@@ -6,9 +6,8 @@ import { M, TAU } from '../core/geom.js';
 import { colorToCss, LINETYPES, lwPixels, LW_DEFAULT } from '../core/style.js';
 import { segsOf, ellipseSweep, splinePoints, textsOf, hatchSegments, insertMatrix, leaderText, boundsOf } from '../core/entities.js';
 import { dimGeometry, arrowPolygon, arrowLines } from '../core/dim.js';
-import { textLayout, emSize, platform } from '../core/text.js';
+import { textLayout, emSize, platform, FONT } from '../core/text.js';
 
-const FONT = 'Arial, "Liberation Sans", "Helvetica Neue", sans-serif';
 const MAX_DEPTH = 8;
 
 export function makeContext(ctx, canvasW, canvasH, dpr, editor, prefs, theme) {
@@ -42,7 +41,7 @@ export function styleOf(rc, e, parent) {
   const transp = e.transp ?? layer.transp ?? 0;
   const fade = layer.locked && rc.fade ? Math.max(.12, 1 - rc.fade) : 1;
   return {
-    rawColor: color, color: colorToCss(color, { dark: rc.theme.dark }), ltype, lw, lts: (e.lts ?? 1) * (parent?.lts ?? 1),
+    rawColor: color, color: rc.mono ? '#000000' : colorToCss(color, { dark: rc.theme.dark }), ltype, lw, lts: (e.lts ?? 1) * (parent?.lts ?? 1),
     alpha: (rc.transpOn ? 1 - Math.min(90, transp) / 100 : 1) * fade,
   };
 }
@@ -114,7 +113,7 @@ function strokeCurrent(rc, style, { selected = false, hover = false, forceWidth 
   const ctx = rc.ctx;
   setScreen(rc);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const w = forceWidth || lwPixels(style.lw, rc.lwOn);
+  const w = forceWidth || (rc.lwPx ? rc.lwPx(style.lw) : lwPixels(style.lw, rc.lwOn));
   if (selected) {
     ctx.globalAlpha = .38 * style.alpha; ctx.strokeStyle = rc.theme.select; ctx.lineWidth = w + 5; ctx.setLineDash([]); ctx.stroke();
   }
@@ -254,7 +253,7 @@ function loopsPath(rc, loops) {
 
 function drawHatch(rc, e, style, selected, hover) {
   const ctx = rc.ctx;
-  const color = e.color !== undefined ? colorToCss(e.color, { dark: rc.theme.dark }) : style.color;
+  const color = e.color !== undefined && !rc.mono ? colorToCss(e.color, { dark: rc.theme.dark }) : style.color;
   if (e.pattern === 'SOLID') {
     if (rc.fill) { loopsPath(rc, e.loops); setScreen(rc); ctx.globalAlpha = style.alpha * .9; ctx.fillStyle = hover ? rc.theme.hover : color; ctx.fill('evenodd'); ctx.globalAlpha = 1; }
     else { loopsPath(rc, e.loops); strokeCurrent(rc, { ...style, color }, {}); }

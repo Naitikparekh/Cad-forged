@@ -364,6 +364,7 @@ button { cursor: pointer; }
 .lm-row.sel { background: var(--accent-soft); } .lm-row:not(.head):hover { background: rgba(127, 138, 149, .15); } .lm-row > div { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-ico, .lm-btn { background: transparent; border: 0; display: inline-flex; align-items: center; gap: 6px; padding: 2px; border-radius: 3px; color: var(--text); position: relative; } .lm-ico:hover, .lm-btn:hover { background: var(--hover); } .lm-x { position: absolute; left: 2px; right: 2px; top: 50%; height: 1.5px; background: var(--err); transform: rotate(-35deg); }
 .lm-edit { width: 100%; background: var(--input); border: 1px solid var(--accent); color: var(--text); padding: 0 4px; height: 20px; user-select: text; } .lm-used { display: inline-block; width: 6px; height: 6px; background: var(--accent-2); border-radius: 1px; } .lm-status { padding: 3px 10px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 11px; }
+.plot { display: flex; gap: 16px; } .plot-form { width: 310px; flex: none; } .plot-form .fl { width: 140px; } .plot-pv { flex: 1; } .plot-prev { display: block; width: 100%; background: #5b6470; border: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -508,8 +509,8 @@ button { cursor: pointer; }
     if (s.t === "l") {
       const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, l2 = dx * dx + dy * dy;
       const t2 = l2 < 1e-24 ? 0 : clamp(((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / l2, 0, 1);
-      const pt3 = { x: s.a.x + dx * t2, y: s.a.y + dy * t2 };
-      return { pt: pt3, t: t2, d: dist(p, pt3) };
+      const pt4 = { x: s.a.x + dx * t2, y: s.a.y + dy * t2 };
+      return { pt: pt4, t: t2, d: dist(p, pt4) };
     }
     const ang = angleOf(s.c, p);
     let t = arcParam(ang, s);
@@ -518,11 +519,11 @@ button { cursor: pointer; }
       return dist(p, e0) <= dist(p, e1) ? { pt: e0, t: 0, d: dist(p, e0) } : { pt: e1, t: 1, d: dist(p, e1) };
     }
     if (dist(p, s.c) < EPS) {
-      const pt3 = arcStart(s);
-      return { pt: pt3, t: 0, d: s.r };
+      const pt4 = arcStart(s);
+      return { pt: pt4, t: 0, d: s.r };
     }
-    const pt2 = polar(s.c, ang, s.r);
-    return { pt: pt2, t, d: dist(p, pt2) };
+    const pt3 = polar(s.c, ang, s.r);
+    return { pt: pt3, t, d: dist(p, pt3) };
   }
   function segProject(s, p) {
     if (s.t === "l") {
@@ -564,10 +565,10 @@ button { cursor: pointer; }
     return [{ pt: { x: s1.a.x + r.x * t1, y: s1.a.y + r.y * t1 }, t1, t2 }];
   }
   function lineArc(l, a) {
-    const d = sub(l.b, l.a), f2 = sub(l.a, a.c);
+    const d = sub(l.b, l.a), f4 = sub(l.a, a.c);
     const A = dot(d, d);
     if (A < 1e-24) return [];
-    const B2 = 2 * dot(f2, d), C3 = dot(f2, f2) - a.r * a.r;
+    const B2 = 2 * dot(f4, d), C3 = dot(f4, f4) - a.r * a.r;
     let disc = B2 * B2 - 4 * A * C3;
     const scale = Math.max(1, B2 * B2);
     if (disc < -1e-12 * scale) return [];
@@ -576,8 +577,8 @@ button { cursor: pointer; }
     const ts = sq < 1e-9 * Math.sqrt(scale) ? [-B2 / (2 * A)] : [(-B2 - sq) / (2 * A), (-B2 + sq) / (2 * A)];
     const out = [];
     for (const t1 of ts) {
-      const pt2 = { x: l.a.x + d.x * t1, y: l.a.y + d.y * t1 };
-      out.push({ pt: pt2, t1, t2: arcParam(angleOf(a.c, pt2), a) });
+      const pt3 = { x: l.a.x + d.x * t1, y: l.a.y + d.y * t1 };
+      out.push({ pt: pt3, t1, t2: arcParam(angleOf(a.c, pt3), a) });
     }
     return out;
   }
@@ -591,7 +592,7 @@ button { cursor: pointer; }
     const h3 = Math.sqrt(h2), u = unit(sub(b.c, a.c));
     const base = add(a.c, mul(u, x));
     const pts = h3 < 1e-9 ? [base] : [add(base, mul(perp(u), h3)), add(base, mul(perp(u), -h3))];
-    return pts.map((pt2) => ({ pt: pt2, t1: arcParam(angleOf(a.c, pt2), a), t2: arcParam(angleOf(b.c, pt2), b) }));
+    return pts.map((pt3) => ({ pt: pt3, t1: arcParam(angleOf(a.c, pt3), a), t2: arcParam(angleOf(b.c, pt3), b) }));
   }
   function perpFeet(s, p) {
     if (s.t === "l") {
@@ -600,7 +601,7 @@ button { cursor: pointer; }
     }
     if (dist(p, s.c) < EPS) return [];
     const a = angleOf(s.c, p);
-    return [polar(s.c, a, s.r), polar(s.c, a + Math.PI, s.r)].map((pt2) => ({ pt: pt2, t: arcParam(angleOf(s.c, pt2), s) }));
+    return [polar(s.c, a, s.r), polar(s.c, a + Math.PI, s.r)].map((pt3) => ({ pt: pt3, t: arcParam(angleOf(s.c, pt3), s) }));
   }
   function tangentPoints(s, p) {
     if (s.t !== "a") return [];
@@ -752,6 +753,7 @@ button { cursor: pointer; }
     /** @returns width in drawing units of `str` at text (cap) height `h`. */
     measureText: (str, h2) => str.length * h2 * 0.62
   };
+  var FONT = 'Arial, "Liberation Sans", "Helvetica Neue", sans-serif';
   var CAP_RATIO = 0.72;
   var LINE_PITCH = 1.5;
   var emSize = (h2) => h2 / CAP_RATIO;
@@ -818,6 +820,18 @@ button { cursor: pointer; }
   for (let i = 250; i < 256; i++) ACI[i] = GRAYS[i - 250];
   var aciHex = (i) => ACI[i] || "#ffffff";
   var ACI_NAMES = { 1: "Red", 2: "Yellow", 3: "Green", 4: "Cyan", 5: "Blue", 6: "Magenta", 7: "White" };
+  function hexToAci(hex) {
+    const n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+    let best = 7, bd = Infinity;
+    for (let i = 1; i < 256; i++) {
+      const c2 = parseInt(ACI[i].slice(1), 16), d = (r - (c2 >> 16 & 255)) ** 2 + (g - (c2 >> 8 & 255)) ** 2 + (b - (c2 & 255)) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  }
   function colorToCss(value, { dark = true } = {}) {
     if (typeof value === "string" && value[0] === "#") return value;
     if (value === 7 || value === void 0) return dark ? "#ffffff" : "#000000";
@@ -1082,12 +1096,12 @@ button { cursor: pointer; }
       maxY = Math.max(maxY, p.y);
     }
     const ua = rad(angle);
-    for (const f2 of pat.families) {
-      const th = rad(f2.a) + ua, ux = Math.cos(th), uy = Math.sin(th), vx = -uy, vy = ux;
-      const step = f2.dy * scale;
+    for (const f4 of pat.families) {
+      const th = rad(f4.a) + ua, ux = Math.cos(th), uy = Math.sin(th), vx = -uy, vy = ux;
+      const step = f4.dy * scale;
       if (Math.abs(step) < 1e-9) continue;
       const ca = Math.cos(ua), sa = Math.sin(ua);
-      const O = { x: (f2.ox * ca - f2.oy * sa) * scale, y: (f2.ox * sa + f2.oy * ca) * scale };
+      const O = { x: (f4.ox * ca - f4.oy * sa) * scale, y: (f4.ox * sa + f4.oy * ca) * scale };
       const ou = O.x * ux + O.y * uy, os = O.x * vx + O.y * vy;
       const edges = [];
       let smin = Infinity, smax = -Infinity;
@@ -1102,7 +1116,7 @@ button { cursor: pointer; }
       }
       const k0 = Math.ceil(Math.min((smin - os) / step, (smax - os) / step) - 1e-9), k1 = Math.floor(Math.max((smin - os) / step, (smax - os) / step) + 1e-9);
       if (k1 - k0 > MAX_HATCH_LINES) return null;
-      const dash = f2.dash ? f2.dash.map((d) => d * scale) : null;
+      const dash = f4.dash ? f4.dash.map((d) => d * scale) : null;
       const period = dash ? dash.reduce((s, d) => s + Math.abs(d), 0) : 0;
       for (let k = k0; k <= k1; k++) {
         const s0 = os + k * step, us = [];
@@ -1116,7 +1130,7 @@ button { cursor: pointer; }
           if (!dash || period < 1e-9) {
             out.push([u0 * ux + s0 * vx, u0 * uy + s0 * vy, u1 * ux + s0 * vx, u1 * uy + s0 * vy]);
           } else {
-            const base = ou + k * f2.dx * scale;
+            const base = ou + k * f4.dx * scale;
             let pos2 = base + Math.floor((u0 - base) / period) * period;
             while (pos2 < u1) {
               for (const d of dash) {
@@ -1223,6 +1237,33 @@ button { cursor: pointer; }
       }
     }
     out.push(e.closed ? { ...P2[0] } : { ...P2[n - 1] });
+    return out;
+  }
+  function splineBeziers(e) {
+    const P2 = e.fit, n = P2.length;
+    if (n < 2) return [];
+    const pts = e.closed ? P2 : [P2[0], ...P2, P2[n - 1]];
+    const count = e.closed ? n : n - 1;
+    const at = (i) => e.closed ? pts[(i % n + n) % n] : pts[i + 1];
+    const knot = (a, b) => Math.sqrt(dist(a, b)) || 1e-6;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const p0 = e.closed ? at(i - 1) : i === 0 ? { x: 2 * P2[0].x - P2[1].x, y: 2 * P2[0].y - P2[1].y } : at(i - 1);
+      const p1 = at(i), p2 = at(i + 1);
+      const p3 = e.closed ? at(i + 2) : i + 2 >= n ? { x: 2 * P2[n - 1].x - P2[n - 2].x, y: 2 * P2[n - 1].y - P2[n - 2].y } : at(i + 2);
+      const d01 = knot(p0, p1), d12 = knot(p1, p2), d23 = knot(p2, p3);
+      const t1 = d01, t2 = t1 + d12, t3 = t2 + d23;
+      const D = (a, b, dt) => ({ x: (b.x - a.x) / dt, y: (b.y - a.y) / dt });
+      const m1 = (() => {
+        const u = D(p0, p1, t1), v = D(p0, p2, t2), w = D(p1, p2, t2 - t1);
+        return { x: u.x - v.x + w.x, y: u.y - v.y + w.y };
+      })();
+      const m2 = (() => {
+        const u = D(p1, p2, t2 - t1), v = D(p1, p3, t3 - t1), w = D(p2, p3, t3 - t2);
+        return { x: u.x - v.x + w.x, y: u.y - v.y + w.y };
+      })();
+      out.push({ p0: p1, c1: { x: p1.x + m1.x * d12 / 3, y: p1.y + m1.y * d12 / 3 }, c2: { x: p2.x - m2.x * d12 / 3, y: p2.y - m2.y * d12 / 3 }, p1: p2 });
+    }
     return out;
   }
   var linesFromPts = (pts, closed) => {
@@ -1741,7 +1782,7 @@ button { cursor: pointer; }
   }
   function computeSnaps(e, doc) {
     const out = [];
-    const push = (pt2, type) => out.push({ pt: pt2, type });
+    const push = (pt3, type) => out.push({ pt: pt3, type });
     switch (e.type) {
       case "line":
         push(e.a, "END");
@@ -2202,7 +2243,7 @@ button { cursor: pointer; }
       let prev = start;
       for (; ; ) {
         const options = made.length >= 2 ? ["Close", "Undo"] : made.length ? ["Undo"] : [];
-        r = await c2.point({ prompt: "Specify next point", base: prev, options, allowEnter: true, preview: (pt2) => [E.line(prev, pt2)] });
+        r = await c2.point({ prompt: "Specify next point", base: prev, options, allowEnter: true, preview: (pt3) => [E.line(prev, pt3)] });
         if (r.kw === "Undo") {
           if (made.length) {
             c2.doc.remove(made.pop());
@@ -2266,10 +2307,10 @@ button { cursor: pointer; }
         const a = bulgeSeg(p0, p1, b);
         return segTangent(a, 1);
       };
-      const preview = (bulge) => (pt2) => {
+      const preview = (bulge) => (pt3) => {
         const vs = verts.map((v) => ({ ...v }));
-        vs[vs.length - 1].b = bulge(pt2);
-        return plinePreview(vs, pt2);
+        vs[vs.length - 1].b = bulge(pt3);
+        return plinePreview(vs, pt3);
       };
       for (; ; ) {
         if (!arcMode) {
@@ -2303,7 +2344,7 @@ button { cursor: pointer; }
           push(r.pt, 0);
         } else {
           const opts = ["Angle", "CEnter", verts.length > 2 ? "CLose" : null, "Direction", "Line", "Radius", "Second pt", "Undo"].filter(Boolean);
-          r = await c2.point({ prompt: "Specify endpoint of arc", options: opts, base: cur(), allowEnter: true, preview: preview((pt2) => tangentBulge(cur(), dir, pt2)) });
+          r = await c2.point({ prompt: "Specify endpoint of arc", options: opts, base: cur(), allowEnter: true, preview: preview((pt3) => tangentBulge(cur(), dir, pt3)) });
           if (r.kw === "Line") {
             arcMode = false;
             continue;
@@ -2333,12 +2374,12 @@ button { cursor: pointer; }
             const cc = await c2.point({ prompt: "Specify center point of arc", base: cur() });
             if (!cc.pt) continue;
             const rad2 = dist(cc.pt, cur());
-            const calc = (pt2) => {
-              const a0 = angleOf(cc.pt, cur()), a1 = angleOf(cc.pt, pt2);
+            const calc = (pt3) => {
+              const a0 = angleOf(cc.pt, cur()), a1 = angleOf(cc.pt, pt3);
               return { end: polar(cc.pt, a1, rad2), bulge: Math.tan(sweepCCW(a0, a1) / 4) };
             };
-            const e = await c2.point({ prompt: "Specify endpoint of arc", base: cc.pt, preview: (pt2) => {
-              const k = calc(pt2);
+            const e = await c2.point({ prompt: "Specify endpoint of arc", base: cc.pt, preview: (pt3) => {
+              const k = calc(pt3);
               const vs = verts.map((v) => ({ ...v }));
               vs[vs.length - 1].b = k.bulge;
               return plinePreview(vs, k.end);
@@ -2353,14 +2394,14 @@ button { cursor: pointer; }
             const d = await c2.point({ prompt: "Specify the tangent direction for the start point of the arc", base: cur() });
             if (!d.pt) continue;
             const dd = unit(sub(d.pt, cur()));
-            const e = await c2.point({ prompt: "Specify endpoint of arc", base: cur(), preview: preview((pt2) => tangentBulge(cur(), dd, pt2)) });
+            const e = await c2.point({ prompt: "Specify endpoint of arc", base: cur(), preview: preview((pt3) => tangentBulge(cur(), dd, pt3)) });
             if (e.pt) push(e.pt, tangentBulge(cur(), dd, e.pt));
             continue;
           }
           if (r.kw === "Radius") {
             const rr = await c2.distance({ prompt: "Specify radius of arc", nonzero: true });
             if (rr.value === void 0) continue;
-            const e = await c2.point({ prompt: "Specify endpoint of arc", base: cur(), preview: preview((pt2) => arcBulge("radius", cur(), dir, { radius: rr.value }, pt2) ?? 0) });
+            const e = await c2.point({ prompt: "Specify endpoint of arc", base: cur(), preview: preview((pt3) => arcBulge("radius", cur(), dir, { radius: rr.value }, pt3) ?? 0) });
             if (e.pt) {
               const b = arcBulge("radius", cur(), dir, { radius: rr.value }, e.pt);
               if (b === null) c2.log("The radius is too small for that endpoint.", "error");
@@ -2371,10 +2412,10 @@ button { cursor: pointer; }
           if (r.kw === "Second pt") {
             const s = await c2.point({ prompt: "Specify second point on arc", base: cur() });
             if (!s.pt) continue;
-            const e = await c2.point({ prompt: "Specify end point of arc", base: cur(), preview: (pt2) => {
+            const e = await c2.point({ prompt: "Specify end point of arc", base: cur(), preview: (pt3) => {
               const vs = verts.map((v) => ({ ...v }));
-              vs[vs.length - 1].b = arcBulge("second", cur(), dir, { second: s.pt }, pt2);
-              return plinePreview(vs, pt2);
+              vs[vs.length - 1].b = arcBulge("second", cur(), dir, { second: s.pt }, pt3);
+              return plinePreview(vs, pt3);
             } });
             if (e.pt) push(e.pt, arcBulge("second", cur(), dir, { second: s.pt }, e.pt));
             continue;
@@ -2425,10 +2466,10 @@ button { cursor: pointer; }
       if (mode === "3P") {
         const a = await c2.point({ prompt: "Specify first point on circle" });
         if (!a.pt) return;
-        const b = await c2.point({ prompt: "Specify second point on circle", base: a.pt, preview: (pt2) => [E.line(a.pt, pt2)] });
+        const b = await c2.point({ prompt: "Specify second point on circle", base: a.pt, preview: (pt3) => [E.line(a.pt, pt3)] });
         if (!b.pt) return;
-        const d = await c2.point({ prompt: "Specify third point on circle", base: b.pt, preview: (pt2) => {
-          const k2 = circleThrough(a.pt, b.pt, pt2);
+        const d = await c2.point({ prompt: "Specify third point on circle", base: b.pt, preview: (pt3) => {
+          const k2 = circleThrough(a.pt, b.pt, pt3);
           return k2 ? [E.circle(k2.c, k2.r)] : [];
         } });
         if (!d.pt) return;
@@ -2444,7 +2485,7 @@ button { cursor: pointer; }
       if (mode === "2P") {
         const a = await c2.point({ prompt: "Specify first end point of circle's diameter" });
         if (!a.pt) return;
-        const b = await c2.point({ prompt: "Specify second end point of circle's diameter", base: a.pt, preview: (pt2) => dist(a.pt, pt2) > 0 ? [E.circle(mid(a.pt, pt2), dist(a.pt, pt2) / 2)] : [] });
+        const b = await c2.point({ prompt: "Specify second end point of circle's diameter", base: a.pt, preview: (pt3) => dist(a.pt, pt3) > 0 ? [E.circle(mid(a.pt, pt3), dist(a.pt, pt3) / 2)] : [] });
         if (!b.pt) return;
         if (samePt(a.pt, b.pt)) return;
         mem.circleRadius = dist(a.pt, b.pt) / 2;
@@ -2478,11 +2519,11 @@ button { cursor: pointer; }
         default: mem.circleRadius * (isDia ? 2 : 1),
         min: 0,
         nonzero: true,
-        preview: (pt2) => dist(center, pt2) > 1e-12 ? [E.circle(center, isDia ? dist(center, pt2) / 2 : dist(center, pt2))] : []
+        preview: (pt3) => dist(center, pt3) > 1e-12 ? [E.circle(center, isDia ? dist(center, pt3) / 2 : dist(center, pt3))] : []
       });
       let radius;
       if (asked.kw === "Diameter") {
-        const d = await c2.distance({ prompt: "Specify diameter of circle", base: center, default: mem.circleRadius * 2, min: 0, nonzero: true, preview: (pt2) => dist(center, pt2) > 1e-12 ? [E.circle(center, dist(center, pt2) / 2)] : [] });
+        const d = await c2.distance({ prompt: "Specify diameter of circle", base: center, default: mem.circleRadius * 2, min: 0, nonzero: true, preview: (pt3) => dist(center, pt3) > 1e-12 ? [E.circle(center, dist(center, pt3) / 2)] : [] });
         if (d.value === void 0) return;
         radius = d.value / 2;
       } else if (asked.value === void 0) return;
@@ -2535,8 +2576,8 @@ button { cursor: pointer; }
         }
         const s2 = last.type === "line" ? last.b : polar(last.c, last.a1, last.r);
         const dir = last.type === "line" ? unit(sub(last.b, last.a)) : { x: -Math.sin(last.a1), y: Math.cos(last.a1) };
-        const e = await P2("Specify end point of arc", { base: s2, preview: (pt2) => {
-          const x = arcSED(s2, pt2, dir);
+        const e = await P2("Specify end point of arc", { base: s2, preview: (pt3) => {
+          const x = arcSED(s2, pt3, dir);
           return x ? [x] : [];
         } });
         if (e.pt) keep(arcSED(s2, e.pt, dir));
@@ -2545,7 +2586,7 @@ button { cursor: pointer; }
       if (["cse", "csa", "csl"].includes(mode)) {
         const ctr = await P2("Specify center point of arc");
         if (!ctr.pt) return;
-        const s2 = await P2("Specify start point of arc", { base: ctr.pt, preview: (pt2) => [E.line(ctr.pt, pt2)] });
+        const s2 = await P2("Specify start point of arc", { base: ctr.pt, preview: (pt3) => [E.line(ctr.pt, pt3)] });
         if (!s2.pt) return;
         return finishCenter(c2, ctr.pt, s2.pt, mode.slice(1), keep);
       }
@@ -2553,14 +2594,14 @@ button { cursor: pointer; }
       if (s.kw === "Center") {
         const ctr = await P2("Specify center point of arc");
         if (!ctr.pt) return;
-        const st = await P2("Specify start point of arc", { base: ctr.pt, preview: (pt2) => [E.line(ctr.pt, pt2)] });
+        const st = await P2("Specify start point of arc", { base: ctr.pt, preview: (pt3) => [E.line(ctr.pt, pt3)] });
         if (!st.pt) return;
         return finishCenter(c2, ctr.pt, st.pt, "se", keep);
       }
       if (!s.pt) return;
       const start = s.pt;
       if (mode === "3p") {
-        const second = await P2("Specify second point of arc", { options: ["Center", "End"], base: start, preview: (pt2) => [E.line(start, pt2)] });
+        const second = await P2("Specify second point of arc", { options: ["Center", "End"], base: start, preview: (pt3) => [E.line(start, pt3)] });
         if (second.kw === "Center") {
           const ctr = await P2("Specify center point of arc", { base: start });
           if (!ctr.pt) return;
@@ -2568,9 +2609,9 @@ button { cursor: pointer; }
         }
         if (second.kw === "End") return startEnd(c2, start, null, keep);
         if (!second.pt) return;
-        const end2 = await P2("Specify end point of arc", { base: second.pt, preview: (pt2) => {
-          const a2 = arcThrough(start, second.pt, pt2);
-          return a2 ? [E.arcSeg(a2)] : [E.line(start, pt2)];
+        const end2 = await P2("Specify end point of arc", { base: second.pt, preview: (pt3) => {
+          const a2 = arcThrough(start, second.pt, pt3);
+          return a2 ? [E.arcSeg(a2)] : [E.line(start, pt3)];
         } });
         if (!end2.pt) return;
         const a = arcThrough(start, second.pt, end2.pt);
@@ -2586,7 +2627,7 @@ button { cursor: pointer; }
         if (!ctr.pt) return;
         return finishCenter(c2, ctr.pt, start, mode.slice(1), keep);
       }
-      const end = await P2("Specify end point of arc", { base: start, preview: (pt2) => [E.line(start, pt2)] });
+      const end = await P2("Specify end point of arc", { base: start, preview: (pt3) => [E.line(start, pt3)] });
       if (!end.pt) return;
       return startEnd(c2, start, end.pt, keep, mode);
     }
@@ -2594,7 +2635,7 @@ button { cursor: pointer; }
   async function finishCenter(c2, ctr, start, kind, keep) {
     const r = dist(ctr, start);
     if (kind === "se" || kind === "ce") {
-      const e = await c2.point({ prompt: "Specify end point of arc", options: ["Angle", "chord Length"], base: ctr, preview: (pt2) => dist(ctr, pt2) > 1e-12 ? [arcCSE(ctr, start, pt2)] : [] });
+      const e = await c2.point({ prompt: "Specify end point of arc", options: ["Angle", "chord Length"], base: ctr, preview: (pt3) => dist(ctr, pt3) > 1e-12 ? [arcCSE(ctr, start, pt3)] : [] });
       if (e.kw === "Angle") return finishCenter(c2, ctr, start, "ca", keep);
       if (e.kw === "chord Length") return finishCenter(c2, ctr, start, "cl", keep);
       if (e.pt) keep(arcCSE(ctr, start, e.pt));
@@ -2613,7 +2654,7 @@ button { cursor: pointer; }
   }
   async function startEnd(c2, start, end, keep, mode = "se") {
     if (!end) {
-      const e = await c2.point({ prompt: "Specify end point of arc", base: start, preview: (pt2) => [E.line(start, pt2)] });
+      const e = await c2.point({ prompt: "Specify end point of arc", base: start, preview: (pt3) => [E.line(start, pt3)] });
       if (!e.pt) return;
       end = e.pt;
     }
@@ -2636,8 +2677,8 @@ button { cursor: pointer; }
       }
       return;
     }
-    const r = await c2.point({ prompt: "Specify center point of arc", options: ["Angle", "Direction", "Radius"], base: start, preview: (pt2) => {
-      const a = arcThrough(start, pt2, end);
+    const r = await c2.point({ prompt: "Specify center point of arc", options: ["Angle", "Direction", "Radius"], base: start, preview: (pt3) => {
+      const a = arcThrough(start, pt3, end);
       void a;
       return [E.line(start, end)];
     } });
@@ -2655,7 +2696,7 @@ button { cursor: pointer; }
     async run(c2) {
       const mem = memory(c2.app);
       let fillet = mem.rectFillet, chamfer = mem.rectChamfer;
-      let first;
+      let first2;
       for (; ; ) {
         const r = await c2.point({ prompt: "Specify first corner point", options: ["Chamfer", "Fillet"], allowEnter: false });
         if (r.kw === "Chamfer") {
@@ -2670,9 +2711,9 @@ button { cursor: pointer; }
           continue;
         }
         if (r.kw === "Fillet") {
-          const f2 = await c2.distance({ prompt: "Specify fillet radius for rectangles", default: fillet, min: 0 });
-          if (f2.value !== void 0) {
-            fillet = f2.value;
+          const f4 = await c2.distance({ prompt: "Specify fillet radius for rectangles", default: fillet, min: 0 });
+          if (f4.value !== void 0) {
+            fillet = f4.value;
             chamfer = [0, 0];
             mem.rectFillet = fillet;
             mem.rectChamfer = [0, 0];
@@ -2680,7 +2721,7 @@ button { cursor: pointer; }
           continue;
         }
         if (!r.pt) return;
-        first = r.pt;
+        first2 = r.pt;
         break;
       }
       let rot = 0;
@@ -2697,9 +2738,9 @@ button { cursor: pointer; }
         return base;
       };
       for (; ; ) {
-        const r = await c2.corner({ prompt: "Specify other corner point", options: ["Area", "Dimensions", "Rotation"], base: first, preview: (pt2) => dist(first, pt2) > 1e-12 ? [build(first, pt2)] : [] });
+        const r = await c2.corner({ prompt: "Specify other corner point", options: ["Area", "Dimensions", "Rotation"], base: first2, preview: (pt3) => dist(first2, pt3) > 1e-12 ? [build(first2, pt3)] : [] });
         if (r.kw === "Rotation") {
-          const a = await c2.angle({ prompt: "Specify rotation angle or [Pick points]", default: rot, base: first });
+          const a = await c2.angle({ prompt: "Specify rotation angle or [Pick points]", default: rot, base: first2 });
           if (a.value !== void 0) rot = a.value;
           continue;
         }
@@ -2707,13 +2748,13 @@ button { cursor: pointer; }
           const L2 = await c2.distance({ prompt: "Specify length for rectangles", default: 10, nonzero: true });
           const W = await c2.distance({ prompt: "Specify width for rectangles", default: 10, nonzero: true });
           if (L2.value === void 0 || W.value === void 0) return;
-          const side = await c2.point({ prompt: "Specify other corner point or [Dimensions]", base: first, preview: (pt2) => {
-            const sx2 = pt2.x >= first.x ? 1 : -1, sy2 = pt2.y >= first.y ? 1 : -1;
-            return [build(first, { x: first.x + sx2 * L2.value, y: first.y + sy2 * W.value })];
+          const side = await c2.point({ prompt: "Specify other corner point or [Dimensions]", base: first2, preview: (pt3) => {
+            const sx2 = pt3.x >= first2.x ? 1 : -1, sy2 = pt3.y >= first2.y ? 1 : -1;
+            return [build(first2, { x: first2.x + sx2 * L2.value, y: first2.y + sy2 * W.value })];
           } });
           if (!side.pt) return;
-          const sx = side.pt.x >= first.x ? 1 : -1, sy = side.pt.y >= first.y ? 1 : -1;
-          c2.add(build(first, { x: first.x + sx * L2.value, y: first.y + sy * W.value }));
+          const sx = side.pt.x >= first2.x ? 1 : -1, sy = side.pt.y >= first2.y ? 1 : -1;
+          c2.add(build(first2, { x: first2.x + sx * L2.value, y: first2.y + sy * W.value }));
           return;
         }
         if (r.kw === "Area") {
@@ -2723,18 +2764,18 @@ button { cursor: pointer; }
           if (area.value === void 0 || v.value === void 0) return;
           const other = area.value / v.value;
           const [L2, W] = how.kw === "Width" ? [other, v.value] : [v.value, other];
-          const side = await c2.point({ prompt: "Specify direction", base: first, preview: (pt2) => {
-            const sx2 = pt2.x >= first.x ? 1 : -1, sy2 = pt2.y >= first.y ? 1 : -1;
-            return [build(first, { x: first.x + sx2 * L2, y: first.y + sy2 * W })];
+          const side = await c2.point({ prompt: "Specify direction", base: first2, preview: (pt3) => {
+            const sx2 = pt3.x >= first2.x ? 1 : -1, sy2 = pt3.y >= first2.y ? 1 : -1;
+            return [build(first2, { x: first2.x + sx2 * L2, y: first2.y + sy2 * W })];
           } });
           if (!side.pt) return;
-          const sx = side.pt.x >= first.x ? 1 : -1, sy = side.pt.y >= first.y ? 1 : -1;
-          c2.add(build(first, { x: first.x + sx * L2, y: first.y + sy * W }));
+          const sx = side.pt.x >= first2.x ? 1 : -1, sy = side.pt.y >= first2.y ? 1 : -1;
+          c2.add(build(first2, { x: first2.x + sx * L2, y: first2.y + sy * W }));
           return;
         }
         if (!r.pt) return;
-        if (dist(first, r.pt) < 1e-12) return;
-        c2.add(build(first, r.pt));
+        if (dist(first2, r.pt) < 1e-12) return;
+        c2.add(build(first2, r.pt));
         return;
       }
     }
@@ -2767,7 +2808,7 @@ button { cursor: pointer; }
         };
         const a = await c2.point({ prompt: "Specify first endpoint of edge" });
         if (!a.pt) return;
-        const b = await c2.point({ prompt: "Specify second endpoint of edge", base: a.pt, preview: (pt2) => edge(a.pt, pt2) });
+        const b = await c2.point({ prompt: "Specify second endpoint of edge", base: a.pt, preview: (pt3) => edge(a.pt, pt3) });
         if (!b.pt) return;
         c2.add(edge(a.pt, b.pt)[0]);
         return;
@@ -2777,10 +2818,10 @@ button { cursor: pointer; }
       const how = await c2.keyword({ prompt: "Enter an option [Inscribed in circle/Circumscribed about circle]", options: ["Inscribed in circle", "Circumscribed about circle"], default: mem.polygonMode === "Circumscribed" ? "Circumscribed about circle" : "Inscribed in circle" });
       const circ = how.kw === "Circumscribed about circle";
       mem.polygonMode = circ ? "Circumscribed" : "Inscribed";
-      const build = (pt2) => {
-        const rr = dist(center, pt2);
+      const build = (pt3) => {
+        const rr = dist(center, pt3);
         if (rr < 1e-12) return [];
-        const ang = angleOf(center, pt2) - (circ ? Math.PI / n : 0);
+        const ang = angleOf(center, pt3) - (circ ? Math.PI / n : 0);
         return [E.pline(polygonVerts(center, n, rr, ang, circ), true)];
       };
       const rad2 = await c2.point({ prompt: "Specify radius of circle", base: center, preview: build });
@@ -2810,26 +2851,26 @@ button { cursor: pointer; }
         else return;
       } else if (mode === "center") arc = !!args.arc;
       let m2, ratio;
-      const ell = (pt2, t02 = 0, t1 = TAU) => {
-        const L2 = dist(center, pt2);
+      const ell = (pt3, t02 = 0, t1 = TAU) => {
+        const L2 = dist(center, pt3);
         return L2 < 1e-12 ? null : E.ellipse(center, m2, Math.min(1, L2 / len(m2)), t02, t1);
       };
       if (mode === "center") {
         const cc = await c2.point({ prompt: "Specify center of ellipse" });
         if (!cc.pt) return;
         center = cc.pt;
-        const ae = await c2.point({ prompt: "Specify endpoint of axis", base: center, preview: (pt2) => [E.line(center, pt2)] });
+        const ae = await c2.point({ prompt: "Specify endpoint of axis", base: center, preview: (pt3) => [E.line(center, pt3)] });
         if (!ae.pt) return;
         m2 = sub(ae.pt, center);
       } else {
-        const other = await c2.point({ prompt: "Specify other endpoint of axis", base: axisEnd, preview: (pt2) => [E.line(axisEnd, pt2)] });
+        const other = await c2.point({ prompt: "Specify other endpoint of axis", base: axisEnd, preview: (pt3) => [E.line(axisEnd, pt3)] });
         if (!other.pt) return;
         center = mid(axisEnd, other.pt);
         m2 = sub(other.pt, center);
       }
       if (len(m2) < 1e-12) return;
-      const d = await c2.point({ prompt: "Specify distance to other axis", options: ["Rotation"], base: center, preview: (pt2) => {
-        const e2 = ell(pt2);
+      const d = await c2.point({ prompt: "Specify distance to other axis", options: ["Rotation"], base: center, preview: (pt3) => {
+        const e2 = ell(pt3);
         return e2 ? [e2] : [];
       } });
       if (d.kw === "Rotation") {
@@ -2845,15 +2886,15 @@ button { cursor: pointer; }
         c2.add(E.ellipse(center, m2, ratio));
         return;
       }
-      const major = Math.atan2(m2.y, m2.x), param = (pt2) => {
-        const v = sub(pt2, center), x = dot(v, unit(m2)) / len(m2), y = dot(v, unit({ x: -m2.y, y: m2.x })) / (len(m2) * ratio);
+      const major = Math.atan2(m2.y, m2.x), param = (pt3) => {
+        const v = sub(pt3, center), x = dot(v, unit(m2)) / len(m2), y = dot(v, unit({ x: -m2.y, y: m2.x })) / (len(m2) * ratio);
         return Math.atan2(y, x);
       };
       void major;
-      const s = await c2.point({ prompt: "Specify start angle", options: ["Parameter"], base: center, preview: (pt2) => [E.line(center, pt2)] });
+      const s = await c2.point({ prompt: "Specify start angle", options: ["Parameter"], base: center, preview: (pt3) => [E.line(center, pt3)] });
       if (!s.pt) return;
       const t0 = param(s.pt);
-      const e = await c2.point({ prompt: "Specify end angle", base: center, preview: (pt2) => [E.ellipse(center, m2, ratio, t0, normAngle(param(pt2)))] });
+      const e = await c2.point({ prompt: "Specify end angle", base: center, preview: (pt3) => [E.ellipse(center, m2, ratio, t0, normAngle(param(pt3)))] });
       if (!e.pt) return;
       c2.add(E.ellipse(center, m2, ratio, normAngle(t0), normAngle(param(e.pt))));
     }
@@ -2865,12 +2906,12 @@ button { cursor: pointer; }
     icon: "spline",
     desc: "Creates a smooth curve through fit points.",
     async run(c2) {
-      const first = await c2.point({ prompt: "Specify first point" });
-      if (!first.pt) return;
-      const fit = [first.pt];
+      const first2 = await c2.point({ prompt: "Specify first point" });
+      if (!first2.pt) return;
+      const fit = [first2.pt];
       let closed = false;
       for (; ; ) {
-        const r = await c2.point({ prompt: "Enter next point", options: fit.length > 2 ? ["Undo", "Close"] : ["Undo"], base: fit[fit.length - 1], allowEnter: true, preview: (pt2) => [E.spline([...fit, pt2], false)] });
+        const r = await c2.point({ prompt: "Enter next point", options: fit.length > 2 ? ["Undo", "Close"] : ["Undo"], base: fit[fit.length - 1], allowEnter: true, preview: (pt3) => [E.spline([...fit, pt3], false)] });
         if (r.kw === "Undo") {
           if (fit.length > 1) fit.pop();
           continue;
@@ -2911,7 +2952,7 @@ button { cursor: pointer; }
       let mode = "point", angle = 0, p0 = null;
       for (; ; ) {
         if (mode === "point") {
-          const r = await c2.point({ prompt: p0 ? "Specify through point" : "Specify a point", options: p0 ? [] : ["Hor", "Ver", "Ang", "Bisect", "Offset"], allowEnter: true, base: p0, noOrtho: !p0, preview: (pt2) => p0 && !samePt(p0, pt2) ? [E.xline(p0, sub(pt2, p0))] : [] });
+          const r = await c2.point({ prompt: p0 ? "Specify through point" : "Specify a point", options: p0 ? [] : ["Hor", "Ver", "Ang", "Bisect", "Offset"], allowEnter: true, base: p0, noOrtho: !p0, preview: (pt3) => p0 && !samePt(p0, pt3) ? [E.xline(p0, sub(pt3, p0))] : [] });
           if (r.kw === "Hor") {
             mode = "dir";
             angle = 0;
@@ -2934,7 +2975,7 @@ button { cursor: pointer; }
             if (!v.pt) return;
             const s = await c2.point({ prompt: "Specify angle start point", base: v.pt });
             if (!s.pt) return;
-            const e = await c2.point({ prompt: "Specify angle end point", base: v.pt, allowEnter: true, preview: (pt2) => [E.xline(v.pt, add(unit(sub(s.pt, v.pt)), unit(sub(pt2, v.pt))))] });
+            const e = await c2.point({ prompt: "Specify angle end point", base: v.pt, allowEnter: true, preview: (pt3) => [E.xline(v.pt, add(unit(sub(s.pt, v.pt)), unit(sub(pt3, v.pt))))] });
             if (!e.pt) return;
             c2.add(E.xline(v.pt, add(unit(sub(s.pt, v.pt)), unit(sub(e.pt, v.pt)))));
             return;
@@ -2950,7 +2991,7 @@ button { cursor: pointer; }
           }
           c2.add(E.xline(p0, sub(r.pt, p0)));
         } else {
-          const r = await c2.point({ prompt: "Specify through point", allowEnter: true, preview: (pt2) => [E.xline(pt2, { x: Math.cos(angle), y: Math.sin(angle) })] });
+          const r = await c2.point({ prompt: "Specify through point", allowEnter: true, preview: (pt3) => [E.xline(pt3, { x: Math.cos(angle), y: Math.sin(angle) })] });
           if (!r.pt) return;
           c2.add(E.xline(r.pt, { x: Math.cos(angle), y: Math.sin(angle) }));
         }
@@ -2966,7 +3007,7 @@ button { cursor: pointer; }
       const s = await c2.point({ prompt: "Specify start point" });
       if (!s.pt) return;
       for (; ; ) {
-        const r = await c2.point({ prompt: "Specify through point", base: s.pt, allowEnter: true, preview: (pt2) => samePt(pt2, s.pt) ? [] : [E.ray(s.pt, sub(pt2, s.pt))] });
+        const r = await c2.point({ prompt: "Specify through point", base: s.pt, allowEnter: true, preview: (pt3) => samePt(pt3, s.pt) ? [] : [E.ray(s.pt, sub(pt3, s.pt))] });
         if (!r.pt) return;
         if (!samePt(r.pt, s.pt)) c2.add(E.ray(s.pt, sub(r.pt, s.pt)));
       }
@@ -2995,7 +3036,7 @@ button { cursor: pointer; }
         return [ring(outer.value / 2), ring(inner.value / 2)].filter(Boolean);
       };
       for (; ; ) {
-        const r = await c2.point({ prompt: "Specify center of donut or <exit>", allowEnter: true, preview: (pt2) => [E.hatch(loops(pt2), { pattern: "SOLID" })] });
+        const r = await c2.point({ prompt: "Specify center of donut or <exit>", allowEnter: true, preview: (pt3) => [E.hatch(loops(pt3), { pattern: "SOLID" })] });
         if (!r.pt) return;
         c2.add(E.hatch(loops(r.pt), { pattern: "SOLID" }));
       }
@@ -3168,11 +3209,11 @@ button { cursor: pointer; }
           if (used.has(it)) continue;
           const head = segStart(segs[0]), tail = segEnd(segs[segs.length - 1]);
           const s0 = segStart(it.path.segs[0]), s1 = segEnd(it.path.segs[it.path.segs.length - 1]);
-          const rev = () => it.path.segs.slice().reverse().map(segReverse);
+          const rev2 = () => it.path.segs.slice().reverse().map(segReverse);
           if (dist(tail, s0) <= tol) segs = [...segs, ...it.path.segs];
-          else if (dist(tail, s1) <= tol) segs = [...segs, ...rev()];
+          else if (dist(tail, s1) <= tol) segs = [...segs, ...rev2()];
           else if (dist(head, s1) <= tol) segs = [...it.path.segs, ...segs];
-          else if (dist(head, s0) <= tol) segs = [...rev(), ...segs];
+          else if (dist(head, s0) <= tol) segs = [...rev2(), ...segs];
           else continue;
           used.add(it);
           grew = true;
@@ -3364,7 +3405,7 @@ button { cursor: pointer; }
       } else {
         if (!r.pt) return;
         const base = r.pt;
-        const r2 = await c2.point({ prompt: "Specify second point or <use first point as displacement>", base, allowEnter: true, preview: (pt2) => transformedClones(sel, M.translate(pt2.x - base.x, pt2.y - base.y), c2.doc) });
+        const r2 = await c2.point({ prompt: "Specify second point or <use first point as displacement>", base, allowEnter: true, preview: (pt3) => transformedClones(sel, M.translate(pt3.x - base.x, pt3.y - base.y), c2.doc) });
         delta = r2.pt ? sub(r2.pt, base) : base;
       }
       applyTransform(c2.doc, sel, M.translate(delta.x, delta.y));
@@ -3391,7 +3432,7 @@ button { cursor: pointer; }
       const base = r.pt, made = [];
       for (; ; ) {
         const opts = made.length ? ["Array", "Exit", "Undo"] : ["Array"];
-        const n = await c2.point({ prompt: "Specify second point" + (made.length ? "" : " or [Array]") + (made.length ? "" : ""), options: made.length ? opts : [], base, allowEnter: true, preview: (pt2) => transformedClones(sel, M.translate(pt2.x - base.x, pt2.y - base.y), c2.doc) });
+        const n = await c2.point({ prompt: "Specify second point" + (made.length ? "" : " or [Array]") + (made.length ? "" : ""), options: made.length ? opts : [], base, allowEnter: true, preview: (pt3) => transformedClones(sel, M.translate(pt3.x - base.x, pt3.y - base.y), c2.doc) });
         if (n.kw === "Undo") {
           const last = made.pop();
           if (last) c2.doc.removeAll(last);
@@ -3417,7 +3458,7 @@ button { cursor: pointer; }
       const base = b.pt;
       let copy = false, refAngle = 0;
       for (; ; ) {
-        const a = await c2.angle({ prompt: "Specify rotation angle", options: ["Copy", "Reference"], base, default: 0, preview: (pt2) => transformedClones(sel, M.rotate(angleOf(base, pt2) - refAngle, base), c2.doc) });
+        const a = await c2.angle({ prompt: "Specify rotation angle", options: ["Copy", "Reference"], base, default: 0, preview: (pt3) => transformedClones(sel, M.rotate(angleOf(base, pt3) - refAngle, base), c2.doc) });
         if (a.kw === "Copy") {
           copy = true;
           continue;
@@ -3426,7 +3467,7 @@ button { cursor: pointer; }
           const ra = await c2.angle({ prompt: "Specify the reference angle", base, default: 0 });
           if (ra.value === void 0) return;
           refAngle = ra.value;
-          const na = await c2.angle({ prompt: "Specify the new angle", base, default: 0, preview: (pt2) => transformedClones(sel, M.rotate(angleOf(base, pt2) - refAngle, base), c2.doc) });
+          const na = await c2.angle({ prompt: "Specify the new angle", base, default: 0, preview: (pt3) => transformedClones(sel, M.rotate(angleOf(base, pt3) - refAngle, base), c2.doc) });
           if (na.value === void 0) return;
           doRotate(na.value - refAngle);
           break;
@@ -3494,7 +3535,7 @@ button { cursor: pointer; }
       if (!sel.length) return;
       const a = await c2.point({ prompt: "Specify first point of mirror line" });
       if (!a.pt) return;
-      const b = await c2.point({ prompt: "Specify second point of mirror line", base: a.pt, preview: (pt2) => samePt(a.pt, pt2) ? [] : [E.line(a.pt, pt2), ...transformedClones(sel, M.mirror(a.pt, pt2), c2.doc)] });
+      const b = await c2.point({ prompt: "Specify second point of mirror line", base: a.pt, preview: (pt3) => samePt(a.pt, pt3) ? [] : [E.line(a.pt, pt3), ...transformedClones(sel, M.mirror(a.pt, pt3), c2.doc)] });
       if (!b.pt || samePt(a.pt, b.pt)) return;
       const del = await c2.keyword({ prompt: "Erase source objects? [Yes/No]", options: ["Yes", "No"], default: "No" });
       const m2 = M.mirror(a.pt, b.pt);
@@ -3514,26 +3555,26 @@ button { cursor: pointer; }
       const st = c2.doc.settings;
       let dist2 = st.offsetGap > 0 ? st.offsetGap : null, erase = false, through = dist2 === null;
       for (; ; ) {
-        const first = await c2.distance({ prompt: "Specify offset distance", options: ["Through", "Erase", "Layer"], default: through ? "Through" : dist2, min: 0 });
-        if (first.kw === "Erase") {
+        const first2 = await c2.distance({ prompt: "Specify offset distance", options: ["Through", "Erase", "Layer"], default: through ? "Through" : dist2, min: 0 });
+        if (first2.kw === "Erase") {
           const y = await c2.keyword({ prompt: "Erase source object after offsetting? [Yes/No]", options: ["Yes", "No"], default: erase ? "Yes" : "No" });
           erase = y.kw === "Yes";
           continue;
         }
-        if (first.kw === "Layer") {
+        if (first2.kw === "Layer") {
           c2.log("Offset objects are created on the layer of the source object.");
           continue;
         }
-        if (first.kw === "Through" || first.enter && through) {
+        if (first2.kw === "Through" || first2.enter && through) {
           through = true;
           break;
         }
-        if (first.value === void 0) return;
-        if (first.value <= 0) {
+        if (first2.value === void 0) return;
+        if (first2.value <= 0) {
           c2.log("Requires a positive, nonzero distance.", "error");
           continue;
         }
-        dist2 = first.value;
+        dist2 = first2.value;
         through = false;
         st.offsetGap = dist2;
         break;
@@ -3549,9 +3590,9 @@ button { cursor: pointer; }
         if (o.kw === "Exit" || !o.entity) return;
         const src = o.entity;
         c2.editor.tempSel = /* @__PURE__ */ new Set([src.id]);
-        const side = await c2.point({ prompt: through ? "Specify through point" : "Specify point on side to offset", options: through ? ["Exit", "Multiple", "Undo"] : ["Exit", "Multiple", "Undo"], allowEnter: true, preview: (pt2) => {
-          const d2 = through ? Math.max(1e-9, nearestDistance(src, pt2, c2.doc)) : dist2;
-          const r2 = offsetEntity(src, d2, pt2, c2.doc);
+        const side = await c2.point({ prompt: through ? "Specify through point" : "Specify point on side to offset", options: through ? ["Exit", "Multiple", "Undo"] : ["Exit", "Multiple", "Undo"], allowEnter: true, preview: (pt3) => {
+          const d2 = through ? Math.max(1e-9, nearestDistance(src, pt3, c2.doc)) : dist2;
+          const r2 = offsetEntity(src, d2, pt3, c2.doc);
           return r2.result ? [r2.result] : [];
         } });
         c2.editor.tempSel = /* @__PURE__ */ new Set();
@@ -3576,9 +3617,9 @@ button { cursor: pointer; }
       }
     }
   });
-  var nearestDistance = (e, pt2, doc) => {
+  var nearestDistance = (e, pt3, doc) => {
     let best = Infinity;
-    for (const s of segsOf(e, doc)) best = Math.min(best, segNearest(s, pt2).d);
+    for (const s of segsOf(e, doc)) best = Math.min(best, segNearest(s, pt3).d);
     return best;
   };
   var arrayCommand = (kind) => async function run(c2, args) {
@@ -3667,9 +3708,9 @@ button { cursor: pointer; }
       } else {
         if (!b.pt) return;
         const base = b.pt;
-        const preview = (pt2) => sel.map((e) => {
+        const preview = (pt3) => sel.map((e) => {
           const cl = clone(e);
-          stretchEntity(cl, rectFor(e), sub(pt2, base), c2.doc);
+          stretchEntity(cl, rectFor(e), sub(pt3, base), c2.doc);
           return cl;
         });
         const s = await c2.point({ prompt: "Specify second point or <use first point as displacement>", base, allowEnter: true, preview });
@@ -3753,7 +3794,7 @@ button { cursor: pointer; }
     const doc = c2.doc, pts = [];
     if (mode === "fence") {
       for (; ; ) {
-        const p = await c2.point({ prompt: pts.length ? "Specify next fence point" : "Specify first fence point", allowEnter: true, base: pts[pts.length - 1], preview: (pt2) => pts.length ? [E.pline([...pts, pt2], false)] : [] });
+        const p = await c2.point({ prompt: pts.length ? "Specify next fence point" : "Specify first fence point", allowEnter: true, base: pts[pts.length - 1], preview: (pt3) => pts.length ? [E.pline([...pts, pt3], false)] : [] });
         if (!p.pt) break;
         pts.push(p.pt);
       }
@@ -3798,8 +3839,8 @@ button { cursor: pointer; }
       for (; ; ) {
         const r = await c2.point({ prompt: "Specify second break point or [First point]", options: ["First point"] });
         if (r.kw === "First point") {
-          const f2 = await c2.point({ prompt: "Specify first break point" });
-          if (f2.pt) p1 = f2.pt;
+          const f4 = await c2.point({ prompt: "Specify first break point" });
+          if (f4.pt) p1 = f4.pt;
           continue;
         }
         if (!r.pt) return;
@@ -4308,7 +4349,7 @@ button { cursor: pointer; }
         c2.log("The clipboard is empty.", "error");
         return;
       }
-      const p = await c2.point({ prompt: "Specify insertion point", preview: (pt2) => transformedClones(clip.entities, M.translate(pt2.x - clip.base.x, pt2.y - clip.base.y), c2.doc) });
+      const p = await c2.point({ prompt: "Specify insertion point", preview: (pt3) => transformedClones(clip.entities, M.translate(pt3.x - clip.base.x, pt3.y - clip.base.y), c2.doc) });
       if (!p.pt) return;
       const made = addCopies(c2.doc, clip.entities, M.translate(p.pt.x - clip.base.x, p.pt.y - clip.base.y));
       c2.editor.clearSel();
@@ -4333,7 +4374,7 @@ button { cursor: pointer; }
         const rotMode = mode === "ROTATE", scaleMode = mode === "SCALE";
         const label = `** ${mode} ${copy ? "(multiple) " : ""}**
 ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move point" : mode === "ROTATE" ? "Specify rotation angle" : mode === "SCALE" ? "Specify scale factor" : "Specify second point"}`;
-        const result = rotMode ? await c2.angle({ prompt: label, options: opts, base, default: 0, allowEnter: true, preview: (pt3) => gripPreview(pt3) }) : scaleMode ? await c2.distance({ prompt: label, options: opts, base, default: 1, allowEnter: true, preview: (pt3) => gripPreview(pt3) }) : await c2.point({ prompt: label, options: opts, base: mode === "MOVE" || mode === "MIRROR" ? base : hot.pt, allowEnter: true, preview: (pt3) => gripPreview(pt3) });
+        const result = rotMode ? await c2.angle({ prompt: label, options: opts, base, default: 0, allowEnter: true, preview: (pt4) => gripPreview(pt4) }) : scaleMode ? await c2.distance({ prompt: label, options: opts, base, default: 1, allowEnter: true, preview: (pt4) => gripPreview(pt4) }) : await c2.point({ prompt: label, options: opts, base: mode === "MOVE" || mode === "MIRROR" ? base : hot.pt, allowEnter: true, preview: (pt4) => gripPreview(pt4) });
         if (result.kw === "eXit") return;
         if (result.kw === "Copy") {
           copy = true;
@@ -4353,29 +4394,29 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           mode = GRIP_MODES[(GRIP_MODES.indexOf(mode) + 1) % GRIP_MODES.length];
           continue;
         }
-        const pt2 = result.pt;
+        const pt3 = result.pt;
         applyGrip(result);
         if (!copy) return;
-        void pt2;
+        void pt3;
       }
       function matrixFor(r) {
         if (mode === "MOVE") return M.translate(r.pt.x - base.x, r.pt.y - base.y);
         if (mode === "ROTATE") return M.rotate(r.pt ? angleOf(base, r.pt) : r.value, base);
         if (mode === "SCALE") {
-          const f2 = r.pt ? dist(base, r.pt) / Math.max(1e-12, dist(base, hot.pt)) : r.value;
-          return M.scale(Math.max(1e-9, f2), Math.max(1e-9, f2), base);
+          const f4 = r.pt ? dist(base, r.pt) / Math.max(1e-12, dist(base, hot.pt)) : r.value;
+          return M.scale(Math.max(1e-9, f4), Math.max(1e-9, f4), base);
         }
         if (mode === "MIRROR") return M.mirror(base, r.pt);
         return null;
       }
-      function gripPreview(pt2) {
-        const r = { pt: pt2, value: pt2 && dist(base, pt2) };
+      function gripPreview(pt3) {
+        const r = { pt: pt3, value: pt3 && dist(base, pt3) };
         if (mode === "STRETCH") return sels.map((e) => {
           const gr = shared(e)[0];
-          return gr ? gripEdit(e, gr.id, pt2, c2.doc) : e;
+          return gr ? gripEdit(e, gr.id, pt3, c2.doc) : e;
         });
-        if (!pt2) return [];
-        const m2 = matrixFor({ pt: pt2, value: r.value });
+        if (!pt3) return [];
+        const m2 = matrixFor({ pt: pt3, value: r.value });
         return m2 ? transformedClones(sels, m2, c2.doc) : [];
       }
       function applyGrip(r) {
@@ -4557,8 +4598,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         if (b && boundsOverlap(b, win)) near2.push(e);
       }
       const cands = [];
-      const add2 = (type, pt2, trigger = dist(raw, pt2)) => {
-        if (trigger <= ap) cands.push({ type, pt: pt2, d: trigger });
+      const add2 = (type, pt3, trigger = dist(raw, pt3)) => {
+        if (trigger <= ap) cands.push({ type, pt: pt3, d: trigger });
       };
       for (const e of near2) {
         for (const s of snapPointsOf(e, doc)) if (mask & OS_BITS[s.type]) add2(s.type, s.pt);
@@ -4579,7 +4620,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           const nearest = segNearest(s, raw);
           if (nearest.d > ap) continue;
           if (mask & OS_BITS.PER) {
-            for (const f2 of perpFeet(s, o.base)) if (f2.t >= -1e-9 && f2.t <= 1 + 1e-9) cands.push({ type: "PER", pt: f2.pt, d: nearest.d });
+            for (const f4 of perpFeet(s, o.base)) if (f4.t >= -1e-9 && f4.t <= 1 + 1e-9) cands.push({ type: "PER", pt: f4.pt, d: nearest.d });
           }
           if (mask & OS_BITS.TAN && s.t === "a") {
             const tp = tangentPoints(s, o.base).filter((q) => q.t >= -1e-9 && q.t <= 1 + 1e-9);
@@ -4606,10 +4647,10 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (base && o.ortho) {
         const dx = raw.x - base.x, dy = raw.y - base.y;
         const horizontal = Math.abs(dx) >= Math.abs(dy);
-        const pt3 = horizontal ? { x: raw.x, y: base.y } : { x: base.x, y: raw.y };
-        const d = dist(base, pt3);
+        const pt4 = horizontal ? { x: raw.x, y: base.y } : { x: base.x, y: raw.y };
+        const d = dist(base, pt4);
         const a = horizontal ? dx >= 0 ? 0 : Math.PI : dy >= 0 ? Math.PI / 2 : -Math.PI / 2;
-        return { pt: pt3, lines: [], marks: [], label: `Ortho: ${fmt(d)} < ${degs(a)}`, kind: "ortho", dist: d, angle: a };
+        return { pt: pt4, lines: [], marks: [], label: `Ortho: ${fmt(d)} < ${degs(a)}`, kind: "ortho", dist: d, angle: a };
       }
       const angles = o.polar ? polarAngles(o.polarInc || Math.PI / 2, o.polarAdd) : [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
       if (base && o.polar) for (const a of angles) vectors.push({ origin: base, dir: { x: Math.cos(a), y: Math.sin(a) }, kind: "polar", angle: a });
@@ -4622,18 +4663,18 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       if (!hits.length) return null;
       hits.sort((a, b) => a.d - b.d);
-      const first = hits[0];
+      const first2 = hits[0];
       for (const h2 of hits.slice(1)) {
-        if (samePt(h2.v.origin, first.v.origin, 1e-9) || Math.abs(cross(first.v.dir, h2.v.dir)) < 1e-6) continue;
-        const a = { t: "l", a: first.v.origin, b: add(first.v.origin, mul(first.v.dir, 1e7)) }, b = { t: "l", a: h2.v.origin, b: add(h2.v.origin, mul(h2.v.dir, 1e7)) };
+        if (samePt(h2.v.origin, first2.v.origin, 1e-9) || Math.abs(cross(first2.v.dir, h2.v.dir)) < 1e-6) continue;
+        const a = { t: "l", a: first2.v.origin, b: add(first2.v.origin, mul(first2.v.dir, 1e7)) }, b = { t: "l", a: h2.v.origin, b: add(h2.v.origin, mul(h2.v.dir, 1e7)) };
         const x = segIntersect(a, b)[0];
         if (x && dist(x.pt, raw) <= ap * 1.5) {
-          return { pt: x.pt, lines: [mkLine(first.v, x.pt), mkLine(h2.v, x.pt)], marks: this.acquired, label: `Intersection`, kind: "intersection" };
+          return { pt: x.pt, lines: [mkLine(first2.v, x.pt), mkLine(h2.v, x.pt)], marks: this.acquired, label: `Intersection`, kind: "intersection" };
         }
       }
-      const pt2 = add(first.v.origin, mul(first.v.dir, first.t));
-      const label = first.v.kind === "polar" ? `Polar: ${fmt(first.t)} < ${degs(first.v.angle)}` : `Track: ${fmt(first.t)} < ${degs(first.v.angle)}`;
-      return { pt: pt2, lines: [mkLine(first.v, pt2)], marks: this.acquired, label, kind: first.v.kind, dist: first.t, angle: first.v.angle };
+      const pt3 = add(first2.v.origin, mul(first2.v.dir, first2.t));
+      const label = first2.v.kind === "polar" ? `Polar: ${fmt(first2.t)} < ${degs(first2.v.angle)}` : `Track: ${fmt(first2.t)} < ${degs(first2.v.angle)}`;
+      return { pt: pt3, lines: [mkLine(first2.v, pt3)], marks: this.acquired, label, kind: first2.v.kind, dist: first2.t, angle: first2.v.angle };
     }
   };
   var fmt = (n) => (Math.round(n * 1e4) / 1e4).toString();
@@ -4721,7 +4762,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
     /** Second corner of a rectangle (shows the rubber-band rectangle from `base`). */
     corner(spec) {
-      return this.ask({ kind: "point", corner: true, ...spec, preview: spec.preview || ((pt2) => [{ __rect: true, a: spec.base, b: pt2 }]) });
+      return this.ask({ kind: "point", corner: true, ...spec, preview: spec.preview || ((pt3) => [{ __rect: true, a: spec.base, b: pt3 }]) });
     }
     /** Typed number. Result: {value} | {kw} | {enter:true,value:default}. */
     number(spec) {
@@ -4996,19 +5037,19 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       await flush();
     }
-    async _pointPicked(ctx, p, pt2, raw) {
+    async _pointPicked(ctx, p, pt3, raw) {
       if (p.fromStage === "base") {
-        p.fromBase = pt2;
+        p.fromBase = pt3;
         p.fromStage = "offset";
         this.log("<Offset>:", "prompt");
         return;
       }
       if (p.fromStage === "offset") {
         p.fromStage = null;
-        return this._finishPoint(ctx, p, pt2);
+        return this._finishPoint(ctx, p, pt3);
       }
       if (p.m2p) {
-        p.m2p.push(pt2);
+        p.m2p.push(pt3);
         if (p.m2p.length < 2) {
           this.log("Second point of mid between 2 points:", "prompt");
           return;
@@ -5017,23 +5058,23 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         p.m2p = null;
         return this._finishPoint(ctx, p, m2);
       }
-      return this._finishPoint(ctx, p, pt2);
+      return this._finishPoint(ctx, p, pt3);
     }
-    async _finishPoint(ctx, p, pt2) {
-      this.lastPoint = pt2;
-      this._deliver(ctx, { pt: pt2 });
+    async _finishPoint(ctx, p, pt3) {
+      this.lastPoint = pt3;
+      this._deliver(ctx, { pt: pt3 });
       await flush();
     }
-    async _measurePicked(ctx, p, pt2) {
+    async _measurePicked(ctx, p, pt3) {
       const base = p.base || p.firstPoint;
       if (!base) {
-        p.firstPoint = pt2;
+        p.firstPoint = pt3;
         this.log("Specify second point:", "prompt");
         this._refreshPreview();
         return;
       }
-      const value = p.kind === "distance" ? dist(base, pt2) : angleOf(base, pt2);
-      this._deliver(ctx, { value, pt: pt2 });
+      const value = p.kind === "distance" ? dist(base, pt3) : angleOf(base, pt3);
+      this._deliver(ctx, { value, pt: pt3 });
       await flush();
     }
     idleClick(raw, mods) {
@@ -5054,8 +5095,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (e) {
         const ids = this.groupIds(e);
         if (mods.shift) {
-          const all = ids.every((id) => ed.sel.has(id));
-          for (const id of ids) all ? ed.sel.delete(id) : ed.sel.add(id);
+          const all2 = ids.every((id) => ed.sel.has(id));
+          for (const id of ids) all2 ? ed.sel.delete(id) : ed.sel.add(id);
         } else for (const id of ids) ed.sel.add(id);
         this.emit();
         return;
@@ -5410,9 +5451,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           return;
         }
         const dir = dist(p.base, this.cursor.pt) < 1e-12 ? { x: 1, y: 0 } : unit(sub(this.cursor.pt, p.base));
-        const pt2 = add(p.base, mul(dir, r.value));
-        this.lastPoint = pt2;
-        return this._deliver(ctx, { pt: pt2, typed: true, dde: true });
+        const pt3 = add(p.base, mul(dir, r.value));
+        this.lastPoint = pt3;
+        return this._deliver(ctx, { pt: pt3, typed: true, dde: true });
       }
     }
     _numberText(ctx, p, t) {
@@ -5704,7 +5745,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   function cycleVerts(graph, cyc) {
     return segsToVerts(cyc.map((id) => graph.half[id].seg), true);
   }
-  function findRegion(doc, pt2, entities = null) {
+  function findRegion(doc, pt3, entities = null) {
     const list = entities || doc.entities.filter((e) => doc.isVisible(e));
     const segs = list.flatMap((e) => e.type === "hatch" ? [] : edgeSegs(e, doc)).filter((s) => !(s.t === "l" && Math.abs(s.a.x) > 5e5));
     if (segs.length > MAX_SEGS) return { error: "The drawing has too many objects for boundary detection." };
@@ -5715,7 +5756,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const poly = tessCycle(graph, c2);
       return { c: c2, poly, area: polygonArea(poly) };
     });
-    const enclosing = cycles.filter((c2) => c2.area > 1e-9 && pointInPolygon(pt2, c2.poly)).sort((a, b) => a.area - b.area);
+    const enclosing = cycles.filter((c2) => c2.area > 1e-9 && pointInPolygon(pt3, c2.poly)).sort((a, b) => a.area - b.area);
     if (!enclosing.length) return { error: "Unable to determine a valid closed boundary at that point." };
     const outer = enclosing[0];
     const comp = new Array(graph.nodes.length).fill(-1);
@@ -5900,8 +5941,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   }
   async function linearLike(c2, kind, args = {}) {
     let p1, p2;
-    const first = await c2.point({ prompt: "Specify first extension line origin or <select object>", allowEnter: true });
-    if (first.enter && !first.pt) {
+    const first2 = await c2.point({ prompt: "Specify first extension line origin or <select object>", allowEnter: true });
+    if (first2.enter && !first2.pt) {
       const o = await c2.entity({ prompt: "Select object to dimension", filter: (e) => ["line", "arc", "circle", "pline"].includes(e.type) });
       if (!o.entity) return;
       const segs = segsOf(o.entity, c2.doc);
@@ -5920,8 +5961,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         p1 = segStart(best);
         p2 = segEnd(best);
       }
-    } else if (first.pt) {
-      p1 = first.pt;
+    } else if (first2.pt) {
+      p1 = first2.pt;
       const second = await c2.point({ prompt: "Specify second extension line origin", base: p1 });
       if (!second.pt) return;
       p2 = second.pt;
@@ -5935,7 +5976,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     };
     for (; ; ) {
       const opts = kind === "lin" ? ["Mtext", "Text", "Angle", "Horizontal", "Vertical", "Rotated"] : ["Mtext", "Text", "Angle"];
-      const r = await c2.point({ prompt: "Specify dimension line location", options: opts, base: mid(p1, p2), noOrtho: true, preview: (pt2) => [make(pt2)] });
+      const r = await c2.point({ prompt: "Specify dimension line location", options: opts, base: mid(p1, p2), noOrtho: true, preview: (pt3) => [make(pt3)] });
       if (r.kw === "Mtext" || r.kw === "Text") {
         const t = await c2.string({ prompt: "Enter dimension text <>", raw: true, default: "<>" });
         if (t.value !== void 0 && t.value !== "<>") override = t.value;
@@ -5971,8 +6012,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   var radial = (kind) => async function run(c2) {
     const o = await c2.entity({ prompt: kind === "rad" ? "Select arc or circle" : "Select arc or circle", filter: (e) => e.type === "circle" || e.type === "arc" });
     if (!o.entity) return;
-    const e0 = o.entity, ctr = e0.c, dir = unit(sub(o.pt, ctr)), pt2 = add(ctr, mul(dir, e0.r));
-    const make = (dp) => E.dim(kind, { c: ctr, pt: kind === "dia" ? pt2 : pt2, dp, ...dimDefaults(c2) });
+    const e0 = o.entity, ctr = e0.c, dir = unit(sub(o.pt, ctr)), pt3 = add(ctr, mul(dir, e0.r));
+    const make = (dp) => E.dim(kind, { c: ctr, pt: kind === "dia" ? pt3 : pt3, dp, ...dimDefaults(c2) });
     const r = await c2.point({ prompt: "Specify dimension line location", options: ["Mtext", "Text", "Angle"], base: ctr, noOrtho: true, preview: (p) => [make(p)] });
     if (r.kw === "Mtext" || r.kw === "Text") {
       const e = make(polar(ctr, angleOf(ctr, o.pt), e0.r * 1.5));
@@ -6051,8 +6092,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       let prev = base.p2;
       for (; ; ) {
-        const make = (pt2) => E.dim(base.kind, { p1: prev, p2: pt2, dp: base.dp, ang: base.ang, ds: base.ds });
-        const r = await c2.point({ prompt: "Specify a second extension line origin or [Undo/Select]", options: ["Undo", "Select"], allowEnter: true, base: prev, preview: (pt2) => [make(pt2)] });
+        const make = (pt3) => E.dim(base.kind, { p1: prev, p2: pt3, dp: base.dp, ang: base.ang, ds: base.ds });
+        const r = await c2.point({ prompt: "Specify a second extension line origin or [Undo/Select]", options: ["Undo", "Select"], allowEnter: true, base: prev, preview: (pt3) => [make(pt3)] });
         if (!r.pt) return;
         const e = c2.add(make(r.pt));
         prev = r.pt;
@@ -6078,8 +6119,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const side = dot(sub(base.dp, base.p1), n) >= 0 ? 1 : -1;
       let dp = base.dp;
       for (; ; ) {
-        const make = (pt2) => E.dim(base.kind, { p1: base.p1, p2: pt2, dp: add(dp, mul(n, side * space)), ang: base.ang, ds: base.ds });
-        const r = await c2.point({ prompt: "Specify a second extension line origin or [Undo/Select]", options: ["Undo", "Select"], allowEnter: true, base: base.p1, preview: (pt2) => [make(pt2)] });
+        const make = (pt3) => E.dim(base.kind, { p1: base.p1, p2: pt3, dp: add(dp, mul(n, side * space)), ang: base.ang, ds: base.ds });
+        const r = await c2.point({ prompt: "Specify a second extension line origin or [Undo/Select]", options: ["Undo", "Select"], allowEnter: true, base: base.p1, preview: (pt3) => [make(pt3)] });
         if (!r.pt) return;
         const e = c2.add(make(r.pt));
         dp = e.dp;
@@ -6100,12 +6141,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (!o.entity) return;
       const e0 = o.entity;
       if (e0.type === "circle" || e0.type === "arc") {
-        const ctr = e0.c, dir = unit(sub(o.pt, ctr)), pt2 = add(ctr, mul(dir, e0.r));
-        const make2 = (dp) => E.dim("rad", { c: ctr, pt: pt2, dp, ...dimDefaults(c2) });
+        const ctr = e0.c, dir = unit(sub(o.pt, ctr)), pt3 = add(ctr, mul(dir, e0.r));
+        const make2 = (dp) => E.dim("rad", { c: ctr, pt: pt3, dp, ...dimDefaults(c2) });
         const r2 = await c2.point({ prompt: "Specify dimension line location or [Mtext/Text/Angle/Diameter/Radius]", options: ["Diameter", "Radius"], base: ctr, noOrtho: true, preview: (p) => [make2(p)] });
         if (r2.kw === "Diameter") {
           const r22 = await c2.point({ prompt: "Specify dimension line location", base: ctr, noOrtho: true });
-          if (r22.pt) c2.add(E.dim("dia", { c: ctr, pt: pt2, dp: r22.pt, ...dimDefaults(c2) }));
+          if (r22.pt) c2.add(E.dim("dia", { c: ctr, pt: pt3, dp: r22.pt, ...dimDefaults(c2) }));
           return;
         }
         if (r2.pt) c2.add(make2(r2.pt));
@@ -6138,7 +6179,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const a = await c2.point({ prompt: "Specify leader arrowhead location" });
       if (!a.pt) return;
       const pts = [a.pt];
-      const r = await c2.point({ prompt: "Specify leader landing location", base: a.pt, noOrtho: false, preview: (pt2) => [E.leader([a.pt, pt2], "", mem.textHeight)] });
+      const r = await c2.point({ prompt: "Specify leader landing location", base: a.pt, noOrtho: false, preview: (pt3) => [E.leader([a.pt, pt3], "", mem.textHeight)] });
       if (!r.pt) return;
       pts.push(r.pt);
       const s = await textInput(c2, { prompt: "Enter text", p: r.pt, h: mem.textHeight, rot: 0, multi: false, jh: r.pt.x >= a.pt.x ? "left" : "right", jv: "middle" });
@@ -6265,7 +6306,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     async run(c2) {
       const a = await c2.point({ prompt: "Specify first point" });
       if (!a.pt) return;
-      const b = await c2.point({ prompt: "Specify second point or [Multiple points]", options: ["Multiple points"], base: a.pt, preview: (pt2) => [E.line(a.pt, pt2)] });
+      const b = await c2.point({ prompt: "Specify second point or [Multiple points]", options: ["Multiple points"], base: a.pt, preview: (pt3) => [E.line(a.pt, pt3)] });
       if (!b.pt) return;
       const d = sub(b.pt, a.pt);
       c2.log(`Distance = ${f(c2, len(d))},  Angle in XY Plane = ${angText(c2, Math.atan2(d.y, d.x))},  Angle from XY Plane = 0`);
@@ -6326,7 +6367,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (!r0.pt) return;
       const pts = [r0.pt];
       for (; ; ) {
-        const r = await c2.point({ prompt: "Specify next corner point or press ENTER for total", base: pts[pts.length - 1], allowEnter: true, preview: (pt2) => [E.pline([...pts, pt2], true)] });
+        const r = await c2.point({ prompt: "Specify next corner point or press ENTER for total", base: pts[pts.length - 1], allowEnter: true, preview: (pt3) => [E.pline([...pts, pt3], true)] });
         if (!r.pt) break;
         pts.push(r.pt);
       }
@@ -6603,8 +6644,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     if (names[t]) return names[t];
     const n = Number(t);
     if (Number.isInteger(n) && n >= 1 && n <= 255) return n;
-    const rgb = t.match(/^(\d{1,3}),(\d{1,3}),(\d{1,3})$/);
-    if (rgb && rgb.slice(1).every((x) => +x <= 255)) return "#" + rgb.slice(1).map((x) => (+x).toString(16).padStart(2, "0")).join("");
+    const rgb2 = t.match(/^(\d{1,3}),(\d{1,3}),(\d{1,3})$/);
+    if (rgb2 && rgb2.slice(1).every((x) => +x <= 255)) return "#" + rgb2.slice(1).map((x) => (+x).toString(16).padStart(2, "0")).join("");
     return badValue(v);
   }
   var READ_ONLY = {
@@ -6784,9 +6825,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
               break;
             }
             case "Color": {
-              const col = await need("New color [Truecolor/COlorbook]");
+              const col2 = await need("New color [Truecolor/COlorbook]");
               const n = await need("Enter name list of layer(s) for color", doc.cur.layer);
-              const v = parseColor(col);
+              const v = parseColor(col2);
               doc.willChange();
               for (const l of matchLayers(doc, n)) l.color = v === void 0 ? 7 : v;
               doc.touch();
@@ -7106,9 +7147,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     desc: "Increases or decreases the magnification of the view in the current viewport.",
     async run(c2, args) {
       const view = c2.view, ed = c2.editor;
-      const factor = (f2) => {
+      const factor = (f4) => {
         view.push();
-        view.zoomAt(view.w / 2, view.h / 2, f2);
+        view.zoomAt(view.w / 2, view.h / 2, f4);
         c2.rt.emit();
       };
       const mode = args.mode;
@@ -7383,8 +7424,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       let sx = args.scale ?? mem.insertScale, sy = args.scale ?? mem.insertScale, rot = args.rotation ?? mem.insertRot;
       for (; ; ) {
-        const make = (pt2) => E.insert(key, pt2, { sx, sy, rot });
-        const r = await c2.point({ prompt: "Specify insertion point", options: ["Basepoint", "Scale", "X", "Y", "Rotate"], preview: (pt2) => [make(pt2)] });
+        const make = (pt3) => E.insert(key, pt3, { sx, sy, rot });
+        const r = await c2.point({ prompt: "Specify insertion point", options: ["Basepoint", "Scale", "X", "Y", "Rotate"], preview: (pt3) => [make(pt3)] });
         if (r.kw === "Scale") {
           const s = await c2.number({ prompt: "Specify scale factor for XYZ axes", default: sx, nonzero: true });
           if (s.value) sx = sy = s.value;
@@ -7763,12 +7804,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     async run(c2, args) {
       let lines = args.lines;
       if (!lines) {
-        const f2 = await c2.app.ui?.openText?.(".scr,.txt");
-        if (!f2) {
+        const f4 = await c2.app.ui?.openText?.(".scr,.txt");
+        if (!f4) {
           c2.log("No script selected.");
           return;
         }
-        lines = f2.text.split(/\r?\n/);
+        lines = f4.text.split(/\r?\n/);
       }
       c2.log(`Running script (${lines.length} lines)`);
       queueMicrotask(() => c2.rt.script(lines));
@@ -8256,7 +8297,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       for (const s of this.solids) {
         if (!Array.isArray(s.vertices) || !Array.isArray(s.faces)) throw Error("Invalid solid.");
-        for (const f2 of s.faces) if (f2.length !== 3 || f2.some((i) => !Number.isInteger(i) || i < 0 || i >= s.vertices.length)) throw Error("Invalid solid geometry.");
+        for (const f4 of s.faces) if (f4.length !== 3 || f4.some((i) => !Number.isInteger(i) || i < 0 || i >= s.vertices.length)) throw Error("Invalid solid geometry.");
       }
     }
     /** Import a version-1 CadForge project (flat entities, points[] arrays, group-based blocks). */
@@ -8288,7 +8329,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       d.solids = (old.solids || []).map((s) => {
         const m2 = structuredClone(s);
-        const fixFeature = (f2) => ({ ...f2, profile: uuidMap.get(f2.profile) ?? f2.profile });
+        const fixFeature = (f4) => ({ ...f4, profile: uuidMap.get(f4.profile) ?? f4.profile });
         if (m2.extrusionProgram) m2.extrusionProgram.features = m2.extrusionProgram.features.map(fixFeature);
         return m2;
       });
@@ -9276,19 +9317,19 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
     }
     collapsedPanel(p) {
-      const first = (items) => {
+      const first2 = (items) => {
         for (const it of items) {
           if (it.t === "btn") {
             const m2 = this.meta(it);
             if (m2) return m2.icon;
           } else if (it.items) {
-            const r = first(it.items);
+            const r = first2(it.items);
             if (r) return r;
           }
         }
         return "properties";
       };
-      const btn = h("button.rb.large.collapsed", { "aria-haspopup": "true", "aria-label": `${p.title} panel`, onclick: () => this.flyoutPanel(btn, p) }, svgIcon(first(p.items), 32), h("span.rb-label", p.title, h("br"), svgIcon("chevdown", 8)));
+      const btn = h("button.rb.large.collapsed", { "aria-haspopup": "true", "aria-label": `${p.title} panel`, onclick: () => this.flyoutPanel(btn, p) }, svgIcon(first2(p.items), 32), h("span.rb-label", p.title, h("br"), svgIcon("chevdown", 8)));
       return h("section.rpanel.collapsed-panel", btn);
     }
     flyoutPanel(anchor, p) {
@@ -9669,7 +9710,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         this.app.runtime._refreshPreview();
         this.app.emit("change");
       };
-      const num3 = (label, key, step) => {
+      const num4 = (label, key, step) => {
         const inp = h("input", { type: "number", step, value: s()?.[key] ?? 0, onchange: (e) => {
           const v = Number(e.target.value);
           if (Number.isFinite(v) && s()) {
@@ -9688,7 +9729,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           this.render();
         }
       } }, h("span.cswatch", { style: { background: s()?.color === void 0 ? "linear-gradient(135deg,#888 50%,#bbb 50%)" : colorToCss(s().color) } }), h("span", describeColor(s()?.color)));
-      return h("div.rcol.hprops", h("label.hrow", h("span", "Color"), colorBtn), num3("Scale", "scale", 0.1), num3("Angle", "angle", 1));
+      return h("div.rcol.hprops", h("label.hrow", h("span", "Color"), colorBtn), num4("Scale", "scale", 0.1), num4("Angle", "angle", 1));
     }
     hatchClose() {
       return h("button.rb.large.primary", { onclick: () => this.app.runtime.enter().then(() => this.ui.hatchDone?.()) }, svgIcon("check", 32), h("span.rb-label", h("span", "Close Hatch"), h("br"), "Creation"));
@@ -9826,8 +9867,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           input.blur();
         }
         if (e.key === "Enter") {
-          const f2 = results.querySelector(".ic-hit");
-          f2?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+          const f4 = results.querySelector(".ic-hit");
+          f4?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
         }
       });
       input.addEventListener("blur", () => setTimeout(() => {
@@ -9934,7 +9975,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   };
 
   // src/render/renderer.js
-  var FONT = 'Arial, "Liberation Sans", "Helvetica Neue", sans-serif';
   var MAX_DEPTH = 8;
   function makeContext(ctx, canvasW, canvasH, dpr, editor, prefs, theme) {
     const { doc, view } = editor;
@@ -9990,7 +10030,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     const fade = layer.locked && rc.fade ? Math.max(0.12, 1 - rc.fade) : 1;
     return {
       rawColor: color,
-      color: colorToCss(color, { dark: rc.theme.dark }),
+      color: rc.mono ? "#000000" : colorToCss(color, { dark: rc.theme.dark }),
       ltype,
       lw,
       lts: (e.lts ?? 1) * (parent?.lts ?? 1),
@@ -9998,16 +10038,16 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     };
   }
   function traceSegs(ctx, segs, closed) {
-    let first = true;
+    let first2 = true;
     for (const s of segs) {
       if (s.t === "l") {
-        if (first) ctx.moveTo(s.a.x, s.a.y);
+        if (first2) ctx.moveTo(s.a.x, s.a.y);
         ctx.lineTo(s.b.x, s.b.y);
       } else {
-        if (first) ctx.moveTo(s.c.x + s.r * Math.cos(s.a0), s.c.y + s.r * Math.sin(s.a0));
+        if (first2) ctx.moveTo(s.c.x + s.r * Math.cos(s.a0), s.c.y + s.r * Math.sin(s.a0));
         ctx.arc(s.c.x, s.c.y, s.r, s.a0, s.a0 + s.sw, s.sw < 0);
       }
-      first = false;
+      first2 = false;
     }
     if (closed) ctx.closePath();
   }
@@ -10083,7 +10123,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     setScreen(rc);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    const w = forceWidth || lwPixels(style.lw, rc.lwOn);
+    const w = forceWidth || (rc.lwPx ? rc.lwPx(style.lw) : lwPixels(style.lw, rc.lwOn));
     if (selected) {
       ctx.globalAlpha = 0.38 * style.alpha;
       ctx.strokeStyle = rc.theme.select;
@@ -10293,7 +10333,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   }
   function drawHatch(rc, e, style, selected, hover) {
     const ctx = rc.ctx;
-    const color = e.color !== void 0 ? colorToCss(e.color, { dark: rc.theme.dark }) : style.color;
+    const color = e.color !== void 0 && !rc.mono ? colorToCss(e.color, { dark: rc.theme.dark }) : style.color;
     if (e.pattern === "SOLID") {
       if (rc.fill) {
         loopsPath(rc, e.loops);
@@ -10401,7 +10441,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     ctx.strokeStyle = theme.gridMajor;
     ctx.lineWidth = 1;
     ctx.stroke();
-    for (const [axis, col] of [["x", "rgba(230,90,90,.55)"], ["y", "rgba(90,200,120,.55)"]]) {
+    for (const [axis, col2] of [["x", "rgba(230,90,90,.55)"], ["y", "rgba(90,200,120,.55)"]]) {
       ctx.beginPath();
       setWorld(rc);
       if (axis === "x") {
@@ -10412,7 +10452,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         ctx.lineTo(0, b.maxY);
       }
       setScreen(rc);
-      ctx.strokeStyle = col;
+      ctx.strokeStyle = col2;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -10668,8 +10708,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (prefs.AUTOSNAP & 2) tipBox(ctx, cur.snap.name, s.x + 14, s.y + 12, theme.dark);
     } else if (tr?.label && prefs.AUTOSNAP & 32 && m2) tipBox(ctx, tr.label, m2.x + 16, m2.y + 18, theme.dark);
     if (m2 && st.showCross !== false) {
-      const col = theme.cross, kind = st.kind;
-      ctx.strokeStyle = col;
+      const col2 = theme.cross, kind = st.kind;
+      ctx.strokeStyle = col2;
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
       const x = Math.round(m2.x) + 0.5, y = Math.round(m2.y) + 0.5;
@@ -10695,18 +10735,18 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   function featureEdges(s) {
     let r = featureCache.get(s);
     if (r && r.nv === s.vertices.length && r.nf === s.faces.length) return r.edges;
-    const V = s.vertices, norm = (f2) => {
-      const [a, b, c2] = f2.map((i) => V[i]);
+    const V = s.vertices, norm = (f4) => {
+      const [a, b, c2] = f4.map((i) => V[i]);
       const u = [b.x - a.x, b.y - a.y, b.z - a.z], v = [c2.x - a.x, c2.y - a.y, c2.z - a.z];
       const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
       const l = Math.hypot(...n) || 1;
       return n.map((x) => x / l);
     };
     const map = /* @__PURE__ */ new Map();
-    s.faces.forEach((f2, fi) => {
-      const n = norm(f2);
+    s.faces.forEach((f4, fi) => {
+      const n = norm(f4);
       for (let k = 0; k < 3; k++) {
-        const a = f2[k], b = f2[(k + 1) % 3], key = a < b ? a + "," + b : b + "," + a;
+        const a = f4[k], b = f4[(k + 1) % 3], key = a < b ? a + "," + b : b + "," + a;
         const entry = map.get(key);
         if (entry) entry.n2 = n;
         else map.set(key, { a, b, n1: n, n2: null });
@@ -10744,19 +10784,19 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     const polys = [];
     for (const s of solids) {
       const P2 = s.vertices.map((v) => view.project(v));
-      const base = s.color && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : "#5aa0d0", rgb = [1, 3, 5].map((i) => parseInt(base.slice(i, i + 2), 16));
+      const base = s.color && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : "#5aa0d0", rgb2 = [1, 3, 5].map((i) => parseInt(base.slice(i, i + 2), 16));
       if (fill) {
-        for (const f2 of s.faces) {
-          const a = P2[f2[0]], b = P2[f2[1]], c2 = P2[f2[2]];
+        for (const f4 of s.faces) {
+          const a = P2[f4[0]], b = P2[f4[1]], c2 = P2[f4[2]];
           const area = (b.x - a.x) * (c2.y - a.y) - (b.y - a.y) * (c2.x - a.x);
           if (area >= 0) continue;
-          const A = s.vertices[f2[0]], B2 = s.vertices[f2[1]], C3 = s.vertices[f2[2]];
+          const A = s.vertices[f4[0]], B2 = s.vertices[f4[1]], C3 = s.vertices[f4[2]];
           const u = [B2.x - A.x, B2.y - A.y, B2.z - A.z], v = [C3.x - A.x, C3.y - A.y, C3.z - A.z];
           let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
           const l = Math.hypot(...n) || 1;
           n = camN(n.map((x) => x / l));
           const lum = style === "Hidden" ? 1 : 0.32 + 0.68 * Math.max(0, n[0] * L2[0] + n[1] * L2[1] + n[2] * L2[2]);
-          polys.push({ pts: [a, b, c2], depth: (a.depth + b.depth + c2.depth) / 3, col: style === "Hidden" ? theme.canvas : `rgb(${rgb.map((x) => Math.round(x * lum))})` });
+          polys.push({ pts: [a, b, c2], depth: (a.depth + b.depth + c2.depth) / 3, col: style === "Hidden" ? theme.canvas : `rgb(${rgb2.map((x) => Math.round(x * lum))})` });
         }
       }
     }
@@ -10834,22 +10874,22 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const x1 = v[0] * cy - v[1] * sy, y1 = v[0] * sy + v[1] * cy;
       return [x1, y1 * sp + v[2] * cp, -y1 * cp + v[2] * sp];
     }
-    faceGeom(f2) {
-      const c2 = this.rot(f2.n), u = this.rot(f2.u), v = this.rot(f2.v);
+    faceGeom(f4) {
+      const c2 = this.rot(f4.n), u = this.rot(f4.u), v = this.rot(f4.v);
       const P2 = (x, y) => ({ x: C2 + R2 * (c2[0] + x * u[0] + y * v[0]), y: C2 - R2 * (c2[1] + x * u[1] + y * v[1]) });
       return { c: c2, u, v, depth: c2[2], P: P2, origin: P2(0, 0), U: { x: R2 * u[0], y: -R2 * u[1] }, V: { x: R2 * v[0], y: -R2 * v[1] } };
     }
     visibleFaces() {
-      return FACES.map((f2) => ({ f: f2, geo: this.faceGeom(f2) })).filter((x) => x.geo.depth > 1e-3).sort((a, b) => a.geo.depth - b.geo.depth);
+      return FACES.map((f4) => ({ f: f4, geo: this.faceGeom(f4) })).filter((x) => x.geo.depth > 1e-3).sort((a, b) => a.geo.depth - b.geo.depth);
     }
     cellAt(x, y) {
-      for (const { f: f2, geo } of [...this.visibleFaces()].reverse()) {
+      for (const { f: f4, geo } of [...this.visibleFaces()].reverse()) {
         const dx = x - geo.origin.x, dy = y - geo.origin.y, det = geo.U.x * geo.V.y - geo.U.y * geo.V.x;
         if (Math.abs(det) < 1e-6) continue;
         const s = (dx * geo.V.y - dy * geo.V.x) / det, t = (geo.U.x * dy - geo.U.y * dx) / det;
         if (Math.abs(s) <= 1 && Math.abs(t) <= 1) {
           const i = Math.abs(s) < 0.58 ? 0 : Math.sign(s), j = Math.abs(t) < 0.58 ? 0 : Math.sign(t);
-          return { face: f2, i, j, dir: [f2.n[0] + i * f2.u[0] + j * f2.v[0], f2.n[1] + i * f2.u[1] + j * f2.v[1], f2.n[2] + i * f2.u[2] + j * f2.v[2]] };
+          return { face: f4, i, j, dir: [f4.n[0] + i * f4.u[0] + j * f4.v[0], f4.n[1] + i * f4.u[1] + j * f4.v[1], f4.n[2] + i * f4.u[2] + j * f4.v[2]] };
         }
       }
       return null;
@@ -10962,11 +11002,11 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           ctx.fillText(label, x * 1 + (x - C2) * 0.22, y + (y - C2) * 0.22);
         }
       }
-      for (const { f: f2, geo } of this.visibleFaces()) {
+      for (const { f: f4, geo } of this.visibleFaces()) {
         const shade = 0.55 + 0.45 * geo.depth;
         const base = dark ? [70, 82, 96] : [214, 222, 232];
-        const col = base.map((c2) => Math.round(c2 * (dark ? shade + 0.25 : 0.86 + 0.14 * shade)));
-        ctx.fillStyle = `rgb(${col})`;
+        const col2 = base.map((c2) => Math.round(c2 * (dark ? shade + 0.25 : 0.86 + 0.14 * shade)));
+        ctx.fillStyle = `rgb(${col2})`;
         ctx.strokeStyle = dark ? "#9fb0c2" : "#6c7b8b";
         ctx.lineWidth = 1;
         const q = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([s, t]) => geo.P(s, t));
@@ -10976,7 +11016,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         ctx.fill();
         ctx.stroke();
         const hv = this.hover?.cell;
-        if (hv && hv.face === f2) {
+        if (hv && hv.face === f4) {
           const lo = (i) => i === 0 ? -0.58 : i > 0 ? 0.58 : -1, hi = (i) => i === 0 ? 0.58 : i > 0 ? 1 : -0.58;
           const cq = [[lo(hv.i), lo(hv.j)], [hi(hv.i), lo(hv.j)], [hi(hv.i), hi(hv.j)], [lo(hv.i), hi(hv.j)]].map(([s, t]) => geo.P(s, t));
           ctx.fillStyle = "rgba(80,170,255,.55)";
@@ -10994,7 +11034,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         ctx.textBaseline = "middle";
         ctx.scale(10, 10);
         ctx.font = '700 .39px "Segoe UI", Arial, sans-serif';
-        ctx.fillText(f2.name, 0, 0);
+        ctx.fillText(f4.name, 0, 0);
         ctx.restore();
       }
       ctx.setTransform(2, 0, 0, 2, 0, 0);
@@ -11338,8 +11378,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           return;
         }
         if (p2.mode === "zoom") {
-          const f2 = Math.exp(-(e.clientY - p2.y) * 0.01);
-          view.zoomAt(this.size.w / 2, this.size.h / 2, f2);
+          const f4 = Math.exp(-(e.clientY - p2.y) * 0.01);
+          view.zoomAt(this.size.w / 2, this.size.h / 2, f4);
           p2.x = e.clientX;
           p2.y = e.clientY;
           this.viewChanged();
@@ -11411,8 +11451,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       } else if (e.ctrlKey) {
         view.pan(-e.deltaY, 0);
       } else {
-        const f2 = Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 33 : 1));
-        view.zoomAt(s.x, s.y, Math.max(0.5, Math.min(2, f2)));
+        const f4 = Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 33 : 1));
+        view.zoomAt(s.x, s.y, Math.max(0.5, Math.min(2, f4)));
       }
       this.mouse = s;
       this.app.runtime.move(view.toWorld(s.x, s.y));
@@ -12602,8 +12642,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         preview.replaceChildren(h("b", sel), h("div", `Text height ${s.txt} \xB7 Arrow size ${s.asz} \xB7 ${s.dec} decimals`), h("div", `Extension offset ${s.exo} \xB7 beyond ${s.exe} \xB7 Scale ${s.scale}`));
       };
       const modify = async () => {
-        const s = styles[sel], f2 = (k, o = {}) => num2(s[k], { width: 90, min: 0, ...o });
-        const txt = f2("txt", { min: 1e-4 }), gap = f2("gap"), asz = f2("asz"), exo = f2("exo"), exe = f2("exe"), cen = f2("cen"), scale = f2("scale", { min: 1e-4 }), dec = f2("dec", { step: 1, max: 8 }), lfac = f2("lfac", { min: 1e-4 });
+        const s = styles[sel], f4 = (k, o = {}) => num2(s[k], { width: 90, min: 0, ...o });
+        const txt = f4("txt", { min: 1e-4 }), gap = f4("gap"), asz = f4("asz"), exo = f4("exo"), exe = f4("exe"), cen = f4("cen"), scale = f4("scale", { min: 1e-4 }), dec = f4("dec", { step: 1, max: 8 }), lfac = f4("lfac", { min: 1e-4 });
         const pre = text(s.pre, { width: 90 }), suf = text(s.suf, { width: 90 }), tad = select([{ value: 1, label: "Above dimension line" }, { value: 0, label: "Centered" }], s.tad ? 1 : 0, { width: 180 });
         const blk = select([["closed", "Closed filled"], ["open", "Open"], ["tick", "Architectural tick"], ["dot", "Dot"], ["none", "None"]].map(([value, label]) => ({ value, label })), s.blk, { width: 180 }), trail = check("Suppress trailing zeros", s.zin & 8);
         const r = await ui2.dialog("dimstyle-edit", { title: `Modify Dimension Style: ${sel}`, pages: [
@@ -12695,7 +12735,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     aliasedit: ({ ui: ui2 }) => {
       const list = h("div.alias-list");
       const q = text("", { placeholder: "Filter", width: 160, label: "Filter aliases" });
-      const all = () => {
+      const all2 = () => {
         const map = /* @__PURE__ */ new Map();
         for (const [a, n] of registry.aliases) map.set(a, { alias: a, cmd: n, user: false });
         for (const [a, n] of registry.userAliases) map.set(a, { alias: a, cmd: n, user: true });
@@ -12705,7 +12745,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         const s = q.value.trim().toUpperCase();
         list.replaceChildren(
           h("div.alias-row.head", h("span", "Alias"), h("span", "Command"), h("span")),
-          ...all().filter((r) => !s || r.alias.includes(s) || r.cmd.includes(s)).map((r) => h("div.alias-row" + (r.user ? ".user" : ""), h("span.a", r.alias), h("span", r.cmd), r.user ? h("button.btn.sm", { type: "button", onclick: () => {
+          ...all2().filter((r) => !s || r.alias.includes(s) || r.cmd.includes(s)).map((r) => h("div.alias-row" + (r.user ? ".user" : ""), h("span.a", r.alias), h("span", r.cmd), r.user ? h("button.btn.sm", { type: "button", onclick: () => {
             registry.userAliases.delete(r.alias);
             saveUserAliases();
             draw();
@@ -12767,9 +12807,1556 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
   };
 
+  // src/io/recorder.js
+  var TAU2 = Math.PI * 2;
+  var RecordingContext = class {
+    constructor(tol = 0.08) {
+      this.ops = [];
+      this.tol = tol;
+      this.m = [1, 0, 0, 1, 0, 0];
+      this.strokeStyle = "#000000";
+      this.fillStyle = "#000000";
+      this.lineWidth = 1;
+      this.globalAlpha = 1;
+      this.lineCap = "butt";
+      this.lineJoin = "miter";
+      this.font = "10px sans-serif";
+      this.textBaseline = "alphabetic";
+      this.dash = [];
+      this.path = [];
+      this.cur = null;
+    }
+    // transforms
+    setTransform(a, b, c2, d, e, f4) {
+      this.m = [a, b, c2, d, e, f4];
+    }
+    scale(sx, sy) {
+      const m2 = this.m;
+      this.m = [m2[0] * sx, m2[1] * sx, m2[2] * sy, m2[3] * sy, m2[4], m2[5]];
+    }
+    setLineDash(a) {
+      this.dash = a.slice();
+    }
+    tp(x, y) {
+      const m2 = this.m;
+      return [m2[0] * x + m2[2] * y + m2[4], m2[1] * x + m2[3] * y + m2[5]];
+    }
+    // path construction (points are stored in device space, i.e. after the transform at call time)
+    beginPath() {
+      this.path = [];
+      this.cur = null;
+    }
+    moveTo(x, y) {
+      this.cur = { pts: [this.tp(x, y)], closed: false };
+      this.path.push(this.cur);
+    }
+    lineTo(x, y) {
+      if (!this.cur) return this.moveTo(x, y);
+      this.cur.pts.push(this.tp(x, y));
+    }
+    closePath() {
+      if (this.cur) {
+        this.cur.closed = true;
+        const p = this.cur.pts[0];
+        this.cur = { pts: [p], closed: false };
+        this.path.push(this.cur);
+      }
+    }
+    rect(x, y, w, h2) {
+      this.moveTo(x, y);
+      this.lineTo(x + w, y);
+      this.lineTo(x + w, y + h2);
+      this.lineTo(x, y + h2);
+      this.closePath();
+    }
+    arc(cx, cy, r, a0, a1, ccw = false) {
+      this.ellipse(cx, cy, r, r, 0, a0, a1, ccw);
+    }
+    ellipse(cx, cy, rx, ry, rot, a0, a1, ccw = false) {
+      let sw = a1 - a0;
+      if (!ccw) {
+        if (sw >= TAU2) sw = TAU2;
+        else while (sw < 0) sw += TAU2;
+      } else {
+        if (sw <= -TAU2) sw = -TAU2;
+        else while (sw > 0) sw -= TAU2;
+      }
+      const k = Math.sqrt(Math.abs(this.m[0] * this.m[3] - this.m[1] * this.m[2])), rDev = Math.max(rx, ry) * k;
+      const stepMax = rDev > this.tol ? 2 * Math.acos(Math.max(0, 1 - this.tol / rDev)) : Math.PI / 2;
+      const n = Math.max(4, Math.min(4e3, Math.ceil(Math.abs(sw) / Math.max(stepMax, 1e-3)))), cr = Math.cos(rot), sr = Math.sin(rot);
+      for (let i = 0; i <= n; i++) {
+        const t = a0 + sw * i / n, x = rx * Math.cos(t), y = ry * Math.sin(t);
+        const px = cx + x * cr - y * sr, py = cy + x * sr + y * cr;
+        if (i === 0 && !this.cur) this.moveTo(px, py);
+        else this.lineTo(px, py);
+      }
+    }
+    // painting
+    stroke() {
+      const paths = this.paths();
+      if (paths.length) this.ops.push({ t: "stroke", paths, color: this.strokeStyle, alpha: this.globalAlpha, w: this.lineWidth, dash: this.dash.slice(), cap: this.lineCap, join: this.lineJoin });
+    }
+    fill(rule = "nonzero") {
+      const paths = this.paths(true);
+      if (paths.length) this.ops.push({ t: "fill", paths, color: this.fillStyle, alpha: this.globalAlpha, rule });
+    }
+    fillRect(x, y, w, h2) {
+      const keep = [this.path, this.cur];
+      this.beginPath();
+      this.rect(x, y, w, h2);
+      this.fill();
+      [this.path, this.cur] = keep;
+    }
+    strokeRect(x, y, w, h2) {
+      const keep = [this.path, this.cur];
+      this.beginPath();
+      this.rect(x, y, w, h2);
+      this.stroke();
+      [this.path, this.cur] = keep;
+    }
+    fillText(str, x, y) {
+      const em = parseFloat(this.font) || 10;
+      this.ops.push({ t: "text", str: String(str), x, y, m: this.m.slice(), em, color: this.fillStyle, alpha: this.globalAlpha });
+    }
+    paths(forFill = false) {
+      return this.path.filter((p) => p.pts.length > (forFill ? 2 : 1) || p.pts.length === 2 && !forFill).map((p) => ({ pts: p.pts, closed: p.closed }));
+    }
+  };
+
+  // src/io/pdf.js
+  var WIN_ANSI = { 8960: 216, 8211: 150, 8212: 151, 8216: 145, 8217: 146, 8220: 147, 8221: 148, 8226: 149, 8364: 128, 8482: 153 };
+  var f2 = (v) => {
+    const s = (Math.round(v * 1e3) / 1e3).toString();
+    return s === "-0" ? "0" : s;
+  };
+  function rgb(css) {
+    let m2 = /^#([0-9a-f]{6})$/i.exec(css);
+    if (m2) {
+      const n = parseInt(m2[1], 16);
+      return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+    }
+    m2 = /^#([0-9a-f]{3})$/i.exec(css);
+    if (m2) return [...m2[1]].map((c2) => parseInt(c2 + c2, 16) / 255);
+    m2 = /^rgba?\(([^)]+)\)/.exec(css);
+    if (m2) {
+      const p = m2[1].split(",").map(Number);
+      return [p[0] / 255, p[1] / 255, p[2] / 255];
+    }
+    return [0, 0, 0];
+  }
+  function pdfString(str) {
+    let out = "(";
+    for (const ch of String(str)) {
+      let c2 = ch.codePointAt(0);
+      if (c2 > 255) c2 = WIN_ANSI[c2] ?? 63;
+      if (c2 === 40 || c2 === 41 || c2 === 92) out += "\\" + String.fromCharCode(c2);
+      else if (c2 < 32 || c2 > 126) out += "\\" + c2.toString(8).padStart(3, "0");
+      else out += String.fromCharCode(c2);
+    }
+    return out + ")";
+  }
+  function writePDF(ops, page, { unitMm = 0.1, title = "CadForge drawing" } = {}) {
+    const pt3 = unitMm * 72 / 25.4, W = page.w * pt3, H = page.h * pt3;
+    const alphas = /* @__PURE__ */ new Map();
+    const gs = (a) => {
+      const k = Math.round(a * 100) / 100;
+      if (!alphas.has(k)) alphas.set(k, `GS${alphas.size + 1}`);
+      return alphas.get(k);
+    };
+    const c2 = [];
+    c2.push(`q ${f2(pt3)} 0 0 ${f2(-pt3)} 0 ${f2(H)} cm`);
+    c2.push("1 J 1 j");
+    const pathOps = (paths) => {
+      for (const p of paths) {
+        p.pts.forEach(([x, y], i) => c2.push(`${f2(x)} ${f2(y)} ${i ? "l" : "m"}`));
+        if (p.closed) c2.push("h");
+      }
+    };
+    for (const op of ops) {
+      const a = op.alpha ?? 1;
+      if (a <= 0) continue;
+      if (a < 1) c2.push(`/${gs(a)} gs`);
+      else if (alphas.size) c2.push("/GS0 gs");
+      if (op.t === "stroke") {
+        const [r, g, b] = rgb(op.color);
+        c2.push(`${f2(r)} ${f2(g)} ${f2(b)} RG ${f2(Math.max(op.w, 0.01))} w ${op.cap === "round" ? 1 : op.cap === "square" ? 2 : 0} J ${op.join === "round" ? 1 : op.join === "bevel" ? 2 : 0} j`);
+        c2.push(op.dash.length ? `[${op.dash.map(f2).join(" ")}] 0 d` : "[] 0 d");
+        pathOps(op.paths);
+        c2.push("S");
+      } else if (op.t === "fill") {
+        const [r, g, b] = rgb(op.color);
+        c2.push(`${f2(r)} ${f2(g)} ${f2(b)} rg`);
+        pathOps(op.paths);
+        c2.push(op.rule === "evenodd" ? "f*" : "f");
+      } else if (op.t === "text") {
+        const [r, g, b] = rgb(op.color), m2 = op.m;
+        c2.push(`q ${m2.map(f2).join(" ")} cm 1 0 0 -1 0 0 cm BT /F1 ${f2(op.em)} Tf ${f2(r)} ${f2(g)} ${f2(b)} rg ${f2(op.x)} ${f2(-op.y)} Td ${pdfString(op.str)} Tj ET Q`);
+      }
+    }
+    c2.push("Q");
+    const content = c2.join("\n");
+    const gsDict = [`/GS0 << /ca 1 /CA 1 >>`, ...[...alphas].map(([a, name]) => `/${name} << /ca ${a} /CA ${a} >>`)].join(" ");
+    const objs = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f2(W)} ${f2(H)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ExtGState << ${gsDict} >> >> >>`,
+      `<< /Length ${content.length} >>
+stream
+${content}
+endstream`,
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+      `<< /Title ${pdfString(title)} /Producer (CadForge) /Creator (CadForge) >>`
+    ];
+    let out = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+    const offsets = [];
+    objs.forEach((o, i) => {
+      offsets.push(out.length);
+      out += `${i + 1} 0 obj
+${o}
+endobj
+`;
+    });
+    const xref = out.length;
+    out += `xref
+0 ${objs.length + 1}
+0000000000 65535 f 
+` + offsets.map((o) => String(o).padStart(10, "0") + " 00000 n \n").join("");
+    out += `trailer
+<< /Size ${objs.length + 1} /Root 1 0 R /Info 6 0 R >>
+startxref
+${xref}
+%%EOF
+`;
+    const bytes = new Uint8Array(out.length);
+    for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
+    return bytes;
+  }
+
+  // src/io/svg.js
+  var f3 = (v) => (Math.round(v * 100) / 100).toString();
+  var esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  var col = (c2) => /^rgba?\(/.test(c2) ? c2 : c2;
+  function writeSVG(ops, page, { unitMm = 0.1, title = "CadForge drawing" } = {}) {
+    const out = [`<?xml version="1.0" encoding="UTF-8"?>`, `<svg xmlns="http://www.w3.org/2000/svg" width="${f3(page.w * unitMm)}mm" height="${f3(page.h * unitMm)}mm" viewBox="0 0 ${f3(page.w)} ${f3(page.h)}">`, `<title>${esc(title)}</title>`, `<rect width="100%" height="100%" fill="#ffffff"/>`];
+    const d = (paths) => paths.map((p) => "M" + p.pts.map(([x, y]) => `${f3(x)} ${f3(y)}`).join("L") + (p.closed ? "Z" : "")).join("");
+    for (const op of ops) {
+      const a = op.alpha ?? 1;
+      if (a <= 0) continue;
+      if (op.t === "stroke") {
+        out.push(`<path d="${d(op.paths)}" fill="none" stroke="${col(op.color)}"${a < 1 ? ` stroke-opacity="${f3(a)}"` : ""} stroke-width="${f3(Math.max(op.w, 0.01))}" stroke-linecap="${op.cap}" stroke-linejoin="${op.join}"${op.dash.length ? ` stroke-dasharray="${op.dash.map(f3).join(" ")}"` : ""}/>`);
+      } else if (op.t === "fill") {
+        out.push(`<path d="${d(op.paths)}" fill="${col(op.color)}"${a < 1 ? ` fill-opacity="${f3(a)}"` : ""} fill-rule="${op.rule === "evenodd" ? "evenodd" : "nonzero"}" stroke="none"/>`);
+      } else if (op.t === "text") {
+        out.push(`<text transform="matrix(${op.m.map((v) => Math.round(v * 1e4) / 1e4).join(" ")})" x="${f3(op.x)}" y="${f3(op.y)}" font-family="Arial, Helvetica, sans-serif" font-size="${f3(op.em)}" fill="${col(op.color)}"${a < 1 ? ` fill-opacity="${f3(a)}"` : ""}>${esc(op.str)}</text>`);
+      }
+    }
+    out.push("</svg>");
+    return out.join("\n");
+  }
+
+  // src/io/plot.js
+  var UNIT_MM = 0.1;
+  var PAPERS = { A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841], Letter: [279.4, 215.9], Legal: [355.6, 215.9], Tabloid: [431.8, 279.4] };
+  var MM_PER_INSUNIT = { 0: 1, 1: 25.4, 2: 304.8, 4: 1, 5: 10, 6: 1e3 };
+  var SCALES = [["Fit to paper", "fit"], ["1:1", 1], ["1:2", 1 / 2], ["1:5", 1 / 5], ["1:10", 1 / 10], ["1:20", 1 / 20], ["1:50", 1 / 50], ["1:100", 1 / 100], ["1:200", 1 / 200], ["2:1", 2], ["5:1", 5], ["10:1", 10]];
+  var plottable = (doc, e) => {
+    const l = doc.layerOf(e);
+    return l.on && !l.frozen && l.plot !== false;
+  };
+  function defaultPlotOptions(doc) {
+    return { paper: "A4", landscape: true, area: "extents", scale: "fit", center: true, offsetX: 0, offsetY: 0, margin: 5, lineweights: true, mono: true, format: "pdf", dpi: 200, title: doc.name };
+  }
+  function pageSize(o) {
+    const [a, b] = PAPERS[o.paper] || PAPERS.A4;
+    return o.landscape ? { w: Math.max(a, b), h: Math.min(a, b) } : { w: Math.min(a, b), h: Math.max(a, b) };
+  }
+  function plotBounds(doc, o, viewBounds) {
+    if (o.area === "display" && viewBounds) return viewBounds;
+    let b = null;
+    for (const e of doc.model.entities) if (plottable(doc, e)) {
+      try {
+        b = unionBounds(b, boundsOf(e, doc));
+      } catch {
+      }
+    }
+    return b;
+  }
+  function plotLayout(doc, o, viewBounds) {
+    const page = pageSize(o), bounds = plotBounds(doc, o, viewBounds);
+    if (!bounds) throw Error("There is nothing to plot.");
+    const bw = Math.max(bounds.maxX - bounds.minX, 1e-9), bh = Math.max(bounds.maxY - bounds.minY, 1e-9);
+    const pw = page.w - 2 * o.margin, ph = page.h - 2 * o.margin;
+    let s;
+    if (o.scale === "fit") s = Math.min(pw / bw, ph / bh);
+    else s = (MM_PER_INSUNIT[doc.settings.units.insUnits] ?? 1) * Number(o.scale);
+    const ox = o.center ? (page.w - bw * s) / 2 : o.margin + (o.offsetX || 0), oy = o.center ? (page.h - bh * s) / 2 : o.margin + (o.offsetY || 0);
+    const worldM = [10 * s, 0, 0, -10 * s, 10 * (ox - s * bounds.minX), 10 * (page.h - oy + s * bounds.minY)];
+    const fits = bw * s <= pw + 1e-6 && bh * s <= ph + 1e-6;
+    return { page, bounds, mmPerUnit: s, worldM, fits, W: Math.round(page.w * 10), H: Math.round(page.h * 10) };
+  }
+  var THEME = { dark: false, canvas: "#ffffff", grid: "#000000", gridMajor: "rgba(0,0,0,.1)", select: "#000000", hover: "#000000", cross: "#000000", gridAlpha: 0 };
+  function renderPlot(ctx, doc, o, layout, dpr = 1, { background = true } = {}) {
+    const { W, H } = layout;
+    const prefs = { LWDISPLAY: 1, LAYLOCKFADECTL: 0, TRANSPARENCYDISPLAY: 1, FILLMODE: 1 };
+    const editor = { doc, view: new View(), sel: /* @__PURE__ */ new Set(), tempSel: /* @__PURE__ */ new Set(), hoverId: null };
+    const rc = makeContext(ctx, W, H, dpr, editor, prefs, THEME);
+    rc.worldM = layout.worldM;
+    rc._vis = null;
+    rc.mono = !!o.mono;
+    rc.fade = 0;
+    rc.lwPx = (lw) => o.lineweights ? Math.max(lw / 10, 0.6) : 2;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (background) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+    }
+    for (const e of doc.model.entities) {
+      if (plottable(doc, e)) drawEntity(rc, e);
+    }
+    return rc;
+  }
+  function exportVector(doc, o, viewBounds) {
+    const layout = plotLayout(doc, o, viewBounds);
+    const rec = new RecordingContext();
+    renderPlot(rec, doc, o, layout, 1, { background: false });
+    const page = { w: layout.W, h: layout.H };
+    if (o.format === "svg") return { data: writeSVG(rec.ops, page, { unitMm: UNIT_MM, title: o.title }), mime: "image/svg+xml", ext: "svg", layout };
+    return { data: writePDF(rec.ops, page, { unitMm: UNIT_MM, title: o.title }), mime: "application/pdf", ext: "pdf", layout };
+  }
+
+  // src/io/sample.js
+  function sampleDrawing() {
+    const d = new Drawing("L-Bracket");
+    d.layers.push(
+      newLayer("Outline", { color: 7, lw: 50 }),
+      newLayer("Holes", { color: 4, lw: 25 }),
+      newLayer("Centre", { color: 1, ltype: "CENTER", lw: 13 }),
+      newLayer("Dimensions", { color: 3, lw: 13 }),
+      newLayer("Hatch", { color: 8, lw: 9 }),
+      newLayer("Notes", { color: 2, lw: 13 })
+    );
+    const L2 = (n) => ({ layer: n });
+    const outline = [[0, 0], [120, 0], [120, 30], [30, 30], [30, 90], [0, 90]].map(([x, y]) => ({ x, y }));
+    d.add(E.pline(outline, true, L2("Outline")));
+    const holes = [[75, 15, 5], [15, 60, 5], [15, 75, 5]];
+    for (const [x, y, r] of holes) {
+      d.add(E.circle({ x, y }, r, L2("Holes")));
+      d.add(E.line({ x: x - r - 4, y }, { x: x + r + 4, y }, L2("Centre")));
+      d.add(E.line({ x, y: y - r - 4 }, { x, y: y + r + 4 }, L2("Centre")));
+    }
+    d.add(E.hatch([[{ x: 0, y: 0, b: 0 }, { x: 8, y: 0, b: 0 }, { x: 8, y: 30, b: 0 }, { x: 0, y: 30, b: 0 }]], { pattern: "ANSI31", ps: 1.2, pa: 0, layer: "Hatch" }));
+    d.add(E.dim("lin", { p1: { x: 0, y: 0 }, p2: { x: 120, y: 0 }, dp: { x: 60, y: -16 }, ang: 0, layer: "Dimensions" }));
+    d.add(E.dim("lin", { p1: { x: 0, y: 0 }, p2: { x: 0, y: 90 }, dp: { x: -16, y: 45 }, ang: Math.PI / 2, layer: "Dimensions" }));
+    d.add(E.dim("lin", { p1: { x: 120, y: 0 }, p2: { x: 120, y: 30 }, dp: { x: 136, y: 15 }, ang: Math.PI / 2, layer: "Dimensions" }));
+    d.add(E.dim("dia", { c: { x: 75, y: 15 }, pt: { x: 75 + 5 * Math.SQRT1_2, y: 15 + 5 * Math.SQRT1_2 }, dp: { x: 94, y: 29 }, layer: "Dimensions" }));
+    d.add(E.leader([{ x: 15, y: 75 }, { x: 52, y: 100 }], "\xD810 THRU, 2 HOLES", 3.5, { layer: "Notes" }));
+    d.add(E.mtext({ x: 0, y: -42 }, 4, "L-BRACKET\nMaterial: 6061-T6 aluminium\nScale 1:1", 100, { layer: "Notes" }));
+    d.cur.layer = "Outline";
+    d.dirty = false;
+    return d;
+  }
+
+  // src/io/project.js
+  var FILE_EXT = ".cadforge.json";
+  function stripExt(name) {
+    return String(name).replace(/\.(cadforge\.json|json|cadforge|dxf)$/i, "");
+  }
+  function toJSON(doc) {
+    return JSON.stringify(doc.serialize());
+  }
+  function fromJSON(text2, name) {
+    let obj;
+    try {
+      obj = JSON.parse(text2);
+    } catch {
+      throw Error("This file is not valid JSON.");
+    }
+    return Drawing.deserialize(obj, name);
+  }
+
+  // src/io/dxf-read.js
+  var TAU3 = Math.PI * 2;
+  function decodeText(s) {
+    return String(s).replace(/\\U\+([0-9a-fA-F]{4})/g, (_, h2) => String.fromCharCode(parseInt(h2, 16))).replace(/%%[cC]/g, "\u2300").replace(/%%[dD]/g, "\xB0").replace(/%%[pP]/g, "\xB1").replace(/%%[uUoO]/g, "").replace(/%%%/g, "%");
+  }
+  function decodeMText(src) {
+    let s = decodeText(src), out = "";
+    for (let i = 0; i < s.length; i++) {
+      const c2 = s[i];
+      if (c2 === "\\") {
+        const n = s[i + 1];
+        if (n === "P" || n === "p") {
+          out += "\n";
+          i++;
+        } else if (n === "~") {
+          out += " ";
+          i++;
+        } else if (n === "\\" || n === "{" || n === "}") {
+          out += n;
+          i++;
+        } else if ("LlOoKk".includes(n)) i++;
+        else if (n === "S") {
+          const m2 = /^\\S([^;]*);/.exec(s.slice(i));
+          if (m2) {
+            out += m2[1].replace(/[\^#]/, "/");
+            i += m2[0].length - 1;
+          }
+        } else if ("fFCcHhWwQqTtAaXx".includes(n)) {
+          const j = s.indexOf(";", i);
+          i = j < 0 ? s.length : j;
+        } else out += c2;
+      } else if (c2 === "{" || c2 === "}") {
+      } else out += c2;
+    }
+    return out.replace(/\n+$/, "");
+  }
+  function tokenize(text2) {
+    const lines = text2.split(/\r\n|\n|\r/);
+    const out = [];
+    for (let i = 0; i + 1 < lines.length; i += 2) {
+      const code = parseInt(lines[i].trim(), 10);
+      if (Number.isNaN(code)) continue;
+      out.push([code, lines[i + 1].trim()]);
+    }
+    return out;
+  }
+  function records(tokens) {
+    const recs = [];
+    let cur = null;
+    for (const t of tokens) {
+      if (t[0] === 0) {
+        cur = { type: t[1], g: [] };
+        recs.push(cur);
+      } else if (cur) cur.g.push(t);
+    }
+    return recs;
+  }
+  var first = (r, code, d) => {
+    for (const [c2, v] of r.g) if (c2 === code) return v;
+    return d;
+  };
+  var firstNum = (r, code, d = 0) => {
+    const v = first(r, code);
+    return v === void 0 ? d : parseFloat(v);
+  };
+  var all = (r, code) => r.g.filter(([c2]) => c2 === code).map(([, v]) => v);
+  var allNum = (r, code) => all(r, code).map(parseFloat);
+  var pt2 = (r, i = 0) => ({ x: firstNum(r, 10 + i), y: firstNum(r, 20 + i) });
+  function sections(recs) {
+    const out = {};
+    let name = null, list = null;
+    for (const r of recs) {
+      if (r.type === "SECTION") {
+        name = null;
+        list = null;
+        const n = first(r, 2);
+        if (n) {
+          name = n;
+          list = out[n] = [];
+        }
+      } else if (r.type === "ENDSEC") {
+        name = null;
+        list = null;
+      } else if (list) list.push(r);
+    }
+    return out;
+  }
+  function parseHeader(tokens) {
+    const vars = {};
+    let inHeader = false, cur = null;
+    for (let i = 0; i < tokens.length; i++) {
+      const [c2, v] = tokens[i];
+      if (c2 === 0 && v === "SECTION" && tokens[i + 1]?.[1] === "HEADER") {
+        inHeader = true;
+        i++;
+        continue;
+      }
+      if (c2 === 0 && v === "ENDSEC") {
+        if (inHeader) break;
+      }
+      if (!inHeader) continue;
+      if (c2 === 9) {
+        cur = vars[v] = [];
+      } else if (cur) cur.push([c2, v]);
+    }
+    return vars;
+  }
+  function colorOf(r) {
+    const tc = first(r, 420);
+    if (tc !== void 0) {
+      const n2 = parseInt(tc, 10) & 16777215;
+      return "#" + n2.toString(16).padStart(6, "0");
+    }
+    const c2 = first(r, 62);
+    if (c2 === void 0) return void 0;
+    const n = parseInt(c2, 10);
+    if (n === 256) return void 0;
+    if (n === 0) return "BYBLOCK";
+    return Math.abs(n) <= 255 ? Math.abs(n) : void 0;
+  }
+  function ltypeOf(name) {
+    if (!name) return void 0;
+    const u = String(name).toUpperCase();
+    if (u === "BYLAYER") return void 0;
+    if (u === "BYBLOCK") return "BYBLOCK";
+    return ltypeKey(name);
+  }
+  function lwOf(r) {
+    const v = first(r, 370);
+    if (v === void 0) return void 0;
+    const n = parseInt(v, 10);
+    return n === LW_BYLAYER ? void 0 : n;
+  }
+  function bsplineSample(deg2, knots, ctrl, weights, perSpan = 12) {
+    const n = ctrl.length - 1;
+    const t0 = knots[deg2], t1 = knots[n + 1];
+    const spans = Math.max(1, new Set(knots.slice(deg2, n + 2)).size - 1);
+    const count = Math.min(2e3, Math.max(24, spans * perSpan));
+    const at = (t) => {
+      let k = deg2;
+      while (k < n && t >= knots[k + 1]) k++;
+      const d = ctrl.slice(k - deg2, k + 1).map((p, i) => ({ x: p.x * (weights?.[k - deg2 + i] ?? 1), y: p.y * (weights?.[k - deg2 + i] ?? 1), w: weights?.[k - deg2 + i] ?? 1 }));
+      for (let r = 1; r <= deg2; r++) for (let j = deg2; j >= r; j--) {
+        const den = knots[j + 1 + k - r] - knots[j + k - deg2], a = den === 0 ? 0 : (t - knots[j + k - deg2]) / den;
+        d[j] = { x: (1 - a) * d[j - 1].x + a * d[j].x, y: (1 - a) * d[j - 1].y + a * d[j].y, w: (1 - a) * d[j - 1].w + a * d[j].w };
+      }
+      return { x: d[deg2].x / d[deg2].w, y: d[deg2].y / d[deg2].w };
+    };
+    const pts = [];
+    for (let i = 0; i < count; i++) pts.push(at(t0 + (t1 - t0) * i / count));
+    pts.push(ctrl[n]);
+    return pts;
+  }
+  function hatchLoops(r) {
+    const gs = r.g, loops = [];
+    let i = gs.findIndex(([c2]) => c2 === 91);
+    if (i < 0) return loops;
+    const n = parseInt(gs[i][1], 10);
+    i++;
+    const num4 = (code) => {
+      while (i < gs.length && gs[i][0] !== code) i++;
+      return i < gs.length ? parseFloat(gs[i++][1]) : NaN;
+    };
+    for (let l = 0; l < n; l++) {
+      const flags = num4(92);
+      if (Number.isNaN(flags)) break;
+      if (flags & 2) {
+        const hasBulge = num4(72), closed = num4(73), nv = num4(93);
+        const verts = [];
+        for (let k = 0; k < nv; k++) {
+          const x = num4(10), y = num4(20);
+          let b = 0;
+          if (hasBulge && gs[i] && gs[i][0] === 42) b = parseFloat(gs[i++][1]);
+          verts.push({ x, y, b });
+        }
+        void closed;
+        if (verts.length > 2) loops.push(verts);
+      } else {
+        const ne = num4(93), edges = [];
+        for (let k = 0; k < ne; k++) {
+          const type = num4(72);
+          if (type === 1) {
+            const a = { x: num4(10), y: num4(20) }, b = { x: num4(11), y: num4(21) };
+            edges.push({ t: "l", a, b });
+          } else if (type === 2) {
+            const c2 = { x: num4(10), y: num4(20) }, rr = num4(40), a0 = rad(num4(50)), a1 = rad(num4(51));
+            const ccw = num4(73);
+            let sw = ccw ? sweepCCW(a0, a1) : -sweepCCW(a1, a0);
+            if (Math.abs(sw) < 1e-12) sw = ccw ? TAU3 : -TAU3;
+            edges.push({ t: "a", c: c2, r: rr, a0, sw });
+          } else if (type === 3) {
+            const c2 = { x: num4(10), y: num4(20) }, m2 = { x: num4(11), y: num4(21) }, ratio = num4(40), a0 = rad(num4(50)), a1 = rad(num4(51));
+            const ccw = num4(73);
+            const sw = ccw ? sweepCCW(a0, a1) || TAU3 : -(sweepCCW(a1, a0) || TAU3), steps = 48, pts = [];
+            for (let s = 0; s <= steps; s++) {
+              const t = a0 + sw * s / steps;
+              pts.push({ x: c2.x + m2.x * Math.cos(t) - m2.y * ratio * Math.sin(t), y: c2.y + m2.y * Math.cos(t) + m2.x * ratio * Math.sin(t) });
+            }
+            for (let s = 0; s < steps; s++) edges.push({ t: "l", a: pts[s], b: pts[s + 1] });
+          } else if (type === 4) {
+            const deg2 = num4(94);
+            num4(73);
+            num4(74);
+            const nk = num4(95), nc = num4(96);
+            const knots = [];
+            for (let k2 = 0; k2 < nk; k2++) knots.push(num4(40));
+            const ctrl = [];
+            for (let k2 = 0; k2 < nc; k2++) ctrl.push({ x: num4(10), y: num4(20) });
+            if (ctrl.length > deg2 && knots.length === ctrl.length + deg2 + 1) {
+              const pts = bsplineSample(deg2, knots, ctrl, null, 10);
+              for (let s = 0; s + 1 < pts.length; s++) edges.push({ t: "l", a: pts[s], b: pts[s + 1] });
+            } else for (let s = 0; s + 1 < ctrl.length; s++) edges.push({ t: "l", a: ctrl[s], b: ctrl[s + 1] });
+          } else break;
+        }
+        const loop = chain(edges);
+        if (loop.length > 2) loops.push(loop);
+        const cnt = num4(97);
+        void cnt;
+      }
+    }
+    return loops;
+  }
+  var startOf = (s) => s.t === "l" ? s.a : arcStart(s);
+  var endOf = (s) => s.t === "l" ? s.b : arcEnd(s);
+  var rev = (s) => s.t === "l" ? { t: "l", a: s.b, b: s.a } : { t: "a", c: s.c, r: s.r, a0: s.a0 + s.sw, sw: -s.sw };
+  function chain(edges) {
+    if (!edges.length) return [];
+    const left = edges.slice(), seq = [left.shift()];
+    const tol = 1e-5 * Math.max(1, ...edges.map((e) => Math.abs(startOf(e).x) + Math.abs(startOf(e).y)));
+    while (left.length) {
+      const tail = endOf(seq[seq.length - 1]);
+      let k = left.findIndex((e2) => dist(startOf(e2), tail) <= tol), flip = false;
+      if (k < 0) {
+        k = left.findIndex((e2) => dist(endOf(e2), tail) <= tol);
+        flip = true;
+      }
+      if (k < 0) {
+        k = 0;
+        flip = false;
+      }
+      const e = left.splice(k, 1)[0];
+      seq.push(flip ? rev(e) : e);
+    }
+    return seq.map((s) => {
+      const p = startOf(s);
+      return { x: p.x, y: p.y, b: s.t === "a" ? bulgeOf(s) : 0 };
+    });
+  }
+  function mirrorX(e) {
+    const m2 = (p) => ({ x: -p.x, y: p.y });
+    switch (e.type) {
+      case "circle":
+        e.c = m2(e.c);
+        break;
+      case "arc": {
+        e.c = m2(e.c);
+        const a0 = Math.PI - e.a1, a1 = Math.PI - e.a0;
+        e.a0 = normAngle(a0);
+        e.a1 = normAngle(a1);
+        break;
+      }
+      case "pline":
+        e.v = e.v.map((v) => ({ x: -v.x, y: v.y, b: -(v.b || 0) }));
+        break;
+      case "text":
+        e.p = m2(e.p);
+        break;
+      default:
+        break;
+    }
+    return e;
+  }
+  var JH = [["left", 0], ["center", 1], ["right", 2], ["left", 0], ["center", 1], ["left", 0]];
+  var JV = ["baseline", "bottom", "middle", "top"];
+  var ATTACH = { 1: ["left", "top"], 2: ["center", "top"], 3: ["right", "top"], 4: ["left", "middle"], 5: ["center", "middle"], 6: ["right", "middle"], 7: ["left", "bottom"], 8: ["center", "bottom"], 9: ["right", "bottom"] };
+  function convert(r, ctx) {
+    const props = { layer: decodeText(first(r, 8, "0")) };
+    const col2 = colorOf(r);
+    if (col2 !== void 0) props.color = col2;
+    const lt = ltypeOf(first(r, 6));
+    if (lt !== void 0) props.ltype = lt;
+    const lw = lwOf(r);
+    if (lw !== void 0) props.lw = lw;
+    const nz = firstNum(r, 230, 1), flip = nz < 0;
+    const out = [];
+    const push = (e, orient = true) => {
+      if (e) {
+        Object.assign(e, props);
+        out.push(flip && orient ? mirrorX(e) : e);
+      }
+    };
+    switch (r.type) {
+      case "LINE":
+        push(E.line(pt2(r), pt2(r, 1)), false);
+        break;
+      case "CIRCLE": {
+        const rr = firstNum(r, 40);
+        if (rr > 0) push(E.circle(pt2(r), rr));
+        break;
+      }
+      case "ARC": {
+        const rr = firstNum(r, 40);
+        if (rr > 0) push(E.arc(pt2(r), rr, rad(firstNum(r, 50)), rad(firstNum(r, 51))));
+        break;
+      }
+      case "POINT":
+        push(E.point(pt2(r)), false);
+        break;
+      case "LWPOLYLINE": {
+        const verts = [];
+        let cur = null;
+        for (const [c2, v] of r.g) {
+          if (c2 === 10) {
+            cur = { x: parseFloat(v), y: 0, b: 0 };
+            verts.push(cur);
+          } else if (c2 === 20 && cur) cur.y = parseFloat(v);
+          else if (c2 === 42 && cur) cur.b = parseFloat(v);
+        }
+        if (verts.length > 1) push(E.pline(verts, (parseInt(first(r, 70, "0"), 10) & 1) === 1));
+        break;
+      }
+      case "POLYLINE": {
+        const flags = parseInt(first(r, 70, "0"), 10);
+        if (flags & (16 | 64)) break;
+        const verts = (r.vertices || []).filter((v) => !(parseInt(first(v, 70, "0"), 10) & 16)).map((v) => ({ x: firstNum(v, 10), y: firstNum(v, 20), b: firstNum(v, 42, 0) }));
+        if (verts.length > 1) push(E.pline(verts, (flags & 1) === 1));
+        break;
+      }
+      case "ELLIPSE": {
+        const m2 = pt2(r, 1), ratio = firstNum(r, 40, 1);
+        if (len(m2) > 0 && ratio > 0) push(E.ellipse(pt2(r), m2, Math.min(1, ratio), firstNum(r, 41, 0), firstNum(r, 42, TAU3)), false);
+        break;
+      }
+      case "SPLINE": {
+        const flags = parseInt(first(r, 70, "0"), 10), deg2 = parseInt(first(r, 71, "3"), 10);
+        const fit = [];
+        {
+          let cur = null;
+          for (const [c2, v] of r.g) {
+            if (c2 === 11) {
+              cur = { x: parseFloat(v), y: 0 };
+              fit.push(cur);
+            } else if (c2 === 21 && cur) cur.y = parseFloat(v);
+          }
+        }
+        const ctrl = [];
+        {
+          let cur = null;
+          for (const [c2, v] of r.g) {
+            if (c2 === 10) {
+              cur = { x: parseFloat(v), y: 0 };
+              ctrl.push(cur);
+            } else if (c2 === 20 && cur) cur.y = parseFloat(v);
+          }
+        }
+        const knots = allNum(r, 40), weights = allNum(r, 41);
+        let pts = null;
+        if (fit.length >= 2) pts = fit;
+        else if (ctrl.length > deg2 && knots.length === ctrl.length + deg2 + 1) pts = bsplineSample(deg2, knots, ctrl, weights.length === ctrl.length ? weights : null);
+        else if (ctrl.length >= 2) pts = ctrl;
+        if (pts && pts.length >= 2) {
+          const closed = (flags & 1) === 1 && fit.length >= 2;
+          if (!closed && pts.length > 2 && dist(pts[0], pts[pts.length - 1]) < 1e-9 && fit.length < 2) {
+            pts = pts.slice(0, -1);
+            push(E.spline(pts, true), false);
+          } else push(E.spline(pts, closed), false);
+        }
+        break;
+      }
+      case "TEXT": {
+        const hh = firstNum(r, 40), s = decodeText(first(r, 1, ""));
+        if (hh > 0 && s.length) {
+          const jh = parseInt(first(r, 72, "0"), 10), jv = parseInt(first(r, 73, "0"), 10);
+          const anchor = (jh || jv) && first(r, 11) !== void 0 ? pt2(r, 1) : pt2(r);
+          push(E.text(anchor, hh, s, { rot: rad(firstNum(r, 50, 0)), jh: (JH[jh] || JH[0])[0], jv: jh === 4 ? "middle" : JV[jv] || "baseline" }));
+        }
+        break;
+      }
+      case "MTEXT": {
+        const raw = all(r, 3).join("") + first(r, 1, ""), s = decodeMText(raw), hh = firstNum(r, 40, 2.5);
+        if (s.length) {
+          const [jh, jv] = ATTACH[parseInt(first(r, 71, "1"), 10)] || ATTACH[1];
+          const rot = first(r, 11) !== void 0 ? Math.atan2(firstNum(r, 21), firstNum(r, 11)) : rad(firstNum(r, 50, 0));
+          push(E.mtext(pt2(r), hh > 0 ? hh : 2.5, s, firstNum(r, 41, 0), { rot, jh, jv }), false);
+        }
+        break;
+      }
+      case "INSERT": {
+        const name = decodeText(first(r, 2, ""));
+        if (name) push(E.insert(name, pt2(r), { sx: firstNum(r, 41, 1) || 1, sy: firstNum(r, 42, 1) || 1, rot: rad(firstNum(r, 50, 0)) }), false);
+        break;
+      }
+      case "XLINE": {
+        const d = pt2(r, 1);
+        if (len(d) > 0) push(E.xline(pt2(r), d), false);
+        break;
+      }
+      case "RAY": {
+        const d = pt2(r, 1);
+        if (len(d) > 0) push(E.ray(pt2(r), d), false);
+        break;
+      }
+      case "LEADER": {
+        const pts = [];
+        let cur = null;
+        for (const [c2, v] of r.g) {
+          if (c2 === 10) {
+            cur = { x: parseFloat(v), y: 0 };
+            pts.push(cur);
+          } else if (c2 === 20 && cur) cur.y = parseFloat(v);
+        }
+        if (pts.length >= 2) push(E.leader(pts, "", firstNum(r, 40, 2.5) || 2.5), false);
+        break;
+      }
+      case "HATCH": {
+        const loops = hatchLoops(r);
+        if (!loops.length) break;
+        const name = String(first(r, 2, "SOLID")).toUpperCase(), solid = parseInt(first(r, 70, "0"), 10) === 1 || name === "SOLID";
+        const pattern = solid ? "SOLID" : PATTERNS[name] ? name : "ANSI31";
+        push(E.hatch(loops, { pattern, ps: firstNum(r, 41, 1) || 1, pa: rad(firstNum(r, 52, 0)) }), false);
+        break;
+      }
+      case "SOLID":
+      case "TRACE": {
+        const p = [pt2(r, 0), pt2(r, 1), pt2(r, 3), pt2(r, 2)];
+        const uniq = p.filter((q, i) => i === 0 || dist(q, p[i - 1]) > 1e-12);
+        if (uniq.length >= 3) push(E.hatch([uniq.map((q) => ({ x: q.x, y: q.y, b: 0 }))], { pattern: "SOLID" }), false);
+        break;
+      }
+      case "DIMENSION": {
+        const bname = first(r, 2), blk = ctx.blocks.get(bname);
+        if (blk) {
+          for (const be of blk.entities) {
+            for (const e of convert(be, ctx)) {
+              if (e.type === "point") continue;
+              e.layer = props.layer;
+              if (e.color === "BYBLOCK" || e.color === void 0) {
+                if (props.color !== void 0) e.color = props.color;
+                else delete e.color;
+              }
+              if (e.ltype === "BYBLOCK") {
+                if (props.ltype !== void 0) e.ltype = props.ltype;
+                else delete e.ltype;
+              }
+              out.push(e);
+            }
+          }
+        }
+        break;
+      }
+      default:
+        ctx.skipped[r.type] = (ctx.skipped[r.type] || 0) + 1;
+    }
+    return out;
+  }
+  function groupEntities(list) {
+    const out = [];
+    let cur = null;
+    for (const r of list) {
+      if (r.type === "POLYLINE") {
+        cur = r;
+        r.vertices = [];
+        out.push(r);
+      } else if (r.type === "VERTEX" && cur?.type === "POLYLINE") cur.vertices.push(r);
+      else if (r.type === "SEQEND") cur = null;
+      else if (r.type === "ATTRIB") {
+      } else {
+        cur = null;
+        out.push(r);
+      }
+    }
+    return out;
+  }
+  function readDXF(text2, name = "Drawing") {
+    if (!/^\s*0\s*\r?\n\s*SECTION/m.test(text2.slice(0, 2e3)) && !/SECTION/.test(text2.slice(0, 2e3))) throw Error("This does not look like an ASCII DXF file.");
+    const tokens = tokenize(text2);
+    const secs = sections(records(tokens));
+    const header = parseHeader(tokens);
+    const doc = new Drawing(name);
+    const hv = (k, code = 70, d) => {
+      const e = header[k]?.find(([c2]) => c2 === code);
+      return e ? parseFloat(e[1]) : d;
+    };
+    const units = hv("$INSUNITS", 70, 0);
+    doc.settings.units.insUnits = [0, 1, 2, 4, 5, 6].includes(units) ? units : 0;
+    doc.settings.units.precision = Math.max(0, Math.min(8, hv("$LUPREC", 70, 4)));
+    doc.settings.ltscale = hv("$LTSCALE", 40, 1) || 1;
+    doc.settings.pdmode = hv("$PDMODE", 70, 0);
+    doc.settings.pdsize = hv("$PDSIZE", 40, 0);
+    const th = hv("$TEXTSIZE", 40, 2.5);
+    if (th > 0) doc.settings.textHeight = th;
+    const ds = doc.settings.dimStyles.Standard;
+    for (const [k, f4] of [["$DIMTXT", "txt"], ["$DIMASZ", "asz"], ["$DIMEXO", "exo"], ["$DIMEXE", "exe"], ["$DIMGAP", "gap"], ["$DIMCEN", "cen"], ["$DIMSCALE", "scale"]]) {
+      const v = hv(k, 40);
+      if (v !== void 0 && v > 0) ds[f4] = v;
+    }
+    const dd = hv("$DIMDEC", 70);
+    if (dd !== void 0 && dd >= 0 && dd <= 8) ds.dec = dd;
+    doc.layers = [];
+    for (const r of (secs.TABLES || []).filter((x) => x.type === "LAYER")) {
+      const lname = decodeText(first(r, 2, ""));
+      if (!lname || doc.layer(lname)) continue;
+      const c62 = parseInt(first(r, 62, "7"), 10), tc = first(r, 420);
+      const flags = parseInt(first(r, 70, "0"), 10);
+      const lt = ltypeKey(first(r, 6, "Continuous")) || "Continuous";
+      const lwv = parseInt(first(r, 370, "25"), 10);
+      doc.layers.push(newLayer(lname, { color: tc !== void 0 ? "#" + (parseInt(tc, 10) & 16777215).toString(16).padStart(6, "0") : Math.abs(c62) || 7, on: c62 >= 0, frozen: !!(flags & 1), locked: !!(flags & 4), ltype: lt, lw: lwv >= 0 ? lwv : 25, plot: first(r, 290) !== "0" }));
+    }
+    if (!doc.layer("0")) doc.layers.unshift(newLayer("0"));
+    const ctx = { blocks: /* @__PURE__ */ new Map(), skipped: {} };
+    {
+      let cur = null;
+      for (const r of secs.BLOCKS || []) {
+        if (r.type === "BLOCK") {
+          cur = { name: decodeText(first(r, 2, "")), base: pt2(r), raw: [] };
+        } else if (r.type === "ENDBLK") {
+          if (cur) ctx.blocks.set(cur.name, cur);
+          cur = null;
+        } else if (cur) cur.raw.push(r);
+      }
+      for (const b of ctx.blocks.values()) b.entities = groupEntities(b.raw);
+    }
+    const userBlocks = [...ctx.blocks.values()].filter((b) => !b.name.startsWith("*"));
+    for (const b of userBlocks) {
+      const ents = [];
+      for (const r of b.entities) for (const e of convert(r, ctx)) ents.push(e);
+      doc.defineBlock(b.name, b.base, ents);
+    }
+    let paper = 0;
+    for (const r of groupEntities(secs.ENTITIES || [])) {
+      if (first(r, 67) === "1") {
+        paper++;
+        continue;
+      }
+      for (const e of convert(r, ctx)) doc.add(e, "model");
+    }
+    for (const e of doc.allEntities()) if (e.layer && !doc.layer(e.layer)) doc.layers.push(newLayer(e.layer));
+    const cl = decodeText(header.$CLAYER?.find(([c2]) => c2 === 8)?.[1] || "0");
+    doc.cur.layer = doc.layer(cl)?.name || doc.layers[0].name;
+    doc.skipped = ctx.skipped;
+    doc.paperSkipped = paper;
+    doc.validate();
+    doc.dirty = false;
+    return doc;
+  }
+
+  // src/io/dxf-write.js
+  var num3 = (v) => {
+    if (!Number.isFinite(v)) return "0";
+    if (Number.isInteger(v)) return String(v);
+    const s = String(+v.toPrecision(15));
+    return /e/i.test(s) ? v.toFixed(12).replace(/0+$/, "").replace(/\.$/, "") : s;
+  };
+  var clean = (s) => String(s).replace(/[\r\n]+/g, " ");
+  var SYMBOLS = { "\u2300": "%%c", "\xB0": "%%d", "\xB1": "%%p" };
+  var enc = (s) => String(s).replace(/[^\x20-\x7E\r\n\t]/gu, (ch) => SYMBOLS[ch] || (ch.codePointAt(0) > 65535 ? "?" : `\\U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`));
+  var JH2 = { left: 0, center: 1, right: 2 };
+  var JV2 = { baseline: 0, bottom: 1, middle: 2, top: 3 };
+  var ATTACH2 = { "left,top": 1, "center,top": 2, "right,top": 3, "left,middle": 4, "center,middle": 5, "right,middle": 6, "left,bottom": 7, "center,bottom": 8, "right,bottom": 9, "left,baseline": 7, "center,baseline": 8, "right,baseline": 9 };
+  var INSUNITS_OK = /* @__PURE__ */ new Set([0, 1, 2, 4, 5, 6]);
+  var Out = class {
+    constructor() {
+      this.lines = [];
+    }
+    c(code, val) {
+      this.lines.push(String(code), typeof val === "number" ? num3(val) : enc(val));
+      return this;
+    }
+    pt(p, i = 0, z = 0) {
+      return this.c(10 + i, p.x).c(20 + i, p.y).c(30 + i, z);
+    }
+    toString() {
+      return this.lines.join("\r\n") + "\r\n";
+    }
+  };
+  function writeDXF(doc) {
+    let handle = 16;
+    const H = () => (handle++).toString(16).toUpperCase();
+    const o = new Out();
+    const layers = doc.layers.map((l) => l.name);
+    const usedLtypes = /* @__PURE__ */ new Set(["Continuous"]);
+    for (const l of doc.layers) usedLtypes.add(l.ltype || "Continuous");
+    for (const e of doc.allEntities()) if (e.ltype && e.ltype !== "BYBLOCK") usedLtypes.add(e.ltype);
+    const ltypeNames = [...usedLtypes].filter((n) => LINETYPES[n]);
+    const userBlocks = Object.values(doc.blocks);
+    const hs = { vport: H(), ltype: H(), layer: H(), style: H(), view: H(), ucs: H(), appid: H(), dimstyle: H(), blockRecord: H(), dictRoot: H(), dictGroup: H(), vportRec: H(), styleRec: H(), appidRec: H(), dimstyleRec: H(), msRec: H(), psRec: H(), msBlock: H(), msEnd: H(), psBlock: H(), psEnd: H() };
+    const blockRec = new Map(userBlocks.map((b) => [b.name, { rec: H(), blk: H(), end: H() }]));
+    const layerHandle = new Map(layers.map((n) => [n, H()]));
+    const ltypeHandle = new Map([["ByBlock", H()], ["ByLayer", H()], ...ltypeNames.map((n) => [n, H()])]);
+    let bb = null;
+    for (const e of doc.model.entities) {
+      try {
+        bb = unionBounds(bb, boundsOf(e, doc));
+      } catch {
+      }
+    }
+    const ext = bb || { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+    o.c(0, "SECTION").c(2, "HEADER");
+    o.c(9, "$ACADVER").c(1, "AC1015").c(9, "$DWGCODEPAGE").c(3, "ANSI_1252");
+    o.c(9, "$HANDSEED").c(5, "__HANDSEED__");
+    o.c(9, "$INSBASE").pt({ x: 0, y: 0 });
+    o.c(9, "$EXTMIN").pt({ x: ext.minX, y: ext.minY });
+    o.c(9, "$EXTMAX").pt({ x: ext.maxX, y: ext.maxY });
+    o.c(9, "$LIMMIN").c(10, 0).c(20, 0);
+    o.c(9, "$LIMMAX").c(10, 420).c(20, 297);
+    o.c(9, "$LTSCALE").c(40, doc.settings.ltscale);
+    o.c(9, "$PDMODE").c(70, doc.settings.pdmode);
+    o.c(9, "$PDSIZE").c(40, doc.settings.pdsize);
+    o.c(9, "$TEXTSIZE").c(40, doc.settings.textHeight);
+    o.c(9, "$CLAYER").c(8, doc.cur.layer);
+    o.c(9, "$INSUNITS").c(70, INSUNITS_OK.has(doc.settings.units.insUnits) ? doc.settings.units.insUnits : 0);
+    o.c(9, "$MEASUREMENT").c(70, doc.settings.units.insUnits === 1 || doc.settings.units.insUnits === 2 ? 0 : 1);
+    o.c(9, "$LUNITS").c(70, 2).c(9, "$LUPREC").c(70, doc.settings.units.precision);
+    o.c(9, "$AUPREC").c(70, doc.settings.units.angPrecision);
+    const ds = doc.settings.dimStyles[doc.settings.curDimStyle] || Object.values(doc.settings.dimStyles)[0];
+    o.c(9, "$DIMSCALE").c(40, ds.scale).c(9, "$DIMTXT").c(40, ds.txt).c(9, "$DIMASZ").c(40, ds.asz).c(9, "$DIMEXO").c(40, ds.exo).c(9, "$DIMEXE").c(40, ds.exe).c(9, "$DIMGAP").c(40, ds.gap).c(9, "$DIMDEC").c(70, ds.dec).c(9, "$DIMCEN").c(40, ds.cen);
+    o.c(0, "ENDSEC");
+    o.c(0, "SECTION").c(2, "TABLES");
+    const table = (name, handleKey, count, body) => {
+      o.c(0, "TABLE").c(2, name).c(5, hs[handleKey]).c(330, 0).c(100, "AcDbSymbolTable").c(70, count);
+      body();
+      o.c(0, "ENDTAB");
+    };
+    table("VPORT", "vport", 1, () => {
+      o.c(0, "VPORT").c(5, hs.vportRec).c(330, hs.vport).c(100, "AcDbSymbolTableRecord").c(100, "AcDbViewportTableRecord").c(2, "*Active").c(70, 0).c(10, 0).c(20, 0).c(11, 1).c(21, 1).c(12, (ext.minX + ext.maxX) / 2).c(22, (ext.minY + ext.maxY) / 2).c(13, 0).c(23, 0).c(14, 10).c(24, 10).c(15, 10).c(25, 10).c(16, 0).c(26, 0).c(36, 1).c(17, 0).c(27, 0).c(37, 0).c(40, Math.max(1, ext.maxY - ext.minY) * 1.2).c(41, 1.5).c(42, 50).c(43, 0).c(44, 0).c(50, 0).c(51, 0).c(71, 0).c(72, 100).c(73, 1).c(74, 3).c(75, 0).c(76, 1).c(77, 0).c(78, 0);
+    });
+    table("LTYPE", "ltype", 2 + ltypeNames.length, () => {
+      const ent = (name, desc, pattern, key) => {
+        o.c(0, "LTYPE").c(5, ltypeHandle.get(key || name)).c(330, hs.ltype).c(100, "AcDbSymbolTableRecord").c(100, "AcDbLinetypeTableRecord").c(2, name).c(70, 0).c(3, desc).c(72, 65).c(73, pattern.length);
+        o.c(40, pattern.reduce((s, v) => s + Math.abs(v), 0));
+        for (const v of pattern) o.c(49, v).c(74, 0);
+      };
+      ent("ByBlock", "", [], "ByBlock");
+      ent("ByLayer", "", [], "ByLayer");
+      for (const n of ltypeNames) ent(n, LINETYPES[n].desc, LINETYPES[n].pattern);
+    });
+    table("LAYER", "layer", layers.length, () => {
+      for (const l of doc.layers) {
+        const aci = typeof l.color === "string" && l.color[0] === "#" ? hexToAci(l.color) : l.color || 7;
+        o.c(0, "LAYER").c(5, layerHandle.get(l.name)).c(330, hs.layer).c(100, "AcDbSymbolTableRecord").c(100, "AcDbLayerTableRecord").c(2, l.name).c(70, (l.frozen ? 1 : 0) | (l.locked ? 4 : 0)).c(62, l.on ? aci : -aci);
+        if (typeof l.color === "string" && l.color[0] === "#") o.c(420, parseInt(l.color.slice(1), 16));
+        o.c(6, l.ltype && LINETYPES[l.ltype] ? l.ltype : "Continuous").c(290, l.plot === false ? 0 : 1).c(370, l.lw ?? 25);
+      }
+    });
+    table("STYLE", "style", 1, () => {
+      o.c(0, "STYLE").c(5, hs.styleRec).c(330, hs.style).c(100, "AcDbSymbolTableRecord").c(100, "AcDbTextStyleTableRecord").c(2, "Standard").c(70, 0).c(40, 0).c(41, 1).c(50, 0).c(71, 0).c(42, 2.5).c(3, "arial.ttf").c(4, "");
+    });
+    table("VIEW", "view", 0, () => {
+    });
+    table("UCS", "ucs", 0, () => {
+    });
+    table("APPID", "appid", 1, () => {
+      o.c(0, "APPID").c(5, hs.appidRec).c(330, hs.appid).c(100, "AcDbSymbolTableRecord").c(100, "AcDbRegAppTableRecord").c(2, "ACAD").c(70, 0);
+    });
+    const dimBlocks = [];
+    const tablesEndMark = o.lines.length;
+    const entityOut = (list, ownerHandle, blockName) => {
+      const out = new Out();
+      const common = (type, e, sub2, extra = {}) => {
+        out.c(0, type).c(5, H()).c(330, ownerHandle).c(100, "AcDbEntity");
+        if (blockName === "*Paper_Space") out.c(67, 1);
+        out.c(8, extra.layer ?? (e.layer ?? "0"));
+        const lt = e.ltype === "BYBLOCK" ? "ByBlock" : e.ltype;
+        if (lt && (LINETYPES[lt] || lt === "ByBlock")) out.c(6, lt);
+        const col2 = e.color;
+        if (col2 === "BYBLOCK") out.c(62, 0);
+        else if (typeof col2 === "number") out.c(62, col2);
+        else if (typeof col2 === "string" && col2[0] === "#") out.c(62, hexToAci(col2)).c(420, parseInt(col2.slice(1), 16));
+        if (e.lw !== void 0 && e.lw !== LW_BYLAYER) out.c(370, e.lw);
+        if (sub2) out.c(100, sub2);
+      };
+      const text2 = (p, h2, s, rot, jh, jv, e, layer) => {
+        common("TEXT", e, "AcDbText", { layer });
+        out.pt(p).c(40, h2).c(1, clean(s)).c(50, deg(rot || 0)).c(7, "Standard");
+        if ((JH2[jh] || 0) !== 0 || (JV2[jv] || 0) !== 0) {
+          out.c(72, JH2[jh] || 0);
+          out.pt(p, 1);
+        }
+        out.c(100, "AcDbText").c(73, JV2[jv] || 0);
+      };
+      const mtext = (e) => {
+        common("MTEXT", e, "AcDbMText");
+        out.pt(e.p).c(40, e.h).c(41, e.w || 0).c(71, ATTACH2[`${e.jh || "left"},${e.jv || "top"}`] || 1).c(72, 1).c(1, e.s.split("\n").map(clean).join("\\P")).c(7, "Standard").c(11, Math.cos(e.rot || 0)).c(21, Math.sin(e.rot || 0)).c(31, 0);
+      };
+      const line = (a, b, e, layer) => {
+        common("LINE", e, "AcDbLine", { layer });
+        out.pt(a).pt(b, 1);
+      };
+      const solid = (pts, e, layer) => {
+        common("SOLID", e, "AcDbTrace", { layer });
+        const p = pts.length === 3 ? [pts[0], pts[1], pts[2], pts[2]] : pts;
+        out.pt(p[0], 0).pt(p[1], 1).pt(p[3], 2).pt(p[2], 3);
+      };
+      const lwpoly = (verts, closed, e, layer) => {
+        common("LWPOLYLINE", e, "AcDbPolyline", { layer });
+        out.c(90, verts.length).c(70, closed ? 1 : 0).c(43, 0);
+        for (const v of verts) {
+          out.c(10, v.x).c(20, v.y);
+          if (v.b) out.c(42, v.b);
+        }
+      };
+      const write = (e) => {
+        switch (e.type) {
+          case "line":
+            line(e.a, e.b, e);
+            break;
+          case "circle":
+            common("CIRCLE", e, "AcDbCircle");
+            out.pt(e.c).c(40, e.r);
+            break;
+          case "arc":
+            common("ARC", e, "AcDbCircle");
+            out.pt(e.c).c(40, e.r).c(100, "AcDbArc").c(50, deg(e.a0)).c(51, deg(e.a1));
+            break;
+          case "pline":
+            lwpoly(e.v, e.closed, e);
+            break;
+          case "point":
+            common("POINT", e, "AcDbPoint");
+            out.pt(e.p);
+            break;
+          case "ellipse": {
+            common("ELLIPSE", e, "AcDbEllipse");
+            out.pt(e.c).pt(e.m, 1).c(210, 0).c(220, 0).c(230, 1).c(40, e.ratio);
+            const full = ellipseSweep(e) >= TAU - 1e-9;
+            out.c(41, full ? 0 : e.t0).c(42, full ? TAU : e.t0 + ellipseSweep(e));
+            break;
+          }
+          case "spline": {
+            const bz = splineBeziers(e);
+            if (!bz.length) break;
+            const ctrl = [bz[0].p0];
+            for (const b of bz) ctrl.push(b.c1, b.c2, b.p1);
+            const knots = [0, 0, 0, 0];
+            for (let i = 1; i < bz.length; i++) knots.push(i, i, i);
+            knots.push(bz.length, bz.length, bz.length, bz.length);
+            common("SPLINE", e, "AcDbSpline");
+            out.c(210, 0).c(220, 0).c(230, 1).c(70, 8).c(71, 3).c(72, knots.length).c(73, ctrl.length).c(74, 0).c(42, 1e-7).c(43, 1e-7).c(44, 1e-10);
+            for (const k of knots) out.c(40, k);
+            for (const p of ctrl) out.pt(p);
+            break;
+          }
+          case "text":
+            if (e.multi) mtext(e);
+            else text2(e.p, e.h, e.s, e.rot, e.jh, e.jv, e);
+            break;
+          case "xline":
+            common("XLINE", e, "AcDbXline");
+            out.pt(e.p).pt(e.d, 1);
+            break;
+          case "ray":
+            common("RAY", e, "AcDbRay");
+            out.pt(e.p).pt(e.d, 1);
+            break;
+          case "insert": {
+            if (!blockRec.has(e.name)) break;
+            common("INSERT", e, "AcDbBlockReference");
+            out.c(2, e.name).pt(e.p).c(41, e.sx ?? 1).c(42, e.sy ?? 1).c(43, 1).c(50, deg(e.rot || 0));
+            break;
+          }
+          case "leader": {
+            common("LEADER", e, "AcDbLeader");
+            out.c(3, "Standard").c(71, 1).c(72, 0).c(73, 3).c(74, 1).c(75, 0).c(40, e.h).c(41, 0).c(76, e.pts.length);
+            for (const p of e.pts) out.pt(p);
+            if (e.s) text2({ x: e.pts[e.pts.length - 1].x + e.h * 0.4, y: e.pts[e.pts.length - 1].y }, e.h, e.s, 0, "left", "middle", e);
+            break;
+          }
+          case "hatch": {
+            const pat = PATTERNS[e.pattern] || PATTERNS.ANSI31, solidFill = !!pat.solid;
+            common("HATCH", e, "AcDbHatch");
+            out.pt({ x: 0, y: 0 }).c(210, 0).c(220, 0).c(230, 1).c(2, solidFill ? "SOLID" : e.pattern).c(70, solidFill ? 1 : 0).c(71, 0).c(91, e.loops.length);
+            e.loops.forEach((loop, i) => {
+              out.c(92, i === 0 ? 3 : 2).c(72, 1).c(73, 1).c(93, loop.length);
+              for (const v of loop) {
+                out.c(10, v.x).c(20, v.y).c(42, v.b || 0);
+              }
+              out.c(97, 0);
+            });
+            out.c(75, 0).c(76, 1);
+            if (!solidFill) {
+              out.c(52, deg(e.pa || 0)).c(41, e.ps || 1).c(77, 0).c(78, pat.families.length);
+              for (const f4 of pat.families) {
+                out.c(53, f4.a).c(43, f4.ox).c(44, f4.oy).c(45, f4.dx).c(46, f4.dy).c(79, f4.dash ? f4.dash.length : 0);
+                for (const d of f4.dash || []) out.c(49, d);
+              }
+            }
+            out.c(98, 0);
+            break;
+          }
+          case "dim": {
+            let geo;
+            try {
+              geo = dimGeometry(e, doc);
+            } catch {
+              break;
+            }
+            const sub2 = { layer: e.layer, color: e.color };
+            const emit = () => {
+              for (const s of geo.segs) {
+                if (s.t === "l") line(s.a, s.b, sub2, e.layer);
+                else {
+                  common("ARC", sub2, "AcDbCircle");
+                  out.pt(s.c).c(40, s.r).c(100, "AcDbArc").c(50, deg(s.sw >= 0 ? s.a0 : s.a0 + s.sw)).c(51, deg(s.sw >= 0 ? s.a0 + s.sw : s.a0));
+                }
+              }
+              for (const a of geo.arrows) {
+                const poly = arrowPolygon(a);
+                if (poly) solid(poly, sub2, e.layer);
+                else for (const [p, q] of arrowLines(a)) line(p, q, sub2, e.layer);
+              }
+              if (geo.text) text2(geo.text.p, geo.text.h, geo.text.s, geo.text.rot, geo.text.jh, geo.text.jv, sub2);
+            };
+            if (e.kind === "ang") {
+              emit();
+              break;
+            }
+            const rec = { name: `*D${dimBlocks.length + 1}`, rec: H(), blk: H(), end: H(), layer: e.layer ?? "0", out: new Out() };
+            dimBlocks.push(rec);
+            const keepLines = out.lines, keepOwner = ownerHandle;
+            out.lines = rec.out.lines;
+            ownerHandle = rec.rec;
+            emit();
+            out.lines = keepLines;
+            ownerHandle = keepOwner;
+            const type = { lin: 0, ali: 1, dia: 3, rad: 4 }[e.kind] ?? 0;
+            common("DIMENSION", e, "AcDbDimension");
+            out.c(2, rec.name).pt(e.kind === "rad" ? e.c : e.kind === "dia" ? add(e.c, sub(e.c, e.pt)) : e.dp);
+            out.pt(geo.text?.p || e.dp, 1).c(70, 32 | type).c(71, 5).c(3, "Standard");
+            if (e.txt) out.c(1, e.txt);
+            if (e.kind === "lin" || e.kind === "ali") {
+              out.c(100, "AcDbAlignedDimension").pt(e.p1, 3).pt(e.p2, 4);
+              if (e.kind === "lin") out.c(50, deg(e.ang || 0)).c(100, "AcDbRotatedDimension");
+            } else out.c(100, e.kind === "dia" ? "AcDbDiametricDimension" : "AcDbRadialDimension").pt(e.pt, 5).c(40, 0);
+            break;
+          }
+          default:
+            break;
+        }
+      };
+      for (const e of list) {
+        try {
+          write(e);
+        } catch (err) {
+          void err;
+        }
+      }
+      return out;
+    };
+    const modelOut = entityOut(doc.model.entities, hs.msRec, "*Model_Space");
+    const blockOuts = userBlocks.map((b) => ({ b, out: entityOut(b.entities, blockRec.get(b.name).rec, b.name) }));
+    const layoutOuts = doc.layouts.map((l) => entityOut(l.entities.filter((e) => e.type !== "viewport"), hs.psRec, "*Paper_Space"));
+    const tail = new Out();
+    const savedLines = o.lines;
+    o.lines = tail.lines;
+    table("DIMSTYLE", "dimstyle", 1, () => {
+      o.c(0, "DIMSTYLE").c(105, hs.dimstyleRec).c(330, hs.dimstyle).c(100, "AcDbSymbolTableRecord").c(100, "AcDbDimStyleTableRecord").c(2, "Standard").c(70, 0).c(40, ds.scale).c(41, ds.asz).c(42, ds.exo).c(43, 3.75).c(44, ds.exe).c(140, ds.txt).c(141, ds.cen).c(147, ds.gap).c(271, ds.dec).c(77, ds.tad ? 1 : 0);
+    });
+    const brCount = 2 + userBlocks.length + dimBlocks.length;
+    table("BLOCK_RECORD", "blockRecord", brCount, () => {
+      const rec = (name, h2) => o.c(0, "BLOCK_RECORD").c(5, h2).c(330, hs.blockRecord).c(100, "AcDbSymbolTableRecord").c(100, "AcDbBlockTableRecord").c(2, name).c(70, 0).c(280, 1).c(281, 0);
+      rec("*Model_Space", hs.msRec);
+      rec("*Paper_Space", hs.psRec);
+      for (const b of userBlocks) rec(b.name, blockRec.get(b.name).rec);
+      for (const d of dimBlocks) rec(d.name, d.rec);
+    });
+    o.c(0, "ENDSEC");
+    o.lines = savedLines;
+    o.lines.push(...tail.lines);
+    void tablesEndMark;
+    o.c(0, "SECTION").c(2, "BLOCKS");
+    const block = (name, h2, endH, ownerRec, body, base = { x: 0, y: 0 }, layer = "0") => {
+      o.c(0, "BLOCK").c(5, h2).c(330, ownerRec).c(100, "AcDbEntity").c(8, layer).c(100, "AcDbBlockBegin").c(2, name).c(70, name.startsWith("*") && !/^\*(Model|Paper)_Space/.test(name) ? 1 : 0).pt(base).c(3, name).c(1, "");
+      o.lines.push(...body);
+      o.c(0, "ENDBLK").c(5, endH).c(330, ownerRec).c(100, "AcDbEntity").c(8, layer).c(100, "AcDbBlockEnd");
+    };
+    block("*Model_Space", hs.msBlock, hs.msEnd, hs.msRec, []);
+    block("*Paper_Space", hs.psBlock, hs.psEnd, hs.psRec, layoutOuts.flatMap((x) => x.lines));
+    for (const { b, out } of blockOuts) block(b.name, blockRec.get(b.name).blk, blockRec.get(b.name).end, blockRec.get(b.name).rec, out.lines, b.base || { x: 0, y: 0 });
+    for (const d of dimBlocks) block(d.name, d.blk, d.end, d.rec, d.out.lines, { x: 0, y: 0 }, d.layer);
+    o.c(0, "ENDSEC");
+    o.c(0, "SECTION").c(2, "ENTITIES");
+    o.lines.push(...modelOut.lines);
+    o.c(0, "ENDSEC");
+    o.c(0, "SECTION").c(2, "OBJECTS");
+    o.c(0, "DICTIONARY").c(5, hs.dictRoot).c(330, 0).c(100, "AcDbDictionary").c(281, 1).c(3, "ACAD_GROUP").c(350, hs.dictGroup);
+    o.c(0, "DICTIONARY").c(5, hs.dictGroup).c(330, hs.dictRoot).c(100, "AcDbDictionary").c(281, 1);
+    o.c(0, "ENDSEC").c(0, "EOF");
+    return o.toString().replace("__HANDSEED__", handle.toString(16).toUpperCase());
+  }
+
+  // src/ui/files.js
+  var RECENT_KEY = "cf.recent";
+  var MAX_RECENT = 6;
+  var MAX_RECENT_BYTES = 4e5;
+  function download(name, data, type = "application/octet-stream") {
+    const blob = data instanceof Blob ? data : new Blob([data], { type });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4e3);
+  }
+  function pickFiles(accept, multiple = false) {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = accept;
+      input.multiple = multiple;
+      input.addEventListener("change", () => resolve([...input.files]));
+      input.addEventListener("cancel", () => resolve([]));
+      input.click();
+    });
+  }
+  var Files = class {
+    constructor(ui2) {
+      this.ui = ui2;
+      this.app = ui2.app;
+    }
+    // ------------------------------------------------------------ recent
+    recent() {
+      try {
+        return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+      } catch {
+        return [];
+      }
+    }
+    remember(doc) {
+      try {
+        const json = toJSON(doc);
+        const list = this.recent().filter((r) => r.name !== doc.name);
+        list.unshift({ name: doc.name, time: Date.now(), json: json.length < MAX_RECENT_BYTES ? json : null });
+        localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
+      } catch {
+      }
+    }
+    openRecent(r) {
+      if (!r.json) {
+        this.ui.toast(`${r.name} is too large to reopen from history. Use Open to choose the file.`);
+        return;
+      }
+      this.adopt(fromJSON(r.json, r.name));
+    }
+    // ------------------------------------------------------------ new / open
+    async newDrawing(opts = {}) {
+      this.ui.showStart(false);
+      return this.app.newDrawing(opts);
+    }
+    openSample() {
+      this.adopt(sampleDrawing());
+    }
+    adopt(doc) {
+      this.ui.showStart(false);
+      const ed = this.app.addDrawing(doc);
+      ed.zoomed = false;
+      this.ui.viewport.resize();
+      this.app.log(`Opened ${doc.name}.`);
+      return ed;
+    }
+    async open() {
+      const files = await pickFiles(".json,.cadforge,.dxf", true);
+      for (const f4 of files) await this.openFile(f4);
+      return files.length > 0;
+    }
+    async openFile(file) {
+      try {
+        const text2 = await file.text();
+        const name = stripExt(file.name);
+        const doc = /\.dxf$/i.test(file.name) ? readDXF(text2, name) : fromJSON(text2, name);
+        doc.fileName = file.name;
+        doc.dirty = false;
+        this.adopt(doc);
+      } catch (e) {
+        this.app.log(`Could not open ${file.name}: ${e.message}`, "error");
+        this.ui.toast(`Could not open ${file.name}: ${e.message}`, 6e3);
+      }
+    }
+    async importFile() {
+      const [f4] = await pickFiles(".json,.cadforge,.dxf");
+      if (!f4) return false;
+      try {
+        const text2 = await f4.text();
+        const src = /\.dxf$/i.test(f4.name) ? readDXF(text2, stripExt(f4.name)) : fromJSON(text2, stripExt(f4.name));
+        const doc = this.app.doc;
+        let n = 0;
+        this.ui.edit("Import", (d) => {
+          d.willChange();
+          for (const l of src.layers) if (!d.layer(l.name)) d.layers.push({ ...l });
+          for (const [k, b] of Object.entries(src.blocks)) if (!d.blocks[k]) d.blocks[k] = b;
+          for (const e of src.model.entities) {
+            const c2 = structuredClone(e);
+            delete c2.id;
+            d.add(c2);
+            n++;
+          }
+          d.touch();
+        });
+        this.app.log(`Imported ${n} objects from ${f4.name}.`);
+        this.app.editor.zoomExtents();
+        this.ui.viewChanged();
+        void doc;
+        return true;
+      } catch (e) {
+        this.app.log(`Could not import ${f4.name}: ${e.message}`, "error");
+        return false;
+      }
+    }
+    async pickText(accept) {
+      const [f4] = await pickFiles(accept);
+      if (!f4) return null;
+      return { name: f4.name, text: await f4.text() };
+    }
+    // ------------------------------------------------------------ save
+    async save() {
+      const doc = this.app.doc;
+      if (!doc) return false;
+      if (!doc.fileName) return this.saveAs();
+      return this.write(doc, doc.fileName);
+    }
+    async saveAs() {
+      const doc = this.app.doc;
+      if (!doc) return false;
+      const suggested = (doc.fileName || doc.name) + (doc.fileName ? "" : FILE_EXT);
+      const name = await this.ui.dialog("prompt", { title: "Save Drawing As", label: "File name (use .dxf for DXF, otherwise CadForge JSON)", value: suggested, ok: "Save" });
+      if (!name) return false;
+      let n = name.trim();
+      if (!/\.(json|dxf|cadforge)$/i.test(n)) n += FILE_EXT;
+      return this.write(doc, n);
+    }
+    async write(doc, fileName) {
+      try {
+        if (/\.dxf$/i.test(fileName)) download(fileName, writeDXF(doc), "application/dxf");
+        else download(fileName, toJSON(doc), "application/json");
+        doc.fileName = fileName;
+        doc.name = stripExt(fileName);
+        doc.dirty = false;
+        this.remember(doc);
+        this.app.log(`Saved ${fileName}.`);
+        this.app.emit("change");
+        this.ui.doctabs.render();
+        return true;
+      } catch (e) {
+        this.app.log(`Could not save: ${e.message}`, "error");
+        this.ui.toast(`Could not save: ${e.message}`, 6e3);
+        return false;
+      }
+    }
+    // ------------------------------------------------------------ export
+    exportDXF() {
+      const doc = this.app.doc;
+      if (!doc) return false;
+      try {
+        download(`${doc.name}.dxf`, writeDXF(doc), "application/dxf");
+        this.app.log(`Exported ${doc.name}.dxf.`);
+        return true;
+      } catch (e) {
+        this.app.log(`DXF export failed: ${e.message}`, "error");
+        return false;
+      }
+    }
+    exportPDF() {
+      return this.ui.dialog("plot", { format: "pdf" });
+    }
+    exportMenu() {
+      const r = this.ui.viewport.el.getBoundingClientRect();
+      showMenu([
+        { label: "DXF (*.dxf)", icon: "dxf", action: () => this.exportDXF() },
+        { label: "PDF (*.pdf)", icon: "pdf", action: () => this.exportPDF() },
+        { label: "SVG (*.svg)", action: () => this.ui.dialog("plot", { format: "svg" }) },
+        { label: "PNG image (*.png)", action: () => this.ui.dialog("plot", { format: "png" }) },
+        { label: "CadForge project (*.json)", action: () => {
+          const d = this.app.doc;
+          download(`${d.name}${FILE_EXT}`, toJSON(d), "application/json");
+        } }
+      ], r.left + 40, r.top + 40);
+    }
+    exportEntities(ents) {
+      const src = this.app.doc, d = new Drawing("Block");
+      d.layers = structuredClone(src.layers);
+      d.settings = structuredClone(src.settings);
+      for (const e of ents) {
+        const c2 = structuredClone(e);
+        delete c2.id;
+        d.add(c2);
+      }
+      download("Block" + FILE_EXT, toJSON(d), "application/json");
+    }
+  };
+
   // src/ui/dialogs-plot.js
+  var remembered = /* @__PURE__ */ new Map();
   var PLOT = {
-    plot: () => ({ title: "Plot", width: 380, body: h("p.fnote", "Plotting is not available yet."), ok: null, cancel: "Close" })
+    plot: ({ ui: ui2, doc, data }) => {
+      const o = { ...defaultPlotOptions(doc), ...remembered.get(doc.name) || {} };
+      if (data.format) o.format = data.format;
+      const view = ui2.editor.view, viewBounds = (() => {
+        try {
+          return view.worldBounds();
+        } catch {
+          return null;
+        }
+      })();
+      const format = select([["pdf", "PDF (vector)"], ["svg", "SVG (vector)"], ["png", "PNG (raster)"]].map(([value, label]) => ({ value, label })), o.format, { width: 150 });
+      const paper = select(Object.keys(PAPERS), o.paper, { width: 150 });
+      const orient = select([{ value: "l", label: "Landscape" }, { value: "p", label: "Portrait" }], o.landscape ? "l" : "p", { width: 150 });
+      const area = select([{ value: "extents", label: "Extents" }, { value: "display", label: "Display" }], o.area, { width: 150 });
+      const scale = select(SCALES.map(([label, v]) => ({ value: String(v), label })), String(o.scale), { width: 150 });
+      const center = check("Center the plot", o.center), ox = num2(o.offsetX, { width: 70 }), oy = num2(o.offsetY, { width: 70 });
+      const lw = check("Plot with lineweights", o.lineweights), mono = check("Monochrome (black ink)", o.mono);
+      const dpi = select([100, 150, 200, 300, 600], o.dpi, { width: 150 });
+      const canvas = h("canvas.plot-prev", { width: 420, height: 300 }), info = h("div.fnote");
+      const read = () => ({ ...o, format: format.value, paper: paper.value, landscape: orient.value === "l", area: area.value, scale: scale.value === "fit" ? "fit" : Number(scale.value), center: center.input.checked, offsetX: Number(ox.value) || 0, offsetY: Number(oy.value) || 0, lineweights: lw.input.checked, mono: mono.input.checked, dpi: Number(dpi.value) });
+      const draw = () => {
+        const opts = read(), ctx = canvas.getContext("2d");
+        ox.disabled = oy.disabled = opts.center;
+        dpi.disabled = opts.format !== "png";
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = "#5b6470";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let layout;
+        try {
+          layout = plotLayout(doc, opts, viewBounds);
+        } catch (e) {
+          info.textContent = e.message;
+          return;
+        }
+        const k = Math.min((canvas.width - 24) / layout.W, (canvas.height - 24) / layout.H), dx = (canvas.width - layout.W * k) / 2, dy = (canvas.height - layout.H * k) / 2;
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.beginPath();
+        ctx.rect(0, 0, layout.W * k, layout.H * k);
+        ctx.clip();
+        renderPlot(ctx, doc, opts, layout, k);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = "rgba(0,0,0,.35)";
+        const m2 = opts.margin * 10 * k;
+        ctx.strokeRect(m2, m2, layout.W * k - 2 * m2, layout.H * k - 2 * m2);
+        ctx.restore();
+        const sc = layout.mmPerUnit / (opts.scale === "fit" ? 1 : 1);
+        info.textContent = `${layout.page.w} \xD7 ${layout.page.h} mm \xB7 1 drawing unit = ${+sc.toFixed(4)} mm on paper${layout.fits ? "" : " \xB7 the drawing is larger than the printable area"}`;
+      };
+      for (const el of [format, paper, orient, area, scale, dpi]) el.addEventListener("change", draw);
+      for (const el of [center, lw, mono]) el.input.addEventListener("change", draw);
+      for (const el of [ox, oy]) el.addEventListener("input", draw);
+      setTimeout(draw, 0);
+      return {
+        title: "Plot \u2014 Model",
+        width: 760,
+        ok: "Plot",
+        body: h(
+          "div.plot",
+          h("div.plot-form", row2("Output", format), row2("Paper size", paper), row2("Orientation", orient), row2("Plot area", area), row2("Scale", scale), h("div.frow", center), row2("Offset X, Y (mm)", ox, oy), h("div.frow", lw), h("div.frow", mono), row2("PNG resolution (dpi)", dpi)),
+          h("div.plot-pv", canvas, info)
+        ),
+        commit: () => {
+          const opts = read();
+          remembered.set(doc.name, opts);
+          try {
+            const base = `${doc.name}`;
+            if (opts.format === "png") {
+              const layout = plotLayout(doc, opts, viewBounds), s = opts.dpi / 25.4 * UNIT_MM;
+              const cv = document.createElement("canvas");
+              cv.width = Math.round(layout.W * s);
+              cv.height = Math.round(layout.H * s);
+              renderPlot(cv.getContext("2d"), doc, opts, layout, s);
+              cv.toBlob((b) => download(`${base}.png`, b, "image/png"));
+            } else {
+              const r = exportVector(doc, opts, viewBounds);
+              download(`${base}.${r.ext}`, r.data, r.mime);
+            }
+            ui2.app.log(`Plotted ${doc.name} to ${opts.format.toUpperCase()}.`);
+            return true;
+          } catch (e) {
+            ui2.toast(e.message, 5e3);
+            return false;
+          }
+        }
+      };
+    }
   };
 
   // src/ui/dialogs.js
@@ -12833,10 +14420,10 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         });
         this.ui.els.overlay.append(back);
         this.stack.push(entry);
-        const first = win.querySelector("input:not([type=checkbox]),select,textarea") || win.querySelector(".btn.primary");
+        const first2 = win.querySelector("input:not([type=checkbox]),select,textarea") || win.querySelector(".btn.primary");
         setTimeout(() => {
-          first?.focus?.();
-          if (first instanceof HTMLInputElement && first.type !== "number") first.select?.();
+          first2?.focus?.();
+          if (first2 instanceof HTMLInputElement && first2.type !== "number") first2.select?.();
           spec.onOpen?.(win);
         }, 0);
       });
@@ -12863,7 +14450,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
 
   // src/ui/palettes.js
   var lengthOf = (e, doc) => segsOf(e, doc).reduce((s, q) => s + segLength(q), 0);
-  var JH = ["left", "center", "right"];
+  var JH3 = ["left", "center", "right"];
   var X = (label, get, set) => ({ label, kind: "num", get, set });
   var RO = (label, get) => ({ label, kind: "ro", get });
   var ANG = (label, get, set) => ({ label, kind: "num", get: (e) => deg(get(e)), set: (e, v) => set(e, rad(v)), unit: "\xB0" });
@@ -12966,7 +14553,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       X("Position Y", (e) => e.p.y, (e, v) => {
         e.p.y = v;
       }),
-      { label: "Justify", kind: "select", options: JH, get: (e) => e.jh || "left", set: (e, v) => {
+      { label: "Justify", kind: "select", options: JH3, get: (e) => e.jh || "left", set: (e, v) => {
         e.jh = v;
       } }
     ],
@@ -13190,7 +14777,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       this.section("General", general);
       const ftype = this.filter === "all" ? types.length === 1 ? sel[0].type : null : targets[0]?.type;
       if (targets.length && ftype && GEOM[ftype]) {
-        const rows = GEOM[ftype].map((f2) => this.geomField(f2, targets, apply, doc)).filter(Boolean);
+        const rows = GEOM[ftype].map((f4) => this.geomField(f4, targets, apply, doc)).filter(Boolean);
         this.section("Geometry", rows);
       } else if (targets.length && !ftype) this.section("Geometry", [h("div.pal-note", "Select a single object type to edit its geometry.")]);
       if (!sel.length) {
@@ -13226,31 +14813,31 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       } else el.value = value;
       return el;
     }
-    geomField(f2, targets, apply, doc) {
-      const vals = targets.map((e) => f2.get(e, doc));
+    geomField(f4, targets, apply, doc) {
+      const vals = targets.map((e) => f4.get(e, doc));
       const same = vals.every((v) => v === vals[0] || typeof v === "number" && Math.abs(v - vals[0]) < 1e-9);
       const shown = same ? vals[0] : "*VARIES*";
       const prec2 = doc.settings.units.precision;
-      if (f2.kind === "ro") return this.field(f2.label, h("span.pal-ro", typeof shown === "number" ? fmtNum(shown, prec2) : String(shown)));
-      if (f2.kind === "bool") return this.field(f2.label, this.selectEl(["Yes", "No"], shown === "*VARIES*" ? shown : shown ? "Yes" : "No", (v) => apply((e) => f2.set(e, v === "Yes", doc))));
-      if (f2.kind === "select") return this.field(f2.label, this.selectEl(f2.options, shown, (v) => apply((e) => f2.set(e, v, doc))));
-      if (f2.kind === "text") {
-        const inp2 = h("input.pal-in", { type: "text", value: shown === "*VARIES*" ? "" : String(shown).replace(/\n/g, " \u23CE "), placeholder: shown === "*VARIES*" ? "*VARIES*" : "", onchange: (e) => apply((en) => f2.set(en, e.target.value.replace(/ ⏎ /g, "\n"), doc)) });
+      if (f4.kind === "ro") return this.field(f4.label, h("span.pal-ro", typeof shown === "number" ? fmtNum(shown, prec2) : String(shown)));
+      if (f4.kind === "bool") return this.field(f4.label, this.selectEl(["Yes", "No"], shown === "*VARIES*" ? shown : shown ? "Yes" : "No", (v) => apply((e) => f4.set(e, v === "Yes", doc))));
+      if (f4.kind === "select") return this.field(f4.label, this.selectEl(f4.options, shown, (v) => apply((e) => f4.set(e, v, doc))));
+      if (f4.kind === "text") {
+        const inp2 = h("input.pal-in", { type: "text", value: shown === "*VARIES*" ? "" : String(shown).replace(/\n/g, " \u23CE "), placeholder: shown === "*VARIES*" ? "*VARIES*" : "", onchange: (e) => apply((en) => f4.set(en, e.target.value.replace(/ ⏎ /g, "\n"), doc)) });
         inp2.addEventListener("keydown", (e) => {
           e.stopPropagation();
           if (e.key === "Enter") inp2.blur();
         });
-        return this.field(f2.label, inp2);
+        return this.field(f4.label, inp2);
       }
       const inp = h("input.pal-in", { type: "text", inputmode: "decimal", value: shown === "*VARIES*" ? "" : fmtNum(shown, prec2, true), placeholder: shown === "*VARIES*" ? "*VARIES*" : "" });
       const commit = () => {
         const v = Number(inp.value);
-        if (!Number.isFinite(v) || inp.value.trim() === "" || f2.min !== void 0 && v < f2.min || f2.max !== void 0 && v > f2.max) {
+        if (!Number.isFinite(v) || inp.value.trim() === "" || f4.min !== void 0 && v < f4.min || f4.max !== void 0 && v > f4.max) {
           this.key = "";
           this.refresh();
           return;
         }
-        apply((e) => f2.set(e, v, doc));
+        apply((e) => f4.set(e, v, doc));
       };
       inp.addEventListener("change", commit);
       inp.addEventListener("keydown", (e) => {
@@ -13261,7 +14848,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           this.refresh();
         }
       });
-      return this.field(f2.label + (f2.unit ? ` (${f2.unit})` : ""), inp);
+      return this.field(f4.label + (f4.unit ? ` (${f4.unit})` : ""), inp);
     }
   };
   var TOOL_SETS = [
@@ -13554,9 +15141,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const types = [...new Set(sel.map(labelOf))];
       this.el.append(h("div.qp-head", types.length === 1 ? `${types[0]}${sel.length > 1 ? ` (${sel.length})` : ""}` : `All (${sel.length})`, h("button.pal-x", { "aria-label": "Close quick properties", onclick: () => this.toggle(false) }, svgIcon("x", 9))));
       const rows = [["Layer", e.layer], ["Color", describeColor(e.color)], ["Linetype", e.ltype === void 0 ? "ByLayer" : ltypeDisplay(e.ltype)]];
-      if (sel.length === 1) for (const f2 of (GEOM[e.type] || []).slice(0, 6)) {
-        const v = f2.get(e, doc);
-        rows.push([f2.label, typeof v === "number" ? fmtNum(v, doc.settings.units.precision, true) : String(v)]);
+      if (sel.length === 1) for (const f4 of (GEOM[e.type] || []).slice(0, 6)) {
+        const v = f4.get(e, doc);
+        rows.push([f4.label, typeof v === "number" ? fmtNum(v, doc.settings.units.precision, true) : String(v)]);
       }
       for (const [k, v] of rows) this.el.append(h("div.qp-row", h("span", k), h("b", v)));
     }
@@ -13682,264 +15269,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       };
       document.addEventListener("pointermove", mv);
       document.addEventListener("pointerup", up);
-    }
-  };
-
-  // src/io/sample.js
-  function sampleDrawing() {
-    const d = new Drawing("L-Bracket");
-    d.layers.push(
-      newLayer("Outline", { color: 7, lw: 50 }),
-      newLayer("Holes", { color: 4, lw: 25 }),
-      newLayer("Centre", { color: 1, ltype: "CENTER", lw: 13 }),
-      newLayer("Dimensions", { color: 3, lw: 13 }),
-      newLayer("Hatch", { color: 8, lw: 9 }),
-      newLayer("Notes", { color: 2, lw: 13 })
-    );
-    const L2 = (n) => ({ layer: n });
-    const outline = [[0, 0], [120, 0], [120, 30], [30, 30], [30, 90], [0, 90]].map(([x, y]) => ({ x, y }));
-    d.add(E.pline(outline, true, L2("Outline")));
-    const holes = [[75, 15, 5], [15, 60, 5], [15, 75, 5]];
-    for (const [x, y, r] of holes) {
-      d.add(E.circle({ x, y }, r, L2("Holes")));
-      d.add(E.line({ x: x - r - 4, y }, { x: x + r + 4, y }, L2("Centre")));
-      d.add(E.line({ x, y: y - r - 4 }, { x, y: y + r + 4 }, L2("Centre")));
-    }
-    d.add(E.hatch([[{ x: 0, y: 0, b: 0 }, { x: 8, y: 0, b: 0 }, { x: 8, y: 30, b: 0 }, { x: 0, y: 30, b: 0 }]], { pattern: "ANSI31", ps: 1.2, pa: 0, layer: "Hatch" }));
-    d.add(E.dim("lin", { p1: { x: 0, y: 0 }, p2: { x: 120, y: 0 }, dp: { x: 60, y: -16 }, ang: 0, layer: "Dimensions" }));
-    d.add(E.dim("lin", { p1: { x: 0, y: 0 }, p2: { x: 0, y: 90 }, dp: { x: -16, y: 45 }, ang: Math.PI / 2, layer: "Dimensions" }));
-    d.add(E.dim("lin", { p1: { x: 120, y: 0 }, p2: { x: 120, y: 30 }, dp: { x: 136, y: 15 }, ang: Math.PI / 2, layer: "Dimensions" }));
-    d.add(E.dim("dia", { c: { x: 75, y: 15 }, pt: { x: 75 + 5 * Math.SQRT1_2, y: 15 + 5 * Math.SQRT1_2 }, dp: { x: 94, y: 29 }, layer: "Dimensions" }));
-    d.add(E.leader([{ x: 15, y: 75 }, { x: 52, y: 100 }], "\xD810 THRU, 2 HOLES", 3.5, { layer: "Notes" }));
-    d.add(E.mtext({ x: 0, y: -42 }, 4, "L-BRACKET\nMaterial: 6061-T6 aluminium\nScale 1:1", 100, { layer: "Notes" }));
-    d.cur.layer = "Outline";
-    d.dirty = false;
-    return d;
-  }
-
-  // src/io/project.js
-  var FILE_EXT = ".cadforge.json";
-  function stripExt(name) {
-    return String(name).replace(/\.(cadforge\.json|json|cadforge|dxf)$/i, "");
-  }
-  function toJSON(doc) {
-    return JSON.stringify(doc.serialize());
-  }
-  function fromJSON(text2, name) {
-    let obj;
-    try {
-      obj = JSON.parse(text2);
-    } catch {
-      throw Error("This file is not valid JSON.");
-    }
-    return Drawing.deserialize(obj, name);
-  }
-
-  // src/io/dxf.js
-  function readDXF() {
-    throw Error("DXF import is not available yet.");
-  }
-  function writeDXF() {
-    throw Error("DXF export is not available yet.");
-  }
-
-  // src/ui/files.js
-  var RECENT_KEY = "cf.recent";
-  var MAX_RECENT = 6;
-  var MAX_RECENT_BYTES = 4e5;
-  function download(name, data, type = "application/octet-stream") {
-    const blob = data instanceof Blob ? data : new Blob([data], { type });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4e3);
-  }
-  function pickFiles(accept, multiple = false) {
-    return new Promise((resolve) => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = accept;
-      input.multiple = multiple;
-      input.addEventListener("change", () => resolve([...input.files]));
-      input.addEventListener("cancel", () => resolve([]));
-      input.click();
-    });
-  }
-  var Files = class {
-    constructor(ui2) {
-      this.ui = ui2;
-      this.app = ui2.app;
-    }
-    // ------------------------------------------------------------ recent
-    recent() {
-      try {
-        return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
-      } catch {
-        return [];
-      }
-    }
-    remember(doc) {
-      try {
-        const json = toJSON(doc);
-        const list = this.recent().filter((r) => r.name !== doc.name);
-        list.unshift({ name: doc.name, time: Date.now(), json: json.length < MAX_RECENT_BYTES ? json : null });
-        localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
-      } catch {
-      }
-    }
-    openRecent(r) {
-      if (!r.json) {
-        this.ui.toast(`${r.name} is too large to reopen from history. Use Open to choose the file.`);
-        return;
-      }
-      this.adopt(fromJSON(r.json, r.name));
-    }
-    // ------------------------------------------------------------ new / open
-    async newDrawing(opts = {}) {
-      this.ui.showStart(false);
-      return this.app.newDrawing(opts);
-    }
-    openSample() {
-      this.adopt(sampleDrawing());
-    }
-    adopt(doc) {
-      this.ui.showStart(false);
-      const ed = this.app.addDrawing(doc);
-      ed.zoomed = false;
-      this.ui.viewport.resize();
-      this.app.log(`Opened ${doc.name}.`);
-      return ed;
-    }
-    async open() {
-      const files = await pickFiles(".json,.cadforge,.dxf", true);
-      for (const f2 of files) await this.openFile(f2);
-      return files.length > 0;
-    }
-    async openFile(file) {
-      try {
-        const text2 = await file.text();
-        const name = stripExt(file.name);
-        const doc = /\.dxf$/i.test(file.name) ? readDXF(text2, name) : fromJSON(text2, name);
-        doc.fileName = file.name;
-        doc.dirty = false;
-        this.adopt(doc);
-      } catch (e) {
-        this.app.log(`Could not open ${file.name}: ${e.message}`, "error");
-        this.ui.toast(`Could not open ${file.name}: ${e.message}`, 6e3);
-      }
-    }
-    async importFile() {
-      const [f2] = await pickFiles(".json,.cadforge,.dxf");
-      if (!f2) return false;
-      try {
-        const text2 = await f2.text();
-        const src = /\.dxf$/i.test(f2.name) ? readDXF(text2, stripExt(f2.name)) : fromJSON(text2, stripExt(f2.name));
-        const doc = this.app.doc;
-        let n = 0;
-        this.ui.edit("Import", (d) => {
-          d.willChange();
-          for (const l of src.layers) if (!d.layer(l.name)) d.layers.push({ ...l });
-          for (const [k, b] of Object.entries(src.blocks)) if (!d.blocks[k]) d.blocks[k] = b;
-          for (const e of src.model.entities) {
-            const c2 = structuredClone(e);
-            delete c2.id;
-            d.add(c2);
-            n++;
-          }
-          d.touch();
-        });
-        this.app.log(`Imported ${n} objects from ${f2.name}.`);
-        this.app.editor.zoomExtents();
-        this.ui.viewChanged();
-        void doc;
-        return true;
-      } catch (e) {
-        this.app.log(`Could not import ${f2.name}: ${e.message}`, "error");
-        return false;
-      }
-    }
-    async pickText(accept) {
-      const [f2] = await pickFiles(accept);
-      if (!f2) return null;
-      return { name: f2.name, text: await f2.text() };
-    }
-    // ------------------------------------------------------------ save
-    async save() {
-      const doc = this.app.doc;
-      if (!doc) return false;
-      if (!doc.fileName) return this.saveAs();
-      return this.write(doc, doc.fileName);
-    }
-    async saveAs() {
-      const doc = this.app.doc;
-      if (!doc) return false;
-      const suggested = (doc.fileName || doc.name) + (doc.fileName ? "" : FILE_EXT);
-      const name = await this.ui.dialog("prompt", { title: "Save Drawing As", label: "File name (use .dxf for DXF, otherwise CadForge JSON)", value: suggested, ok: "Save" });
-      if (!name) return false;
-      let n = name.trim();
-      if (!/\.(json|dxf|cadforge)$/i.test(n)) n += FILE_EXT;
-      return this.write(doc, n);
-    }
-    async write(doc, fileName) {
-      try {
-        if (/\.dxf$/i.test(fileName)) download(fileName, writeDXF(doc), "application/dxf");
-        else download(fileName, toJSON(doc), "application/json");
-        doc.fileName = fileName;
-        doc.name = stripExt(fileName);
-        doc.dirty = false;
-        this.remember(doc);
-        this.app.log(`Saved ${fileName}.`);
-        this.app.emit("change");
-        this.ui.doctabs.render();
-        return true;
-      } catch (e) {
-        this.app.log(`Could not save: ${e.message}`, "error");
-        this.ui.toast(`Could not save: ${e.message}`, 6e3);
-        return false;
-      }
-    }
-    // ------------------------------------------------------------ export
-    exportDXF() {
-      const doc = this.app.doc;
-      if (!doc) return false;
-      try {
-        download(`${doc.name}.dxf`, writeDXF(doc), "application/dxf");
-        this.app.log(`Exported ${doc.name}.dxf.`);
-        return true;
-      } catch (e) {
-        this.app.log(`DXF export failed: ${e.message}`, "error");
-        return false;
-      }
-    }
-    exportPDF() {
-      return this.ui.dialog("plot", { format: "pdf" });
-    }
-    exportMenu() {
-      const r = this.ui.viewport.el.getBoundingClientRect();
-      showMenu([
-        { label: "DXF (*.dxf)", icon: "dxf", action: () => this.exportDXF() },
-        { label: "PDF (*.pdf)", icon: "pdf", action: () => this.exportPDF() },
-        { label: "SVG (*.svg)", action: () => this.ui.dialog("plot", { format: "svg" }) },
-        { label: "PNG image (*.png)", action: () => this.ui.dialog("plot", { format: "png" }) },
-        { label: "CadForge project (*.json)", action: () => {
-          const d = this.app.doc;
-          download(`${d.name}${FILE_EXT}`, toJSON(d), "application/json");
-        } }
-      ], r.left + 40, r.top + 40);
-    }
-    exportEntities(ents) {
-      const src = this.app.doc, d = new Drawing("Block");
-      d.layers = structuredClone(src.layers);
-      d.settings = structuredClone(src.settings);
-      for (const e of ents) {
-        const c2 = structuredClone(e);
-        delete c2.id;
-        d.add(c2);
-      }
-      download("Block" + FILE_EXT, toJSON(d), "application/json");
     }
   };
 
@@ -14523,8 +15852,22 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   };
 
   // src/main.js
+  function installTextMetrics() {
+    const ctx = document.createElement("canvas").getContext("2d"), cache = /* @__PURE__ */ new Map(), REF = 200;
+    ctx.font = `${REF}px ${FONT}`;
+    platform.measureText = (str, h2) => {
+      let w = cache.get(str);
+      if (w === void 0) {
+        w = ctx.measureText(str).width / REF;
+        if (cache.size > 5e3) cache.clear();
+        cache.set(str, w);
+      }
+      return w * emSize(h2);
+    };
+  }
   var $ = (id) => document.getElementById(id);
   function boot() {
+    installTextMetrics();
     const store = (() => {
       try {
         return window.localStorage;

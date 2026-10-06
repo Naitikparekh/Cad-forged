@@ -94,6 +94,29 @@ export function splinePoints(e, perSpan = 14) {
   return out;
 }
 
+/** Exact cubic Bezier form of the spline: [{p0,c1,c2,p1}, ...] (used for DXF export). */
+export function splineBeziers(e) {
+  const P = e.fit, n = P.length;
+  if (n < 2) return [];
+  const pts = e.closed ? P : [P[0], ...P, P[n - 1]];
+  const count = e.closed ? n : n - 1;
+  const at = i => e.closed ? pts[((i % n) + n) % n] : pts[i + 1];
+  const knot = (a, b) => Math.sqrt(g.dist(a, b)) || 1e-6;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const p0 = e.closed ? at(i - 1) : (i === 0 ? { x: 2 * P[0].x - P[1].x, y: 2 * P[0].y - P[1].y } : at(i - 1));
+    const p1 = at(i), p2 = at(i + 1);
+    const p3 = e.closed ? at(i + 2) : (i + 2 >= n ? { x: 2 * P[n - 1].x - P[n - 2].x, y: 2 * P[n - 1].y - P[n - 2].y } : at(i + 2));
+    const d01 = knot(p0, p1), d12 = knot(p1, p2), d23 = knot(p2, p3);
+    const t1 = d01, t2 = t1 + d12, t3 = t2 + d23;
+    const D = (a, b, dt) => ({ x: (b.x - a.x) / dt, y: (b.y - a.y) / dt });
+    const m1 = (() => { const u = D(p0, p1, t1), v = D(p0, p2, t2), w = D(p1, p2, t2 - t1); return { x: u.x - v.x + w.x, y: u.y - v.y + w.y }; })();
+    const m2 = (() => { const u = D(p1, p2, t2 - t1), v = D(p1, p3, t3 - t1), w = D(p2, p3, t3 - t2); return { x: u.x - v.x + w.x, y: u.y - v.y + w.y }; })();
+    out.push({ p0: p1, c1: { x: p1.x + m1.x * d12 / 3, y: p1.y + m1.y * d12 / 3 }, c2: { x: p2.x - m2.x * d12 / 3, y: p2.y - m2.y * d12 / 3 }, p1: p2 });
+  }
+  return out;
+}
+
 const linesFromPts = (pts, closed) => {
   const out = [];
   for (let i = 0; i + 1 < pts.length; i++) out.push({ t: 'l', a: pts[i], b: pts[i + 1], approx: true });

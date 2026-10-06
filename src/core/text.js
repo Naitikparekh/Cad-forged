@@ -7,6 +7,7 @@ export const platform = {
   measureText: (str, h) => str.length * h * .62,
 };
 
+export const FONT = 'Arial, "Liberation Sans", "Helvetica Neue", sans-serif';
 export const CAP_RATIO = .72;            // cap height / em size for the UI font
 export const LINE_PITCH = 1.5;           // line spacing as a multiple of text height
 export const emSize = h => h / CAP_RATIO;

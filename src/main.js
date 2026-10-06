@@ -2,10 +2,23 @@
 import './commands/index.js';
 import { App } from './engine/app.js';
 import { UI } from './ui/ui.js';
+import { platform, emSize, FONT } from './core/text.js';
+
+/** Real glyph metrics (measured at a large reference size, then scaled) for text alignment, wrapping and bounds. */
+function installTextMetrics() {
+  const ctx = document.createElement('canvas').getContext('2d'), cache = new Map(), REF = 200;
+  ctx.font = `${REF}px ${FONT}`;
+  platform.measureText = (str, h) => {
+    let w = cache.get(str);
+    if (w === undefined) { w = ctx.measureText(str).width / REF; if (cache.size > 5000) cache.clear(); cache.set(str, w); }
+    return w * emSize(h);
+  };
+}
 
 const $ = id => document.getElementById(id);
 
 function boot() {
+  installTextMetrics();
   const store = (() => { try { return window.localStorage; } catch { return null; } })();
   const app = new App({ storage: store });
   let theme = 'dark';

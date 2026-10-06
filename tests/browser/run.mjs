@@ -1,4 +1,5 @@
 // Browser tests: drive the real UI (mouse, keyboard, ribbon, dialogs) in headless Chromium.
+import fs from 'node:fs';
 import { chromium, boot, test, summary, eq, ok, near } from './harness.mjs';
 
 const browser = await chromium.launch();
@@ -102,6 +103,52 @@ await test('Properties palette lists the selected object', async () => {
   ok((await page.locator('.pal-section').allInnerTexts()).join(' ').includes('Geometry'));
   ok(await page.locator('.pal-row:has-text("Radius") input').count() === 1);
   await page.evaluate(() => window.cadforge.ui.togglePalette('properties', false));
+});
+
+console.log('files and plotting');
+await test('plot dialog exports a PDF download', async () => {
+  await page.evaluate(() => { window.cadforge.ui.files.openSample(); });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { window.cadforge.ui.dialog('plot'); });
+  await page.waitForSelector('.plot-prev');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.dlg .btn.primary').click()]);
+  eq(dl.suggestedFilename(), 'L-Bracket.pdf');
+  const buf = fs.readFileSync(await dl.path());
+  ok(buf.slice(0, 8).toString() === '%PDF-1.4', 'PDF header');
+  eq(await page.locator('.dlg').count(), 0);
+});
+await test('plot dialog exports SVG and PNG', async () => {
+  for (const [fmt, ext] of [['svg', 'svg'], ['png', 'png']]) {
+    await page.evaluate(f => { window.cadforge.ui.dialog('plot', { format: f }); }, fmt);
+    await page.waitForSelector('.plot-prev');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.dlg .btn.primary').click()]);
+    eq(dl.suggestedFilename(), `L-Bracket.${ext}`);
+    const buf = fs.readFileSync(await dl.path());
+    ok(ext === 'svg' ? buf.toString().includes('<svg') : buf.slice(1, 4).toString() === 'PNG', `${ext} content`);
+  }
+});
+await test('Export DXF downloads a file ezdxf-style readers accept (header check)', async () => {
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => { window.cadforge.ui.files.exportDXF(); })]);
+  eq(dl.suggestedFilename(), 'L-Bracket.dxf');
+  const txt = fs.readFileSync(await dl.path(), 'utf8');
+  ok(txt.includes('AC1015') && txt.includes('ENTITIES') && txt.trimEnd().endsWith('EOF'));
+});
+await test('Save As JSON then reopen restores the drawing', async () => {
+  const before = await page.evaluate(() => window.cadforge.app.doc.entities.length);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => { window.cadforge.ui.files.write(window.cadforge.app.doc, 'copy.cadforge.json'); })]);
+  const file = await dl.path();
+  const json = fs.readFileSync(file, 'utf8');
+  await page.evaluate(async txt => { const f = new File([txt], 'copy.cadforge.json'); await window.cadforge.ui.files.openFile(f); }, json);
+  await page.waitForTimeout(100);
+  eq(await page.evaluate(() => window.cadforge.app.doc.entities.length), before);
+  eq(await page.evaluate(() => window.cadforge.app.doc.name), 'copy');
+});
+await test('opening a DXF through the UI works', async () => {
+  const dxf = fs.readFileSync('tests/dxf/fixtures/ezdxf-sample.dxf', 'utf8');
+  await page.evaluate(async txt => { await window.cadforge.ui.files.openFile(new File([txt], 'ez.dxf')); }, dxf);
+  await page.waitForTimeout(150);
+  ok(await page.evaluate(() => window.cadforge.app.doc.entities.length) > 30);
+  eq(await page.evaluate(() => window.cadforge.app.doc.name), 'ez');
 });
 
 eq(t.errors, [], 'console errors during run');
