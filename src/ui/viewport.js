@@ -198,7 +198,7 @@ export class Viewport {
       const { a, b } = this.dragRect; this.dragRect = null;
       await rt.drag(a, b, { shift: d.shift });
     } else if (!this.realtime) {
-      await rt.click(this.worldAt(e), { shift: d.shift, ctrl: d.ctrl });
+      await rt.click(this.worldAt(e), { shift: d.shift, ctrl: d.ctrl, screen: this.screenAt(e) });
     }
     this.overlayDirty = true; this.sceneDirty = true; this.schedule();
   }

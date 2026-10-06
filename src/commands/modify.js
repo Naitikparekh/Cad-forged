@@ -18,10 +18,11 @@ const SELECT = 'Select objects';
 def({
   name: 'ERASE', aliases: ['E', 'DEL'], title: 'Erase', icon: 'erase', desc: 'Removes objects from the drawing.',
   async run(c) {
-    const sel = await c.select({ prompt: SELECT });
-    if (!sel.length) return;
+    const sel = await c.select({ prompt: SELECT, solids: true });
+    if (!sel.length && !sel.solids.length) return;
     memory(c.app).erased = sel.map(e => clone(e));
     c.doc.removeAll(sel);
+    for (const s of sel.solids) c.doc.removeSolid(s);
     c.clearSel();
   },
 });
@@ -41,8 +42,8 @@ def({
 def({
   name: 'MOVE', aliases: ['M'], title: 'Move', icon: 'move', desc: 'Moves objects a specified distance in a specified direction.',
   async run(c) {
-    const sel = await c.select({ prompt: SELECT });
-    if (!sel.length) return;
+    const sel = await c.select({ prompt: SELECT, solids: true });
+    if (!sel.length && !sel.solids.length) return;
     let r = await c.point({ prompt: 'Specify base point', options: ['Displacement'], default: undefined });
     let delta;
     if (r.kw === 'Displacement') {
@@ -62,8 +63,8 @@ def({
 def({
   name: 'COPY', aliases: ['CO', 'CP'], title: 'Copy', icon: 'copy', desc: 'Copies objects a specified distance in a specified direction.',
   async run(c) {
-    const sel = await c.select({ prompt: SELECT });
-    if (!sel.length) return;
+    const sel = await c.select({ prompt: SELECT, solids: true });
+    if (!sel.length && !sel.solids.length) return;
     const r = await c.point({ prompt: 'Specify base point', options: ['Displacement', 'mOde'] });
     if (r.kw === 'Displacement') { const d = await c.point({ prompt: 'Specify displacement', default: { x: 0, y: 0 } }); if (d.pt) addCopies(c.doc, sel, M.translate(d.pt.x, d.pt.y)); c.clearSel(); return; }
     if (!r.pt) return;
@@ -71,7 +72,7 @@ def({
     for (;;) {
       const opts = made.length ? ['Array', 'Exit', 'Undo'] : ['Array'];
       const n = await c.point({ prompt: 'Specify second point' + (made.length ? '' : ' or [Array]') + (made.length ? '' : ''), options: made.length ? opts : [], base, allowEnter: true, preview: pt => transformedClones(sel, M.translate(pt.x - base.x, pt.y - base.y), c.doc) });
-      if (n.kw === 'Undo') { const last = made.pop(); if (last) c.doc.removeAll(last); continue; }
+      if (n.kw === 'Undo') { const last = made.pop(); if (last) { c.doc.removeAll(last); for (const sd of last.solids || []) c.doc.removeSolid(sd); } continue; }
       if (n.kw === 'Exit' || !n.pt) break;
       made.push(addCopies(c.doc, sel, M.translate(n.pt.x - base.x, n.pt.y - base.y)));
     }
@@ -84,8 +85,8 @@ def({
 def({
   name: 'ROTATE', aliases: ['RO'], title: 'Rotate', icon: 'rotate', desc: 'Rotates objects around a base point.',
   async run(c) {
-    const sel = await c.select({ prompt: SELECT });
-    if (!sel.length) return;
+    const sel = await c.select({ prompt: SELECT, solids: true });
+    if (!sel.length && !sel.solids.length) return;
     const b = await c.point({ prompt: 'Specify base point' }); if (!b.pt) return;
     const base = b.pt;
     let copy = false, refAngle = 0;
@@ -113,8 +114,8 @@ def({
 def({
   name: 'SCALE', aliases: ['SC'], title: 'Scale', icon: 'scale', desc: 'Enlarges or reduces selected objects, keeping the proportions the same.',
   async run(c) {
-    const sel = await c.select({ prompt: SELECT });
-    if (!sel.length) return;
+    const sel = await c.select({ prompt: SELECT, solids: true });
+    if (!sel.length && !sel.solids.length) return;
     const b = await c.point({ prompt: 'Specify base point' }); if (!b.pt) return;
     const base = b.pt;
     let copy = false;
@@ -139,8 +140,8 @@ def({
 def({
   name: 'MIRROR', aliases: ['MI'], title: 'Mirror', icon: 'mirror', desc: 'Creates a mirrored copy of selected objects.',
   async run(c) {
-    const sel = await c.select({ prompt: SELECT });
-    if (!sel.length) return;
+    const sel = await c.select({ prompt: SELECT, solids: true });
+    if (!sel.length && !sel.solids.length) return;
     const a = await c.point({ prompt: 'Specify first point of mirror line' }); if (!a.pt) return;
     const b = await c.point({ prompt: 'Specify second point of mirror line', base: a.pt, preview: pt => g.samePt(a.pt, pt) ? [] : [E.line(a.pt, pt), ...transformedClones(sel, M.mirror(a.pt, pt), c.doc)] });
     if (!b.pt || g.samePt(a.pt, b.pt)) return;

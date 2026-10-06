@@ -3,6 +3,7 @@ import './commands/index.js';
 import { App } from './engine/app.js';
 import { UI } from './ui/ui.js';
 import { platform, emSize, FONT } from './core/text.js';
+import { setWorkerSource, stats as solidStats } from './solid/boolean.js';
 
 /** Real glyph metrics (measured at a large reference size, then scaled) for text alignment, wrapping and bounds. */
 function installTextMetrics() {
@@ -19,6 +20,7 @@ const $ = id => document.getElementById(id);
 
 function boot() {
   installTextMetrics();
+  setWorkerSource(document.getElementById('cf-worker')?.textContent || null);
   const store = (() => { try { return window.localStorage; } catch { return null; } })();
   const app = new App({ storage: store });
   let theme = 'dark';
@@ -30,7 +32,7 @@ function boot() {
   });
   app.newDrawing();
   app.log('CadForge 2.0 — type a command, or choose one from the ribbon. Press F1 for help.');
-  window.cadforge = { app, ui };
+  window.cadforge = { app, ui, solidStats };
   ui.layoutChanged();
   ui.cmdline.focus();
 }

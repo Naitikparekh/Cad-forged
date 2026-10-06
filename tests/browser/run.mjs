@@ -151,6 +151,40 @@ await test('opening a DXF through the UI works', async () => {
   eq(await page.evaluate(() => window.cadforge.app.doc.name), 'ez');
 });
 
+console.log('3D solids');
+await test('BOX/CYLINDER then SUBTRACT by clicking solids in an isometric view (worker path)', async () => {
+  await t.fresh();
+  await page.evaluate(() => { const { app, ui } = window.cadforge; app.doc.solids.length = 0; app.active.visualStyle = 'Shaded'; app.active.view.setPreset('swiso'); app.active.zoomExtents(); ui.viewChanged(); });
+  await page.locator('.cl-input').focus();
+  await t.cmd('BOX'); await t.cmd('0,0'); await t.cmd('60,40'); await t.cmd('20');
+  await t.cmd('CYLINDER'); await t.cmd('30,20'); await t.cmd('10'); await t.cmd('40');
+  eq(await page.evaluate(() => window.cadforge.app.doc.solids.length), 2);
+  await page.evaluate(() => { const { app, ui } = window.cadforge; app.active.zoomExtents(); ui.viewChanged(); });
+  const at = (x, y, z) => page.evaluate(([x, y, z]) => { const { ui } = window.cadforge, r = ui.viewport.el.getBoundingClientRect(), p = ui.editor.view.project({ x, y, z }); return { x: r.left + p.x, y: r.top + p.y }; }, [x, y, z]);
+  await t.cmd('SUBTRACT');
+  let p = await at(5, 5, 20); await page.mouse.click(p.x, p.y); await page.waitForTimeout(80);
+  await page.keyboard.press('Enter');
+  p = await at(30, 20, 40); await page.mouse.click(p.x, p.y); await page.waitForTimeout(80);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.cadforge.app.doc.solids.length === 1 && !window.cadforge.app.runtime.busy, null, { timeout: 15000 });
+  const vol = await page.evaluate(() => { const s = window.cadforge.app.doc.solids[0]; let v = 0; for (const [i, j, k] of s.faces) { const a = s.vertices[i], b = s.vertices[j], c = s.vertices[k]; v += (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) + a.z * (b.x * c.y - b.y * c.x)) / 6; } return v; });
+  near(vol, 60 * 40 * 20 - Math.PI * 100 * 20, 40);
+  ok((await page.evaluate(() => window.cadforge.solidStats.worker)) >= 1, 'the boolean ran on the worker thread');
+});
+await test('exporting solids as OBJ and STL downloads files', async () => {
+  for (const ext of ['obj', 'stl']) {
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(e => { window.cadforge.ui.files.exportMesh(e); }, ext)]);
+    eq(dl.suggestedFilename().endsWith('.' + ext), true);
+    ok(fs.readFileSync(await dl.path(), 'utf8').length > 200);
+  }
+});
+await test('selecting a solid by clicking shows it in the Properties palette summary', async () => {
+  await page.evaluate(() => { const { app } = window.cadforge; app.active.sel.clear(); app.emit('change'); });
+  const p = await page.evaluate(() => { const { ui } = window.cadforge, r = ui.viewport.el.getBoundingClientRect(), q = ui.editor.view.project({ x: 5, y: 5, z: 20 }); return { x: r.left + q.x, y: r.top + q.y }; });
+  await page.mouse.click(p.x, p.y); await page.waitForTimeout(100);
+  eq(await page.evaluate(() => window.cadforge.app.active.selectedSolids.length), 1);
+});
+
 eq(t.errors, [], 'console errors during run');
 await browser.close();
 process.exit(summary() ? 0 : 1);

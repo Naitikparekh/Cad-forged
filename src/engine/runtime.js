@@ -5,6 +5,7 @@ import { Snapper, activeMask } from './snap.js';
 import { parseInput, parseOverride, matchOption, optionName, optionsText, OS_BITS, OS_FULL } from './parse.js';
 import { pickAt, selectRect, selectPolygon, selectFence, rectOf } from './select.js';
 import { gripsOf, boundsOf } from '../core/entities.js';
+import { pickSolid, solidsInScreenRect } from '../solid/pick.js';
 
 export class Cancel extends Error { constructor() { super('*Cancel*'); this.cancel = true; } }
 export const flush = () => new Promise(r => setTimeout(r, 0));
@@ -49,18 +50,23 @@ class Ctx {
   keyword(spec) { return this.ask({ kind: 'keyword', ...spec }); }
   /** Pick one object. Result: {entity, pt} | {kw} | {enter:true}. */
   entity(spec) { return this.ask({ kind: 'entity', ...spec }); }
+  /** Pick one 3D solid. Result: {solid, pt} | {kw} | {enter:true}. */
+  solid(spec) { return this.ask({ kind: 'solid', ...spec }); }
 
   /** "Select objects:" loop. Returns the array of selected entities (honours pick-first selection). */
   async select(spec = {}) {
     const ed = this.editor;
     if ((spec.pickfirst ?? this.def.pickfirst ?? true) && this.sv.prefs.PICKFIRST && ed.sel.size) {
       const pre = ed.selected.filter(e => this.rt.selectableBy(e, spec));
-      if (pre.length) { this.log(`${pre.length} found`); ed.tempSel = new Set(pre.map(e => e.id)); return pre; }
+      const preSolids = spec.solids ? ed.selectedSolids.filter(s => this.doc.solidVisible(s)) : [];
+      if (pre.length || preSolids.length) { this.log(`${pre.length + preSolids.length} found`); ed.tempSel = new Set([...pre, ...preSolids].map(e => e.id)); pre.solids = preSolids; return pre; }
     }
     const set = new Map();
     const result = await this.ask({ kind: 'select', message: spec.prompt || 'Select objects', ...spec, set, remove: false, window: null, previous: spec.previous });
     void result;
-    return [...set.values()];
+    const vals = [...set.values()], ents = vals.filter(v => !v.vertices);
+    ents.solids = vals.filter(v => v.vertices);
+    return ents;
   }
 
   /** Single object with pick-box. Returns entity or null. */
@@ -234,10 +240,32 @@ export class Runtime {
         this._deliver(ctx, { entity: e, pt: raw, mods });
         break;
       }
+      case 'solid': {
+        const hit = this.solidAt(ctx.editor, raw, mods);
+        if (!hit) { this.log('Nothing selected', 'error'); await flush(); return; }
+        this._deliver(ctx, { solid: hit, pt: raw, mods });
+        break;
+      }
       case 'select': this._selectClick(ctx, p, raw, mods); return;
       default: return;
     }
     await flush();
+  }
+
+  /** Solid under the pointer (screen position from the event, or projected from the world point). */
+  solidAt(ed, raw, mods = {}) {
+    const doc = ed.doc;
+    if (!doc.solids.length) return null;
+    const sp = mods.screen || ed.view.toScreen(raw), style = ed.visualStyle || '2D Wireframe';
+    const hit = pickSolid(doc.solids, ed.view, sp, { aperture: this.sv.prefs.PICKBOX + 4, interior: style !== '2D Wireframe' && style !== 'Wireframe', isVisible: s => doc.solidVisible(s) && !(doc.layer(s.layer || '0')?.locked) });
+    return hit?.solid || null;
+  }
+
+  solidsInRect(ed, a, b, crossing) {
+    const doc = ed.doc;
+    if (!doc.solids.length) return [];
+    const sa = ed.view.toScreen(a), sb = ed.view.toScreen(b), rect = { minX: Math.min(sa.x, sb.x), maxX: Math.max(sa.x, sb.x), minY: Math.min(sa.y, sb.y), maxY: Math.max(sa.y, sb.y) };
+    return solidsInScreenRect(doc.solids, ed.view, rect, crossing, s => doc.solidVisible(s) && !(doc.layer(s.layer || '0')?.locked));
   }
 
   async _pointPicked(ctx, p, pt, raw) {
@@ -274,7 +302,11 @@ export class Runtime {
       else for (const id of ids) ed.sel.add(id);
       this.emit(); return;
     }
-    if (!mods.shift) { /* empty click starts an implied window */ }
+    const solid = this.solidAt(ed, raw, mods);
+    if (solid) {
+      if (mods.shift && ed.sel.has(solid.id)) ed.sel.delete(solid.id); else ed.sel.add(solid.id);
+      this.emit(); return;
+    }
     this.idleWindow = { a: raw };
     this.emit();
   }
@@ -289,6 +321,7 @@ export class Runtime {
     const ed = this.editor, crossing = b.x < a.x;
     const list = selectRect(ed.doc, rectOf(a, b), crossing);
     const ids = new Set(list.flatMap(e => this.groupIds(e)));
+    for (const s of this.solidsInRect(ed, a, b, crossing)) ids.add(s.id);
     if (mods.shift) for (const id of ids) ed.sel.delete(id);
     else for (const id of ids) ed.sel.add(id);
     this.log(`${ids.size} found`, 'info');
@@ -306,7 +339,7 @@ export class Runtime {
   doubleClick(raw) {
     if (this.busy) return;
     const ed = this.editor, e = pickAt(ed.doc, raw, this.apertureWorld());
-    if (!e) return;
+    if (!e) { const s = this.solidAt(ed, raw); if (s) { ed.sel.clear(); ed.sel.add(s.id); this.start('PROPERTIES'); } return; }
     ed.sel.clear(); ed.sel.add(e.id);
     const map = { text: 'TEXTEDIT', pline: 'PEDIT', hatch: 'HATCHEDIT', dim: 'TEXTEDIT', leader: 'TEXTEDIT', insert: 'PROPERTIES' };
     this.start(map[e.type] || 'PROPERTIES', { args: { entity: e } });
@@ -362,6 +395,7 @@ export class Runtime {
     if (p.polygon) { p.polygon.pts.push(raw); this.log(`Specify endpoint of ${p.polygon.kind === 'F' ? 'line' : 'polygon'} or [Undo]:`, 'prompt'); this.emit(); return; }
     const e = pickAt(ed.doc, raw, this.apertureWorld(this.sv.prefs.PICKBOX + 4), { filter: p.filter });
     if (e) { if (mods.shift) { const prev = p.remove; p.remove = true; this._selAdd(ctx, p, [e]); p.remove = prev; } else this._selAdd(ctx, p, [e]); return; }
+    if (p.solids) { const sol = this.solidAt(ed, raw, mods); if (sol) { this._selAddSolids(ctx, p, [sol], mods.shift); return; } }
     if (p.single) { this.log('Nothing selected', 'error'); return; }
     p.window = { a: raw, mode: null };
     this.log('Specify opposite corner:', 'prompt');
@@ -376,6 +410,18 @@ export class Runtime {
     if (mods.shift) p.remove = true;
     this._selAdd(ctx, p, list);
     p.remove = prev;
+    if (p.solids) this._selAddSolids(ctx, p, this.solidsInRect(ctx.editor, a, b, crossing), mods.shift);
+  }
+
+  _selAddSolids(ctx, p, solids, remove = false) {
+    let n = 0;
+    for (const s of solids) {
+      if (remove || p.remove) { if (p.set.delete(s.id)) n++; } else if (!p.set.has(s.id)) { p.set.set(s.id, s); n++; }
+    }
+    ctx.editor.tempSel = new Set(p.set.keys());
+    this.log(`${n} found${p.set.size !== n ? `, ${p.set.size} total` : ''}`);
+    this.emit();
+    if (p.single && p.set.size) this._deliver(ctx, { enter: true });
   }
 
   _selectText(ctx, p, text) {

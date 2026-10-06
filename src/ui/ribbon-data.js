@@ -120,15 +120,17 @@ export const RIBBON = [
   },
   {
     id: 'output', title: 'Output', panels: [
-      { title: 'Plot', items: [L('PLOT'), stack(B('EXPORTPDF', { label: 'Export PDF' }), B('DXFOUT', { label: 'Export DXF' }), B('EXPORT', { label: 'Other Formats' }))] },
+      { title: 'Plot', items: [L('PLOT'), stack(B('EXPORTPDF', { label: 'Export PDF' }), B('DXFOUT', { label: 'Export DXF' }), B('EXPORT', { label: 'Other Formats' })), stack(B('OBJOUT', { label: 'Export OBJ' }), B('STLOUT', { label: 'Export STL' }))] },
       { title: 'File', items: [L('QSAVE', { label: 'Save' }), L('SAVEAS', { label: 'Save As' }), L('OPEN'), L('NEW')] },
     ],
   },
   {
     id: 'solid', title: '3D Tools', panels: [
       { title: 'Primitives', items: [L('BOX'), L('CYLINDER'), L('SPHERE'), stack(B('CONE'), B('WEDGE'))] },
-      { title: 'Solid', items: [L('EXTRUDE'), L('PRESSPULL')] },
+      { title: 'Solid', items: [L('EXTRUDE'), L('PRESSPULL'), L('UPDATEEXTRUSION', { label: 'Update\nExtrusion' })] },
       { title: 'Boolean', items: [L('UNION'), L('SUBTRACT'), L('INTERSECT')] },
+      { title: 'Modify', items: [L('3DMOVE', { label: '3D\nMove' }), L('MASSPROP', { label: 'Mass\nProperties' })] },
+      { title: 'Visual Styles', items: [{ t: 'combo', kind: 'visualstyle' }] },
       {
         title: 'Views', items: [
           L('3DORBIT', { label: 'Orbit' }),

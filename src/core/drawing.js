@@ -143,6 +143,28 @@ export class Drawing {
     this.cur.layer = l.name;
   }
 
+  // ------------------------------------------------------------ solids
+
+  addSolid(s) {
+    this.willChange();
+    if (s.id === undefined) s.id = this.nextId++; else if (s.id >= this.nextId) this.nextId = s.id + 1;
+    if (s.layer === undefined) s.layer = this.cur.layer;
+    if (s.color === undefined && this.cur.color !== undefined && typeof this.cur.color !== 'string') s.color = this.cur.color;
+    this.solids.push(s);
+    this.touch();
+    return s;
+  }
+
+  removeSolid(s) {
+    this.willChange();
+    const i = this.solids.indexOf(s);
+    if (i >= 0) this.solids.splice(i, 1);
+    this.touch();
+  }
+
+  solidById(id) { return this.solids.find(s => s.id === id) || null; }
+  solidVisible(s) { const l = this.layer(s.layer || '0') || this.layers[0]; return l.on && !l.frozen; }
+
   // ------------------------------------------------------------ blocks
 
   defineBlock(name, base, entities) {

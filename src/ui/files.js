@@ -4,6 +4,7 @@ import { sampleDrawing } from '../io/sample.js';
 import { toJSON, fromJSON, stripExt, FILE_EXT } from '../io/project.js';
 import { readDXF, writeDXF } from '../io/dxf.js';
 import { showMenu } from './menu.js';
+import { toOBJ, toSTL } from '../solid/mesh.js';
 
 const RECENT_KEY = 'cf.recent';
 const MAX_RECENT = 6, MAX_RECENT_BYTES = 400_000;
@@ -148,8 +149,18 @@ export class Files {
       { label: 'PDF (*.pdf)', icon: 'pdf', action: () => this.exportPDF() },
       { label: 'SVG (*.svg)', action: () => this.ui.dialog('plot', { format: 'svg' }) },
       { label: 'PNG image (*.png)', action: () => this.ui.dialog('plot', { format: 'png' }) },
+      { label: 'OBJ mesh (*.obj)', action: () => this.exportMesh('obj') },
+      { label: 'STL mesh (*.stl)', action: () => this.exportMesh('stl') },
       { label: 'CadForge project (*.json)', action: () => { const d = this.app.doc; download(`${d.name}${FILE_EXT}`, toJSON(d), 'application/json'); } },
     ], r.left + 40, r.top + 40);
+  }
+
+  exportMesh(fmt) {
+    const doc = this.app.doc, solids = doc?.solids || [];
+    if (!solids.length) { this.ui.toast('There are no solids to export.'); return false; }
+    download(`${doc.name}.${fmt}`, fmt === 'stl' ? toSTL(solids) : toOBJ(solids), 'text/plain');
+    this.app.log(`Exported ${solids.length} solid${solids.length === 1 ? '' : 's'} to ${doc.name}.${fmt}.`);
+    return true;
   }
 
   exportEntities(ents) {

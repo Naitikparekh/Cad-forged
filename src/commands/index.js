@@ -6,6 +6,7 @@ import './inquiry.js';
 import './layer.js';
 import './view.js';
 import './blocks.js';
+import './solids.js';
 import './system.js';
 import { installAliases } from './aliases.js';
 

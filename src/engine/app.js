@@ -17,16 +17,18 @@ export class Editor {
     this.hoverId = null;
     this.lastView = null;
     this.zoomed = false;
+    this.visualStyle = '2D Wireframe';
   }
 
   entityById(id) { return this.doc.entities.find(e => e.id === id) || null; }
   get selected() { return this.doc.entities.filter(e => this.sel.has(e.id)); }
+  get selectedSolids() { return this.doc.solids.filter(s => this.sel.has(s.id)); }
   select(list) { for (const e of list) this.sel.add(e.id); }
   deselect(list) { for (const e of list) this.sel.delete(e.id); }
   clearSel() { this.sel.clear(); this.tempSel.clear(); }
   /** Drop ids that no longer exist (after undo, erase...). */
   prune() {
-    const live = new Set(this.doc.entities.map(e => e.id));
+    const live = new Set([...this.doc.entities.map(e => e.id), ...this.doc.solids.map(s => s.id)]);
     for (const id of [...this.sel]) if (!live.has(id)) this.sel.delete(id);
     for (const id of [...this.tempSel]) if (!live.has(id)) this.tempSel.delete(id);
   }

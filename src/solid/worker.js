@@ -1,2 +1,7 @@
-// Boolean-operation worker (CSG). Filled in with the 3D port; the build embeds this file as a Blob worker.
-self.onmessage = e => { self.postMessage({ id: e.data?.id, error: 'Solid operations are not available yet.' }); };
+// Boolean-operation worker: bundled by build.mjs and started from an embedded Blob.
+import { booleanSync } from './boolean.js';
+
+self.onmessage = e => {
+  try { self.postMessage({ result: booleanSync(e.data.a, e.data.b, e.data.op) }); }
+  catch (err) { self.postMessage({ error: err.message || String(err) }); }
+};

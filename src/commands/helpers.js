@@ -1,6 +1,7 @@
 // Shared helpers for command implementations.
 import * as g from '../core/geom.js';
 import { E, clone, transformEntity, segsOf } from '../core/entities.js';
+import { transformSolid } from '../solid/mesh.js';
 
 /** Persistent defaults between command runs (last radius, polygon sides, hatch settings...). */
 export const memory = app => (app.mem ??= {
@@ -16,7 +17,10 @@ export function transformedClones(entities, matrix, doc) {
 
 /** Apply a matrix to existing entities in place (inside a change notification). */
 export function applyTransform(doc, entities, matrix) {
-  doc.change(() => { for (const e of entities) transformEntity(e, matrix, doc); });
+  doc.change(() => {
+    for (const e of entities) transformEntity(e, matrix, doc);
+    for (const s of entities.solids || []) { const t = transformSolid(s, matrix); s.vertices = t.vertices; s.faces = t.faces; }
+  });
 }
 
 /** Add transformed copies to the drawing, remapping group ids so copies form their own groups. */
@@ -26,6 +30,12 @@ export function addCopies(doc, entities, matrix) {
     const c = clone(e); transformEntity(c, matrix, doc);
     if (c.grp) { if (!groupMap.has(c.grp)) groupMap.set(c.grp, `G${doc.nextId}_${groupMap.size}`); c.grp = groupMap.get(c.grp); }
     out.push(doc.add(c));
+  }
+  out.solids = [];
+  for (const s of entities.solids || []) {
+    const t = transformSolid(s, matrix), copy = { ...structuredClone({ ...s, vertices: undefined, faces: undefined, id: undefined, program: undefined }), vertices: t.vertices, faces: t.faces };
+    if (s.program) copy.program = structuredClone(s.program);
+    out.solids.push(doc.addSolid(copy));
   }
   return out;
 }

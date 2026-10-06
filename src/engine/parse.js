@@ -74,6 +74,7 @@ export function matchOption(input, options) {
   if (!t) return null;
   for (const o of options) if (optionName(o).toLowerCase() === t) return o;
   for (const o of options) if (optionKey(o).toLowerCase() === t) return o;
+  if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;            // a number is never an abbreviation ("2" is not 2Point)
   const prefixed = options.filter(o => optionName(o).toLowerCase().startsWith(t));
   return prefixed.length === 1 ? prefixed[0] : null;
 }

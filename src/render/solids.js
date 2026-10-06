@@ -1,71 +1,98 @@
-// Triangle-mesh solids: painter's-algorithm shading, feature edges and the AutoCAD visual styles.
+// Triangle-mesh solids: painter's-algorithm shading with smoothed normals, feature edges and the AutoCAD visual styles.
 import * as g from '../core/geom.js';
+import { colorToCss } from '../core/style.js';
 
-const featureCache = new WeakMap();
+const CREASE = Math.cos(g.rad(35));         // faces meeting at a sharper angle keep a hard edge
+const EDGE_ANGLE = Math.cos(g.rad(25));
+const cache = new WeakMap();
 
-/** Edges shared by faces whose normals differ by more than ~25 degrees (plus boundary edges). */
-function featureEdges(s) {
-  let r = featureCache.get(s);
-  if (r && r.nv === s.vertices.length && r.nf === s.faces.length) return r.edges;
-  const V = s.vertices, norm = f => { const [a, b, c] = f.map(i => V[i]); const u = [b.x - a.x, b.y - a.y, b.z - a.z], v = [c.x - a.x, c.y - a.y, c.z - a.z]; const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; return n.map(x => x / l); };
+const faceNormal = (V, f) => {
+  const a = V[f[0]], b = V[f[1]], c = V[f[2]], u = [b.x - a.x, b.y - a.y, b.z - a.z], v = [c.x - a.x, c.y - a.y, c.z - a.z];
+  const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const l = Math.hypot(...n);
+  return { n: l < 1e-15 ? [0, 0, 1] : n.map(x => x / l), area: l / 2 };
+};
+
+/** Per-solid derived data: face normals, smoothed per-face shading normals and feature edges. */
+function derived(s, rev) {
+  const c = cache.get(s);
+  if (c && c.rev === rev && c.nv === s.vertices.length && c.nf === s.faces.length) return c;
+  const V = s.vertices, F = s.faces;
+  const fn = F.map(f => faceNormal(V, f));
+  const incident = Array.from({ length: V.length }, () => []);
+  F.forEach((f, i) => { for (const v of f) incident[v].push(i); });
+  const smooth = F.map((f, i) => {
+    const acc = [0, 0, 0], n0 = fn[i].n;
+    for (const v of f) for (const j of incident[v]) { const nj = fn[j]; if (n0[0] * nj.n[0] + n0[1] * nj.n[1] + n0[2] * nj.n[2] >= CREASE) { acc[0] += nj.n[0] * nj.area; acc[1] += nj.n[1] * nj.area; acc[2] += nj.n[2] * nj.area; } }
+    const l = Math.hypot(...acc) || 1;
+    return [acc[0] / l, acc[1] / l, acc[2] / l];
+  });
   const map = new Map();
-  s.faces.forEach((f, fi) => {
-    const n = norm(f);
+  F.forEach((f, fi) => {
     for (let k = 0; k < 3; k++) {
-      const a = f[k], b = f[(k + 1) % 3], key = a < b ? a + ',' + b : b + ',' + a;
-      const entry = map.get(key); if (entry) entry.n2 = n; else map.set(key, { a, b, n1: n, n2: null });
+      const a = f[k], b = f[(k + 1) % 3], key = a < b ? a * 4294967296 + b : b * 4294967296 + a, e = map.get(key);
+      if (e) e.n2 = fn[fi].n; else map.set(key, { a, b, n1: fn[fi].n, n2: null });
     }
-    void fi;
   });
   const edges = [];
   for (const e of map.values()) {
     if (!e.n2) { edges.push([e.a, e.b]); continue; }
-    const dot = e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2];
-    if (dot < Math.cos(g.rad(25))) edges.push([e.a, e.b]);
+    if (e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2] < EDGE_ANGLE) edges.push([e.a, e.b]);
   }
-  featureCache.set(s, { nv: V.length, nf: s.faces.length, edges });
-  return edges;
+  const d = { rev, nv: V.length, nf: F.length, fn, smooth, edges };
+  cache.set(s, d);
+  return d;
 }
 
-const LIGHT = [-.35, .45, .82];
+const LIGHT = (() => { const l = [-.35, .45, .82], n = Math.hypot(...l); return l.map(x => x / n); })();
+
+function baseColor(rc, s) {
+  const doc = rc.doc, layer = doc.layer(s.layer || '0') || doc.layers[0];
+  let col = s.color !== undefined ? s.color : layer.color;
+  if (typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color)) col = s.color;
+  if (col === 7 || col === undefined || col === 'BYBLOCK') return rc.theme.dark ? '#c3ccd6' : '#8695a4';
+  return colorToCss(col, { dark: rc.theme.dark });
+}
 
 export function drawSolids(rc, style = '2D Wireframe') {
   const solids = rc.doc.solids;
   if (!solids?.length) return;
-  const { ctx, view, theme } = rc;
-  const wire = style === '2D Wireframe' || style === 'Wireframe', edges = style !== 'Shaded', fill = !wire;
+  const { ctx, view, theme, doc } = rc;
+  const wire = style === '2D Wireframe' || style === 'Wireframe', fill = !wire, edges = style !== 'Shaded';
   const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
   const camN = n => { const x1 = n[0] * cy - n[1] * sy, y1 = n[0] * sy + n[1] * cy; return [x1, y1 * sp + n[2] * cp, -y1 * cp + n[2] * sp]; };
-  const L = (() => { const l = Math.hypot(...LIGHT); return LIGHT.map(x => x / l); })();
   ctx.setTransform(rc.dpr, 0, 0, rc.dpr, 0, 0);
-  const polys = [];
+  const polys = [], edgePaths = [];
   for (const s of solids) {
-    const P = s.vertices.map(v => view.project(v));
-    const base = s.color && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : '#5aa0d0', rgb = [1, 3, 5].map(i => parseInt(base.slice(i, i + 2), 16));
+    if (!doc.solidVisible(s)) continue;
+    const P = s.vertices.map(v => view.project(v)), D = derived(s, doc.rev);
+    const sel = rc.sel.has(s.id) || rc.tempSel.has(s.id);
+    const base = baseColor(rc, s), m = /^#([0-9a-f]{6})$/i.exec(base), rgb = m ? [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16)) : [160, 170, 180];
     if (fill) {
-      for (const f of s.faces) {
+      s.faces.forEach((f, i) => {
         const a = P[f[0]], b = P[f[1]], c = P[f[2]];
-        const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-        if (area >= 0) continue;                                            // back face (screen y points down: front faces are clockwise)
-        const A = s.vertices[f[0]], B = s.vertices[f[1]], C = s.vertices[f[2]];
-        const u = [B.x - A.x, B.y - A.y, B.z - A.z], v = [C.x - A.x, C.y - A.y, C.z - A.z];
-        let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; n = camN(n.map(x => x / l));
-        const lum = style === 'Hidden' ? 1 : .32 + .68 * Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2]);
-        polys.push({ pts: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3, col: style === 'Hidden' ? theme.canvas : `rgb(${rgb.map(x => Math.round(x * lum))})` });
-      }
+        if ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0) return;                    // back face
+        const n = camN(D.smooth[i]);
+        const lum = style === 'Hidden' ? 1 : .3 + .7 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+        polys.push({ pts: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3, col: style === 'Hidden' ? theme.canvas : `rgb(${rgb.map(x => Math.min(255, Math.round(x * lum * 1.08)))})` });
+      });
     }
+    edgePaths.push({ P, D, sel });
   }
   polys.sort((p, q) => q.depth - p.depth);
   for (const p of polys) {
     ctx.beginPath(); ctx.moveTo(p.pts[0].x, p.pts[0].y); ctx.lineTo(p.pts[1].x, p.pts[1].y); ctx.lineTo(p.pts[2].x, p.pts[2].y); ctx.closePath();
-    ctx.fillStyle = p.col; ctx.fill(); ctx.strokeStyle = p.col; ctx.lineWidth = .6; ctx.stroke();
+    ctx.fillStyle = p.col; ctx.fill(); ctx.strokeStyle = p.col; ctx.lineWidth = .7; ctx.lineJoin = 'round'; ctx.stroke();
   }
   if (edges || wire) {
     ctx.beginPath();
-    for (const s of solids) {
-      const P = s.vertices.map(v => view.project(v));
-      for (const [a, b] of featureEdges(s)) { ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); }
-    }
-    ctx.strokeStyle = wire ? (theme.dark ? '#7fd0ff' : '#0b5a96') : (theme.dark ? 'rgba(10,18,26,.85)' : 'rgba(10,20,30,.8)'); ctx.lineWidth = wire ? 1.1 : 1; ctx.lineJoin = 'round'; ctx.stroke();
+    for (const { P, D, sel } of edgePaths) if (!sel) for (const [a, b] of D.edges) { ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); }
+    ctx.strokeStyle = wire ? (theme.dark ? '#7fd0ff' : '#0b5a96') : (theme.dark ? 'rgba(8,14,20,.9)' : 'rgba(10,20,30,.85)'); ctx.lineWidth = wire ? 1.15 : 1; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+  for (const { P, D, sel } of edgePaths) {
+    if (!sel) continue;
+    ctx.beginPath();
+    for (const [a, b] of D.edges) { ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); }
+    ctx.strokeStyle = theme.select; ctx.lineWidth = 2.2; ctx.setLineDash([]); ctx.stroke();
   }
 }

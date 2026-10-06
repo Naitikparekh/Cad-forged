@@ -384,9 +384,506 @@ button { cursor: pointer; }
 </div>
 <div id="overlay-root"></div>
 <script type="text/plain" id="cf-worker">(() => {
+  // src/solid/vendor/csg.js
+  var CSG;
+  CSG = function() {
+    this.polygons = [];
+  };
+  CSG.fromPolygons = function(polygons) {
+    var csg = new CSG();
+    csg.polygons = polygons;
+    return csg;
+  };
+  CSG.prototype = {
+    clone: function() {
+      var csg = new CSG();
+      csg.polygons = this.polygons.map(function(p) {
+        return p.clone();
+      });
+      return csg;
+    },
+    toPolygons: function() {
+      return this.polygons;
+    },
+    // Return a new CSG solid representing space in either this solid or in the
+    // solid `csg`. Neither this solid nor the solid `csg` are modified.
+    // 
+    //     A.union(B)
+    // 
+    //     +-------+            +-------+
+    //     |       |            |       |
+    //     |   A   |            |       |
+    //     |    +--+----+   =   |       +----+
+    //     +----+--+    |       +----+       |
+    //          |   B   |            |       |
+    //          |       |            |       |
+    //          +-------+            +-------+
+    // 
+    union: function(csg) {
+      var a = new CSG.Node(this.clone().polygons);
+      var b = new CSG.Node(csg.clone().polygons);
+      a.clipTo(b);
+      b.clipTo(a);
+      b.invert();
+      b.clipTo(a);
+      b.invert();
+      a.build(b.allPolygons());
+      return CSG.fromPolygons(a.allPolygons());
+    },
+    // Return a new CSG solid representing space in this solid but not in the
+    // solid `csg`. Neither this solid nor the solid `csg` are modified.
+    // 
+    //     A.subtract(B)
+    // 
+    //     +-------+            +-------+
+    //     |       |            |       |
+    //     |   A   |            |       |
+    //     |    +--+----+   =   |    +--+
+    //     +----+--+    |       +----+
+    //          |   B   |
+    //          |       |
+    //          +-------+
+    // 
+    subtract: function(csg) {
+      var a = new CSG.Node(this.clone().polygons);
+      var b = new CSG.Node(csg.clone().polygons);
+      a.invert();
+      a.clipTo(b);
+      b.clipTo(a);
+      b.invert();
+      b.clipTo(a);
+      b.invert();
+      a.build(b.allPolygons());
+      a.invert();
+      return CSG.fromPolygons(a.allPolygons());
+    },
+    // Return a new CSG solid representing space both this solid and in the
+    // solid `csg`. Neither this solid nor the solid `csg` are modified.
+    // 
+    //     A.intersect(B)
+    // 
+    //     +-------+
+    //     |       |
+    //     |   A   |
+    //     |    +--+----+   =   +--+
+    //     +----+--+    |       +--+
+    //          |   B   |
+    //          |       |
+    //          +-------+
+    // 
+    intersect: function(csg) {
+      var a = new CSG.Node(this.clone().polygons);
+      var b = new CSG.Node(csg.clone().polygons);
+      a.invert();
+      b.clipTo(a);
+      b.invert();
+      a.clipTo(b);
+      b.clipTo(a);
+      a.build(b.allPolygons());
+      a.invert();
+      return CSG.fromPolygons(a.allPolygons());
+    },
+    // Return a new CSG solid with solid and empty space switched. This solid is
+    // not modified.
+    inverse: function() {
+      var csg = this.clone();
+      csg.polygons.map(function(p) {
+        p.flip();
+      });
+      return csg;
+    }
+  };
+  CSG.cube = function(options) {
+    options = options || {};
+    var c = new CSG.Vector(options.center || [0, 0, 0]);
+    var r = !options.radius ? [1, 1, 1] : options.radius.length ? options.radius : [options.radius, options.radius, options.radius];
+    return CSG.fromPolygons([
+      [[0, 4, 6, 2], [-1, 0, 0]],
+      [[1, 3, 7, 5], [1, 0, 0]],
+      [[0, 1, 5, 4], [0, -1, 0]],
+      [[2, 6, 7, 3], [0, 1, 0]],
+      [[0, 2, 3, 1], [0, 0, -1]],
+      [[4, 5, 7, 6], [0, 0, 1]]
+    ].map(function(info) {
+      return new CSG.Polygon(info[0].map(function(i) {
+        var pos = new CSG.Vector(
+          c.x + r[0] * (2 * !!(i & 1) - 1),
+          c.y + r[1] * (2 * !!(i & 2) - 1),
+          c.z + r[2] * (2 * !!(i & 4) - 1)
+        );
+        return new CSG.Vertex(pos, new CSG.Vector(info[1]));
+      }));
+    }));
+  };
+  CSG.sphere = function(options) {
+    options = options || {};
+    var c = new CSG.Vector(options.center || [0, 0, 0]);
+    var r = options.radius || 1;
+    var slices = options.slices || 16;
+    var stacks = options.stacks || 8;
+    var polygons = [], vertices;
+    function vertex(theta, phi) {
+      theta *= Math.PI * 2;
+      phi *= Math.PI;
+      var dir = new CSG.Vector(
+        Math.cos(theta) * Math.sin(phi),
+        Math.cos(phi),
+        Math.sin(theta) * Math.sin(phi)
+      );
+      vertices.push(new CSG.Vertex(c.plus(dir.times(r)), dir));
+    }
+    for (var i = 0; i < slices; i++) {
+      for (var j = 0; j < stacks; j++) {
+        vertices = [];
+        vertex(i / slices, j / stacks);
+        if (j > 0) vertex((i + 1) / slices, j / stacks);
+        if (j < stacks - 1) vertex((i + 1) / slices, (j + 1) / stacks);
+        vertex(i / slices, (j + 1) / stacks);
+        polygons.push(new CSG.Polygon(vertices));
+      }
+    }
+    return CSG.fromPolygons(polygons);
+  };
+  CSG.cylinder = function(options) {
+    options = options || {};
+    var s = new CSG.Vector(options.start || [0, -1, 0]);
+    var e = new CSG.Vector(options.end || [0, 1, 0]);
+    var ray = e.minus(s);
+    var r = options.radius || 1;
+    var slices = options.slices || 16;
+    var axisZ = ray.unit(), isY = Math.abs(axisZ.y) > 0.5;
+    var axisX = new CSG.Vector(isY, !isY, 0).cross(axisZ).unit();
+    var axisY = axisX.cross(axisZ).unit();
+    var start = new CSG.Vertex(s, axisZ.negated());
+    var end = new CSG.Vertex(e, axisZ.unit());
+    var polygons = [];
+    function point(stack, slice, normalBlend) {
+      var angle = slice * Math.PI * 2;
+      var out = axisX.times(Math.cos(angle)).plus(axisY.times(Math.sin(angle)));
+      var pos = s.plus(ray.times(stack)).plus(out.times(r));
+      var normal = out.times(1 - Math.abs(normalBlend)).plus(axisZ.times(normalBlend));
+      return new CSG.Vertex(pos, normal);
+    }
+    for (var i = 0; i < slices; i++) {
+      var t0 = i / slices, t1 = (i + 1) / slices;
+      polygons.push(new CSG.Polygon([start, point(0, t0, -1), point(0, t1, -1)]));
+      polygons.push(new CSG.Polygon([point(0, t1, 0), point(0, t0, 0), point(1, t0, 0), point(1, t1, 0)]));
+      polygons.push(new CSG.Polygon([end, point(1, t1, 1), point(1, t0, 1)]));
+    }
+    return CSG.fromPolygons(polygons);
+  };
+  CSG.Vector = function(x, y, z) {
+    if (arguments.length == 3) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+    } else if ("x" in x) {
+      this.x = x.x;
+      this.y = x.y;
+      this.z = x.z;
+    } else {
+      this.x = x[0];
+      this.y = x[1];
+      this.z = x[2];
+    }
+  };
+  CSG.Vector.prototype = {
+    clone: function() {
+      return new CSG.Vector(this.x, this.y, this.z);
+    },
+    negated: function() {
+      return new CSG.Vector(-this.x, -this.y, -this.z);
+    },
+    plus: function(a) {
+      return new CSG.Vector(this.x + a.x, this.y + a.y, this.z + a.z);
+    },
+    minus: function(a) {
+      return new CSG.Vector(this.x - a.x, this.y - a.y, this.z - a.z);
+    },
+    times: function(a) {
+      return new CSG.Vector(this.x * a, this.y * a, this.z * a);
+    },
+    dividedBy: function(a) {
+      return new CSG.Vector(this.x / a, this.y / a, this.z / a);
+    },
+    dot: function(a) {
+      return this.x * a.x + this.y * a.y + this.z * a.z;
+    },
+    lerp: function(a, t) {
+      return this.plus(a.minus(this).times(t));
+    },
+    length: function() {
+      return Math.sqrt(this.dot(this));
+    },
+    unit: function() {
+      return this.dividedBy(this.length());
+    },
+    cross: function(a) {
+      return new CSG.Vector(
+        this.y * a.z - this.z * a.y,
+        this.z * a.x - this.x * a.z,
+        this.x * a.y - this.y * a.x
+      );
+    }
+  };
+  CSG.Vertex = function(pos, normal) {
+    this.pos = new CSG.Vector(pos);
+    this.normal = new CSG.Vector(normal);
+  };
+  CSG.Vertex.prototype = {
+    clone: function() {
+      return new CSG.Vertex(this.pos.clone(), this.normal.clone());
+    },
+    // Invert all orientation-specific data (e.g. vertex normal). Called when the
+    // orientation of a polygon is flipped.
+    flip: function() {
+      this.normal = this.normal.negated();
+    },
+    // Create a new vertex between this vertex and `other` by linearly
+    // interpolating all properties using a parameter of `t`. Subclasses should
+    // override this to interpolate additional properties.
+    interpolate: function(other, t) {
+      return new CSG.Vertex(
+        this.pos.lerp(other.pos, t),
+        this.normal.lerp(other.normal, t)
+      );
+    }
+  };
+  CSG.Plane = function(normal, w) {
+    this.normal = normal;
+    this.w = w;
+  };
+  CSG.Plane.EPSILON = 1e-5;
+  CSG.Plane.fromPoints = function(a, b, c) {
+    var n = b.minus(a).cross(c.minus(a)).unit();
+    return new CSG.Plane(n, n.dot(a));
+  };
+  CSG.Plane.prototype = {
+    clone: function() {
+      return new CSG.Plane(this.normal.clone(), this.w);
+    },
+    flip: function() {
+      this.normal = this.normal.negated();
+      this.w = -this.w;
+    },
+    // Split `polygon` by this plane if needed, then put the polygon or polygon
+    // fragments in the appropriate lists. Coplanar polygons go into either
+    // `coplanarFront` or `coplanarBack` depending on their orientation with
+    // respect to this plane. Polygons in front or in back of this plane go into
+    // either `front` or `back`.
+    splitPolygon: function(polygon, coplanarFront, coplanarBack, front, back) {
+      var COPLANAR = 0;
+      var FRONT = 1;
+      var BACK = 2;
+      var SPANNING = 3;
+      var polygonType = 0;
+      var types = [];
+      for (var i = 0; i < polygon.vertices.length; i++) {
+        var t = this.normal.dot(polygon.vertices[i].pos) - this.w;
+        var type = t < -CSG.Plane.EPSILON ? BACK : t > CSG.Plane.EPSILON ? FRONT : COPLANAR;
+        polygonType |= type;
+        types.push(type);
+      }
+      switch (polygonType) {
+        case COPLANAR:
+          (this.normal.dot(polygon.plane.normal) > 0 ? coplanarFront : coplanarBack).push(polygon);
+          break;
+        case FRONT:
+          front.push(polygon);
+          break;
+        case BACK:
+          back.push(polygon);
+          break;
+        case SPANNING:
+          var f = [], b = [];
+          for (var i = 0; i < polygon.vertices.length; i++) {
+            var j = (i + 1) % polygon.vertices.length;
+            var ti = types[i], tj = types[j];
+            var vi = polygon.vertices[i], vj = polygon.vertices[j];
+            if (ti != BACK) f.push(vi);
+            if (ti != FRONT) b.push(ti != BACK ? vi.clone() : vi);
+            if ((ti | tj) == SPANNING) {
+              var t = (this.w - this.normal.dot(vi.pos)) / this.normal.dot(vj.pos.minus(vi.pos));
+              var v = vi.interpolate(vj, t);
+              f.push(v);
+              b.push(v.clone());
+            }
+          }
+          if (f.length >= 3) front.push(new CSG.Polygon(f, polygon.shared));
+          if (b.length >= 3) back.push(new CSG.Polygon(b, polygon.shared));
+          break;
+      }
+    }
+  };
+  CSG.Polygon = function(vertices, shared) {
+    this.vertices = vertices;
+    this.shared = shared;
+    this.plane = CSG.Plane.fromPoints(vertices[0].pos, vertices[1].pos, vertices[2].pos);
+  };
+  CSG.Polygon.prototype = {
+    clone: function() {
+      var vertices = this.vertices.map(function(v) {
+        return v.clone();
+      });
+      return new CSG.Polygon(vertices, this.shared);
+    },
+    flip: function() {
+      this.vertices.reverse().map(function(v) {
+        v.flip();
+      });
+      this.plane.flip();
+    }
+  };
+  CSG.Node = function(polygons) {
+    this.plane = null;
+    this.front = null;
+    this.back = null;
+    this.polygons = [];
+    if (polygons) this.build(polygons);
+  };
+  CSG.Node.prototype = {
+    clone: function() {
+      var node = new CSG.Node();
+      node.plane = this.plane && this.plane.clone();
+      node.front = this.front && this.front.clone();
+      node.back = this.back && this.back.clone();
+      node.polygons = this.polygons.map(function(p) {
+        return p.clone();
+      });
+      return node;
+    },
+    // Convert solid space to empty space and empty space to solid space.
+    invert: function() {
+      for (var i = 0; i < this.polygons.length; i++) {
+        this.polygons[i].flip();
+      }
+      this.plane.flip();
+      if (this.front) this.front.invert();
+      if (this.back) this.back.invert();
+      var temp = this.front;
+      this.front = this.back;
+      this.back = temp;
+    },
+    // Recursively remove all polygons in `polygons` that are inside this BSP
+    // tree.
+    clipPolygons: function(polygons) {
+      if (!this.plane) return polygons.slice();
+      var front = [], back = [];
+      for (var i = 0; i < polygons.length; i++) {
+        this.plane.splitPolygon(polygons[i], front, back, front, back);
+      }
+      if (this.front) front = this.front.clipPolygons(front);
+      if (this.back) back = this.back.clipPolygons(back);
+      else back = [];
+      return front.concat(back);
+    },
+    // Remove all polygons in this BSP tree that are inside the other BSP tree
+    // `bsp`.
+    clipTo: function(bsp) {
+      this.polygons = bsp.clipPolygons(this.polygons);
+      if (this.front) this.front.clipTo(bsp);
+      if (this.back) this.back.clipTo(bsp);
+    },
+    // Return a list of all polygons in this BSP tree.
+    allPolygons: function() {
+      var polygons = this.polygons.slice();
+      if (this.front) polygons = polygons.concat(this.front.allPolygons());
+      if (this.back) polygons = polygons.concat(this.back.allPolygons());
+      return polygons;
+    },
+    // Build a BSP tree out of `polygons`. When called on an existing tree, the
+    // new polygons are filtered down to the bottom of the tree and become new
+    // nodes there. Each set of polygons is partitioned using the first polygon
+    // (no heuristic is used to pick a good split).
+    build: function(polygons) {
+      if (!polygons.length) return;
+      if (!this.plane) this.plane = polygons[0].plane.clone();
+      var front = [], back = [];
+      for (var i = 0; i < polygons.length; i++) {
+        this.plane.splitPolygon(polygons[i], this.polygons, this.polygons, front, back);
+      }
+      if (front.length) {
+        if (!this.front) this.front = new CSG.Node();
+        this.front.build(front);
+      }
+      if (back.length) {
+        if (!this.back) this.back = new CSG.Node();
+        this.back.build(back);
+      }
+    }
+  };
+  var csg_default = CSG;
+
+  // src/core/geom.js
+  var TAU = Math.PI * 2;
+
+  // src/core/style.js
+  var STD = ["#000000", "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff", "#ffffff", "#808080", "#c0c0c0"];
+  var GRAYS = ["#333333", "#505050", "#696969", "#828282", "#bebebe", "#ffffff"];
+  function hsv(h, s, v) {
+    const c = v * s, x = c * (1 - Math.abs(h / 60 % 2 - 1)), m = v - c;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    const hex = (n) => Math.floor((n + m) * 255 + 1e-6).toString(16).padStart(2, "0");
+    return "#" + hex(r) + hex(g) + hex(b);
+  }
+  var ACI = new Array(256);
+  for (let i = 0; i < 10; i++) ACI[i] = STD[i];
+  for (let i = 10; i < 250; i++) {
+    const hue = Math.floor((i - 10) / 10) * 15, k = (i - 10) % 10;
+    ACI[i] = hsv(hue, k % 2 ? 0.5 : 1, [1, 1, 0.8, 0.8, 0.6, 0.6, 0.5, 0.5, 0.3, 0.3][k]);
+  }
+  for (let i = 250; i < 256; i++) ACI[i] = GRAYS[i - 250];
+
+  // src/solid/mesh.js
+  var TAU2 = Math.PI * 2;
+
+  // src/solid/boolean.js
+  var MAX_TRIANGLES = 1e5;
+  function toCSG(mesh) {
+    const polys = [];
+    for (const f of mesh.faces) {
+      const ps = f.map((i) => new csg_default.Vector(mesh.vertices[i].x, mesh.vertices[i].y, mesh.vertices[i].z));
+      const n = ps[1].minus(ps[0]).cross(ps[2].minus(ps[0]));
+      if (n.length() < 1e-12) continue;
+      const normal = n.unit();
+      polys.push(new csg_default.Polygon(ps.map((p) => new csg_default.Vertex(p, normal))));
+    }
+    return csg_default.fromPolygons(polys);
+  }
+  function fromCSG(csg, name, extra = {}) {
+    const vertices = [], faces = [], lookup = /* @__PURE__ */ new Map();
+    const index = (p) => {
+      const key = `${p.x.toFixed(7)},${p.y.toFixed(7)},${p.z.toFixed(7)}`;
+      let i = lookup.get(key);
+      if (i === void 0) {
+        i = vertices.length;
+        vertices.push({ x: +p.x.toFixed(9), y: +p.y.toFixed(9), z: +p.z.toFixed(9) });
+        lookup.set(key, i);
+      }
+      return i;
+    };
+    for (const poly of csg.toPolygons()) {
+      const ids = poly.vertices.map((v) => index(v.pos));
+      for (let i = 1; i + 1 < ids.length; i++) if (ids[0] !== ids[i] && ids[i] !== ids[i + 1] && ids[0] !== ids[i + 1]) faces.push([ids[0], ids[i], ids[i + 1]]);
+    }
+    return { name, vertices, faces, ...extra };
+  }
+  function booleanSync(a, b, op) {
+    if (!["union", "subtract", "intersect"].includes(op)) throw Error("Unknown boolean operation.");
+    if (a.faces.length + b.faces.length > MAX_TRIANGLES) throw Error(`The solids have more than ${MAX_TRIANGLES} triangles.`);
+    const A = toCSG(a), B = toCSG(b);
+    const r = op === "union" ? A.union(B) : op === "subtract" ? A.subtract(B) : A.intersect(B);
+    const m = fromCSG(r, { union: "Union", subtract: "Subtract", intersect: "Intersect" }[op]);
+    return m;
+  }
+
   // src/solid/worker.js
   self.onmessage = (e) => {
-    self.postMessage({ id: e.data?.id, error: "Solid operations are not available yet." });
+    try {
+      self.postMessage({ result: booleanSync(e.data.a, e.data.b, e.data.op) });
+    } catch (err) {
+      self.postMessage({ error: err.message || String(err) });
+    }
   };
 })();
 </script>
@@ -565,10 +1062,10 @@ button { cursor: pointer; }
     return [{ pt: { x: s1.a.x + r.x * t1, y: s1.a.y + r.y * t1 }, t1, t2 }];
   }
   function lineArc(l, a) {
-    const d = sub(l.b, l.a), f4 = sub(l.a, a.c);
+    const d = sub(l.b, l.a), f5 = sub(l.a, a.c);
     const A = dot(d, d);
     if (A < 1e-24) return [];
-    const B2 = 2 * dot(f4, d), C3 = dot(f4, f4) - a.r * a.r;
+    const B2 = 2 * dot(f5, d), C3 = dot(f5, f5) - a.r * a.r;
     let disc = B2 * B2 - 4 * A * C3;
     const scale = Math.max(1, B2 * B2);
     if (disc < -1e-12 * scale) return [];
@@ -644,16 +1141,16 @@ button { cursor: pointer; }
   }
   function plineArea(v) {
     const n = v.length;
-    let area = polygonArea(v);
+    let area2 = polygonArea(v);
     for (let i = 0; i < n; i++) {
       const b = v[i].b || 0;
       if (!b) continue;
       const a = v[i], c2 = v[(i + 1) % n], ch = dist(a, c2), sw = 4 * Math.atan(b);
       const r = ch / (2 * Math.sin(Math.abs(sw) / 2));
       const seg = r * r / 2 * (Math.abs(sw) - Math.sin(Math.abs(sw)));
-      area += Math.sign(b) * seg;
+      area2 += Math.sign(b) * seg;
     }
-    return area;
+    return area2;
   }
   function plineLength(v, closed) {
     return plineSegs(v, closed).reduce((s, g) => s + segLength(g), 0);
@@ -1096,12 +1593,12 @@ button { cursor: pointer; }
       maxY = Math.max(maxY, p.y);
     }
     const ua = rad(angle);
-    for (const f4 of pat.families) {
-      const th = rad(f4.a) + ua, ux = Math.cos(th), uy = Math.sin(th), vx = -uy, vy = ux;
-      const step = f4.dy * scale;
+    for (const f5 of pat.families) {
+      const th = rad(f5.a) + ua, ux = Math.cos(th), uy = Math.sin(th), vx = -uy, vy = ux;
+      const step = f5.dy * scale;
       if (Math.abs(step) < 1e-9) continue;
       const ca = Math.cos(ua), sa = Math.sin(ua);
-      const O = { x: (f4.ox * ca - f4.oy * sa) * scale, y: (f4.ox * sa + f4.oy * ca) * scale };
+      const O = { x: (f5.ox * ca - f5.oy * sa) * scale, y: (f5.ox * sa + f5.oy * ca) * scale };
       const ou = O.x * ux + O.y * uy, os = O.x * vx + O.y * vy;
       const edges = [];
       let smin = Infinity, smax = -Infinity;
@@ -1116,7 +1613,7 @@ button { cursor: pointer; }
       }
       const k0 = Math.ceil(Math.min((smin - os) / step, (smax - os) / step) - 1e-9), k1 = Math.floor(Math.max((smin - os) / step, (smax - os) / step) + 1e-9);
       if (k1 - k0 > MAX_HATCH_LINES) return null;
-      const dash = f4.dash ? f4.dash.map((d) => d * scale) : null;
+      const dash = f5.dash ? f5.dash.map((d) => d * scale) : null;
       const period = dash ? dash.reduce((s, d) => s + Math.abs(d), 0) : 0;
       for (let k = k0; k <= k1; k++) {
         const s0 = os + k * step, us = [];
@@ -1130,7 +1627,7 @@ button { cursor: pointer; }
           if (!dash || period < 1e-9) {
             out.push([u0 * ux + s0 * vx, u0 * uy + s0 * vy, u1 * ux + s0 * vx, u1 * uy + s0 * vy]);
           } else {
-            const base = ou + k * f4.dx * scale;
+            const base = ou + k * f5.dx * scale;
             let pos2 = base + Math.floor((u0 - base) / period) * period;
             while (pos2 < u1) {
               for (const d of dash) {
@@ -1319,10 +1816,10 @@ button { cursor: pointer; }
         return [];
       // fill region only: not snappable, picked via its pattern lines
       case "insert": {
-        const def9 = doc.blocks?.[e.name];
-        if (!def9 || depth > MAX_BLOCK_DEPTH) return [];
-        const m2 = insertMatrix(e, def9.base);
-        return def9.entities.flatMap((be) => transformSegs(segsOf(be, doc, depth + 1), m2));
+        const def10 = doc.blocks?.[e.name];
+        if (!def10 || depth > MAX_BLOCK_DEPTH) return [];
+        const m2 = insertMatrix(e, def10.base);
+        return def10.entities.flatMap((be) => transformSegs(segsOf(be, doc, depth + 1), m2));
       }
       case "xline":
         return [{ t: "l", a: add(e.p, mul(e.d, -1e6)), b: add(e.p, mul(e.d, 1e6)) }];
@@ -1342,10 +1839,10 @@ button { cursor: pointer; }
     }
     if (e.type === "leader" && e.s) return [leaderText(e)];
     if (e.type === "insert") {
-      const def9 = doc.blocks?.[e.name];
-      if (!def9 || depth > MAX_BLOCK_DEPTH) return [];
-      const m2 = insertMatrix(e, def9.base), k = M.scaleFactor(m2), ang = M.angle(m2);
-      return def9.entities.flatMap((be) => textsOf(be, doc, depth + 1)).map((t) => ({
+      const def10 = doc.blocks?.[e.name];
+      if (!def10 || depth > MAX_BLOCK_DEPTH) return [];
+      const m2 = insertMatrix(e, def10.base), k = M.scaleFactor(m2), ang = M.angle(m2);
+      return def10.entities.flatMap((be) => textsOf(be, doc, depth + 1)).map((t) => ({
         ...t,
         p: M.apply(m2, t.p),
         h: t.h * k,
@@ -1740,7 +2237,7 @@ button { cursor: pointer; }
       }
       case "ellipse": {
         if (id === "a0" || id === "a1") {
-          const sign = id === "a0" ? 1 : -1, m2 = mul(sub(to, e.c), sign), L2 = len(m2), L0 = len(orig.m);
+          const sign2 = id === "a0" ? 1 : -1, m2 = mul(sub(to, e.c), sign2), L2 = len(m2), L0 = len(orig.m);
           if (L2 > 1e-9) {
             e.m = m2;
             e.ratio = orig.ratio * L0 / L2;
@@ -1876,11 +2373,11 @@ button { cursor: pointer; }
       case "pline":
         return plineSegs(e.v, e.closed).map((s) => inherit(s.t === "l" ? E.line(s.a, s.b) : E.arcSeg(s)));
       case "insert": {
-        const def9 = doc.blocks?.[e.name];
-        if (!def9) return [];
-        const m2 = insertMatrix(e, def9.base), out = [];
+        const def10 = doc.blocks?.[e.name];
+        if (!def10) return [];
+        const m2 = insertMatrix(e, def10.base), out = [];
         const nonUniform = !M.isSimilarity(m2);
-        for (const be of def9.entities) {
+        for (const be of def10.entities) {
           let c2 = clone(be);
           if (nonUniform && (c2.type === "circle" || c2.type === "arc")) c2 = circleToEllipse(c2, m2);
           else transformEntity(c2, m2, doc);
@@ -1957,12 +2454,12 @@ button { cursor: pointer; }
      * @param {{name:string, aliases?:string[], run:Function, transparent?:boolean, pickfirst?:boolean, group?:string,
      *          title?:string, desc?:string, icon?:string, repeatable?:boolean}} def
      */
-    define(def9) {
-      const name = def9.name.toUpperCase();
-      def9 = { repeatable: true, ...def9, name };
-      this.commands.set(name, def9);
-      for (const a of def9.aliases || []) this.aliases.set(a.toUpperCase(), name);
-      return def9;
+    define(def10) {
+      const name = def10.name.toUpperCase();
+      def10 = { repeatable: true, ...def10, name };
+      this.commands.set(name, def10);
+      for (const a of def10.aliases || []) this.aliases.set(a.toUpperCase(), name);
+      return def10;
     },
     alias(alias, name) {
       this.aliases.set(alias.toUpperCase(), name.toUpperCase());
@@ -2163,6 +2660,577 @@ button { cursor: pointer; }
     return cornerPass(e, doc, (A, pa, B2, pb) => chamferSegs(A, pa, B2, pb, d1, d2));
   }
 
+  // src/solid/earcut.js
+  var Node2 = class {
+    constructor(i, x, y) {
+      this.i = i;
+      this.x = x;
+      this.y = y;
+      this.prev = null;
+      this.next = null;
+      this.steiner = false;
+    }
+  };
+  function earcut(data, holeIndices = []) {
+    const hasHoles = holeIndices.length > 0, outerLen = hasHoles ? holeIndices[0] * 2 : data.length;
+    let outer = linkedList(data, 0, outerLen, true);
+    const tri = [];
+    if (!outer || outer.next === outer.prev) return tri;
+    if (hasHoles) outer = eliminateHoles(data, holeIndices, outer);
+    earcutLinked(outer, tri, 0);
+    return tri;
+  }
+  function linkedList(data, start, end, clockwise) {
+    let last;
+    if (clockwise === signedArea(data, start, end) > 0) {
+      for (let i = start; i < end; i += 2) last = insertNode(i / 2 | 0, data[i], data[i + 1], last);
+    } else {
+      for (let i = end - 2; i >= start; i -= 2) last = insertNode(i / 2 | 0, data[i], data[i + 1], last);
+    }
+    if (last && equals(last, last.next)) {
+      removeNode(last);
+      last = last.next;
+    }
+    return last;
+  }
+  function filterPoints(start, end) {
+    if (!start) return start;
+    if (!end) end = start;
+    let p = start, again;
+    do {
+      again = false;
+      if (!p.steiner && (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
+        removeNode(p);
+        p = end = p.prev;
+        if (p === p.next) break;
+        again = true;
+      } else p = p.next;
+    } while (again || p !== end);
+    return end;
+  }
+  function earcutLinked(ear, tri, pass) {
+    if (!ear) return;
+    let stop = ear, prev, next;
+    while (ear.prev !== ear.next) {
+      prev = ear.prev;
+      next = ear.next;
+      if (isEar(ear)) {
+        tri.push(prev.i, ear.i, next.i);
+        removeNode(ear);
+        ear = next.next;
+        stop = next.next;
+        continue;
+      }
+      ear = next;
+      if (ear === stop) {
+        if (!pass) earcutLinked(filterPoints(ear), tri, 1);
+        else if (pass === 1) {
+          ear = cureLocalIntersections(filterPoints(ear), tri);
+          earcutLinked(ear, tri, 2);
+        } else if (pass === 2) splitEarcut(ear, tri);
+        break;
+      }
+    }
+  }
+  function isEar(ear) {
+    const a = ear.prev, b = ear, c2 = ear.next;
+    if (area(a, b, c2) >= 0) return false;
+    const x0 = Math.min(a.x, b.x, c2.x), y0 = Math.min(a.y, b.y, c2.y), x1 = Math.max(a.x, b.x, c2.x), y1 = Math.max(a.y, b.y, c2.y);
+    let p = c2.next;
+    while (p !== a) {
+      if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && pointInTriangleExceptFirst(a.x, a.y, b.x, b.y, c2.x, c2.y, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
+      p = p.next;
+    }
+    return true;
+  }
+  function cureLocalIntersections(start, tri) {
+    let p = start;
+    do {
+      const a = p.prev, b = p.next.next;
+      if (!equals(a, b) && intersects(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
+        tri.push(a.i, p.i, b.i);
+        removeNode(p);
+        removeNode(p.next);
+        p = start = b;
+      }
+      p = p.next;
+    } while (p !== start);
+    return filterPoints(p);
+  }
+  function splitEarcut(start, tri) {
+    let a = start;
+    do {
+      let b = a.next.next;
+      while (b !== a.prev) {
+        if (a.i !== b.i && isValidDiagonal(a, b)) {
+          let c2 = splitPolygon(a, b);
+          a = filterPoints(a, a.next);
+          c2 = filterPoints(c2, c2.next);
+          earcutLinked(a, tri, 0);
+          earcutLinked(c2, tri, 0);
+          return;
+        }
+        b = b.next;
+      }
+      a = a.next;
+    } while (a !== start);
+  }
+  function eliminateHoles(data, holeIndices, outer) {
+    const queue = [];
+    for (let i = 0; i < holeIndices.length; i++) {
+      const start = holeIndices[i] * 2, end = i < holeIndices.length - 1 ? holeIndices[i + 1] * 2 : data.length;
+      const list = linkedList(data, start, end, false);
+      if (list === list.next) list.steiner = true;
+      queue.push(getLeftmost(list));
+    }
+    queue.sort(compareXYSlope);
+    for (const h2 of queue) outer = eliminateHole(h2, outer);
+    return outer;
+  }
+  function compareXYSlope(a, b) {
+    let r = a.x - b.x;
+    if (r === 0) {
+      r = a.y - b.y;
+      if (r === 0) r = (a.next.y - a.y) / (a.next.x - a.x) - (b.next.y - b.y) / (b.next.x - b.x);
+    }
+    return r;
+  }
+  function eliminateHole(hole, outer) {
+    const bridge = findHoleBridge(hole, outer);
+    if (!bridge) return outer;
+    const rev2 = splitPolygon(bridge, hole);
+    filterPoints(rev2, rev2.next);
+    return filterPoints(bridge, bridge.next);
+  }
+  function findHoleBridge(hole, outer) {
+    let p = outer;
+    const hx = hole.x, hy = hole.y;
+    let qx = -Infinity, m2;
+    if (equals(hole, p)) return p;
+    do {
+      if (equals(hole, p.next)) return p.next;
+      if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
+        const x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
+        if (x <= hx && x > qx) {
+          qx = x;
+          m2 = p.x < p.next.x ? p : p.next;
+          if (x === hx) return m2;
+        }
+      }
+      p = p.next;
+    } while (p !== outer);
+    if (!m2) return null;
+    const stop = m2, mx = m2.x, my = m2.y;
+    let tanMin = Infinity;
+    p = m2;
+    do {
+      if (hx >= p.x && p.x >= mx && hx !== p.x && pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
+        const tan = Math.abs(hy - p.y) / (hx - p.x);
+        if (locallyInside(p, hole) && (tan < tanMin || tan === tanMin && (p.x > m2.x || p.x === m2.x && sectorContainsSector(m2, p)))) {
+          m2 = p;
+          tanMin = tan;
+        }
+      }
+      p = p.next;
+    } while (p !== stop);
+    return m2;
+  }
+  var sectorContainsSector = (m2, p) => area(m2.prev, m2, p.prev) < 0 && area(p.next, m2, m2.next) < 0;
+  function getLeftmost(start) {
+    let p = start, l = start;
+    do {
+      if (p.x < l.x || p.x === l.x && p.y < l.y) l = p;
+      p = p.next;
+    } while (p !== start);
+    return l;
+  }
+  var pointInTriangle = (ax, ay, bx, by, cx, cy, px, py) => (cx - px) * (ay - py) >= (ax - px) * (cy - py) && (ax - px) * (by - py) >= (bx - px) * (ay - py) && (bx - px) * (cy - py) >= (cx - px) * (by - py);
+  var pointInTriangleExceptFirst = (ax, ay, bx, by, cx, cy, px, py) => !(ax === px && ay === py) && pointInTriangle(ax, ay, bx, by, cx, cy, px, py);
+  function isValidDiagonal(a, b) {
+    return a.next.i !== b.i && a.prev.i !== b.i && !intersectsPolygon(a, b) && (locallyInside(a, b) && locallyInside(b, a) && middleInside(a, b) && (area(a.prev, a, b.prev) || area(a, b.prev, b)) || equals(a, b) && area(a.prev, a, a.next) > 0 && area(b.prev, b, b.next) > 0);
+  }
+  var area = (p, q, r) => (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+  var equals = (p1, p2) => p1.x === p2.x && p1.y === p2.y;
+  var sign = (n) => n > 0 ? 1 : n < 0 ? -1 : 0;
+  var onSegment = (p, q, r) => q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
+  function intersects(p1, q1, p2, q2) {
+    const o1 = sign(area(p1, q1, p2)), o2 = sign(area(p1, q1, q2)), o3 = sign(area(p2, q2, p1)), o4 = sign(area(p2, q2, q1));
+    if (o1 !== o2 && o3 !== o4) return true;
+    if (o1 === 0 && onSegment(p1, p2, q1)) return true;
+    if (o2 === 0 && onSegment(p1, q2, q1)) return true;
+    if (o3 === 0 && onSegment(p2, p1, q2)) return true;
+    if (o4 === 0 && onSegment(p2, q1, q2)) return true;
+    return false;
+  }
+  function intersectsPolygon(a, b) {
+    let p = a;
+    do {
+      if (p.i !== a.i && p.next.i !== a.i && p.i !== b.i && p.next.i !== b.i && intersects(p, p.next, a, b)) return true;
+      p = p.next;
+    } while (p !== a);
+    return false;
+  }
+  var locallyInside = (a, b) => area(a.prev, a, a.next) < 0 ? area(a, b, a.next) >= 0 && area(a, a.prev, b) >= 0 : area(a, b, a.prev) < 0 || area(a, a.next, b) < 0;
+  function middleInside(a, b) {
+    let p = a, inside = false;
+    const px = (a.x + b.x) / 2, py = (a.y + b.y) / 2;
+    do {
+      if (p.y > py !== p.next.y > py && p.next.y !== p.y && px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x) inside = !inside;
+      p = p.next;
+    } while (p !== a);
+    return inside;
+  }
+  function splitPolygon(a, b) {
+    const a2 = new Node2(a.i, a.x, a.y), b2 = new Node2(b.i, b.x, b.y), an = a.next, bp = b.prev;
+    a.next = b;
+    b.prev = a;
+    a2.next = an;
+    an.prev = a2;
+    b2.next = a2;
+    a2.prev = b2;
+    bp.next = b2;
+    b2.prev = bp;
+    return b2;
+  }
+  function insertNode(i, x, y, last) {
+    const p = new Node2(i, x, y);
+    if (!last) {
+      p.prev = p;
+      p.next = p;
+    } else {
+      p.next = last.next;
+      p.prev = last;
+      last.next.prev = p;
+      last.next = p;
+    }
+    return p;
+  }
+  function removeNode(p) {
+    p.next.prev = p.prev;
+    p.prev.next = p.next;
+  }
+  function signedArea(data, start, end) {
+    let sum = 0;
+    for (let i = start, j = end - 2; i < end; i += 2) {
+      sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
+      j = i;
+    }
+    return sum;
+  }
+
+  // src/solid/mesh.js
+  var TAU2 = Math.PI * 2;
+  function loopOfEntity(e, doc, tol) {
+    switch (e.type) {
+      case "circle": {
+        const n = Math.max(24, Math.min(256, Math.ceil(TAU2 / (2 * Math.acos(Math.max(0, 1 - tol / Math.max(e.r, tol * 2)))))));
+        return Array.from({ length: n }, (_, i) => ({ x: e.c.x + e.r * Math.cos(TAU2 * i / n), y: e.c.y + e.r * Math.sin(TAU2 * i / n) }));
+      }
+      case "ellipse": {
+        if (ellipseSweep(e) < TAU2 - 1e-9) return null;
+        return Array.from({ length: 96 }, (_, i) => ellipsePoint(e, TAU2 * i / 96));
+      }
+      case "pline":
+        return e.closed ? dedupe(tessSegs(plineSegs(e.v, true), tol)) : null;
+      case "spline":
+        return e.closed ? dedupe(splinePoints(e, 16).slice(0, -1)) : null;
+      case "hatch":
+        return null;
+      default:
+        return null;
+    }
+  }
+  function dedupe(pts) {
+    const out = [];
+    for (const p of pts) if (!out.length || dist(p, out[out.length - 1]) > 1e-9) out.push({ x: p.x, y: p.y });
+    if (out.length > 1 && dist(out[0], out[out.length - 1]) < 1e-9) out.pop();
+    return out;
+  }
+  function chainOpen(entities, doc, tol) {
+    const paths = entities.map((e) => segsOf(e, doc).map((s) => ({ ...s }))).filter((p) => p.length);
+    const loops = [];
+    const eps = 1e-6;
+    const used = /* @__PURE__ */ new Set();
+    const start = (s) => segStart(s), end = (s) => segEnd(s);
+    for (let i = 0; i < paths.length; i++) {
+      if (used.has(i)) continue;
+      used.add(i);
+      let chain2 = paths[i].slice();
+      let grew = true;
+      while (grew && dist(start(chain2[0]), end(chain2[chain2.length - 1])) > eps) {
+        grew = false;
+        for (let j = 0; j < paths.length; j++) {
+          if (used.has(j)) continue;
+          const p = paths[j], tail = end(chain2[chain2.length - 1]), head = start(chain2[0]);
+          if (dist(start(p[0]), tail) <= eps) {
+            chain2 = [...chain2, ...p];
+          } else if (dist(end(p[p.length - 1]), tail) <= eps) {
+            chain2 = [...chain2, ...p.slice().reverse().map(segReverse)];
+          } else if (dist(end(p[p.length - 1]), head) <= eps) {
+            chain2 = [...p, ...chain2];
+          } else if (dist(start(p[0]), head) <= eps) {
+            chain2 = [...p.slice().reverse().map(segReverse), ...chain2];
+          } else continue;
+          used.add(j);
+          grew = true;
+          break;
+        }
+      }
+      if (dist(start(chain2[0]), end(chain2[chain2.length - 1])) <= eps) loops.push(dedupe(tessSegs(chain2, tol)));
+      else return { loops, open: true };
+    }
+    return { loops, open: false };
+  }
+  function profileLoops(entities, doc, tol = 0.02) {
+    const loops = [], open = [];
+    for (const e of entities) {
+      const l = loopOfEntity(e, doc, tol);
+      if (l && l.length >= 3) loops.push(l);
+      else if (["line", "arc", "pline"].includes(e.type)) open.push(e);
+    }
+    if (open.length) {
+      const r = chainOpen(open, doc, tol);
+      if (r.open) return { loops, error: "The selected lines and arcs do not form a closed outline." };
+      loops.push(...r.loops.filter((l) => l.length >= 3));
+    }
+    if (!loops.length) return { loops, error: "Select closed polylines, circles, ellipses or a closed chain of lines and arcs." };
+    return { loops };
+  }
+  function groupLoops(loops) {
+    const items = loops.map((l) => ({ pts: l, area: polygonArea(l) })).map((it) => ({ ...it, abs: Math.abs(it.area) })).sort((a, b) => b.abs - a.abs);
+    for (const it of items) {
+      it.parents = [];
+      for (const o of items) if (o !== it && o.abs > it.abs && pointInPolygon(it.pts[0], o.pts)) it.parents.push(o);
+      it.depth = it.parents.length;
+    }
+    const groups = [];
+    for (const it of items) {
+      if (it.depth % 2 === 0) {
+        it.group = { outer: it.area >= 0 ? it.pts : it.pts.slice().reverse(), holes: [] };
+        groups.push(it.group);
+      }
+    }
+    for (const it of items) {
+      if (it.depth % 2 === 1) {
+        const outer = it.parents.filter((p) => p.depth === it.depth - 1).sort((a, b) => a.abs - b.abs)[0];
+        outer?.group?.holes.push(it.area <= 0 ? it.pts : it.pts.slice().reverse());
+      }
+    }
+    return groups;
+  }
+  function extrudeLoops(loops, height, { startZ = 0, name = "Extrusion", taper = 0 } = {}) {
+    if (!Number.isFinite(height) || height === 0) throw Error("The extrusion height must not be zero.");
+    const groups = groupLoops(loops);
+    if (!groups.length) throw Error("There is no closed outline to extrude.");
+    const z0 = height > 0 ? startZ : startZ + height, z1 = height > 0 ? startZ + height : startZ, h2 = Math.abs(height);
+    const vertices = [], faces = [];
+    const k = Math.tan(rad(taper));
+    for (const grp of groups) {
+      const rings = [grp.outer, ...grp.holes];
+      const flat = [], holeStarts = [], map = [];
+      const bottoms = [], tops = [];
+      for (const [ri, ring] of rings.entries()) {
+        if (ri > 0) holeStarts.push(flat.length / 2);
+        const top = taper ? offsetRing(ring, (ri === 0 ? -1 : 1) * k * h2) : ring;
+        const b = [], t = [];
+        for (let i = 0; i < ring.length; i++) {
+          b.push(vertices.length);
+          vertices.push({ x: ring[i].x, y: ring[i].y, z: z0 });
+        }
+        for (let i = 0; i < ring.length; i++) {
+          t.push(vertices.length);
+          vertices.push({ x: top[i].x, y: top[i].y, z: z1 });
+        }
+        bottoms.push(b);
+        tops.push(t);
+        for (let i = 0; i < ring.length; i++) {
+          flat.push(ring[i].x, ring[i].y);
+          map.push(i);
+        }
+      }
+      const tri = earcut(flat, holeStarts);
+      const idxBottom = [], idxTop = [];
+      rings.forEach((ring, ri) => {
+        for (let i = 0; i < ring.length; i++) {
+          idxBottom.push(bottoms[ri][i]);
+          idxTop.push(tops[ri][i]);
+        }
+      });
+      for (let i = 0; i < tri.length; i += 3) {
+        let [a, b, c2] = [tri[i], tri[i + 1], tri[i + 2]];
+        const pa = { x: flat[a * 2], y: flat[a * 2 + 1] }, pb = { x: flat[b * 2], y: flat[b * 2 + 1] }, pc = { x: flat[c2 * 2], y: flat[c2 * 2 + 1] };
+        if ((pb.x - pa.x) * (pc.y - pa.y) - (pb.y - pa.y) * (pc.x - pa.x) < 0) [b, c2] = [c2, b];
+        faces.push([idxTop[a], idxTop[b], idxTop[c2]]);
+        faces.push([idxBottom[a], idxBottom[c2], idxBottom[b]]);
+      }
+      rings.forEach((ring, ri) => {
+        const n = ring.length;
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n, a0 = bottoms[ri][i], b0 = bottoms[ri][j], a1 = tops[ri][i], b1 = tops[ri][j];
+          faces.push([a0, b0, b1], [a0, b1, a1]);
+        }
+      });
+    }
+    return { name, vertices, faces };
+  }
+  function offsetRing(ring, d) {
+    const n = ring.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const p = ring[(i + n - 1) % n], c2 = ring[i], q = ring[(i + 1) % n];
+      const e1 = unit(sub(c2, p)), e2 = unit(sub(q, c2));
+      const n1 = { x: e1.y, y: -e1.x }, n2 = { x: e2.y, y: -e2.x };
+      const bis = unit(add(n1, n2)), cosHalf = Math.max(0.2, dot(bis, n1));
+      out.push({ x: c2.x + bis.x * d / cosHalf, y: c2.y + bis.y * d / cosHalf });
+    }
+    return out;
+  }
+  function boxMesh(x0, y0, z0, w, d, h2, name = "Box") {
+    const x1 = x0 + w, y1 = y0 + d, z1 = z0 + h2;
+    const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]].map(([x, y, z]) => ({ x, y, z }));
+    const f5 = [[0, 3, 2], [0, 2, 1], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+    return orient({ name, vertices: v, faces: f5 });
+  }
+  function wedgeMesh(x0, y0, z0, w, d, h2, name = "Wedge") {
+    const x1 = x0 + w, y1 = y0 + d, z1 = z0 + h2;
+    const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x1, y0, z1], [x1, y1, z1]].map(([x, y, z]) => ({ x, y, z }));
+    const f5 = [[0, 3, 2], [0, 2, 1], [1, 2, 5], [1, 5, 4], [0, 1, 4], [3, 5, 2], [0, 4, 5], [0, 5, 3]];
+    return orient({ name, vertices: v, faces: f5 });
+  }
+  function cylinderMesh(cx, cy, z0, r, h2, seg = 64, name = "Cylinder") {
+    return coneMesh(cx, cy, z0, r, r, h2, seg, name);
+  }
+  function coneMesh(cx, cy, z0, r1, r2, h2, seg = 64, name = "Cone") {
+    const vertices = [], faces = [], ring = (r, z) => {
+      const s = vertices.length;
+      if (r < 1e-12) {
+        vertices.push({ x: cx, y: cy, z });
+        return [s];
+      }
+      for (let i = 0; i < seg; i++) vertices.push({ x: cx + r * Math.cos(TAU2 * i / seg), y: cy + r * Math.sin(TAU2 * i / seg), z });
+      return Array.from({ length: seg }, (_, i) => s + i);
+    };
+    const bot = ring(r1, z0), top = ring(r2, z0 + h2);
+    const cap = (idx, up, centre) => {
+      if (idx.length === 1) return;
+      const c2 = vertices.length;
+      vertices.push({ x: cx, y: cy, z: centre });
+      for (let i = 0; i < seg; i++) {
+        const a = idx[i], b = idx[(i + 1) % seg];
+        faces.push(up ? [c2, a, b] : [c2, b, a]);
+      }
+    };
+    for (let i = 0; i < seg; i++) {
+      const j = (i + 1) % seg;
+      if (bot.length === 1) faces.push([bot[0], top[i], top[j]]);
+      else if (top.length === 1) faces.push([bot[i], bot[j], top[0]]);
+      else faces.push([bot[i], bot[j], top[j]], [bot[i], top[j], top[i]]);
+    }
+    cap(top, true, z0 + h2);
+    cap(bot, false, z0);
+    return { name, vertices, faces };
+  }
+  function sphereMesh(cx, cy, cz, r, seg = 48, name = "Sphere") {
+    const rings = Math.max(6, seg >> 1), vertices = [{ x: cx, y: cy, z: cz - r }], faces = [];
+    for (let k = 1; k < rings; k++) {
+      const phi = -Math.PI / 2 + Math.PI * k / rings;
+      for (let i = 0; i < seg; i++) vertices.push({ x: cx + r * Math.cos(phi) * Math.cos(TAU2 * i / seg), y: cy + r * Math.cos(phi) * Math.sin(TAU2 * i / seg), z: cz + r * Math.sin(phi) });
+    }
+    vertices.push({ x: cx, y: cy, z: cz + r });
+    const at = (k, i) => 1 + (k - 1) * seg + i % seg, south = 0, north = vertices.length - 1;
+    for (let i = 0; i < seg; i++) faces.push([south, at(1, i + 1), at(1, i)]);
+    for (let k = 1; k < rings - 1; k++) for (let i = 0; i < seg; i++) faces.push([at(k, i), at(k, i + 1), at(k + 1, i + 1)], [at(k, i), at(k + 1, i + 1), at(k + 1, i)]);
+    for (let i = 0; i < seg; i++) faces.push([north, at(rings - 1, i), at(rings - 1, i + 1)]);
+    return { name, vertices, faces };
+  }
+  function orient(m2) {
+    if (meshVolume(m2) < 0) m2.faces = m2.faces.map(([a, b, c2]) => [a, c2, b]);
+    return m2;
+  }
+  function meshVolume(m2) {
+    let v = 0;
+    for (const [i, j, k] of m2.faces) {
+      const a = m2.vertices[i], b = m2.vertices[j], c2 = m2.vertices[k];
+      v += (a.x * (b.y * c2.z - b.z * c2.y) - a.y * (b.x * c2.z - b.z * c2.x) + a.z * (b.x * c2.y - b.y * c2.x)) / 6;
+    }
+    return v;
+  }
+  function meshArea(m2) {
+    let s = 0;
+    for (const [i, j, k] of m2.faces) {
+      const a = m2.vertices[i], b = m2.vertices[j], c2 = m2.vertices[k], u = sub3(b, a), w = sub3(c2, a);
+      s += Math.hypot(u.y * w.z - u.z * w.y, u.z * w.x - u.x * w.z, u.x * w.y - u.y * w.x) / 2;
+    }
+    return s;
+  }
+  function meshBounds(m2) {
+    const b = { min: { x: Infinity, y: Infinity, z: Infinity }, max: { x: -Infinity, y: -Infinity, z: -Infinity } };
+    for (const p of m2.vertices) for (const k of "xyz") {
+      if (p[k] < b.min[k]) b.min[k] = p[k];
+      if (p[k] > b.max[k]) b.max[k] = p[k];
+    }
+    return b;
+  }
+  function meshCentroid(m2) {
+    let V = 0, cx = 0, cy = 0, cz = 0;
+    for (const [i, j, k] of m2.faces) {
+      const a = m2.vertices[i], b = m2.vertices[j], c2 = m2.vertices[k], v = (a.x * (b.y * c2.z - b.z * c2.y) - a.y * (b.x * c2.z - b.z * c2.x) + a.z * (b.x * c2.y - b.y * c2.x)) / 6;
+      V += v;
+      cx += v * (a.x + b.x + c2.x) / 4;
+      cy += v * (a.y + b.y + c2.y) / 4;
+      cz += v * (a.z + b.z + c2.z) / 4;
+    }
+    return Math.abs(V) < 1e-12 ? { x: 0, y: 0, z: 0 } : { x: cx / V, y: cy / V, z: cz / V };
+  }
+  var sub3 = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+  var M3 = {
+    identity: () => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+    translate: (x, y, z) => [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z],
+    rotateZ: (a, c2 = { x: 0, y: 0 }) => {
+      const co = Math.cos(a), si = Math.sin(a);
+      return [co, -si, 0, c2.x - co * c2.x + si * c2.y, si, co, 0, c2.y - si * c2.x - co * c2.y, 0, 0, 1, 0];
+    },
+    scale: (s, c2 = { x: 0, y: 0, z: 0 }) => [s, 0, 0, c2.x * (1 - s), 0, s, 0, c2.y * (1 - s), 0, 0, s, c2.z * (1 - s)],
+    mirrorXY: (a, b) => {
+      const d = unit(sub(b, a)), c2 = d.x * d.x - d.y * d.y, s2 = 2 * d.x * d.y;
+      return [c2, s2, 0, a.x - c2 * a.x - s2 * a.y, s2, -c2, 0, a.y - s2 * a.x + c2 * a.y, 0, 0, 1, 0];
+    },
+    apply: (m2, p) => ({ x: m2[0] * p.x + m2[1] * p.y + m2[2] * p.z + m2[3], y: m2[4] * p.x + m2[5] * p.y + m2[6] * p.z + m2[7], z: m2[8] * p.x + m2[9] * p.y + m2[10] * p.z + m2[11] }),
+    det: (m2) => m2[0] * (m2[5] * m2[10] - m2[6] * m2[9]) - m2[1] * (m2[4] * m2[10] - m2[6] * m2[8]) + m2[2] * (m2[4] * m2[9] - m2[5] * m2[8])
+  };
+  function transformMesh(s, m2) {
+    const out = { ...s, vertices: s.vertices.map((p) => M3.apply(m2, p)), faces: s.faces.map((f5) => f5.slice()) };
+    if (M3.det(m2) < 0) out.faces = out.faces.map(([a, b, c2]) => [a, c2, b]);
+    return out;
+  }
+  function solidMatrix(m2) {
+    const [a, b, c2, d, e, f5] = m2, k = Math.sqrt(Math.abs(a * d - b * c2));
+    return [a, c2, 0, e, b, d, 0, f5, 0, 0, k, 0];
+  }
+  var transformSolid = (s, m2d) => transformMesh(s, solidMatrix(m2d));
+  function toOBJ(solids) {
+    const out = ["# CadForge solids (drawing units)"];
+    let off = 1;
+    solids.forEach((s, n) => {
+      out.push(`o ${String(s.name || `solid${n + 1}`).replace(/[^\w-]/g, "_")}`);
+      for (const p of s.vertices) out.push(`v ${p.x} ${p.y} ${p.z}`);
+      for (const f5 of s.faces) out.push(`f ${f5.map((i) => i + off).join(" ")}`);
+      off += s.vertices.length;
+    });
+    return out.join("\n") + "\n";
+  }
+  function toSTL(solids) {
+    const out = ["solid CadForge"];
+    for (const s of solids) for (const [i, j, k] of s.faces) {
+      const a = s.vertices[i], b = s.vertices[j], c2 = s.vertices[k], u = sub3(b, a), w = sub3(c2, a);
+      let n = { x: u.y * w.z - u.z * w.y, y: u.z * w.x - u.x * w.z, z: u.x * w.y - u.y * w.x };
+      const l = Math.hypot(n.x, n.y, n.z) || 1;
+      n = { x: n.x / l, y: n.y / l, z: n.z / l };
+      out.push(` facet normal ${n.x} ${n.y} ${n.z}`, "  outer loop", ...[a, b, c2].map((p) => `   vertex ${p.x} ${p.y} ${p.z}`), "  endloop", " endfacet");
+    }
+    out.push("endsolid CadForge");
+    return out.join("\n") + "\n";
+  }
+
   // src/commands/helpers.js
   var memory = (app) => app.mem ??= {
     circleRadius: 5,
@@ -2192,6 +3260,11 @@ button { cursor: pointer; }
   function applyTransform(doc, entities, matrix) {
     doc.change(() => {
       for (const e of entities) transformEntity(e, matrix, doc);
+      for (const s of entities.solids || []) {
+        const t = transformSolid(s, matrix);
+        s.vertices = t.vertices;
+        s.faces = t.faces;
+      }
     });
   }
   function addCopies(doc, entities, matrix) {
@@ -2205,9 +3278,15 @@ button { cursor: pointer; }
       }
       out.push(doc.add(c2));
     }
+    out.solids = [];
+    for (const s of entities.solids || []) {
+      const t = transformSolid(s, matrix), copy = { ...structuredClone({ ...s, vertices: void 0, faces: void 0, id: void 0, program: void 0 }), vertices: t.vertices, faces: t.faces };
+      if (s.program) copy.program = structuredClone(s.program);
+      out.solids.push(doc.addSolid(copy));
+    }
     return out;
   }
-  var num = (v, prec2 = 4) => String(+Number(v).toFixed(prec2));
+  var num = (v, prec3 = 4) => String(+Number(v).toFixed(prec3));
   function tangentBulge(p0, dir, p1) {
     const chord = angleOf(p0, p1), theta = normAngleSigned(chord - Math.atan2(dir.y, dir.x));
     return Math.tan(theta / 2);
@@ -2711,9 +3790,9 @@ button { cursor: pointer; }
           continue;
         }
         if (r.kw === "Fillet") {
-          const f4 = await c2.distance({ prompt: "Specify fillet radius for rectangles", default: fillet, min: 0 });
-          if (f4.value !== void 0) {
-            fillet = f4.value;
+          const f5 = await c2.distance({ prompt: "Specify fillet radius for rectangles", default: fillet, min: 0 });
+          if (f5.value !== void 0) {
+            fillet = f5.value;
             chamfer = [0, 0];
             mem.rectFillet = fillet;
             mem.rectChamfer = [0, 0];
@@ -2758,11 +3837,11 @@ button { cursor: pointer; }
           return;
         }
         if (r.kw === "Area") {
-          const area = await c2.number({ prompt: "Enter area of rectangle", min: 0, nonzero: true, default: 100 });
+          const area2 = await c2.number({ prompt: "Enter area of rectangle", min: 0, nonzero: true, default: 100 });
           const how = await c2.keyword({ prompt: "Calculate rectangle dimensions based on [Length/Width]", options: ["Length", "Width"], default: "Length" });
           const v = await c2.distance({ prompt: how.kw === "Width" ? "Enter rectangle width" : "Enter rectangle length", default: 10, nonzero: true });
-          if (area.value === void 0 || v.value === void 0) return;
-          const other = area.value / v.value;
+          if (area2.value === void 0 || v.value === void 0) return;
+          const other = area2.value / v.value;
           const [L2, W] = how.kw === "Width" ? [other, v.value] : [v.value, other];
           const side = await c2.point({ prompt: "Specify direction", base: first2, preview: (pt3) => {
             const sx2 = pt3.x >= first2.x ? 1 : -1, sy2 = pt3.y >= first2.y ? 1 : -1;
@@ -3366,10 +4445,11 @@ button { cursor: pointer; }
     icon: "erase",
     desc: "Removes objects from the drawing.",
     async run(c2) {
-      const sel = await c2.select({ prompt: SELECT });
-      if (!sel.length) return;
+      const sel = await c2.select({ prompt: SELECT, solids: true });
+      if (!sel.length && !sel.solids.length) return;
       memory(c2.app).erased = sel.map((e) => clone(e));
       c2.doc.removeAll(sel);
+      for (const s of sel.solids) c2.doc.removeSolid(s);
       c2.clearSel();
     }
   });
@@ -3394,8 +4474,8 @@ button { cursor: pointer; }
     icon: "move",
     desc: "Moves objects a specified distance in a specified direction.",
     async run(c2) {
-      const sel = await c2.select({ prompt: SELECT });
-      if (!sel.length) return;
+      const sel = await c2.select({ prompt: SELECT, solids: true });
+      if (!sel.length && !sel.solids.length) return;
       let r = await c2.point({ prompt: "Specify base point", options: ["Displacement"], default: void 0 });
       let delta;
       if (r.kw === "Displacement") {
@@ -3419,8 +4499,8 @@ button { cursor: pointer; }
     icon: "copy",
     desc: "Copies objects a specified distance in a specified direction.",
     async run(c2) {
-      const sel = await c2.select({ prompt: SELECT });
-      if (!sel.length) return;
+      const sel = await c2.select({ prompt: SELECT, solids: true });
+      if (!sel.length && !sel.solids.length) return;
       const r = await c2.point({ prompt: "Specify base point", options: ["Displacement", "mOde"] });
       if (r.kw === "Displacement") {
         const d = await c2.point({ prompt: "Specify displacement", default: { x: 0, y: 0 } });
@@ -3435,7 +4515,10 @@ button { cursor: pointer; }
         const n = await c2.point({ prompt: "Specify second point" + (made.length ? "" : " or [Array]") + (made.length ? "" : ""), options: made.length ? opts : [], base, allowEnter: true, preview: (pt3) => transformedClones(sel, M.translate(pt3.x - base.x, pt3.y - base.y), c2.doc) });
         if (n.kw === "Undo") {
           const last = made.pop();
-          if (last) c2.doc.removeAll(last);
+          if (last) {
+            c2.doc.removeAll(last);
+            for (const sd of last.solids || []) c2.doc.removeSolid(sd);
+          }
           continue;
         }
         if (n.kw === "Exit" || !n.pt) break;
@@ -3451,8 +4534,8 @@ button { cursor: pointer; }
     icon: "rotate",
     desc: "Rotates objects around a base point.",
     async run(c2) {
-      const sel = await c2.select({ prompt: SELECT });
-      if (!sel.length) return;
+      const sel = await c2.select({ prompt: SELECT, solids: true });
+      if (!sel.length && !sel.solids.length) return;
       const b = await c2.point({ prompt: "Specify base point" });
       if (!b.pt) return;
       const base = b.pt;
@@ -3491,8 +4574,8 @@ button { cursor: pointer; }
     icon: "scale",
     desc: "Enlarges or reduces selected objects, keeping the proportions the same.",
     async run(c2) {
-      const sel = await c2.select({ prompt: SELECT });
-      if (!sel.length) return;
+      const sel = await c2.select({ prompt: SELECT, solids: true });
+      if (!sel.length && !sel.solids.length) return;
       const b = await c2.point({ prompt: "Specify base point" });
       if (!b.pt) return;
       const base = b.pt;
@@ -3531,8 +4614,8 @@ button { cursor: pointer; }
     icon: "mirror",
     desc: "Creates a mirrored copy of selected objects.",
     async run(c2) {
-      const sel = await c2.select({ prompt: SELECT });
-      if (!sel.length) return;
+      const sel = await c2.select({ prompt: SELECT, solids: true });
+      if (!sel.length && !sel.solids.length) return;
       const a = await c2.point({ prompt: "Specify first point of mirror line" });
       if (!a.pt) return;
       const b = await c2.point({ prompt: "Specify second point of mirror line", base: a.pt, preview: (pt3) => samePt(a.pt, pt3) ? [] : [E.line(a.pt, pt3), ...transformedClones(sel, M.mirror(a.pt, pt3), c2.doc)] });
@@ -3839,8 +4922,8 @@ button { cursor: pointer; }
       for (; ; ) {
         const r = await c2.point({ prompt: "Specify second break point or [First point]", options: ["First point"] });
         if (r.kw === "First point") {
-          const f4 = await c2.point({ prompt: "Specify first break point" });
-          if (f4.pt) p1 = f4.pt;
+          const f5 = await c2.point({ prompt: "Specify first break point" });
+          if (f5.pt) p1 = f5.pt;
           continue;
         }
         if (!r.pt) return;
@@ -4403,8 +5486,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         if (mode === "MOVE") return M.translate(r.pt.x - base.x, r.pt.y - base.y);
         if (mode === "ROTATE") return M.rotate(r.pt ? angleOf(base, r.pt) : r.value, base);
         if (mode === "SCALE") {
-          const f4 = r.pt ? dist(base, r.pt) / Math.max(1e-12, dist(base, hot.pt)) : r.value;
-          return M.scale(Math.max(1e-9, f4), Math.max(1e-9, f4), base);
+          const f5 = r.pt ? dist(base, r.pt) / Math.max(1e-12, dist(base, hot.pt)) : r.value;
+          return M.scale(Math.max(1e-9, f5), Math.max(1e-9, f5), base);
         }
         if (mode === "MIRROR") return M.mirror(base, r.pt);
         return null;
@@ -4520,6 +5603,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     if (!t) return null;
     for (const o of options) if (optionName(o).toLowerCase() === t) return o;
     for (const o of options) if (optionKey(o).toLowerCase() === t) return o;
+    if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
     const prefixed = options.filter((o) => optionName(o).toLowerCase().startsWith(t));
     return prefixed.length === 1 ? prefixed[0] : null;
   }
@@ -4620,7 +5704,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           const nearest = segNearest(s, raw);
           if (nearest.d > ap) continue;
           if (mask & OS_BITS.PER) {
-            for (const f4 of perpFeet(s, o.base)) if (f4.t >= -1e-9 && f4.t <= 1 + 1e-9) cands.push({ type: "PER", pt: f4.pt, d: nearest.d });
+            for (const f5 of perpFeet(s, o.base)) if (f5.t >= -1e-9 && f5.t <= 1 + 1e-9) cands.push({ type: "PER", pt: f5.pt, d: nearest.d });
           }
           if (mask & OS_BITS.TAN && s.t === "a") {
             const tp = tangentPoints(s, o.base).filter((q) => q.t >= -1e-9 && q.t <= 1 + 1e-9);
@@ -4702,6 +5786,53 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     return osmode & ~(16384 | 1024);
   }
 
+  // src/solid/pick.js
+  function project(solid, view) {
+    return solid.vertices.map((p) => view.project(p));
+  }
+  function bary(p, a, b, c2) {
+    const d = (b.y - c2.y) * (a.x - c2.x) + (c2.x - b.x) * (a.y - c2.y);
+    if (Math.abs(d) < 1e-12) return null;
+    const u = ((b.y - c2.y) * (p.x - c2.x) + (c2.x - b.x) * (p.y - c2.y)) / d, v = ((c2.y - a.y) * (p.x - c2.x) + (a.x - c2.x) * (p.y - c2.y)) / d;
+    return [u, v, 1 - u - v];
+  }
+  function segHit(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy, t = L2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+    return { d: Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t), depth: a.depth + (b.depth - a.depth) * t };
+  }
+  function pickSolid(solids, view, sp, { aperture = 6, interior = true, isVisible = () => true } = {}) {
+    let best = null;
+    for (const s of solids) {
+      if (!isVisible(s)) continue;
+      const P2 = project(s, view);
+      for (const f5 of s.faces) {
+        const a = P2[f5[0]], b = P2[f5[1]], c2 = P2[f5[2]];
+        let depth = null;
+        const w = interior ? bary(sp, a, b, c2) : null;
+        if (w && w[0] >= -1e-9 && w[1] >= -1e-9 && w[2] >= -1e-9) depth = w[0] * a.depth + w[1] * b.depth + w[2] * c2.depth;
+        else {
+          for (const [p, q] of [[a, b], [b, c2], [c2, a]]) {
+            const h2 = segHit(sp, p, q);
+            if (h2.d <= aperture && (depth === null || h2.depth < depth)) depth = h2.depth - 1e-3;
+          }
+        }
+        if (depth !== null && (!best || depth < best.depth)) best = { solid: s, depth };
+      }
+    }
+    return best;
+  }
+  function solidScreenBounds(solid, view) {
+    const P2 = project(solid, view);
+    return ptsBounds(P2);
+  }
+  function solidsInScreenRect(solids, view, rect, crossing, isVisible = () => true) {
+    return solids.filter((s) => {
+      if (!isVisible(s)) return false;
+      const b = solidScreenBounds(s, view);
+      return crossing ? boundsOverlap(b, rect) : boundsInside(b, rect);
+    });
+  }
+
   // src/engine/runtime.js
   var Cancel = class extends Error {
     constructor() {
@@ -4714,12 +5845,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     const s = (Math.round(n * 10 ** p) / 10 ** p).toString();
     return s;
   };
-  var fmtPt = (p, prec2 = 4) => `${fmt2(p.x, prec2)},${fmt2(p.y, prec2)}`;
+  var fmtPt = (p, prec3 = 4) => `${fmt2(p.x, prec3)},${fmt2(p.y, prec3)}`;
   var Ctx = class {
-    constructor(rt, def9, editor, args) {
+    constructor(rt, def10, editor, args) {
       this.rt = rt;
-      this.def = def9;
-      this.name = def9.name;
+      this.def = def10;
+      this.name = def10.name;
       this.editor = editor;
       this.args = args || {};
       this.pending = null;
@@ -4786,21 +5917,29 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     entity(spec) {
       return this.ask({ kind: "entity", ...spec });
     }
+    /** Pick one 3D solid. Result: {solid, pt} | {kw} | {enter:true}. */
+    solid(spec) {
+      return this.ask({ kind: "solid", ...spec });
+    }
     /** "Select objects:" loop. Returns the array of selected entities (honours pick-first selection). */
     async select(spec = {}) {
       const ed = this.editor;
       if ((spec.pickfirst ?? this.def.pickfirst ?? true) && this.sv.prefs.PICKFIRST && ed.sel.size) {
         const pre = ed.selected.filter((e) => this.rt.selectableBy(e, spec));
-        if (pre.length) {
-          this.log(`${pre.length} found`);
-          ed.tempSel = new Set(pre.map((e) => e.id));
+        const preSolids = spec.solids ? ed.selectedSolids.filter((s) => this.doc.solidVisible(s)) : [];
+        if (pre.length || preSolids.length) {
+          this.log(`${pre.length + preSolids.length} found`);
+          ed.tempSel = new Set([...pre, ...preSolids].map((e) => e.id));
+          pre.solids = preSolids;
           return pre;
         }
       }
       const set = /* @__PURE__ */ new Map();
       const result = await this.ask({ kind: "select", message: spec.prompt || "Select objects", ...spec, set, remove: false, window: null, previous: spec.previous });
       void result;
-      return [...set.values()];
+      const vals = [...set.values()], ents = vals.filter((v) => !v.vertices);
+      ents.solids = vals.filter((v) => v.vertices);
+      return ents;
     }
     /** Single object with pick-box. Returns entity or null. */
     async pickEntity(prompt, filter, extra = {}) {
@@ -4918,25 +6057,25 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     // ------------------------------------------------------------ running commands
     /** Run a command by name/alias. Resolves when the command finishes. */
     async run(text2, { transparent = false, args = null } = {}) {
-      const def9 = typeof text2 === "object" ? text2 : this.app.registry.find(text2);
-      if (!def9) {
+      const def10 = typeof text2 === "object" ? text2 : this.app.registry.find(text2);
+      if (!def10) {
         this.log(`Unknown command "${String(text2)}".  Press F1 for help.`, "error");
         this.emit();
         return;
       }
       if (!this.editor) return;
       const ed = this.editor, isTop = !this.stack.length;
-      const ctx = new Ctx(this, def9, ed, args);
-      if (!isTop && !transparent && !def9.transparent) {
+      const ctx = new Ctx(this, def10, ed, args);
+      if (!isTop && !transparent && !def10.transparent) {
         this.log("That command may not be used transparently.", "error");
         return;
       }
       this.stack.push(ctx);
       if (!transparent && isTop) ed.doc.beginCommand();
-      if (!def9.silent) this.log(`Command: ${def9.name}`, "cmd");
-      this.usage[def9.name] = (this.usage[def9.name] || 0) + 1;
+      if (!def10.silent) this.log(`Command: ${def10.name}`, "cmd");
+      this.usage[def10.name] = (this.usage[def10.name] || 0) + 1;
       try {
-        await def9.run(ctx, args || {});
+        await def10.run(ctx, args || {});
       } catch (e) {
         if (e && e.cancel) this.log("*Cancel*", "info");
         else {
@@ -4949,23 +6088,23 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         this.override = null;
         this.idleWindow = null;
         if (!transparent && isTop) {
-          ed.doc.endCommand(def9.name);
+          ed.doc.endCommand(def10.name);
           ed.tempSel.clear();
           ed.prune();
           this.snapper.reset();
-          if (def9.repeatable && !def9.name.startsWith("_")) this.lastCommand = def9.name;
-          if (def9.repeatable && !def9.name.startsWith("_")) {
-            this.recentCommands = [def9.name, ...this.recentCommands.filter((n) => n !== def9.name)].slice(0, 12);
+          if (def10.repeatable && !def10.name.startsWith("_")) this.lastCommand = def10.name;
+          if (def10.repeatable && !def10.name.startsWith("_")) {
+            this.recentCommands = [def10.name, ...this.recentCommands.filter((n) => n !== def10.name)].slice(0, 12);
           }
-          this.app.emit("commandEnd", def9.name);
+          this.app.emit("commandEnd", def10.name);
         } else if (this.ctx) this._refreshPreview();
         this.emit();
       }
     }
     /** From the UI (ribbon, menus): cancels whatever is running, then starts the command. */
     async start(name, opts = {}) {
-      const def9 = this.app.registry.find(name);
-      if (def9?.transparent && this.busy) return this.run(def9, { ...opts, transparent: true });
+      const def10 = this.app.registry.find(name);
+      if (def10?.transparent && this.busy) return this.run(def10, { ...opts, transparent: true });
       if (this.busy) {
         this.escape();
         await flush();
@@ -5029,6 +6168,16 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           this._deliver(ctx, { entity: e, pt: raw, mods });
           break;
         }
+        case "solid": {
+          const hit = this.solidAt(ctx.editor, raw, mods);
+          if (!hit) {
+            this.log("Nothing selected", "error");
+            await flush();
+            return;
+          }
+          this._deliver(ctx, { solid: hit, pt: raw, mods });
+          break;
+        }
         case "select":
           this._selectClick(ctx, p, raw, mods);
           return;
@@ -5036,6 +6185,20 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           return;
       }
       await flush();
+    }
+    /** Solid under the pointer (screen position from the event, or projected from the world point). */
+    solidAt(ed, raw, mods = {}) {
+      const doc = ed.doc;
+      if (!doc.solids.length) return null;
+      const sp = mods.screen || ed.view.toScreen(raw), style = ed.visualStyle || "2D Wireframe";
+      const hit = pickSolid(doc.solids, ed.view, sp, { aperture: this.sv.prefs.PICKBOX + 4, interior: style !== "2D Wireframe" && style !== "Wireframe", isVisible: (s) => doc.solidVisible(s) && !doc.layer(s.layer || "0")?.locked });
+      return hit?.solid || null;
+    }
+    solidsInRect(ed, a, b, crossing) {
+      const doc = ed.doc;
+      if (!doc.solids.length) return [];
+      const sa = ed.view.toScreen(a), sb = ed.view.toScreen(b), rect = { minX: Math.min(sa.x, sb.x), maxX: Math.max(sa.x, sb.x), minY: Math.min(sa.y, sb.y), maxY: Math.max(sa.y, sb.y) };
+      return solidsInScreenRect(doc.solids, ed.view, rect, crossing, (s) => doc.solidVisible(s) && !doc.layer(s.layer || "0")?.locked);
     }
     async _pointPicked(ctx, p, pt3, raw) {
       if (p.fromStage === "base") {
@@ -5101,7 +6264,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         this.emit();
         return;
       }
-      if (!mods.shift) {
+      const solid = this.solidAt(ed, raw, mods);
+      if (solid) {
+        if (mods.shift && ed.sel.has(solid.id)) ed.sel.delete(solid.id);
+        else ed.sel.add(solid.id);
+        this.emit();
+        return;
       }
       this.idleWindow = { a: raw };
       this.emit();
@@ -5115,6 +6283,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const ed = this.editor, crossing = b.x < a.x;
       const list = selectRect(ed.doc, rectOf(a, b), crossing);
       const ids = new Set(list.flatMap((e) => this.groupIds(e)));
+      for (const s of this.solidsInRect(ed, a, b, crossing)) ids.add(s.id);
       if (mods.shift) for (const id of ids) ed.sel.delete(id);
       else for (const id of ids) ed.sel.add(id);
       this.log(`${ids.size} found`, "info");
@@ -5138,7 +6307,15 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     doubleClick(raw) {
       if (this.busy) return;
       const ed = this.editor, e = pickAt(ed.doc, raw, this.apertureWorld());
-      if (!e) return;
+      if (!e) {
+        const s = this.solidAt(ed, raw);
+        if (s) {
+          ed.sel.clear();
+          ed.sel.add(s.id);
+          this.start("PROPERTIES");
+        }
+        return;
+      }
       ed.sel.clear();
       ed.sel.add(e.id);
       const map = { text: "TEXTEDIT", pline: "PEDIT", hatch: "HATCHEDIT", dim: "TEXTEDIT", leader: "TEXTEDIT", insert: "PROPERTIES" };
@@ -5214,6 +6391,13 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         } else this._selAdd(ctx, p, [e]);
         return;
       }
+      if (p.solids) {
+        const sol = this.solidAt(ed, raw, mods);
+        if (sol) {
+          this._selAddSolids(ctx, p, [sol], mods.shift);
+          return;
+        }
+      }
       if (p.single) {
         this.log("Nothing selected", "error");
         return;
@@ -5230,6 +6414,22 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (mods.shift) p.remove = true;
       this._selAdd(ctx, p, list);
       p.remove = prev;
+      if (p.solids) this._selAddSolids(ctx, p, this.solidsInRect(ctx.editor, a, b, crossing), mods.shift);
+    }
+    _selAddSolids(ctx, p, solids, remove = false) {
+      let n = 0;
+      for (const s of solids) {
+        if (remove || p.remove) {
+          if (p.set.delete(s.id)) n++;
+        } else if (!p.set.has(s.id)) {
+          p.set.set(s.id, s);
+          n++;
+        }
+      }
+      ctx.editor.tempSel = new Set(p.set.keys());
+      this.log(`${n} found${p.set.size !== n ? `, ${p.set.size} total` : ""}`);
+      this.emit();
+      if (p.single && p.set.size) this._deliver(ctx, { enter: true });
     }
     _selectText(ctx, p, text2) {
       const t = text2.trim().toUpperCase();
@@ -6353,12 +7553,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       let total = 0, mode = "add-first";
       const r0 = await c2.point({ prompt: "Specify first corner point or", options: ["Object", "Add area", "Subtract area", "eXit"] });
       if (r0.kw === "Object" || r0.kw === "Add area" || r0.kw === "Subtract area") {
-        let sign = r0.kw === "Subtract area" ? -1 : 1;
+        let sign2 = r0.kw === "Subtract area" ? -1 : 1;
         for (; ; ) {
           const o = await c2.entity({ prompt: "Select objects", allowEnter: true, filter: (e) => !!entityArea(e, c2.doc) });
           if (!o.entity) break;
           const r = entityArea(o.entity, c2.doc);
-          total += sign * r.area;
+          total += sign2 * r.area;
           c2.log(`Area = ${f(c2, r.area)},  ${o.entity.type === "circle" ? "Circumference" : "Perimeter"} = ${f(c2, r.perimeter)}`);
           if (r0.kw !== "Object") c2.log(`Total area = ${f(c2, total)}`);
         }
@@ -6375,8 +7575,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         c2.log("At least three points are required.", "error");
         return;
       }
-      const area = Math.abs(polygonArea(pts)), per = plineLength(pts.map((p) => ({ ...p, b: 0 })), true);
-      c2.log(`Area = ${f(c2, area)},  Perimeter = ${f(c2, per)}`);
+      const area2 = Math.abs(polygonArea(pts)), per = plineLength(pts.map((p) => ({ ...p, b: 0 })), true);
+      c2.log(`Area = ${f(c2, area2)},  Perimeter = ${f(c2, per)}`);
       void mode;
     }
   });
@@ -6487,11 +7687,11 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           c2.log("No solids in the drawing.", "error");
           return;
         }
-        c2.log(`Volume = ${f(c2, s.reduce((v, m2) => v + meshVolume(m2), 0))}`);
+        c2.log(`Volume = ${f(c2, s.reduce((v, m2) => v + meshVolume2(m2), 0))}`);
       } else return c2.rt.run("DIST", { transparent: true });
     }
   });
-  function meshVolume(m2) {
+  function meshVolume2(m2) {
     let v = 0;
     for (const fc of m2.faces) {
       const [a, b, cc] = fc.map((i) => m2.vertices[i]);
@@ -7147,9 +8347,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     desc: "Increases or decreases the magnification of the view in the current viewport.",
     async run(c2, args) {
       const view = c2.view, ed = c2.editor;
-      const factor = (f4) => {
+      const factor = (f5) => {
         view.push();
-        view.zoomAt(view.w / 2, view.h / 2, f4);
+        view.zoomAt(view.w / 2, view.h / 2, f5);
         c2.rt.emit();
       };
       const mode = args.mode;
@@ -7569,9 +8769,951 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
   });
 
-  // src/commands/system.js
-  var def8 = (d) => registry.define({ group: "System", ...d });
+  // src/solid/vendor/csg.js
+  var CSG;
+  CSG = function() {
+    this.polygons = [];
+  };
+  CSG.fromPolygons = function(polygons) {
+    var csg = new CSG();
+    csg.polygons = polygons;
+    return csg;
+  };
+  CSG.prototype = {
+    clone: function() {
+      var csg = new CSG();
+      csg.polygons = this.polygons.map(function(p) {
+        return p.clone();
+      });
+      return csg;
+    },
+    toPolygons: function() {
+      return this.polygons;
+    },
+    // Return a new CSG solid representing space in either this solid or in the
+    // solid `csg`. Neither this solid nor the solid `csg` are modified.
+    // 
+    //     A.union(B)
+    // 
+    //     +-------+            +-------+
+    //     |       |            |       |
+    //     |   A   |            |       |
+    //     |    +--+----+   =   |       +----+
+    //     +----+--+    |       +----+       |
+    //          |   B   |            |       |
+    //          |       |            |       |
+    //          +-------+            +-------+
+    // 
+    union: function(csg) {
+      var a = new CSG.Node(this.clone().polygons);
+      var b = new CSG.Node(csg.clone().polygons);
+      a.clipTo(b);
+      b.clipTo(a);
+      b.invert();
+      b.clipTo(a);
+      b.invert();
+      a.build(b.allPolygons());
+      return CSG.fromPolygons(a.allPolygons());
+    },
+    // Return a new CSG solid representing space in this solid but not in the
+    // solid `csg`. Neither this solid nor the solid `csg` are modified.
+    // 
+    //     A.subtract(B)
+    // 
+    //     +-------+            +-------+
+    //     |       |            |       |
+    //     |   A   |            |       |
+    //     |    +--+----+   =   |    +--+
+    //     +----+--+    |       +----+
+    //          |   B   |
+    //          |       |
+    //          +-------+
+    // 
+    subtract: function(csg) {
+      var a = new CSG.Node(this.clone().polygons);
+      var b = new CSG.Node(csg.clone().polygons);
+      a.invert();
+      a.clipTo(b);
+      b.clipTo(a);
+      b.invert();
+      b.clipTo(a);
+      b.invert();
+      a.build(b.allPolygons());
+      a.invert();
+      return CSG.fromPolygons(a.allPolygons());
+    },
+    // Return a new CSG solid representing space both this solid and in the
+    // solid `csg`. Neither this solid nor the solid `csg` are modified.
+    // 
+    //     A.intersect(B)
+    // 
+    //     +-------+
+    //     |       |
+    //     |   A   |
+    //     |    +--+----+   =   +--+
+    //     +----+--+    |       +--+
+    //          |   B   |
+    //          |       |
+    //          +-------+
+    // 
+    intersect: function(csg) {
+      var a = new CSG.Node(this.clone().polygons);
+      var b = new CSG.Node(csg.clone().polygons);
+      a.invert();
+      b.clipTo(a);
+      b.invert();
+      a.clipTo(b);
+      b.clipTo(a);
+      a.build(b.allPolygons());
+      a.invert();
+      return CSG.fromPolygons(a.allPolygons());
+    },
+    // Return a new CSG solid with solid and empty space switched. This solid is
+    // not modified.
+    inverse: function() {
+      var csg = this.clone();
+      csg.polygons.map(function(p) {
+        p.flip();
+      });
+      return csg;
+    }
+  };
+  CSG.cube = function(options) {
+    options = options || {};
+    var c2 = new CSG.Vector(options.center || [0, 0, 0]);
+    var r = !options.radius ? [1, 1, 1] : options.radius.length ? options.radius : [options.radius, options.radius, options.radius];
+    return CSG.fromPolygons([
+      [[0, 4, 6, 2], [-1, 0, 0]],
+      [[1, 3, 7, 5], [1, 0, 0]],
+      [[0, 1, 5, 4], [0, -1, 0]],
+      [[2, 6, 7, 3], [0, 1, 0]],
+      [[0, 2, 3, 1], [0, 0, -1]],
+      [[4, 5, 7, 6], [0, 0, 1]]
+    ].map(function(info) {
+      return new CSG.Polygon(info[0].map(function(i) {
+        var pos2 = new CSG.Vector(
+          c2.x + r[0] * (2 * !!(i & 1) - 1),
+          c2.y + r[1] * (2 * !!(i & 2) - 1),
+          c2.z + r[2] * (2 * !!(i & 4) - 1)
+        );
+        return new CSG.Vertex(pos2, new CSG.Vector(info[1]));
+      }));
+    }));
+  };
+  CSG.sphere = function(options) {
+    options = options || {};
+    var c2 = new CSG.Vector(options.center || [0, 0, 0]);
+    var r = options.radius || 1;
+    var slices = options.slices || 16;
+    var stacks = options.stacks || 8;
+    var polygons = [], vertices;
+    function vertex(theta, phi) {
+      theta *= Math.PI * 2;
+      phi *= Math.PI;
+      var dir = new CSG.Vector(
+        Math.cos(theta) * Math.sin(phi),
+        Math.cos(phi),
+        Math.sin(theta) * Math.sin(phi)
+      );
+      vertices.push(new CSG.Vertex(c2.plus(dir.times(r)), dir));
+    }
+    for (var i = 0; i < slices; i++) {
+      for (var j = 0; j < stacks; j++) {
+        vertices = [];
+        vertex(i / slices, j / stacks);
+        if (j > 0) vertex((i + 1) / slices, j / stacks);
+        if (j < stacks - 1) vertex((i + 1) / slices, (j + 1) / stacks);
+        vertex(i / slices, (j + 1) / stacks);
+        polygons.push(new CSG.Polygon(vertices));
+      }
+    }
+    return CSG.fromPolygons(polygons);
+  };
+  CSG.cylinder = function(options) {
+    options = options || {};
+    var s = new CSG.Vector(options.start || [0, -1, 0]);
+    var e = new CSG.Vector(options.end || [0, 1, 0]);
+    var ray = e.minus(s);
+    var r = options.radius || 1;
+    var slices = options.slices || 16;
+    var axisZ = ray.unit(), isY = Math.abs(axisZ.y) > 0.5;
+    var axisX = new CSG.Vector(isY, !isY, 0).cross(axisZ).unit();
+    var axisY = axisX.cross(axisZ).unit();
+    var start = new CSG.Vertex(s, axisZ.negated());
+    var end = new CSG.Vertex(e, axisZ.unit());
+    var polygons = [];
+    function point(stack2, slice, normalBlend) {
+      var angle = slice * Math.PI * 2;
+      var out = axisX.times(Math.cos(angle)).plus(axisY.times(Math.sin(angle)));
+      var pos2 = s.plus(ray.times(stack2)).plus(out.times(r));
+      var normal = out.times(1 - Math.abs(normalBlend)).plus(axisZ.times(normalBlend));
+      return new CSG.Vertex(pos2, normal);
+    }
+    for (var i = 0; i < slices; i++) {
+      var t0 = i / slices, t1 = (i + 1) / slices;
+      polygons.push(new CSG.Polygon([start, point(0, t0, -1), point(0, t1, -1)]));
+      polygons.push(new CSG.Polygon([point(0, t1, 0), point(0, t0, 0), point(1, t0, 0), point(1, t1, 0)]));
+      polygons.push(new CSG.Polygon([end, point(1, t1, 1), point(1, t0, 1)]));
+    }
+    return CSG.fromPolygons(polygons);
+  };
+  CSG.Vector = function(x, y, z) {
+    if (arguments.length == 3) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+    } else if ("x" in x) {
+      this.x = x.x;
+      this.y = x.y;
+      this.z = x.z;
+    } else {
+      this.x = x[0];
+      this.y = x[1];
+      this.z = x[2];
+    }
+  };
+  CSG.Vector.prototype = {
+    clone: function() {
+      return new CSG.Vector(this.x, this.y, this.z);
+    },
+    negated: function() {
+      return new CSG.Vector(-this.x, -this.y, -this.z);
+    },
+    plus: function(a) {
+      return new CSG.Vector(this.x + a.x, this.y + a.y, this.z + a.z);
+    },
+    minus: function(a) {
+      return new CSG.Vector(this.x - a.x, this.y - a.y, this.z - a.z);
+    },
+    times: function(a) {
+      return new CSG.Vector(this.x * a, this.y * a, this.z * a);
+    },
+    dividedBy: function(a) {
+      return new CSG.Vector(this.x / a, this.y / a, this.z / a);
+    },
+    dot: function(a) {
+      return this.x * a.x + this.y * a.y + this.z * a.z;
+    },
+    lerp: function(a, t) {
+      return this.plus(a.minus(this).times(t));
+    },
+    length: function() {
+      return Math.sqrt(this.dot(this));
+    },
+    unit: function() {
+      return this.dividedBy(this.length());
+    },
+    cross: function(a) {
+      return new CSG.Vector(
+        this.y * a.z - this.z * a.y,
+        this.z * a.x - this.x * a.z,
+        this.x * a.y - this.y * a.x
+      );
+    }
+  };
+  CSG.Vertex = function(pos2, normal) {
+    this.pos = new CSG.Vector(pos2);
+    this.normal = new CSG.Vector(normal);
+  };
+  CSG.Vertex.prototype = {
+    clone: function() {
+      return new CSG.Vertex(this.pos.clone(), this.normal.clone());
+    },
+    // Invert all orientation-specific data (e.g. vertex normal). Called when the
+    // orientation of a polygon is flipped.
+    flip: function() {
+      this.normal = this.normal.negated();
+    },
+    // Create a new vertex between this vertex and `other` by linearly
+    // interpolating all properties using a parameter of `t`. Subclasses should
+    // override this to interpolate additional properties.
+    interpolate: function(other, t) {
+      return new CSG.Vertex(
+        this.pos.lerp(other.pos, t),
+        this.normal.lerp(other.normal, t)
+      );
+    }
+  };
+  CSG.Plane = function(normal, w) {
+    this.normal = normal;
+    this.w = w;
+  };
+  CSG.Plane.EPSILON = 1e-5;
+  CSG.Plane.fromPoints = function(a, b, c2) {
+    var n = b.minus(a).cross(c2.minus(a)).unit();
+    return new CSG.Plane(n, n.dot(a));
+  };
+  CSG.Plane.prototype = {
+    clone: function() {
+      return new CSG.Plane(this.normal.clone(), this.w);
+    },
+    flip: function() {
+      this.normal = this.normal.negated();
+      this.w = -this.w;
+    },
+    // Split `polygon` by this plane if needed, then put the polygon or polygon
+    // fragments in the appropriate lists. Coplanar polygons go into either
+    // `coplanarFront` or `coplanarBack` depending on their orientation with
+    // respect to this plane. Polygons in front or in back of this plane go into
+    // either `front` or `back`.
+    splitPolygon: function(polygon, coplanarFront, coplanarBack, front, back) {
+      var COPLANAR = 0;
+      var FRONT = 1;
+      var BACK = 2;
+      var SPANNING = 3;
+      var polygonType = 0;
+      var types = [];
+      for (var i = 0; i < polygon.vertices.length; i++) {
+        var t = this.normal.dot(polygon.vertices[i].pos) - this.w;
+        var type = t < -CSG.Plane.EPSILON ? BACK : t > CSG.Plane.EPSILON ? FRONT : COPLANAR;
+        polygonType |= type;
+        types.push(type);
+      }
+      switch (polygonType) {
+        case COPLANAR:
+          (this.normal.dot(polygon.plane.normal) > 0 ? coplanarFront : coplanarBack).push(polygon);
+          break;
+        case FRONT:
+          front.push(polygon);
+          break;
+        case BACK:
+          back.push(polygon);
+          break;
+        case SPANNING:
+          var f5 = [], b = [];
+          for (var i = 0; i < polygon.vertices.length; i++) {
+            var j = (i + 1) % polygon.vertices.length;
+            var ti = types[i], tj = types[j];
+            var vi = polygon.vertices[i], vj = polygon.vertices[j];
+            if (ti != BACK) f5.push(vi);
+            if (ti != FRONT) b.push(ti != BACK ? vi.clone() : vi);
+            if ((ti | tj) == SPANNING) {
+              var t = (this.w - this.normal.dot(vi.pos)) / this.normal.dot(vj.pos.minus(vi.pos));
+              var v = vi.interpolate(vj, t);
+              f5.push(v);
+              b.push(v.clone());
+            }
+          }
+          if (f5.length >= 3) front.push(new CSG.Polygon(f5, polygon.shared));
+          if (b.length >= 3) back.push(new CSG.Polygon(b, polygon.shared));
+          break;
+      }
+    }
+  };
+  CSG.Polygon = function(vertices, shared) {
+    this.vertices = vertices;
+    this.shared = shared;
+    this.plane = CSG.Plane.fromPoints(vertices[0].pos, vertices[1].pos, vertices[2].pos);
+  };
+  CSG.Polygon.prototype = {
+    clone: function() {
+      var vertices = this.vertices.map(function(v) {
+        return v.clone();
+      });
+      return new CSG.Polygon(vertices, this.shared);
+    },
+    flip: function() {
+      this.vertices.reverse().map(function(v) {
+        v.flip();
+      });
+      this.plane.flip();
+    }
+  };
+  CSG.Node = function(polygons) {
+    this.plane = null;
+    this.front = null;
+    this.back = null;
+    this.polygons = [];
+    if (polygons) this.build(polygons);
+  };
+  CSG.Node.prototype = {
+    clone: function() {
+      var node = new CSG.Node();
+      node.plane = this.plane && this.plane.clone();
+      node.front = this.front && this.front.clone();
+      node.back = this.back && this.back.clone();
+      node.polygons = this.polygons.map(function(p) {
+        return p.clone();
+      });
+      return node;
+    },
+    // Convert solid space to empty space and empty space to solid space.
+    invert: function() {
+      for (var i = 0; i < this.polygons.length; i++) {
+        this.polygons[i].flip();
+      }
+      this.plane.flip();
+      if (this.front) this.front.invert();
+      if (this.back) this.back.invert();
+      var temp = this.front;
+      this.front = this.back;
+      this.back = temp;
+    },
+    // Recursively remove all polygons in `polygons` that are inside this BSP
+    // tree.
+    clipPolygons: function(polygons) {
+      if (!this.plane) return polygons.slice();
+      var front = [], back = [];
+      for (var i = 0; i < polygons.length; i++) {
+        this.plane.splitPolygon(polygons[i], front, back, front, back);
+      }
+      if (this.front) front = this.front.clipPolygons(front);
+      if (this.back) back = this.back.clipPolygons(back);
+      else back = [];
+      return front.concat(back);
+    },
+    // Remove all polygons in this BSP tree that are inside the other BSP tree
+    // `bsp`.
+    clipTo: function(bsp) {
+      this.polygons = bsp.clipPolygons(this.polygons);
+      if (this.front) this.front.clipTo(bsp);
+      if (this.back) this.back.clipTo(bsp);
+    },
+    // Return a list of all polygons in this BSP tree.
+    allPolygons: function() {
+      var polygons = this.polygons.slice();
+      if (this.front) polygons = polygons.concat(this.front.allPolygons());
+      if (this.back) polygons = polygons.concat(this.back.allPolygons());
+      return polygons;
+    },
+    // Build a BSP tree out of `polygons`. When called on an existing tree, the
+    // new polygons are filtered down to the bottom of the tree and become new
+    // nodes there. Each set of polygons is partitioned using the first polygon
+    // (no heuristic is used to pick a good split).
+    build: function(polygons) {
+      if (!polygons.length) return;
+      if (!this.plane) this.plane = polygons[0].plane.clone();
+      var front = [], back = [];
+      for (var i = 0; i < polygons.length; i++) {
+        this.plane.splitPolygon(polygons[i], this.polygons, this.polygons, front, back);
+      }
+      if (front.length) {
+        if (!this.front) this.front = new CSG.Node();
+        this.front.build(front);
+      }
+      if (back.length) {
+        if (!this.back) this.back = new CSG.Node();
+        this.back.build(back);
+      }
+    }
+  };
+  var csg_default = CSG;
+
+  // src/solid/boolean.js
+  var MAX_TRIANGLES = 1e5;
+  function toCSG(mesh) {
+    const polys = [];
+    for (const f5 of mesh.faces) {
+      const ps = f5.map((i) => new csg_default.Vector(mesh.vertices[i].x, mesh.vertices[i].y, mesh.vertices[i].z));
+      const n = ps[1].minus(ps[0]).cross(ps[2].minus(ps[0]));
+      if (n.length() < 1e-12) continue;
+      const normal = n.unit();
+      polys.push(new csg_default.Polygon(ps.map((p) => new csg_default.Vertex(p, normal))));
+    }
+    return csg_default.fromPolygons(polys);
+  }
+  function fromCSG(csg, name, extra = {}) {
+    const vertices = [], faces = [], lookup = /* @__PURE__ */ new Map();
+    const index = (p) => {
+      const key = `${p.x.toFixed(7)},${p.y.toFixed(7)},${p.z.toFixed(7)}`;
+      let i = lookup.get(key);
+      if (i === void 0) {
+        i = vertices.length;
+        vertices.push({ x: +p.x.toFixed(9), y: +p.y.toFixed(9), z: +p.z.toFixed(9) });
+        lookup.set(key, i);
+      }
+      return i;
+    };
+    for (const poly of csg.toPolygons()) {
+      const ids = poly.vertices.map((v) => index(v.pos));
+      for (let i = 1; i + 1 < ids.length; i++) if (ids[0] !== ids[i] && ids[i] !== ids[i + 1] && ids[0] !== ids[i + 1]) faces.push([ids[0], ids[i], ids[i + 1]]);
+    }
+    return { name, vertices, faces, ...extra };
+  }
+  function booleanSync(a, b, op) {
+    if (!["union", "subtract", "intersect"].includes(op)) throw Error("Unknown boolean operation.");
+    if (a.faces.length + b.faces.length > MAX_TRIANGLES) throw Error(`The solids have more than ${MAX_TRIANGLES} triangles.`);
+    const A = toCSG(a), B2 = toCSG(b);
+    const r = op === "union" ? A.union(B2) : op === "subtract" ? A.subtract(B2) : A.intersect(B2);
+    const m2 = fromCSG(r, { union: "Union", subtract: "Subtract", intersect: "Intersect" }[op]);
+    return m2;
+  }
+  var stats = { worker: 0, sync: 0 };
+  var workerSource = null;
+  function setWorkerSource(src) {
+    workerSource = src;
+  }
+  function booleanAsync(a, b, op, { timeout = 6e4 } = {}) {
+    if (typeof Worker === "undefined" || !workerSource || typeof Blob === "undefined") return Promise.resolve().then(() => {
+      stats.sync++;
+      return booleanSync(a, b, op);
+    });
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
+      const w = new Worker(url);
+      URL.revokeObjectURL(url);
+      const timer = setTimeout(() => {
+        w.terminate();
+        reject(Error("The boolean operation took longer than a minute and was stopped. Try simpler solids."));
+      }, timeout);
+      w.onmessage = (e) => {
+        clearTimeout(timer);
+        w.terminate();
+        stats.worker++;
+        if (e.data.error) reject(Error(e.data.error));
+        else resolve(e.data.result);
+      };
+      w.onerror = (e) => {
+        clearTimeout(timer);
+        w.terminate();
+        reject(Error(e.message || "Boolean worker failed."));
+      };
+      w.postMessage({ a: { vertices: a.vertices, faces: a.faces }, b: { vertices: b.vertices, faces: b.faces }, op });
+    }).catch((err) => {
+      if (/Boolean worker failed|Failed to construct|SecurityError/i.test(err.message)) {
+        stats.sync++;
+        return booleanSync(a, b, op);
+      }
+      throw err;
+    });
+  }
+
+  // src/commands/solids.js
+  var def8 = (d) => registry.define({ group: "3D", pickfirst: false, ...d });
+  var solidMem = (c2) => memory(c2.app).solid ??= { radius: 10, height: 20, length: 30, top: 0 };
+  var prec2 = (c2) => c2.doc.settings.units.precision;
+  var f2 = (c2, v) => fmtNum(v, prec2(c2));
+  var addSolid = (c2, mesh) => c2.doc.addSolid(mesh);
+  async function selectSolids(c2, prompt) {
+    const sel = await c2.select({ prompt, solids: true, filter: () => false, pickfirst: true });
+    return sel.solids || [];
+  }
+  var rectPreview = (a, b) => [E.pline([{ x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y }], true)];
+  async function boxFootprint(c2, mem) {
+    let r = await c2.point({ prompt: "Specify first corner", options: ["Center"] });
+    let a, centre = false;
+    if (r.kw === "Center") {
+      centre = true;
+      r = await c2.point({ prompt: "Specify center" });
+    }
+    if (!r.pt) return null;
+    a = r.pt;
+    for (; ; ) {
+      const o = await c2.corner({ prompt: "Specify other corner", options: ["Cube", "Length"], base: a, preview: (pt3) => centre ? rectPreview(sub(a, sub(pt3, a)), pt3) : void 0 });
+      if (o.kw === "Cube") {
+        const l = await c2.distance({ prompt: "Specify length", base: a, default: mem.length, nonzero: true });
+        if (l.value === void 0) return null;
+        mem.length = l.value;
+        const rot = unit(sub(c2.rt.cursor.pt, a));
+        void rot;
+        return centre ? { x0: a.x - l.value / 2, y0: a.y - l.value / 2, w: l.value, d: l.value, h: l.value, cube: true } : { x0: a.x, y0: a.y, w: l.value, d: l.value, h: l.value, cube: true };
+      }
+      if (o.kw === "Length") {
+        const l = await c2.distance({ prompt: "Specify length", base: a, default: mem.length, nonzero: true });
+        if (l.value === void 0) return null;
+        const w = await c2.distance({ prompt: "Specify width", base: a, default: mem.length, nonzero: true });
+        if (w.value === void 0) return null;
+        mem.length = l.value;
+        return centre ? { x0: a.x - l.value / 2, y0: a.y - w.value / 2, w: l.value, d: w.value } : { x0: a.x, y0: a.y, w: l.value, d: w.value };
+      }
+      if (!o.pt) return null;
+      const b = o.pt;
+      if (centre) {
+        const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y);
+        return { x0: a.x - dx, y0: a.y - dy, w: 2 * dx, d: 2 * dy };
+      }
+      return { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), d: Math.abs(b.y - a.y), a, b };
+    }
+  }
+  async function heightPrompt(c2, mem, base, label = "Specify height") {
+    const h2 = await c2.distance({ prompt: label, options: ["2Point"], base, default: mem.height, nonzero: true });
+    if (h2.kw === "2Point") {
+      const q = await c2.distance({ prompt: "Specify first point" });
+      return q.value;
+    }
+    return h2.value;
+  }
   def8({
+    name: "BOX",
+    title: "Box",
+    icon: "box",
+    desc: "Creates a 3D solid box.",
+    async run(c2) {
+      const mem = solidMem(c2), fp = await boxFootprint(c2, mem);
+      if (!fp) return;
+      if (fp.w < 1e-9 || fp.d < 1e-9) throw Error("The box has zero width or depth.");
+      let h2 = fp.h;
+      if (h2 === void 0) {
+        h2 = await heightPrompt(c2, mem, fp.b || { x: fp.x0, y: fp.y0 });
+        if (h2 === void 0) return;
+        mem.height = h2;
+      }
+      addSolid(c2, boxMesh(fp.x0, fp.y0, h2 < 0 ? h2 : 0, fp.w, fp.d, Math.abs(h2), "Box"));
+      c2.log(`Box ${f2(c2, fp.w)} x ${f2(c2, fp.d)} x ${f2(c2, Math.abs(h2))} created.`);
+    }
+  });
+  def8({
+    name: "WEDGE",
+    aliases: ["WE"],
+    title: "Wedge",
+    icon: "wedge",
+    desc: "Creates a 3D solid wedge.",
+    async run(c2) {
+      const mem = solidMem(c2), fp = await boxFootprint(c2, mem);
+      if (!fp) return;
+      if (fp.w < 1e-9 || fp.d < 1e-9) throw Error("The wedge has zero width or depth.");
+      let h2 = fp.h;
+      if (h2 === void 0) {
+        h2 = await heightPrompt(c2, mem, fp.b || { x: fp.x0, y: fp.y0 });
+        if (h2 === void 0) return;
+        mem.height = h2;
+      }
+      addSolid(c2, wedgeMesh(fp.x0, fp.y0, h2 < 0 ? h2 : 0, fp.w, fp.d, Math.abs(h2), "Wedge"));
+    }
+  });
+  async function radiusPrompt(c2, mem, centre, label = "Specify radius") {
+    const r = await c2.distance({ prompt: label, options: ["Diameter"], base: centre, default: mem.radius, nonzero: true, min: 0, preview: (pt3) => [E.circle(centre, Math.max(dist(centre, pt3), 1e-9))] });
+    if (r.kw === "Diameter") {
+      const d = await c2.distance({ prompt: "Specify diameter", base: centre, default: mem.radius * 2, nonzero: true, min: 0 });
+      return d.value === void 0 ? void 0 : d.value / 2;
+    }
+    return r.value;
+  }
+  def8({
+    name: "CYLINDER",
+    aliases: ["CYL"],
+    title: "Cylinder",
+    icon: "cylinder",
+    desc: "Creates a 3D solid cylinder with a circular base.",
+    async run(c2) {
+      const mem = solidMem(c2);
+      const ctr = await c2.point({ prompt: "Specify center point of base" });
+      if (!ctr.pt) return;
+      const r = await radiusPrompt(c2, mem, ctr.pt, "Specify base radius");
+      if (r === void 0) return;
+      mem.radius = r;
+      const h2 = await heightPrompt(c2, mem, ctr.pt);
+      if (h2 === void 0) return;
+      mem.height = h2;
+      addSolid(c2, cylinderMesh(ctr.pt.x, ctr.pt.y, h2 < 0 ? h2 : 0, r, Math.abs(h2), segmentsFor(r), "Cylinder"));
+    }
+  });
+  def8({
+    name: "CONE",
+    title: "Cone",
+    icon: "cone",
+    desc: "Creates a 3D solid cone or frustum.",
+    async run(c2) {
+      const mem = solidMem(c2);
+      const ctr = await c2.point({ prompt: "Specify center point of base" });
+      if (!ctr.pt) return;
+      const r = await radiusPrompt(c2, mem, ctr.pt, "Specify base radius");
+      if (r === void 0) return;
+      mem.radius = r;
+      let top = 0, h2;
+      for (; ; ) {
+        const k = await c2.distance({ prompt: "Specify height", options: ["2Point", "Top radius"], base: ctr.pt, default: mem.height, nonzero: true });
+        if (k.kw === "Top radius") {
+          const t = await c2.distance({ prompt: "Specify top radius", base: ctr.pt, default: 0, min: 0 });
+          if (t.value !== void 0) top = t.value;
+          continue;
+        }
+        if (k.kw === "2Point") {
+          const q = await c2.distance({ prompt: "Specify first point" });
+          h2 = q.value;
+          break;
+        }
+        h2 = k.value;
+        break;
+      }
+      if (h2 === void 0) return;
+      mem.height = h2;
+      addSolid(c2, coneMesh(ctr.pt.x, ctr.pt.y, h2 < 0 ? h2 : 0, r, top, Math.abs(h2), segmentsFor(Math.max(r, top)), top > 0 ? "Frustum" : "Cone"));
+    }
+  });
+  def8({
+    name: "SPHERE",
+    aliases: ["SPH"],
+    title: "Sphere",
+    icon: "sphere",
+    desc: "Creates a 3D solid sphere.",
+    async run(c2) {
+      const mem = solidMem(c2);
+      const ctr = await c2.point({ prompt: "Specify center point" });
+      if (!ctr.pt) return;
+      const r = await radiusPrompt(c2, mem, ctr.pt);
+      if (r === void 0) return;
+      mem.radius = r;
+      addSolid(c2, sphereMesh(ctr.pt.x, ctr.pt.y, 0, r, 48, "Sphere"));
+    }
+  });
+  var segmentsFor = (r) => Math.max(32, Math.min(96, Math.round(24 + Math.sqrt(Math.max(r, 0)) * 8)));
+  var EXTRUDABLE = (e) => ["pline", "circle", "ellipse", "spline", "line", "arc"].includes(e.type);
+  function featureMesh(doc, feature) {
+    const ents = feature.profile.map((id) => doc.byId(id)).filter(Boolean);
+    if (ents.length !== feature.profile.length) throw Error("The source outline of this extrusion was deleted. Draw it again and use EXTRUDE.");
+    const pr = profileLoops(ents, doc);
+    if (pr.error) throw Error(pr.error);
+    return extrudeLoops(pr.loops, feature.height, { startZ: feature.startZ || 0, taper: feature.taper || 0 });
+  }
+  async function applyFeature(cur, mesh, op) {
+    if (op === "new" || !cur) return mesh;
+    const r = await booleanAsync(cur, mesh, op === "add" ? "union" : "subtract");
+    return r;
+  }
+  def8({
+    name: "EXTRUDE",
+    aliases: ["EXT"],
+    title: "Extrude",
+    icon: "extrude",
+    desc: "Extends the dimensions of a 2D closed outline into 3D space, creating a solid.",
+    async run(c2, args) {
+      const sel = await c2.select({ prompt: "Select objects to extrude", filter: EXTRUDABLE, pickfirst: true });
+      if (!sel.length) return;
+      const pr = profileLoops(sel, c2.doc);
+      if (pr.error) throw Error(pr.error);
+      const mem = solidMem(c2);
+      let taper = 0, start = 0, op = args.op || "new", h2;
+      for (; ; ) {
+        const k = await c2.distance({ prompt: "Specify height of extrusion", options: ["Taper angle", "Start elevation", "Operation"], default: mem.height, nonzero: true, noSnap: false });
+        if (k.kw === "Taper angle") {
+          const t2 = await c2.angle({ prompt: "Specify angle of taper for extrusion", default: 0 });
+          if (t2.value !== void 0) taper = deg(t2.value);
+          continue;
+        }
+        if (k.kw === "Start elevation") {
+          const z = await c2.number({ prompt: "Specify start elevation", default: start });
+          if (z.value !== void 0) start = z.value;
+          continue;
+        }
+        if (k.kw === "Operation") {
+          const o = await c2.keyword({ prompt: "Combine with an existing solid", options: ["New", "Add", "Subtract"], default: "New" });
+          op = (o.kw || "New").toLowerCase();
+          continue;
+        }
+        h2 = k.value;
+        break;
+      }
+      if (h2 === void 0) return;
+      if (Math.abs(taper) >= 89) throw Error("The taper angle must be between -89 and 89 degrees.");
+      mem.height = h2;
+      const feature = { op, profile: sel.map((e) => e.id), height: h2, startZ: start, taper };
+      const mesh = extrudeLoops(pr.loops, h2, { startZ: start, taper });
+      if (op === "new") {
+        const s = addSolid(c2, mesh);
+        s.program = { features: [feature] };
+        c2.log(`Extruded solid created (volume ${f2(c2, meshVolume(mesh))}).`);
+        return;
+      }
+      const t = await c2.select({ prompt: "Select the solid to modify", solids: true, filter: () => false, pickfirst: false });
+      const target = t.solids?.[0];
+      if (!target) return;
+      c2.log(op === "add" ? "Computing union..." : "Computing difference...");
+      const res = await booleanAsync(target, mesh, op === "add" ? "union" : "subtract");
+      const base = target.program ? target.program.base : { vertices: structuredClone(target.vertices), faces: structuredClone(target.faces) };
+      replaceSolid(c2, target, res, { features: [...target.program?.features || [], feature], ...base ? { base } : {} });
+    }
+  });
+  function replaceSolid(c2, target, mesh, program) {
+    c2.doc.change(() => {
+      if (!mesh.faces.length) {
+        c2.doc.solids.splice(c2.doc.solids.indexOf(target), 1);
+        c2.log("No solid remains.");
+        return;
+      }
+      target.vertices = mesh.vertices;
+      target.faces = mesh.faces;
+      if (program) target.program = program;
+    });
+  }
+  def8({
+    name: "UPDATEEXTRUSION",
+    aliases: ["EXTUPDATE"],
+    title: "Update Extrusion",
+    icon: "extrude",
+    desc: "Rebuilds solids from their source outlines after the outlines were edited.",
+    async run(c2) {
+      const sel = (await selectSolids(c2, "Select extruded solids to update")).filter((s) => s.program);
+      if (!sel.length) {
+        c2.log("The selected solids have no extrusion history.", "error");
+        return;
+      }
+      for (const s of sel) {
+        let cur = s.program.base ? { vertices: s.program.base.vertices, faces: s.program.base.faces } : null;
+        for (const ft of s.program.features) cur = await applyFeature(cur, featureMesh(c2.doc, ft), ft.op);
+        replaceSolid(c2, s, cur, s.program);
+      }
+      c2.log(`${sel.length} solid${sel.length === 1 ? "" : "s"} updated.`);
+      c2.clearSel();
+    }
+  });
+  def8({
+    name: "PRESSPULL",
+    aliases: ["PRESSPULL"],
+    title: "Presspull",
+    icon: "presspull",
+    desc: "Presses or pulls bounded areas into 3D.",
+    async run(c2) {
+      const mem = solidMem(c2);
+      const r = await c2.point({ prompt: "Click inside bounded areas to press or pull", allowEnter: false });
+      if (!r.pt) return;
+      const reg = findRegion(c2.doc, r.pt);
+      if (reg.error) throw Error(c2.rt.solidAt(c2.editor, r.pt, { screen: c2.view.toScreen(r.pt) }) ? "Pressing faces of existing solids is not supported; use EXTRUDE with Add or Subtract." : reg.error);
+      const loops = reg.loops.map((l) => tess(l));
+      const h2 = await c2.distance({ prompt: "Specify extrusion height", default: mem.height, nonzero: true, base: r.pt });
+      if (h2.value === void 0) return;
+      mem.height = h2.value;
+      addSolid(c2, extrudeLoops(loops, h2.value, { name: "Presspull" }));
+    }
+  });
+  var tess = (loop) => {
+    const pts = [];
+    for (const p of tessSegs(plineSegs(loop, true), 0.02)) if (!pts.length || dist(p, pts[pts.length - 1]) > 1e-9) pts.push({ x: p.x, y: p.y });
+    if (pts.length > 1 && dist(pts[0], pts[pts.length - 1]) < 1e-9) pts.pop();
+    return pts;
+  };
+  async function combine(c2, op, label) {
+    const sol = await selectSolids(c2, "Select solids to " + label);
+    if (sol.length < 2) {
+      c2.log(`${op[0].toUpperCase() + op.slice(1)} needs at least two solids.`, "error");
+      return;
+    }
+    c2.log("Computing...");
+    let acc = sol[0];
+    for (const s of sol.slice(1)) acc = await booleanAsync(acc, s, op);
+    finishBoolean(c2, sol, acc, { union: "Union", intersect: "Intersect" }[op]);
+  }
+  function finishBoolean(c2, operands, result, name) {
+    const first2 = operands[0];
+    c2.doc.change(() => {
+      for (const s of operands) c2.doc.solids.splice(c2.doc.solids.indexOf(s), 1);
+      if (result.faces.length) {
+        const m2 = { name, vertices: result.vertices, faces: result.faces, layer: first2.layer, ...first2.color !== void 0 ? { color: first2.color } : {} };
+        m2.id = c2.doc.nextId++;
+        c2.doc.solids.push(m2);
+        c2.log(`${name} complete (volume ${f2(c2, meshVolume(m2))}).`);
+      } else c2.log("The result is empty; no solid remains.");
+    });
+    c2.clearSel();
+  }
+  def8({ name: "UNION", aliases: ["UNI"], title: "Union", icon: "union", desc: "Combines selected 3D solids into a single solid.", async run(c2) {
+    await combine(c2, "union", "combine");
+  } });
+  def8({ name: "INTERSECT", aliases: ["IN"], title: "Intersect", icon: "intersect", desc: "Creates a 3D solid from the volume common to two or more solids.", async run(c2) {
+    await combine(c2, "intersect", "intersect");
+  } });
+  def8({
+    name: "SUBTRACT",
+    aliases: ["SU"],
+    title: "Subtract",
+    icon: "subtract",
+    desc: "Subtracts one set of 3D solids from another.",
+    async run(c2) {
+      const a = await selectSolids(c2, "Select solids to subtract from");
+      if (!a.length) return;
+      c2.editor.tempSel = new Set(a.map((s) => s.id));
+      const b = (await selectSolids(c2, "Select solids to subtract")).filter((s) => !a.includes(s));
+      if (!b.length) {
+        c2.log("Nothing to subtract.", "error");
+        return;
+      }
+      c2.log("Computing...");
+      let acc = a[0];
+      for (const s of a.slice(1)) acc = await booleanAsync(acc, s, "union");
+      for (const s of b) acc = await booleanAsync(acc, s, "subtract");
+      finishBoolean(c2, [...a, ...b], acc, "Subtract");
+    }
+  });
+  def8({
+    name: "3DMOVE",
+    aliases: ["3M"],
+    title: "3D Move",
+    icon: "move",
+    desc: "Moves 3D solids a specified distance in a specified direction.",
+    async run(c2) {
+      const sol = await selectSolids(c2, "Select solids to move");
+      if (!sol.length) return;
+      const b = await c2.point({ prompt: "Specify base point" });
+      if (!b.pt) return;
+      const r = await c2.point({ prompt: "Specify second point or <use first point as displacement>", base: b.pt, allowEnter: true });
+      const d = r.pt ? sub(r.pt, b.pt) : b.pt;
+      const z = await c2.number({ prompt: "Specify Z displacement", default: 0 });
+      const dz = z.value ?? 0;
+      c2.doc.change(() => {
+        for (const s of sol) {
+          const t = transformMesh(s, M3.translate(d.x, d.y, dz));
+          s.vertices = t.vertices;
+        }
+      });
+      c2.clearSel();
+    }
+  });
+  def8({
+    name: "MASSPROP",
+    title: "Mass Properties",
+    icon: "list",
+    desc: "Calculates the mass properties of regions or 3D solids.",
+    async run(c2) {
+      const sol = await selectSolids(c2, "Select objects");
+      if (!sol.length) return;
+      for (const s of sol) {
+        const b = meshBounds(s), cen = meshCentroid(s);
+        c2.log(`---------------- SOLID: ${s.name || "Solid"} ----------------`);
+        c2.log(`Volume:           ${f2(c2, meshVolume(s))}`);
+        c2.log(`Surface area:     ${f2(c2, meshArea(s))}`);
+        c2.log(`Bounding box:     X: ${f2(c2, b.min.x)} -- ${f2(c2, b.max.x)}`);
+        c2.log(`                  Y: ${f2(c2, b.min.y)} -- ${f2(c2, b.max.y)}`);
+        c2.log(`                  Z: ${f2(c2, b.min.z)} -- ${f2(c2, b.max.z)}`);
+        c2.log(`Centroid:         X: ${f2(c2, cen.x)}  Y: ${f2(c2, cen.y)}  Z: ${f2(c2, cen.z)}`);
+        c2.log(`Triangles:        ${s.faces.length}`);
+      }
+    }
+  });
+  def8({
+    name: "VSCURRENT",
+    aliases: ["VS"],
+    title: "Visual Style",
+    icon: "view",
+    desc: "Sets the visual style in the current viewport.",
+    transparent: true,
+    async run(c2, args) {
+      let name = args.style;
+      if (!name) {
+        const k = await c2.keyword({ prompt: "Enter an option", options: ["2dwireframe", "Wireframe", "Hidden", "Shaded", "shaded with Edges"], default: "Shaded" });
+        name = k.kw;
+      }
+      const map = { "2dwireframe": "2D Wireframe", wireframe: "Wireframe", hidden: "Hidden", shaded: "Shaded", "shaded with edges": "Shaded with Edges" };
+      name = map[String(name).toLowerCase()] || name;
+      if (c2.app.ui?.setVisualStyle) c2.app.ui.setVisualStyle(name);
+      else c2.editor.visualStyle = name;
+      c2.rt.emit();
+    }
+  });
+  for (const [name, fmt3, title] of [["OBJOUT", "obj", "Export OBJ"], ["STLOUT", "stl", "Export STL"]]) {
+    def8({
+      name,
+      title,
+      icon: "export",
+      desc: `Writes the solids of the drawing as a ${fmt3.toUpperCase()} mesh file.`,
+      repeatable: false,
+      async run(c2) {
+        if (!c2.doc.solids.length) {
+          c2.log("There are no solids to export.", "error");
+          return;
+        }
+        const fn = c2.app.ui?.exportMesh;
+        if (!fn) {
+          c2.log(`${fmt3.toUpperCase()} export is not available in this environment.`, "error");
+          return;
+        }
+        await fn.call(c2.app.ui, fmt3);
+      }
+    });
+  }
+
+  // src/commands/system.js
+  var def9 = (d) => registry.define({ group: "System", ...d });
+  def9({
     name: "U",
     title: "Undo",
     icon: "undo",
@@ -7588,7 +9730,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  def8({
+  def9({
     name: "UNDO",
     title: "Undo",
     icon: "undo",
@@ -7610,7 +9752,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  def8({
+  def9({
     name: "REDO",
     title: "Redo",
     icon: "redo",
@@ -7626,7 +9768,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  def8({
+  def9({
     name: "SETVAR",
     aliases: ["SET"],
     title: "Set Variable",
@@ -7671,7 +9813,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  var toggle = (name, varName, label, desc, icon2) => def8({
+  var toggle = (name, varName, label, desc, icon2) => def9({
     name,
     title: label,
     icon: icon2,
@@ -7696,7 +9838,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   toggle("OTRACK", "OTRACKMODE", "Object Snap Tracking", "Tracks from acquired object snap points.", "otrack");
   toggle("LWDISPLAY", "LWDISPLAY", "Lineweight", "Displays or hides lineweights.", "lweight");
   toggle("QUICKPROPERTIES", "QPMODE", "Quick Properties", "Displays the Quick Properties panel.", "qprops");
-  def8({
+  def9({
     name: "DYN",
     title: "Dynamic Input",
     icon: "dyn",
@@ -7708,7 +9850,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  def8({
+  def9({
     name: "OSNAPTOGGLE",
     title: "Object Snap",
     icon: "osnap",
@@ -7721,7 +9863,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  def8({
+  def9({
     name: "OSNAP",
     aliases: ["OS"],
     title: "Object Snap Settings",
@@ -7735,12 +9877,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   });
   for (const [k, bit] of Object.entries(OS_BITS)) {
     if (["QUI", "APP"].includes(k)) continue;
-    def8({ name: `OSNAP_${k}`, title: OS_FULL[k], icon: "osnap", desc: `Toggles the ${OS_FULL[k]} running object snap.`, transparent: true, repeatable: false, silent: true, async run(c2) {
+    def9({ name: `OSNAP_${k}`, title: OS_FULL[k], icon: "osnap", desc: `Toggles the ${OS_FULL[k]} running object snap.`, transparent: true, repeatable: false, silent: true, async run(c2) {
       c2.sv.set("OSMODE", c2.sv.prefs.OSMODE ^ bit);
       c2.rt.emit();
     } });
   }
-  def8({
+  def9({
     name: "SELECTALL",
     title: "Select All",
     desc: "Selects all objects except those on locked or frozen layers.",
@@ -7753,7 +9895,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.rt.emit();
     }
   });
-  def8({
+  def9({
     name: "SELECTSIMILAR",
     aliases: ["SELSIM"],
     title: "Select Similar",
@@ -7767,7 +9909,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       c2.log(`${list.length} found`);
     }
   });
-  def8({
+  def9({
     name: "DRAWORDER",
     aliases: ["DR"],
     title: "Draw Order",
@@ -7789,13 +9931,13 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       });
     }
   });
-  def8({ name: "TOFRONT", title: "Bring to Front", icon: "draworder", desc: "Brings objects to the front.", async run(c2) {
+  def9({ name: "TOFRONT", title: "Bring to Front", icon: "draworder", desc: "Brings objects to the front.", async run(c2) {
     return c2.rt.run("DRAWORDER", { args: { where: "Front" }, transparent: true });
   } });
-  def8({ name: "TOBACK", title: "Send to Back", icon: "draworder", desc: "Sends objects to the back.", async run(c2) {
+  def9({ name: "TOBACK", title: "Send to Back", icon: "draworder", desc: "Sends objects to the back.", async run(c2) {
     return c2.rt.run("DRAWORDER", { args: { where: "Back" }, transparent: true });
   } });
-  def8({
+  def9({
     name: "SCRIPT",
     aliases: ["SCR"],
     title: "Run Script",
@@ -7804,18 +9946,18 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     async run(c2, args) {
       let lines = args.lines;
       if (!lines) {
-        const f4 = await c2.app.ui?.openText?.(".scr,.txt");
-        if (!f4) {
+        const f5 = await c2.app.ui?.openText?.(".scr,.txt");
+        if (!f5) {
           c2.log("No script selected.");
           return;
         }
-        lines = f4.text.split(/\r?\n/);
+        lines = f5.text.split(/\r?\n/);
       }
       c2.log(`Running script (${lines.length} lines)`);
       queueMicrotask(() => c2.rt.script(lines));
     }
   });
-  var ui = (name, method, extra = {}) => def8({
+  var ui = (name, method, extra = {}) => def9({
     name,
     silent: false,
     ...extra,
@@ -7828,7 +9970,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       await fn.call(c2.app.ui, c2, args);
     }
   });
-  var palette = (name, pal, extra) => def8({ name, ...extra, async run(c2, args) {
+  var palette = (name, pal, extra) => def9({ name, ...extra, async run(c2, args) {
     c2.app.ui?.togglePalette?.(pal, args.show);
   } });
   palette("PROPERTIES", "properties", { aliases: ["PR", "MO", "CH", "PROPS", "DDMODIFY"], title: "Properties", icon: "properties", desc: "Controls properties of existing objects.", transparent: true, repeatable: false });
@@ -8149,6 +10291,30 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (l.frozen) throw Error(`Layer "${l.name}" is frozen and cannot be made current.`);
       this.cur.layer = l.name;
     }
+    // ------------------------------------------------------------ solids
+    addSolid(s) {
+      this.willChange();
+      if (s.id === void 0) s.id = this.nextId++;
+      else if (s.id >= this.nextId) this.nextId = s.id + 1;
+      if (s.layer === void 0) s.layer = this.cur.layer;
+      if (s.color === void 0 && this.cur.color !== void 0 && typeof this.cur.color !== "string") s.color = this.cur.color;
+      this.solids.push(s);
+      this.touch();
+      return s;
+    }
+    removeSolid(s) {
+      this.willChange();
+      const i = this.solids.indexOf(s);
+      if (i >= 0) this.solids.splice(i, 1);
+      this.touch();
+    }
+    solidById(id) {
+      return this.solids.find((s) => s.id === id) || null;
+    }
+    solidVisible(s) {
+      const l = this.layer(s.layer || "0") || this.layers[0];
+      return l.on && !l.frozen;
+    }
     // ------------------------------------------------------------ blocks
     defineBlock(name, base, entities) {
       this.willChange();
@@ -8297,7 +10463,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       for (const s of this.solids) {
         if (!Array.isArray(s.vertices) || !Array.isArray(s.faces)) throw Error("Invalid solid.");
-        for (const f4 of s.faces) if (f4.length !== 3 || f4.some((i) => !Number.isInteger(i) || i < 0 || i >= s.vertices.length)) throw Error("Invalid solid geometry.");
+        for (const f5 of s.faces) if (f5.length !== 3 || f5.some((i) => !Number.isInteger(i) || i < 0 || i >= s.vertices.length)) throw Error("Invalid solid geometry.");
       }
     }
     /** Import a version-1 CadForge project (flat entities, points[] arrays, group-based blocks). */
@@ -8329,7 +10495,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       d.solids = (old.solids || []).map((s) => {
         const m2 = structuredClone(s);
-        const fixFeature = (f4) => ({ ...f4, profile: uuidMap.get(f4.profile) ?? f4.profile });
+        const fixFeature = (f5) => ({ ...f5, profile: uuidMap.get(f5.profile) ?? f5.profile });
         if (m2.extrusionProgram) m2.extrusionProgram.features = m2.extrusionProgram.features.map(fixFeature);
         return m2;
       });
@@ -8504,12 +10670,16 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       this.hoverId = null;
       this.lastView = null;
       this.zoomed = false;
+      this.visualStyle = "2D Wireframe";
     }
     entityById(id) {
       return this.doc.entities.find((e) => e.id === id) || null;
     }
     get selected() {
       return this.doc.entities.filter((e) => this.sel.has(e.id));
+    }
+    get selectedSolids() {
+      return this.doc.solids.filter((s) => this.sel.has(s.id));
     }
     select(list) {
       for (const e of list) this.sel.add(e.id);
@@ -8523,7 +10693,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
     /** Drop ids that no longer exist (after undo, erase...). */
     prune() {
-      const live = new Set(this.doc.entities.map((e) => e.id));
+      const live = /* @__PURE__ */ new Set([...this.doc.entities.map((e) => e.id), ...this.doc.solids.map((s) => s.id)]);
       for (const id of [...this.sel]) if (!live.has(id)) this.sel.delete(id);
       for (const id of [...this.tempSel]) if (!live.has(id)) this.tempSel.delete(id);
     }
@@ -9194,7 +11364,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       id: "output",
       title: "Output",
       panels: [
-        { title: "Plot", items: [L("PLOT"), stack(B("EXPORTPDF", { label: "Export PDF" }), B("DXFOUT", { label: "Export DXF" }), B("EXPORT", { label: "Other Formats" }))] },
+        { title: "Plot", items: [L("PLOT"), stack(B("EXPORTPDF", { label: "Export PDF" }), B("DXFOUT", { label: "Export DXF" }), B("EXPORT", { label: "Other Formats" })), stack(B("OBJOUT", { label: "Export OBJ" }), B("STLOUT", { label: "Export STL" }))] },
         { title: "File", items: [L("QSAVE", { label: "Save" }), L("SAVEAS", { label: "Save As" }), L("OPEN"), L("NEW")] }
       ]
     },
@@ -9203,8 +11373,10 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       title: "3D Tools",
       panels: [
         { title: "Primitives", items: [L("BOX"), L("CYLINDER"), L("SPHERE"), stack(B("CONE"), B("WEDGE"))] },
-        { title: "Solid", items: [L("EXTRUDE"), L("PRESSPULL")] },
+        { title: "Solid", items: [L("EXTRUDE"), L("PRESSPULL"), L("UPDATEEXTRUSION", { label: "Update\nExtrusion" })] },
         { title: "Boolean", items: [L("UNION"), L("SUBTRACT"), L("INTERSECT")] },
+        { title: "Modify", items: [L("3DMOVE", { label: "3D\nMove" }), L("MASSPROP", { label: "Mass\nProperties" })] },
+        { title: "Visual Styles", items: [{ t: "combo", kind: "visualstyle" }] },
         {
           title: "Views",
           items: [
@@ -9468,8 +11640,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
     }
     meta(it) {
-      const def9 = registry.commands.get(it.cmd.toUpperCase());
-      return def9 ? { def: def9, label: it.label ?? def9.title ?? def9.name, icon: it.icon ?? def9.icon ?? def9.name.toLowerCase() } : null;
+      const def10 = registry.commands.get(it.cmd.toUpperCase());
+      return def10 ? { def: def10, label: it.label ?? def10.title ?? def10.name, icon: it.icon ?? def10.icon ?? def10.name.toLowerCase() } : null;
     }
     tipFor(it, m2) {
       return () => ({ title: plain(m2.label), desc: m2.def.desc, cmd: m2.def.name.replace(/^-/, "-"), alias: aliasOf(m2.def.name) || void 0 });
@@ -9510,9 +11682,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
     menuItems(it) {
       const mk = (e) => e.sep ? { sep: true } : (() => {
-        const def9 = registry.commands.get(e.cmd.toUpperCase());
-        if (!def9) return null;
-        return { label: e.label ?? def9.title, icon: e.icon ?? def9.icon, action: () => this.ui.runCommand(e.cmd, e.args), tip: { title: e.label ?? def9.title, desc: def9.desc, cmd: def9.name } };
+        const def10 = registry.commands.get(e.cmd.toUpperCase());
+        if (!def10) return null;
+        return { label: e.label ?? def10.title, icon: e.icon ?? def10.icon, action: () => this.ui.runCommand(e.cmd, e.args), tip: { title: e.label ?? def10.title, desc: def10.desc, cmd: def10.name } };
       })();
       if (it.menu === "blocks") {
         const names = Object.keys(this.app.doc?.blocks || {});
@@ -9788,13 +11960,13 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           this.qat.append(h("div.qat-sep"));
           continue;
         }
-        const def9 = registry.commands.get(it.cmd);
-        if (!def9) continue;
-        const b = h("button.qat-btn", { dataset: { cmd: it.cmd }, "aria-label": it.label || def9.title, onclick: () => this.ui.runCommand(it.cmd, it.args), oncontextmenu: (e) => {
+        const def10 = registry.commands.get(it.cmd);
+        if (!def10) continue;
+        const b = h("button.qat-btn", { dataset: { cmd: it.cmd }, "aria-label": it.label || def10.title, onclick: () => this.ui.runCommand(it.cmd, it.args), oncontextmenu: (e) => {
           e.preventDefault();
           showMenu([{ label: "Remove from Quick Access Toolbar", action: () => this.removeQat(it) }], e.clientX, e.clientY);
-        } }, svgIcon(it.icon || def9.icon || it.cmd.toLowerCase(), 18));
-        attachTip(b, { title: it.label || def9.title, desc: def9.desc, cmd: def9.name });
+        } }, svgIcon(it.icon || def10.icon || it.cmd.toLowerCase(), 18));
+        attachTip(b, { title: it.label || def10.title, desc: def10.desc, cmd: def10.name });
         this.qat.append(b);
         if (it.menu === "undo") this.qat.append(h("button.qat-arrow", { "aria-label": "Undo list", onclick: (e) => this.undoMenu(e) }, svgIcon("chevdown", 8)));
       }
@@ -9867,8 +12039,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           input.blur();
         }
         if (e.key === "Enter") {
-          const f4 = results.querySelector(".ic-hit");
-          f4?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+          const f5 = results.querySelector(".ic-hit");
+          f5?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
         }
       });
       input.addEventListener("blur", () => setTimeout(() => {
@@ -10181,12 +12353,12 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
   }
   function drawInsert(rc, e, style, selected, hover, depth) {
-    const def9 = rc.doc.blocks[e.name];
-    if (!def9 || depth > MAX_DEPTH) return;
+    const def10 = rc.doc.blocks[e.name];
+    if (!def10 || depth > MAX_DEPTH) return;
     const saved = rc.worldM;
-    rc.worldM = M.mul(saved, insertMatrix(e, def9.base));
+    rc.worldM = M.mul(saved, insertMatrix(e, def10.base));
     rc._vis = null;
-    for (const be of def9.entities) {
+    for (const be of def10.entities) {
       const layer = rc.layers.get((be.layer || "0").toLowerCase());
       if (layer && (!layer.on || layer.frozen) && be.layer !== "0") continue;
       const inherit = be.layer === "0" || be.layer === void 0 ? { ...e } : null;
@@ -10731,27 +12903,44 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   }
 
   // src/render/solids.js
-  var featureCache = /* @__PURE__ */ new WeakMap();
-  function featureEdges(s) {
-    let r = featureCache.get(s);
-    if (r && r.nv === s.vertices.length && r.nf === s.faces.length) return r.edges;
-    const V = s.vertices, norm = (f4) => {
-      const [a, b, c2] = f4.map((i) => V[i]);
-      const u = [b.x - a.x, b.y - a.y, b.z - a.z], v = [c2.x - a.x, c2.y - a.y, c2.z - a.z];
-      const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-      const l = Math.hypot(...n) || 1;
-      return n.map((x) => x / l);
-    };
-    const map = /* @__PURE__ */ new Map();
-    s.faces.forEach((f4, fi) => {
-      const n = norm(f4);
-      for (let k = 0; k < 3; k++) {
-        const a = f4[k], b = f4[(k + 1) % 3], key = a < b ? a + "," + b : b + "," + a;
-        const entry = map.get(key);
-        if (entry) entry.n2 = n;
-        else map.set(key, { a, b, n1: n, n2: null });
+  var CREASE = Math.cos(rad(35));
+  var EDGE_ANGLE = Math.cos(rad(25));
+  var cache = /* @__PURE__ */ new WeakMap();
+  var faceNormal = (V, f5) => {
+    const a = V[f5[0]], b = V[f5[1]], c2 = V[f5[2]], u = [b.x - a.x, b.y - a.y, b.z - a.z], v = [c2.x - a.x, c2.y - a.y, c2.z - a.z];
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const l = Math.hypot(...n);
+    return { n: l < 1e-15 ? [0, 0, 1] : n.map((x) => x / l), area: l / 2 };
+  };
+  function derived(s, rev2) {
+    const c2 = cache.get(s);
+    if (c2 && c2.rev === rev2 && c2.nv === s.vertices.length && c2.nf === s.faces.length) return c2;
+    const V = s.vertices, F = s.faces;
+    const fn = F.map((f5) => faceNormal(V, f5));
+    const incident = Array.from({ length: V.length }, () => []);
+    F.forEach((f5, i) => {
+      for (const v of f5) incident[v].push(i);
+    });
+    const smooth = F.map((f5, i) => {
+      const acc = [0, 0, 0], n0 = fn[i].n;
+      for (const v of f5) for (const j of incident[v]) {
+        const nj = fn[j];
+        if (n0[0] * nj.n[0] + n0[1] * nj.n[1] + n0[2] * nj.n[2] >= CREASE) {
+          acc[0] += nj.n[0] * nj.area;
+          acc[1] += nj.n[1] * nj.area;
+          acc[2] += nj.n[2] * nj.area;
+        }
       }
-      void fi;
+      const l = Math.hypot(...acc) || 1;
+      return [acc[0] / l, acc[1] / l, acc[2] / l];
+    });
+    const map = /* @__PURE__ */ new Map();
+    F.forEach((f5, fi) => {
+      for (let k = 0; k < 3; k++) {
+        const a = f5[k], b = f5[(k + 1) % 3], key = a < b ? a * 4294967296 + b : b * 4294967296 + a, e = map.get(key);
+        if (e) e.n2 = fn[fi].n;
+        else map.set(key, { a, b, n1: fn[fi].n, n2: null });
+      }
     });
     const edges = [];
     for (const e of map.values()) {
@@ -10759,46 +12948,50 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         edges.push([e.a, e.b]);
         continue;
       }
-      const dot2 = e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2];
-      if (dot2 < Math.cos(rad(25))) edges.push([e.a, e.b]);
+      if (e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2] < EDGE_ANGLE) edges.push([e.a, e.b]);
     }
-    featureCache.set(s, { nv: V.length, nf: s.faces.length, edges });
-    return edges;
+    const d = { rev: rev2, nv: V.length, nf: F.length, fn, smooth, edges };
+    cache.set(s, d);
+    return d;
   }
-  var LIGHT = [-0.35, 0.45, 0.82];
+  var LIGHT = (() => {
+    const l = [-0.35, 0.45, 0.82], n = Math.hypot(...l);
+    return l.map((x) => x / n);
+  })();
+  function baseColor(rc, s) {
+    const doc = rc.doc, layer = doc.layer(s.layer || "0") || doc.layers[0];
+    let col2 = s.color !== void 0 ? s.color : layer.color;
+    if (typeof s.color === "string" && /^#[0-9a-f]{6}$/i.test(s.color)) col2 = s.color;
+    if (col2 === 7 || col2 === void 0 || col2 === "BYBLOCK") return rc.theme.dark ? "#c3ccd6" : "#8695a4";
+    return colorToCss(col2, { dark: rc.theme.dark });
+  }
   function drawSolids(rc, style = "2D Wireframe") {
     const solids = rc.doc.solids;
     if (!solids?.length) return;
-    const { ctx, view, theme } = rc;
-    const wire = style === "2D Wireframe" || style === "Wireframe", edges = style !== "Shaded", fill = !wire;
+    const { ctx, view, theme, doc } = rc;
+    const wire = style === "2D Wireframe" || style === "Wireframe", fill = !wire, edges = style !== "Shaded";
     const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
     const camN = (n) => {
       const x1 = n[0] * cy - n[1] * sy, y1 = n[0] * sy + n[1] * cy;
       return [x1, y1 * sp + n[2] * cp, -y1 * cp + n[2] * sp];
     };
-    const L2 = (() => {
-      const l = Math.hypot(...LIGHT);
-      return LIGHT.map((x) => x / l);
-    })();
     ctx.setTransform(rc.dpr, 0, 0, rc.dpr, 0, 0);
-    const polys = [];
+    const polys = [], edgePaths = [];
     for (const s of solids) {
-      const P2 = s.vertices.map((v) => view.project(v));
-      const base = s.color && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : "#5aa0d0", rgb2 = [1, 3, 5].map((i) => parseInt(base.slice(i, i + 2), 16));
+      if (!doc.solidVisible(s)) continue;
+      const P2 = s.vertices.map((v) => view.project(v)), D = derived(s, doc.rev);
+      const sel = rc.sel.has(s.id) || rc.tempSel.has(s.id);
+      const base = baseColor(rc, s), m2 = /^#([0-9a-f]{6})$/i.exec(base), rgb2 = m2 ? [0, 2, 4].map((i) => parseInt(m2[1].slice(i, i + 2), 16)) : [160, 170, 180];
       if (fill) {
-        for (const f4 of s.faces) {
-          const a = P2[f4[0]], b = P2[f4[1]], c2 = P2[f4[2]];
-          const area = (b.x - a.x) * (c2.y - a.y) - (b.y - a.y) * (c2.x - a.x);
-          if (area >= 0) continue;
-          const A = s.vertices[f4[0]], B2 = s.vertices[f4[1]], C3 = s.vertices[f4[2]];
-          const u = [B2.x - A.x, B2.y - A.y, B2.z - A.z], v = [C3.x - A.x, C3.y - A.y, C3.z - A.z];
-          let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-          const l = Math.hypot(...n) || 1;
-          n = camN(n.map((x) => x / l));
-          const lum = style === "Hidden" ? 1 : 0.32 + 0.68 * Math.max(0, n[0] * L2[0] + n[1] * L2[1] + n[2] * L2[2]);
-          polys.push({ pts: [a, b, c2], depth: (a.depth + b.depth + c2.depth) / 3, col: style === "Hidden" ? theme.canvas : `rgb(${rgb2.map((x) => Math.round(x * lum))})` });
-        }
+        s.faces.forEach((f5, i) => {
+          const a = P2[f5[0]], b = P2[f5[1]], c2 = P2[f5[2]];
+          if ((b.x - a.x) * (c2.y - a.y) - (b.y - a.y) * (c2.x - a.x) >= 0) return;
+          const n = camN(D.smooth[i]);
+          const lum = style === "Hidden" ? 1 : 0.3 + 0.7 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+          polys.push({ pts: [a, b, c2], depth: (a.depth + b.depth + c2.depth) / 3, col: style === "Hidden" ? theme.canvas : `rgb(${rgb2.map((x) => Math.min(255, Math.round(x * lum * 1.08)))})` });
+        });
       }
+      edgePaths.push({ P: P2, D, sel });
     }
     polys.sort((p, q) => q.depth - p.depth);
     for (const p of polys) {
@@ -10810,21 +13003,31 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       ctx.fillStyle = p.col;
       ctx.fill();
       ctx.strokeStyle = p.col;
-      ctx.lineWidth = 0.6;
+      ctx.lineWidth = 0.7;
+      ctx.lineJoin = "round";
       ctx.stroke();
     }
     if (edges || wire) {
       ctx.beginPath();
-      for (const s of solids) {
-        const P2 = s.vertices.map((v) => view.project(v));
-        for (const [a, b] of featureEdges(s)) {
-          ctx.moveTo(P2[a].x, P2[a].y);
-          ctx.lineTo(P2[b].x, P2[b].y);
-        }
+      for (const { P: P2, D, sel } of edgePaths) if (!sel) for (const [a, b] of D.edges) {
+        ctx.moveTo(P2[a].x, P2[a].y);
+        ctx.lineTo(P2[b].x, P2[b].y);
       }
-      ctx.strokeStyle = wire ? theme.dark ? "#7fd0ff" : "#0b5a96" : theme.dark ? "rgba(10,18,26,.85)" : "rgba(10,20,30,.8)";
-      ctx.lineWidth = wire ? 1.1 : 1;
+      ctx.strokeStyle = wire ? theme.dark ? "#7fd0ff" : "#0b5a96" : theme.dark ? "rgba(8,14,20,.9)" : "rgba(10,20,30,.85)";
+      ctx.lineWidth = wire ? 1.15 : 1;
       ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+    for (const { P: P2, D, sel } of edgePaths) {
+      if (!sel) continue;
+      ctx.beginPath();
+      for (const [a, b] of D.edges) {
+        ctx.moveTo(P2[a].x, P2[a].y);
+        ctx.lineTo(P2[b].x, P2[b].y);
+      }
+      ctx.strokeStyle = theme.select;
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([]);
       ctx.stroke();
     }
   }
@@ -10874,22 +13077,22 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const x1 = v[0] * cy - v[1] * sy, y1 = v[0] * sy + v[1] * cy;
       return [x1, y1 * sp + v[2] * cp, -y1 * cp + v[2] * sp];
     }
-    faceGeom(f4) {
-      const c2 = this.rot(f4.n), u = this.rot(f4.u), v = this.rot(f4.v);
+    faceGeom(f5) {
+      const c2 = this.rot(f5.n), u = this.rot(f5.u), v = this.rot(f5.v);
       const P2 = (x, y) => ({ x: C2 + R2 * (c2[0] + x * u[0] + y * v[0]), y: C2 - R2 * (c2[1] + x * u[1] + y * v[1]) });
       return { c: c2, u, v, depth: c2[2], P: P2, origin: P2(0, 0), U: { x: R2 * u[0], y: -R2 * u[1] }, V: { x: R2 * v[0], y: -R2 * v[1] } };
     }
     visibleFaces() {
-      return FACES.map((f4) => ({ f: f4, geo: this.faceGeom(f4) })).filter((x) => x.geo.depth > 1e-3).sort((a, b) => a.geo.depth - b.geo.depth);
+      return FACES.map((f5) => ({ f: f5, geo: this.faceGeom(f5) })).filter((x) => x.geo.depth > 1e-3).sort((a, b) => a.geo.depth - b.geo.depth);
     }
     cellAt(x, y) {
-      for (const { f: f4, geo } of [...this.visibleFaces()].reverse()) {
+      for (const { f: f5, geo } of [...this.visibleFaces()].reverse()) {
         const dx = x - geo.origin.x, dy = y - geo.origin.y, det = geo.U.x * geo.V.y - geo.U.y * geo.V.x;
         if (Math.abs(det) < 1e-6) continue;
         const s = (dx * geo.V.y - dy * geo.V.x) / det, t = (geo.U.x * dy - geo.U.y * dx) / det;
         if (Math.abs(s) <= 1 && Math.abs(t) <= 1) {
           const i = Math.abs(s) < 0.58 ? 0 : Math.sign(s), j = Math.abs(t) < 0.58 ? 0 : Math.sign(t);
-          return { face: f4, i, j, dir: [f4.n[0] + i * f4.u[0] + j * f4.v[0], f4.n[1] + i * f4.u[1] + j * f4.v[1], f4.n[2] + i * f4.u[2] + j * f4.v[2]] };
+          return { face: f5, i, j, dir: [f5.n[0] + i * f5.u[0] + j * f5.v[0], f5.n[1] + i * f5.u[1] + j * f5.v[1], f5.n[2] + i * f5.u[2] + j * f5.v[2]] };
         }
       }
       return null;
@@ -11002,7 +13205,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           ctx.fillText(label, x * 1 + (x - C2) * 0.22, y + (y - C2) * 0.22);
         }
       }
-      for (const { f: f4, geo } of this.visibleFaces()) {
+      for (const { f: f5, geo } of this.visibleFaces()) {
         const shade = 0.55 + 0.45 * geo.depth;
         const base = dark ? [70, 82, 96] : [214, 222, 232];
         const col2 = base.map((c2) => Math.round(c2 * (dark ? shade + 0.25 : 0.86 + 0.14 * shade)));
@@ -11016,7 +13219,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         ctx.fill();
         ctx.stroke();
         const hv = this.hover?.cell;
-        if (hv && hv.face === f4) {
+        if (hv && hv.face === f5) {
           const lo = (i) => i === 0 ? -0.58 : i > 0 ? 0.58 : -1, hi = (i) => i === 0 ? 0.58 : i > 0 ? 1 : -0.58;
           const cq = [[lo(hv.i), lo(hv.j)], [hi(hv.i), lo(hv.j)], [hi(hv.i), hi(hv.j)], [lo(hv.i), hi(hv.j)]].map(([s, t]) => geo.P(s, t));
           ctx.fillStyle = "rgba(80,170,255,.55)";
@@ -11034,7 +13237,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         ctx.textBaseline = "middle";
         ctx.scale(10, 10);
         ctx.font = '700 .39px "Segoe UI", Arial, sans-serif';
-        ctx.fillText(f4.name, 0, 0);
+        ctx.fillText(f5.name, 0, 0);
         ctx.restore();
       }
       ctx.setTransform(2, 0, 0, 2, 0, 0);
@@ -11082,7 +13285,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         return;
       }
       this.el.hidden = false;
-      const prec2 = app.doc.settings.units.precision;
+      const prec3 = app.doc.settings.units.precision;
       const msg = rt.promptText(p).replace(/:$/, "").replace(/\n/g, " ");
       this.prompt.textContent = msg + (p.options?.length ? "  \u25BE" : "");
       clear(this.field);
@@ -11094,8 +13297,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         const base = p.base || p.firstPoint;
         if (base && sv.dimensionInput) {
           const d = dist(base, cur), a = deg(normAngle(angleOf(base, cur)));
-          this.field.append(h("span.dyn-k", "L"), h("span.dyn-v", fmtNum(d, prec2)), h("span.dyn-k", "\u2220"), h("span.dyn-v", fmtNum(a, 0) + "\xB0"));
-        } else this.field.append(h("span.dyn-v", `${fmtNum(cur.x, Math.min(prec2, 4))},  ${fmtNum(cur.y, Math.min(prec2, 4))}`));
+          this.field.append(h("span.dyn-k", "L"), h("span.dyn-v", fmtNum(d, prec3)), h("span.dyn-k", "\u2220"), h("span.dyn-v", fmtNum(a, 0) + "\xB0"));
+        } else this.field.append(h("span.dyn-v", `${fmtNum(cur.x, Math.min(prec3, 4))},  ${fmtNum(cur.y, Math.min(prec3, 4))}`));
         this.field.hidden = false;
       } else this.field.hidden = true;
       const vp = this.ui.viewport.el.getBoundingClientRect(), w = this.el.offsetWidth, hh = this.el.offsetHeight;
@@ -11378,8 +13581,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           return;
         }
         if (p2.mode === "zoom") {
-          const f4 = Math.exp(-(e.clientY - p2.y) * 0.01);
-          view.zoomAt(this.size.w / 2, this.size.h / 2, f4);
+          const f5 = Math.exp(-(e.clientY - p2.y) * 0.01);
+          view.zoomAt(this.size.w / 2, this.size.h / 2, f5);
           p2.x = e.clientX;
           p2.y = e.clientY;
           this.viewChanged();
@@ -11437,7 +13640,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         this.dragRect = null;
         await rt.drag(a, b, { shift: d.shift });
       } else if (!this.realtime) {
-        await rt.click(this.worldAt(e), { shift: d.shift, ctrl: d.ctrl });
+        await rt.click(this.worldAt(e), { shift: d.shift, ctrl: d.ctrl, screen: this.screenAt(e) });
       }
       this.overlayDirty = true;
       this.sceneDirty = true;
@@ -11451,8 +13654,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       } else if (e.ctrlKey) {
         view.pan(-e.deltaY, 0);
       } else {
-        const f4 = Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 33 : 1));
-        view.zoomAt(s.x, s.y, Math.max(0.5, Math.min(2, f4)));
+        const f5 = Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 33 : 1));
+        view.zoomAt(s.x, s.y, Math.max(0.5, Math.min(2, f5)));
       }
       this.mouse = s;
       this.app.runtime.move(view.toWorld(s.x, s.y));
@@ -11698,7 +13901,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     renderSuggest() {
       clear(this.sug);
       this.sugs.forEach((n, i) => {
-        const def9 = registry.commands.get(n), isVar = !def9;
+        const def10 = registry.commands.get(n), isVar = !def10;
         this.sug.append(h(
           "div.sg" + (i === this.sugIdx ? ".sel" : ""),
           { onmousedown: (e) => {
@@ -11707,9 +13910,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
             this.hideSuggest();
             this.submit();
           } },
-          h("span.sg-ico", def9 ? svgIcon(def9.icon || n.toLowerCase(), 14) : h("span.sg-var", "V")),
+          h("span.sg-ico", def10 ? svgIcon(def10.icon || n.toLowerCase(), 14) : h("span.sg-var", "V")),
           h("span.sg-name", n),
-          h("span.sg-desc", def9?.title && def9.title !== n ? def9.title : isVar ? "System variable" : "")
+          h("span.sg-desc", def10?.title && def10.title !== n ? def10.title : isVar ? "System variable" : "")
         ));
       });
       this.sug.hidden = false;
@@ -11827,11 +14030,11 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       this.coords();
     }
     coords() {
-      const rt = this.app.runtime, c2 = rt.cursor.pt, prec2 = Math.min(this.app.doc?.settings.units.precision ?? 4, 4);
+      const rt = this.app.runtime, c2 = rt.cursor.pt, prec3 = Math.min(this.app.doc?.settings.units.precision ?? 4, 4);
       const base = rt.pending?.base;
       if (this.coordMode === 2 && base) {
-        this.coordEl.textContent = `${fmtNum(dist(base, c2), prec2)} < ${fmtNum(deg(normAngle(angleOf(base, c2))), 0)}\xB0, ${fmtNum(0, prec2)}`;
-      } else this.coordEl.textContent = `${fmtNum(c2.x, prec2)}, ${fmtNum(c2.y, prec2)}, ${fmtNum(0, prec2)}`;
+        this.coordEl.textContent = `${fmtNum(dist(base, c2), prec3)} < ${fmtNum(deg(normAngle(angleOf(base, c2))), 0)}\xB0, ${fmtNum(0, prec3)}`;
+      } else this.coordEl.textContent = `${fmtNum(c2.x, prec3)}, ${fmtNum(c2.y, prec3)}, ${fmtNum(0, prec3)}`;
     }
     // ------------------------------------------------------------ settings menus
     osnapMenu(e) {
@@ -12023,9 +14226,9 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const r = btn.getBoundingClientRect(), ui2 = this.ui;
       const m2 = showMenu(items.map((i) => {
         if (i.sep) return i;
-        const def9 = registry.commands.get(i.cmd);
-        if (!def9) return null;
-        return { label: i.label, icon: def9.icon, shortcut: i.shortcut, action: () => ui2.runCommand(i.cmd, i.args) };
+        const def10 = registry.commands.get(i.cmd);
+        if (!def10) return null;
+        return { label: i.label, icon: def10.icon, shortcut: i.shortcut, action: () => ui2.runCommand(i.cmd, i.args) };
       }).filter(Boolean), r.left, r.bottom);
       const obs = new MutationObserver(() => {
         if (!m2.isConnected) {
@@ -12642,8 +14845,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         preview.replaceChildren(h("b", sel), h("div", `Text height ${s.txt} \xB7 Arrow size ${s.asz} \xB7 ${s.dec} decimals`), h("div", `Extension offset ${s.exo} \xB7 beyond ${s.exe} \xB7 Scale ${s.scale}`));
       };
       const modify = async () => {
-        const s = styles[sel], f4 = (k, o = {}) => num2(s[k], { width: 90, min: 0, ...o });
-        const txt = f4("txt", { min: 1e-4 }), gap = f4("gap"), asz = f4("asz"), exo = f4("exo"), exe = f4("exe"), cen = f4("cen"), scale = f4("scale", { min: 1e-4 }), dec = f4("dec", { step: 1, max: 8 }), lfac = f4("lfac", { min: 1e-4 });
+        const s = styles[sel], f5 = (k, o = {}) => num2(s[k], { width: 90, min: 0, ...o });
+        const txt = f5("txt", { min: 1e-4 }), gap = f5("gap"), asz = f5("asz"), exo = f5("exo"), exe = f5("exe"), cen = f5("cen"), scale = f5("scale", { min: 1e-4 }), dec = f5("dec", { step: 1, max: 8 }), lfac = f5("lfac", { min: 1e-4 });
         const pre = text(s.pre, { width: 90 }), suf = text(s.suf, { width: 90 }), tad = select([{ value: 1, label: "Above dimension line" }, { value: 0, label: "Centered" }], s.tad ? 1 : 0, { width: 180 });
         const blk = select([["closed", "Closed filled"], ["open", "Open"], ["tick", "Architectural tick"], ["dot", "Dot"], ["none", "None"]].map(([value, label]) => ({ value, label })), s.blk, { width: 180 }), trail = check("Suppress trailing zeros", s.zin & 8);
         const r = await ui2.dialog("dimstyle-edit", { title: `Modify Dimension Style: ${sel}`, pages: [
@@ -12808,7 +15011,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   };
 
   // src/io/recorder.js
-  var TAU2 = Math.PI * 2;
+  var TAU3 = Math.PI * 2;
   var RecordingContext = class {
     constructor(tol = 0.08) {
       this.ops = [];
@@ -12827,8 +15030,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       this.cur = null;
     }
     // transforms
-    setTransform(a, b, c2, d, e, f4) {
-      this.m = [a, b, c2, d, e, f4];
+    setTransform(a, b, c2, d, e, f5) {
+      this.m = [a, b, c2, d, e, f5];
     }
     scale(sx, sy) {
       const m2 = this.m;
@@ -12875,11 +15078,11 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     ellipse(cx, cy, rx, ry, rot, a0, a1, ccw = false) {
       let sw = a1 - a0;
       if (!ccw) {
-        if (sw >= TAU2) sw = TAU2;
-        else while (sw < 0) sw += TAU2;
+        if (sw >= TAU3) sw = TAU3;
+        else while (sw < 0) sw += TAU3;
       } else {
-        if (sw <= -TAU2) sw = -TAU2;
-        else while (sw > 0) sw -= TAU2;
+        if (sw <= -TAU3) sw = -TAU3;
+        else while (sw > 0) sw -= TAU3;
       }
       const k = Math.sqrt(Math.abs(this.m[0] * this.m[3] - this.m[1] * this.m[2])), rDev = Math.max(rx, ry) * k;
       const stepMax = rDev > this.tol ? 2 * Math.acos(Math.max(0, 1 - this.tol / rDev)) : Math.PI / 2;
@@ -12925,7 +15128,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
 
   // src/io/pdf.js
   var WIN_ANSI = { 8960: 216, 8211: 150, 8212: 151, 8216: 145, 8217: 146, 8220: 147, 8221: 148, 8226: 149, 8364: 128, 8482: 153 };
-  var f2 = (v) => {
+  var f3 = (v) => {
     const s = (Math.round(v * 1e3) / 1e3).toString();
     return s === "-0" ? "0" : s;
   };
@@ -12964,11 +15167,11 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       return alphas.get(k);
     };
     const c2 = [];
-    c2.push(`q ${f2(pt3)} 0 0 ${f2(-pt3)} 0 ${f2(H)} cm`);
+    c2.push(`q ${f3(pt3)} 0 0 ${f3(-pt3)} 0 ${f3(H)} cm`);
     c2.push("1 J 1 j");
     const pathOps = (paths) => {
       for (const p of paths) {
-        p.pts.forEach(([x, y], i) => c2.push(`${f2(x)} ${f2(y)} ${i ? "l" : "m"}`));
+        p.pts.forEach(([x, y], i) => c2.push(`${f3(x)} ${f3(y)} ${i ? "l" : "m"}`));
         if (p.closed) c2.push("h");
       }
     };
@@ -12979,18 +15182,18 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       else if (alphas.size) c2.push("/GS0 gs");
       if (op.t === "stroke") {
         const [r, g, b] = rgb(op.color);
-        c2.push(`${f2(r)} ${f2(g)} ${f2(b)} RG ${f2(Math.max(op.w, 0.01))} w ${op.cap === "round" ? 1 : op.cap === "square" ? 2 : 0} J ${op.join === "round" ? 1 : op.join === "bevel" ? 2 : 0} j`);
-        c2.push(op.dash.length ? `[${op.dash.map(f2).join(" ")}] 0 d` : "[] 0 d");
+        c2.push(`${f3(r)} ${f3(g)} ${f3(b)} RG ${f3(Math.max(op.w, 0.01))} w ${op.cap === "round" ? 1 : op.cap === "square" ? 2 : 0} J ${op.join === "round" ? 1 : op.join === "bevel" ? 2 : 0} j`);
+        c2.push(op.dash.length ? `[${op.dash.map(f3).join(" ")}] 0 d` : "[] 0 d");
         pathOps(op.paths);
         c2.push("S");
       } else if (op.t === "fill") {
         const [r, g, b] = rgb(op.color);
-        c2.push(`${f2(r)} ${f2(g)} ${f2(b)} rg`);
+        c2.push(`${f3(r)} ${f3(g)} ${f3(b)} rg`);
         pathOps(op.paths);
         c2.push(op.rule === "evenodd" ? "f*" : "f");
       } else if (op.t === "text") {
         const [r, g, b] = rgb(op.color), m2 = op.m;
-        c2.push(`q ${m2.map(f2).join(" ")} cm 1 0 0 -1 0 0 cm BT /F1 ${f2(op.em)} Tf ${f2(r)} ${f2(g)} ${f2(b)} rg ${f2(op.x)} ${f2(-op.y)} Td ${pdfString(op.str)} Tj ET Q`);
+        c2.push(`q ${m2.map(f3).join(" ")} cm 1 0 0 -1 0 0 cm BT /F1 ${f3(op.em)} Tf ${f3(r)} ${f3(g)} ${f3(b)} rg ${f3(op.x)} ${f3(-op.y)} Td ${pdfString(op.str)} Tj ET Q`);
       }
     }
     c2.push("Q");
@@ -12999,7 +15202,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     const objs = [
       "<< /Type /Catalog /Pages 2 0 R >>",
       "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f2(W)} ${f2(H)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ExtGState << ${gsDict} >> >> >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f3(W)} ${f3(H)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ExtGState << ${gsDict} >> >> >>`,
       `<< /Length ${content.length} >>
 stream
 ${content}
@@ -13033,21 +15236,21 @@ ${xref}
   }
 
   // src/io/svg.js
-  var f3 = (v) => (Math.round(v * 100) / 100).toString();
+  var f4 = (v) => (Math.round(v * 100) / 100).toString();
   var esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   var col = (c2) => /^rgba?\(/.test(c2) ? c2 : c2;
   function writeSVG(ops, page, { unitMm = 0.1, title = "CadForge drawing" } = {}) {
-    const out = [`<?xml version="1.0" encoding="UTF-8"?>`, `<svg xmlns="http://www.w3.org/2000/svg" width="${f3(page.w * unitMm)}mm" height="${f3(page.h * unitMm)}mm" viewBox="0 0 ${f3(page.w)} ${f3(page.h)}">`, `<title>${esc(title)}</title>`, `<rect width="100%" height="100%" fill="#ffffff"/>`];
-    const d = (paths) => paths.map((p) => "M" + p.pts.map(([x, y]) => `${f3(x)} ${f3(y)}`).join("L") + (p.closed ? "Z" : "")).join("");
+    const out = [`<?xml version="1.0" encoding="UTF-8"?>`, `<svg xmlns="http://www.w3.org/2000/svg" width="${f4(page.w * unitMm)}mm" height="${f4(page.h * unitMm)}mm" viewBox="0 0 ${f4(page.w)} ${f4(page.h)}">`, `<title>${esc(title)}</title>`, `<rect width="100%" height="100%" fill="#ffffff"/>`];
+    const d = (paths) => paths.map((p) => "M" + p.pts.map(([x, y]) => `${f4(x)} ${f4(y)}`).join("L") + (p.closed ? "Z" : "")).join("");
     for (const op of ops) {
       const a = op.alpha ?? 1;
       if (a <= 0) continue;
       if (op.t === "stroke") {
-        out.push(`<path d="${d(op.paths)}" fill="none" stroke="${col(op.color)}"${a < 1 ? ` stroke-opacity="${f3(a)}"` : ""} stroke-width="${f3(Math.max(op.w, 0.01))}" stroke-linecap="${op.cap}" stroke-linejoin="${op.join}"${op.dash.length ? ` stroke-dasharray="${op.dash.map(f3).join(" ")}"` : ""}/>`);
+        out.push(`<path d="${d(op.paths)}" fill="none" stroke="${col(op.color)}"${a < 1 ? ` stroke-opacity="${f4(a)}"` : ""} stroke-width="${f4(Math.max(op.w, 0.01))}" stroke-linecap="${op.cap}" stroke-linejoin="${op.join}"${op.dash.length ? ` stroke-dasharray="${op.dash.map(f4).join(" ")}"` : ""}/>`);
       } else if (op.t === "fill") {
-        out.push(`<path d="${d(op.paths)}" fill="${col(op.color)}"${a < 1 ? ` fill-opacity="${f3(a)}"` : ""} fill-rule="${op.rule === "evenodd" ? "evenodd" : "nonzero"}" stroke="none"/>`);
+        out.push(`<path d="${d(op.paths)}" fill="${col(op.color)}"${a < 1 ? ` fill-opacity="${f4(a)}"` : ""} fill-rule="${op.rule === "evenodd" ? "evenodd" : "nonzero"}" stroke="none"/>`);
       } else if (op.t === "text") {
-        out.push(`<text transform="matrix(${op.m.map((v) => Math.round(v * 1e4) / 1e4).join(" ")})" x="${f3(op.x)}" y="${f3(op.y)}" font-family="Arial, Helvetica, sans-serif" font-size="${f3(op.em)}" fill="${col(op.color)}"${a < 1 ? ` fill-opacity="${f3(a)}"` : ""}>${esc(op.str)}</text>`);
+        out.push(`<text transform="matrix(${op.m.map((v) => Math.round(v * 1e4) / 1e4).join(" ")})" x="${f4(op.x)}" y="${f4(op.y)}" font-family="Arial, Helvetica, sans-serif" font-size="${f4(op.em)}" fill="${col(op.color)}"${a < 1 ? ` fill-opacity="${f4(a)}"` : ""}>${esc(op.str)}</text>`);
       }
     }
     out.push("</svg>");
@@ -13175,7 +15378,7 @@ ${xref}
   }
 
   // src/io/dxf-read.js
-  var TAU3 = Math.PI * 2;
+  var TAU4 = Math.PI * 2;
   function decodeText(s) {
     return String(s).replace(/\\U\+([0-9a-fA-F]{4})/g, (_, h2) => String.fromCharCode(parseInt(h2, 16))).replace(/%%[cC]/g, "\u2300").replace(/%%[dD]/g, "\xB0").replace(/%%[pP]/g, "\xB1").replace(/%%[uUoO]/g, "").replace(/%%%/g, "%");
   }
@@ -13362,12 +15565,12 @@ ${xref}
             const c2 = { x: num4(10), y: num4(20) }, rr = num4(40), a0 = rad(num4(50)), a1 = rad(num4(51));
             const ccw = num4(73);
             let sw = ccw ? sweepCCW(a0, a1) : -sweepCCW(a1, a0);
-            if (Math.abs(sw) < 1e-12) sw = ccw ? TAU3 : -TAU3;
+            if (Math.abs(sw) < 1e-12) sw = ccw ? TAU4 : -TAU4;
             edges.push({ t: "a", c: c2, r: rr, a0, sw });
           } else if (type === 3) {
             const c2 = { x: num4(10), y: num4(20) }, m2 = { x: num4(11), y: num4(21) }, ratio = num4(40), a0 = rad(num4(50)), a1 = rad(num4(51));
             const ccw = num4(73);
-            const sw = ccw ? sweepCCW(a0, a1) || TAU3 : -(sweepCCW(a1, a0) || TAU3), steps = 48, pts = [];
+            const sw = ccw ? sweepCCW(a0, a1) || TAU4 : -(sweepCCW(a1, a0) || TAU4), steps = 48, pts = [];
             for (let s = 0; s <= steps; s++) {
               const t = a0 + sw * s / steps;
               pts.push({ x: c2.x + m2.x * Math.cos(t) - m2.y * ratio * Math.sin(t), y: c2.y + m2.y * Math.cos(t) + m2.x * ratio * Math.sin(t) });
@@ -13459,10 +15662,10 @@ ${xref}
     if (lw !== void 0) props.lw = lw;
     const nz = firstNum(r, 230, 1), flip = nz < 0;
     const out = [];
-    const push = (e, orient = true) => {
+    const push = (e, orient2 = true) => {
       if (e) {
         Object.assign(e, props);
-        out.push(flip && orient ? mirrorX(e) : e);
+        out.push(flip && orient2 ? mirrorX(e) : e);
       }
     };
     switch (r.type) {
@@ -13504,7 +15707,7 @@ ${xref}
       }
       case "ELLIPSE": {
         const m2 = pt2(r, 1), ratio = firstNum(r, 40, 1);
-        if (len(m2) > 0 && ratio > 0) push(E.ellipse(pt2(r), m2, Math.min(1, ratio), firstNum(r, 41, 0), firstNum(r, 42, TAU3)), false);
+        if (len(m2) > 0 && ratio > 0) push(E.ellipse(pt2(r), m2, Math.min(1, ratio), firstNum(r, 41, 0), firstNum(r, 42, TAU4)), false);
         break;
       }
       case "SPLINE": {
@@ -13666,9 +15869,9 @@ ${xref}
     const th = hv("$TEXTSIZE", 40, 2.5);
     if (th > 0) doc.settings.textHeight = th;
     const ds = doc.settings.dimStyles.Standard;
-    for (const [k, f4] of [["$DIMTXT", "txt"], ["$DIMASZ", "asz"], ["$DIMEXO", "exo"], ["$DIMEXE", "exe"], ["$DIMGAP", "gap"], ["$DIMCEN", "cen"], ["$DIMSCALE", "scale"]]) {
+    for (const [k, f5] of [["$DIMTXT", "txt"], ["$DIMASZ", "asz"], ["$DIMEXO", "exo"], ["$DIMEXE", "exe"], ["$DIMGAP", "gap"], ["$DIMCEN", "cen"], ["$DIMSCALE", "scale"]]) {
       const v = hv(k, 40);
-      if (v !== void 0 && v > 0) ds[f4] = v;
+      if (v !== void 0 && v > 0) ds[f5] = v;
     }
     const dd = hv("$DIMDEC", 70);
     if (dd !== void 0 && dd >= 0 && dd <= 8) ds.dec = dd;
@@ -13955,9 +16158,9 @@ ${xref}
             out.c(75, 0).c(76, 1);
             if (!solidFill) {
               out.c(52, deg(e.pa || 0)).c(41, e.ps || 1).c(77, 0).c(78, pat.families.length);
-              for (const f4 of pat.families) {
-                out.c(53, f4.a).c(43, f4.ox).c(44, f4.oy).c(45, f4.dx).c(46, f4.dy).c(79, f4.dash ? f4.dash.length : 0);
-                for (const d of f4.dash || []) out.c(49, d);
+              for (const f5 of pat.families) {
+                out.c(53, f5.a).c(43, f5.ox).c(44, f5.oy).c(45, f5.dx).c(46, f5.dy).c(79, f5.dash ? f5.dash.length : 0);
+                for (const d of f5.dash || []) out.c(49, d);
               }
             }
             out.c(98, 0);
@@ -14136,7 +16339,7 @@ ${xref}
     }
     async open() {
       const files = await pickFiles(".json,.cadforge,.dxf", true);
-      for (const f4 of files) await this.openFile(f4);
+      for (const f5 of files) await this.openFile(f5);
       return files.length > 0;
     }
     async openFile(file) {
@@ -14153,11 +16356,11 @@ ${xref}
       }
     }
     async importFile() {
-      const [f4] = await pickFiles(".json,.cadforge,.dxf");
-      if (!f4) return false;
+      const [f5] = await pickFiles(".json,.cadforge,.dxf");
+      if (!f5) return false;
       try {
-        const text2 = await f4.text();
-        const src = /\.dxf$/i.test(f4.name) ? readDXF(text2, stripExt(f4.name)) : fromJSON(text2, stripExt(f4.name));
+        const text2 = await f5.text();
+        const src = /\.dxf$/i.test(f5.name) ? readDXF(text2, stripExt(f5.name)) : fromJSON(text2, stripExt(f5.name));
         const doc = this.app.doc;
         let n = 0;
         this.ui.edit("Import", (d) => {
@@ -14172,20 +16375,20 @@ ${xref}
           }
           d.touch();
         });
-        this.app.log(`Imported ${n} objects from ${f4.name}.`);
+        this.app.log(`Imported ${n} objects from ${f5.name}.`);
         this.app.editor.zoomExtents();
         this.ui.viewChanged();
         void doc;
         return true;
       } catch (e) {
-        this.app.log(`Could not import ${f4.name}: ${e.message}`, "error");
+        this.app.log(`Could not import ${f5.name}: ${e.message}`, "error");
         return false;
       }
     }
     async pickText(accept) {
-      const [f4] = await pickFiles(accept);
-      if (!f4) return null;
-      return { name: f4.name, text: await f4.text() };
+      const [f5] = await pickFiles(accept);
+      if (!f5) return null;
+      return { name: f5.name, text: await f5.text() };
     }
     // ------------------------------------------------------------ save
     async save() {
@@ -14245,11 +16448,23 @@ ${xref}
         { label: "PDF (*.pdf)", icon: "pdf", action: () => this.exportPDF() },
         { label: "SVG (*.svg)", action: () => this.ui.dialog("plot", { format: "svg" }) },
         { label: "PNG image (*.png)", action: () => this.ui.dialog("plot", { format: "png" }) },
+        { label: "OBJ mesh (*.obj)", action: () => this.exportMesh("obj") },
+        { label: "STL mesh (*.stl)", action: () => this.exportMesh("stl") },
         { label: "CadForge project (*.json)", action: () => {
           const d = this.app.doc;
           download(`${d.name}${FILE_EXT}`, toJSON(d), "application/json");
         } }
       ], r.left + 40, r.top + 40);
+    }
+    exportMesh(fmt3) {
+      const doc = this.app.doc, solids = doc?.solids || [];
+      if (!solids.length) {
+        this.ui.toast("There are no solids to export.");
+        return false;
+      }
+      download(`${doc.name}.${fmt3}`, fmt3 === "stl" ? toSTL(solids) : toOBJ(solids), "text/plain");
+      this.app.log(`Exported ${solids.length} solid${solids.length === 1 ? "" : "s"} to ${doc.name}.${fmt3}.`);
+      return true;
     }
     exportEntities(ents) {
       const src = this.app.doc, d = new Drawing("Block");
@@ -14279,14 +16494,14 @@ ${xref}
       })();
       const format = select([["pdf", "PDF (vector)"], ["svg", "SVG (vector)"], ["png", "PNG (raster)"]].map(([value, label]) => ({ value, label })), o.format, { width: 150 });
       const paper = select(Object.keys(PAPERS), o.paper, { width: 150 });
-      const orient = select([{ value: "l", label: "Landscape" }, { value: "p", label: "Portrait" }], o.landscape ? "l" : "p", { width: 150 });
-      const area = select([{ value: "extents", label: "Extents" }, { value: "display", label: "Display" }], o.area, { width: 150 });
+      const orient2 = select([{ value: "l", label: "Landscape" }, { value: "p", label: "Portrait" }], o.landscape ? "l" : "p", { width: 150 });
+      const area2 = select([{ value: "extents", label: "Extents" }, { value: "display", label: "Display" }], o.area, { width: 150 });
       const scale = select(SCALES.map(([label, v]) => ({ value: String(v), label })), String(o.scale), { width: 150 });
       const center = check("Center the plot", o.center), ox = num2(o.offsetX, { width: 70 }), oy = num2(o.offsetY, { width: 70 });
       const lw = check("Plot with lineweights", o.lineweights), mono = check("Monochrome (black ink)", o.mono);
       const dpi = select([100, 150, 200, 300, 600], o.dpi, { width: 150 });
       const canvas = h("canvas.plot-prev", { width: 420, height: 300 }), info = h("div.fnote");
-      const read = () => ({ ...o, format: format.value, paper: paper.value, landscape: orient.value === "l", area: area.value, scale: scale.value === "fit" ? "fit" : Number(scale.value), center: center.input.checked, offsetX: Number(ox.value) || 0, offsetY: Number(oy.value) || 0, lineweights: lw.input.checked, mono: mono.input.checked, dpi: Number(dpi.value) });
+      const read = () => ({ ...o, format: format.value, paper: paper.value, landscape: orient2.value === "l", area: area2.value, scale: scale.value === "fit" ? "fit" : Number(scale.value), center: center.input.checked, offsetX: Number(ox.value) || 0, offsetY: Number(oy.value) || 0, lineweights: lw.input.checked, mono: mono.input.checked, dpi: Number(dpi.value) });
       const draw = () => {
         const opts = read(), ctx = canvas.getContext("2d");
         ox.disabled = oy.disabled = opts.center;
@@ -14319,7 +16534,7 @@ ${xref}
         const sc = layout.mmPerUnit / (opts.scale === "fit" ? 1 : 1);
         info.textContent = `${layout.page.w} \xD7 ${layout.page.h} mm \xB7 1 drawing unit = ${+sc.toFixed(4)} mm on paper${layout.fits ? "" : " \xB7 the drawing is larger than the printable area"}`;
       };
-      for (const el of [format, paper, orient, area, scale, dpi]) el.addEventListener("change", draw);
+      for (const el of [format, paper, orient2, area2, scale, dpi]) el.addEventListener("change", draw);
       for (const el of [center, lw, mono]) el.input.addEventListener("change", draw);
       for (const el of [ox, oy]) el.addEventListener("input", draw);
       setTimeout(draw, 0);
@@ -14329,7 +16544,7 @@ ${xref}
         ok: "Plot",
         body: h(
           "div.plot",
-          h("div.plot-form", row2("Output", format), row2("Paper size", paper), row2("Orientation", orient), row2("Plot area", area), row2("Scale", scale), h("div.frow", center), row2("Offset X, Y (mm)", ox, oy), h("div.frow", lw), h("div.frow", mono), row2("PNG resolution (dpi)", dpi)),
+          h("div.plot-form", row2("Output", format), row2("Paper size", paper), row2("Orientation", orient2), row2("Plot area", area2), row2("Scale", scale), h("div.frow", center), row2("Offset X, Y (mm)", ox, oy), h("div.frow", lw), h("div.frow", mono), row2("PNG resolution (dpi)", dpi)),
           h("div.plot-pv", canvas, info)
         ),
         commit: () => {
@@ -14375,8 +16590,8 @@ ${xref}
       if (t) t.finish(t.spec.cancelValue ?? null);
     }
     open(name, data = {}) {
-      const def9 = DEFS[name];
-      if (!def9) {
+      const def10 = DEFS[name];
+      if (!def10) {
         this.ui.toast(`The ${name} dialog is not available.`);
         return Promise.resolve(null);
       }
@@ -14384,7 +16599,7 @@ ${xref}
       return new Promise((resolve) => {
         const entry = { name };
         const api = { ui: this.ui, app: this.app, doc: this.app.doc, data, close: (v) => entry.finish(v) };
-        const spec = def9(api);
+        const spec = def10(api);
         entry.spec = spec;
         const titleEl = h("div.dlg-title", { onpointerdown: (e) => this.drag(e, win) }, h("span", spec.title), h("button.dlg-x", { type: "button", "aria-label": "Close", onclick: () => entry.finish(spec.cancelValue ?? null) }, svgIcon("x", 10)));
         const buttons = h("div.dlg-btns");
@@ -14711,6 +16926,7 @@ ${xref}
     render(ed, sel) {
       const doc = ed.doc, ui2 = this.ui;
       clear(this.body);
+      if (!sel.length && ed.selectedSolids.length) return this.renderSolids(ed, ed.selectedSolids);
       const types = [...new Set(sel.map((e) => labelOf(e)))];
       if (this.filter !== "all" && !types.includes(this.filter)) this.filter = "all";
       const targets = this.filter === "all" ? sel : sel.filter((e) => labelOf(e) === this.filter);
@@ -14777,13 +16993,59 @@ ${xref}
       this.section("General", general);
       const ftype = this.filter === "all" ? types.length === 1 ? sel[0].type : null : targets[0]?.type;
       if (targets.length && ftype && GEOM[ftype]) {
-        const rows = GEOM[ftype].map((f4) => this.geomField(f4, targets, apply, doc)).filter(Boolean);
+        const rows = GEOM[ftype].map((f5) => this.geomField(f5, targets, apply, doc)).filter(Boolean);
         this.section("Geometry", rows);
       } else if (targets.length && !ftype) this.section("Geometry", [h("div.pal-note", "Select a single object type to edit its geometry.")]);
       if (!sel.length) {
         const v = ed.view, p = doc.settings.units.precision;
         this.section("View", [this.field("Center X", h("span.pal-ro", fmtNum(v.target.x, p))), this.field("Center Y", h("span.pal-ro", fmtNum(v.target.y, p))), this.field("Height", h("span.pal-ro", fmtNum(v.h / v.scale, p))), this.field("Width", h("span.pal-ro", fmtNum(v.w / v.scale, p)))]);
         this.section("Misc", [this.field("Drawing", h("span.pal-ro", doc.name)), this.field("Objects", h("span.pal-ro", String(doc.entities.length))), this.field("Layers", h("span.pal-ro", String(doc.layers.length))), this.field("Units", h("span.pal-ro", ["Unitless", "Inches", "Feet", "", "Millimeters", "Centimeters", "Meters"][doc.settings.units.insUnits] || "Unitless"))]);
+      }
+    }
+    renderSolids(ed, solids) {
+      const doc = ed.doc, ui2 = this.ui, p = doc.settings.units.precision;
+      this.body.append(h("div.pal-top", h("select.pal-sel", { "aria-label": "Selected objects" }, h("option", `Solid (${solids.length})`)), h("span")));
+      const apply = (fn) => {
+        ui2.edit("Properties", (d) => {
+          d.willChange();
+          for (const s of solids) if (!d.layer(s.layer || "0")?.locked) fn(s);
+          d.touch();
+        });
+        ui2.viewport.invalidate();
+      };
+      const same = (get) => {
+        const set = new Set(solids.map((s) => JSON.stringify(get(s) ?? null)));
+        return set.size === 1 ? get(solids[0]) : "*VARIES*";
+      };
+      const colorVal = same((s) => s.color), layerVal = same((s) => s.layer || "0");
+      this.section("General", [
+        this.field("Color", this.colorButton(colorVal, async () => {
+          const v = await ui2.dialog("color", { value: colorVal === "*VARIES*" ? void 0 : colorVal, allowByLayer: true });
+          if (v !== null && v !== void 0) apply((s) => {
+            if (v === "BYLAYER") delete s.color;
+            else s.color = v;
+          });
+        })),
+        this.field("Layer", this.selectEl(doc.layers.map((l) => l.name), layerVal, (v) => apply((s) => {
+          s.layer = v;
+        })))
+      ]);
+      if (solids.length === 1) {
+        const s = solids[0], b = meshBounds(s), c2 = meshCentroid(s), f5 = (v) => fmtNum(v, p, true);
+        const rows = [
+          ["Name", s.name || "Solid"],
+          ["Volume", f5(meshVolume(s))],
+          ["Surface area", f5(meshArea(s))],
+          ["Triangles", String(s.faces.length)],
+          ["Length (X)", f5(b.max.x - b.min.x)],
+          ["Width (Y)", f5(b.max.y - b.min.y)],
+          ["Height (Z)", f5(b.max.z - b.min.z)],
+          ["Centroid X", f5(c2.x)],
+          ["Centroid Y", f5(c2.y)],
+          ["Centroid Z", f5(c2.z)],
+          ["History", s.program ? `${s.program.features.length} extrusion feature${s.program.features.length === 1 ? "" : "s"}` : "None"]
+        ];
+        this.section("Geometry", rows.map(([k, v]) => this.field(k, h("span.pal-ro", v))));
       }
     }
     section(title, rows) {
@@ -14813,31 +17075,31 @@ ${xref}
       } else el.value = value;
       return el;
     }
-    geomField(f4, targets, apply, doc) {
-      const vals = targets.map((e) => f4.get(e, doc));
+    geomField(f5, targets, apply, doc) {
+      const vals = targets.map((e) => f5.get(e, doc));
       const same = vals.every((v) => v === vals[0] || typeof v === "number" && Math.abs(v - vals[0]) < 1e-9);
       const shown = same ? vals[0] : "*VARIES*";
-      const prec2 = doc.settings.units.precision;
-      if (f4.kind === "ro") return this.field(f4.label, h("span.pal-ro", typeof shown === "number" ? fmtNum(shown, prec2) : String(shown)));
-      if (f4.kind === "bool") return this.field(f4.label, this.selectEl(["Yes", "No"], shown === "*VARIES*" ? shown : shown ? "Yes" : "No", (v) => apply((e) => f4.set(e, v === "Yes", doc))));
-      if (f4.kind === "select") return this.field(f4.label, this.selectEl(f4.options, shown, (v) => apply((e) => f4.set(e, v, doc))));
-      if (f4.kind === "text") {
-        const inp2 = h("input.pal-in", { type: "text", value: shown === "*VARIES*" ? "" : String(shown).replace(/\n/g, " \u23CE "), placeholder: shown === "*VARIES*" ? "*VARIES*" : "", onchange: (e) => apply((en) => f4.set(en, e.target.value.replace(/ ⏎ /g, "\n"), doc)) });
+      const prec3 = doc.settings.units.precision;
+      if (f5.kind === "ro") return this.field(f5.label, h("span.pal-ro", typeof shown === "number" ? fmtNum(shown, prec3) : String(shown)));
+      if (f5.kind === "bool") return this.field(f5.label, this.selectEl(["Yes", "No"], shown === "*VARIES*" ? shown : shown ? "Yes" : "No", (v) => apply((e) => f5.set(e, v === "Yes", doc))));
+      if (f5.kind === "select") return this.field(f5.label, this.selectEl(f5.options, shown, (v) => apply((e) => f5.set(e, v, doc))));
+      if (f5.kind === "text") {
+        const inp2 = h("input.pal-in", { type: "text", value: shown === "*VARIES*" ? "" : String(shown).replace(/\n/g, " \u23CE "), placeholder: shown === "*VARIES*" ? "*VARIES*" : "", onchange: (e) => apply((en) => f5.set(en, e.target.value.replace(/ ⏎ /g, "\n"), doc)) });
         inp2.addEventListener("keydown", (e) => {
           e.stopPropagation();
           if (e.key === "Enter") inp2.blur();
         });
-        return this.field(f4.label, inp2);
+        return this.field(f5.label, inp2);
       }
-      const inp = h("input.pal-in", { type: "text", inputmode: "decimal", value: shown === "*VARIES*" ? "" : fmtNum(shown, prec2, true), placeholder: shown === "*VARIES*" ? "*VARIES*" : "" });
+      const inp = h("input.pal-in", { type: "text", inputmode: "decimal", value: shown === "*VARIES*" ? "" : fmtNum(shown, prec3, true), placeholder: shown === "*VARIES*" ? "*VARIES*" : "" });
       const commit = () => {
         const v = Number(inp.value);
-        if (!Number.isFinite(v) || inp.value.trim() === "" || f4.min !== void 0 && v < f4.min || f4.max !== void 0 && v > f4.max) {
+        if (!Number.isFinite(v) || inp.value.trim() === "" || f5.min !== void 0 && v < f5.min || f5.max !== void 0 && v > f5.max) {
           this.key = "";
           this.refresh();
           return;
         }
-        apply((e) => f4.set(e, v, doc));
+        apply((e) => f5.set(e, v, doc));
       };
       inp.addEventListener("change", commit);
       inp.addEventListener("keydown", (e) => {
@@ -14848,7 +17110,7 @@ ${xref}
           this.refresh();
         }
       });
-      return this.field(f4.label + (f4.unit ? ` (${f4.unit})` : ""), inp);
+      return this.field(f5.label + (f5.unit ? ` (${f5.unit})` : ""), inp);
     }
   };
   var TOOL_SETS = [
@@ -14871,10 +17133,10 @@ ${xref}
       } }, t)));
       const grid = h("div.tp-grid");
       for (const name of TOOL_SETS[this.tab][1]) {
-        const def9 = registry.commands.get(name);
-        if (!def9) continue;
-        const b = h("button.tp-tool", { onclick: () => this.ui.runCommand(name) }, svgIcon(def9.icon || name.toLowerCase(), 24), h("span", def9.title || name));
-        attachTip(b, { title: def9.title, desc: def9.desc, cmd: def9.name });
+        const def10 = registry.commands.get(name);
+        if (!def10) continue;
+        const b = h("button.tp-tool", { onclick: () => this.ui.runCommand(name) }, svgIcon(def10.icon || name.toLowerCase(), 24), h("span", def10.title || name));
+        attachTip(b, { title: def10.title, desc: def10.desc, cmd: def10.name });
         grid.append(b);
       }
       this.body.append(tabs2, grid);
@@ -15141,9 +17403,9 @@ ${xref}
       const types = [...new Set(sel.map(labelOf))];
       this.el.append(h("div.qp-head", types.length === 1 ? `${types[0]}${sel.length > 1 ? ` (${sel.length})` : ""}` : `All (${sel.length})`, h("button.pal-x", { "aria-label": "Close quick properties", onclick: () => this.toggle(false) }, svgIcon("x", 9))));
       const rows = [["Layer", e.layer], ["Color", describeColor(e.color)], ["Linetype", e.ltype === void 0 ? "ByLayer" : ltypeDisplay(e.ltype)]];
-      if (sel.length === 1) for (const f4 of (GEOM[e.type] || []).slice(0, 6)) {
-        const v = f4.get(e, doc);
-        rows.push([f4.label, typeof v === "number" ? fmtNum(v, doc.settings.units.precision, true) : String(v)]);
+      if (sel.length === 1) for (const f5 of (GEOM[e.type] || []).slice(0, 6)) {
+        const v = f5.get(e, doc);
+        rows.push([f5.label, typeof v === "number" ? fmtNum(v, doc.settings.units.precision, true) : String(v)]);
       }
       for (const [k, v] of rows) this.el.append(h("div.qp-row", h("span", k), h("b", v)));
     }
@@ -15469,7 +17731,7 @@ ${xref}
     currentProps() {
       const doc = this.app.doc, ed = this.app.active;
       if (!doc) return { layer: "0", layerObj: null };
-      const sel = ed.selected;
+      const sel = [...ed.selected, ...ed.selectedSolids];
       const one = (get) => {
         const set = new Set(sel.map((e) => JSON.stringify(get(e) ?? null)));
         return set.size === 1 ? get(sel[0]) : VARIES;
@@ -15496,7 +17758,7 @@ ${xref}
     setProperty(kind, value) {
       const doc = this.app.doc, ed = this.app.active;
       if (!doc) return;
-      const sel = ed.selected.filter((e) => !doc.isLocked(e));
+      const sel = [...ed.selected, ...ed.selectedSolids].filter((e) => !doc.layer(e.layer || "0")?.locked);
       if (sel.length) {
         this.edit("Properties", (d) => {
           d.willChange();
@@ -15643,6 +17905,9 @@ ${xref}
     }
     async importFile() {
       return this.files.importFile();
+    }
+    async exportMesh(fmt3) {
+      return this.files.exportMesh(fmt3);
     }
     async quit() {
       const dirty = this.app.editors.some((e) => e.doc.dirty);
@@ -15853,14 +18118,14 @@ ${xref}
 
   // src/main.js
   function installTextMetrics() {
-    const ctx = document.createElement("canvas").getContext("2d"), cache = /* @__PURE__ */ new Map(), REF = 200;
+    const ctx = document.createElement("canvas").getContext("2d"), cache2 = /* @__PURE__ */ new Map(), REF = 200;
     ctx.font = `${REF}px ${FONT}`;
     platform.measureText = (str, h2) => {
-      let w = cache.get(str);
+      let w = cache2.get(str);
       if (w === void 0) {
         w = ctx.measureText(str).width / REF;
-        if (cache.size > 5e3) cache.clear();
-        cache.set(str, w);
+        if (cache2.size > 5e3) cache2.clear();
+        cache2.set(str, w);
       }
       return w * emSize(h2);
     };
@@ -15868,6 +18133,7 @@ ${xref}
   var $ = (id) => document.getElementById(id);
   function boot() {
     installTextMetrics();
+    setWorkerSource(document.getElementById("cf-worker")?.textContent || null);
     const store = (() => {
       try {
         return window.localStorage;
@@ -15898,7 +18164,7 @@ ${xref}
     });
     app.newDrawing();
     app.log("CadForge 2.0 \u2014 type a command, or choose one from the ribbon. Press F1 for help.");
-    window.cadforge = { app, ui: ui2 };
+    window.cadforge = { app, ui: ui2, solidStats: stats };
     ui2.layoutChanged();
     ui2.cmdline.focus();
   }

@@ -159,7 +159,7 @@ export class UI {
   currentProps() {
     const doc = this.app.doc, ed = this.app.active;
     if (!doc) return { layer: '0', layerObj: null };
-    const sel = ed.selected;
+    const sel = [...ed.selected, ...ed.selectedSolids];
     const one = (get) => { const set = new Set(sel.map(e => JSON.stringify(get(e) ?? null))); return set.size === 1 ? get(sel[0]) : VARIES; };
     const layerName = sel.length ? one(e => e.layer) : doc.cur.layer;
     const color = sel.length ? one(e => e.color) : doc.cur.color;
@@ -178,7 +178,7 @@ export class UI {
   /** Set layer / color / lw / ltype for the selection, or the current setting when nothing is selected. */
   setProperty(kind, value) {
     const doc = this.app.doc, ed = this.app.active; if (!doc) return;
-    const sel = ed.selected.filter(e => !doc.isLocked(e));
+    const sel = [...ed.selected, ...ed.selectedSolids].filter(e => !(doc.layer(e.layer || '0')?.locked));
     if (sel.length) {
       this.edit('Properties', d => {
         d.willChange();
@@ -257,6 +257,7 @@ export class UI {
   async exportPDF() { return this.files.exportPDF(); }
   async exportMenu() { return this.files.exportMenu(); }
   async importFile() { return this.files.importFile(); }
+  async exportMesh(fmt) { return this.files.exportMesh(fmt); }
   async quit() { const dirty = this.app.editors.some(e => e.doc.dirty); if (!dirty || await this.dialogs.open('confirm', { title: 'CadForge', message: 'Discard unsaved changes and close all drawings?', buttons: ['Close All', 'Cancel'] }) === 'Close All') { for (const ed of [...this.app.editors]) this.app.closeEditor(ed); this.showStart(true); } }
 
   // ------------------------------------------------------------ context menus

@@ -4,6 +4,7 @@ import { showMenu, attachTip } from './menu.js';
 import { labelOf, segsOf } from '../core/entities.js';
 import { entityArea } from '../commands/inquiry.js';
 import * as g from '../core/geom.js';
+import { meshVolume, meshArea, meshBounds, meshCentroid } from '../solid/mesh.js';
 import { colorToCss, describeColor, LINETYPES, LINEWEIGHTS, lwDisplay, ltypeDisplay, fmtNum } from '../core/style.js';
 import { PATTERNS } from '../core/hatch.js';
 import { dimGeometry } from '../core/dim.js';
@@ -129,6 +130,7 @@ class PropertiesPalette extends Docked {
   render(ed, sel) {
     const doc = ed.doc, ui = this.ui;
     clear(this.body);
+    if (!sel.length && ed.selectedSolids.length) return this.renderSolids(ed, ed.selectedSolids);
     const types = [...new Set(sel.map(e => labelOf(e)))];
     if (this.filter !== 'all' && !types.includes(this.filter)) this.filter = 'all';
     const targets = this.filter === 'all' ? sel : sel.filter(e => labelOf(e) === this.filter);
@@ -171,6 +173,25 @@ class PropertiesPalette extends Docked {
       const v = ed.view, p = doc.settings.units.precision;
       this.section('View', [this.field('Center X', h('span.pal-ro', fmtNum(v.target.x, p))), this.field('Center Y', h('span.pal-ro', fmtNum(v.target.y, p))), this.field('Height', h('span.pal-ro', fmtNum(v.h / v.scale, p))), this.field('Width', h('span.pal-ro', fmtNum(v.w / v.scale, p)))]);
       this.section('Misc', [this.field('Drawing', h('span.pal-ro', doc.name)), this.field('Objects', h('span.pal-ro', String(doc.entities.length))), this.field('Layers', h('span.pal-ro', String(doc.layers.length))), this.field('Units', h('span.pal-ro', ['Unitless', 'Inches', 'Feet', '', 'Millimeters', 'Centimeters', 'Meters'][doc.settings.units.insUnits] || 'Unitless'))]);
+    }
+  }
+
+  renderSolids(ed, solids) {
+    const doc = ed.doc, ui = this.ui, p = doc.settings.units.precision;
+    this.body.append(h('div.pal-top', h('select.pal-sel', { 'aria-label': 'Selected objects' }, h('option', `Solid (${solids.length})`)), h('span')));
+    const apply = (fn) => { ui.edit('Properties', d => { d.willChange(); for (const s of solids) if (!d.layer(s.layer || '0')?.locked) fn(s); d.touch(); }); ui.viewport.invalidate(); };
+    const same = get => { const set = new Set(solids.map(s => JSON.stringify(get(s) ?? null))); return set.size === 1 ? get(solids[0]) : '*VARIES*'; };
+    const colorVal = same(s => s.color), layerVal = same(s => s.layer || '0');
+    this.section('General', [
+      this.field('Color', this.colorButton(colorVal, async () => { const v = await ui.dialog('color', { value: colorVal === '*VARIES*' ? undefined : colorVal, allowByLayer: true }); if (v !== null && v !== undefined) apply(s => { if (v === 'BYLAYER') delete s.color; else s.color = v; }); })),
+      this.field('Layer', this.selectEl(doc.layers.map(l => l.name), layerVal, v => apply(s => { s.layer = v; }))),
+    ]);
+    if (solids.length === 1) {
+      const s = solids[0], b = meshBounds(s), c = meshCentroid(s), f = v => fmtNum(v, p, true);
+      const rows = [['Name', s.name || 'Solid'], ['Volume', f(meshVolume(s))], ['Surface area', f(meshArea(s))], ['Triangles', String(s.faces.length)],
+        ['Length (X)', f(b.max.x - b.min.x)], ['Width (Y)', f(b.max.y - b.min.y)], ['Height (Z)', f(b.max.z - b.min.z)], ['Centroid X', f(c.x)], ['Centroid Y', f(c.y)], ['Centroid Z', f(c.z)],
+        ['History', s.program ? `${s.program.features.length} extrusion feature${s.program.features.length === 1 ? '' : 's'}` : 'None']];
+      this.section('Geometry', rows.map(([k, v]) => this.field(k, h('span.pal-ro', v))));
     }
   }
 
