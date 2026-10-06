@@ -1,0 +1,68 @@
+/* ---------- title bar ---------- */
+.titlebar { display: flex; align-items: center; height: 34px; background: var(--chrome); border-bottom: 1px solid var(--border); padding: 0 6px 0 4px; gap: 4px; flex: none; }
+.app-btn { width: 34px; height: 30px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 4px; padding: 0; }
+.app-btn:hover, .app-btn[aria-expanded="true"] { background: var(--hover); }
+.qat { display: flex; align-items: center; gap: 1px; height: 100%; }
+.qat-btn, .qat-arrow, .tb-btn { background: transparent; border: 0; border-radius: 3px; height: 26px; min-width: 26px; padding: 0 4px; display: grid; place-items: center; }
+.qat-btn:hover, .qat-arrow:hover, .tb-btn:hover { background: var(--hover); }
+.qat-btn.disabled { opacity: .4; pointer-events: none; }
+.qat-arrow { min-width: 14px; width: 14px; padding: 0; }
+.qat-sep { width: 1px; height: 18px; background: var(--sep); margin: 0 4px; }
+.qat-ws { display: flex; align-items: center; gap: 4px; background: transparent; border: 0; color: var(--text-2); height: 26px; padding: 0 6px; border-radius: 3px; font-size: 12px; }
+.qat-ws:hover { background: var(--hover); color: var(--text); }
+.title-text { margin-left: 16px; color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-fill, .rtabs-fill, .dt-fill, .sb-fill, .lm-fill { flex: 1; }
+.infocenter { position: relative; width: 270px; }
+.ic-input { width: 100%; height: 24px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; padding: 0 28px 0 8px; color: var(--text); outline: none; }
+.ic-input:focus { border-color: var(--accent); }
+.ic-icon { position: absolute; right: 8px; top: 5px; pointer-events: none; opacity: .7; }
+.ic-results { position: absolute; z-index: 60; top: 28px; left: 0; width: 420px; max-height: 360px; overflow: auto; background: var(--chrome-2); border: 1px solid var(--border); border-radius: 4px; box-shadow: var(--shadow); padding: 4px 0; }
+.ic-head { padding: 4px 10px; color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.ic-hit { display: flex; width: 100%; align-items: center; gap: 8px; background: transparent; border: 0; text-align: left; padding: 5px 10px; }
+.ic-hit:hover { background: var(--hover); }
+.ic-name { font-weight: 600; white-space: nowrap; } .ic-desc { color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- classic menu bar ---------- */
+.menubar { display: flex; height: 24px; background: var(--chrome-2); border-bottom: 1px solid var(--border); flex: none; }
+.mb { background: transparent; border: 0; padding: 0 12px; color: var(--text); }
+.mb:hover, .mb.open { background: var(--hover); }
+
+/* ---------- document tabs ---------- */
+.doctabs { display: flex; align-items: flex-end; height: 28px; background: var(--chrome); padding: 0 4px; gap: 2px; border-bottom: 1px solid var(--border); flex: none; overflow: hidden; }
+.dt { display: flex; align-items: center; gap: 8px; height: 25px; padding: 0 8px 0 12px; background: var(--chrome-2); border: 1px solid var(--border); border-bottom: 0; border-radius: 4px 4px 0 0; color: var(--text-2); cursor: pointer; min-width: 90px; max-width: 220px; }
+.dt:hover { background: var(--ribbon-title); color: var(--text); }
+.dt.active { background: var(--canvas); color: var(--text); height: 26px; position: relative; top: 1px; border-color: var(--border); }
+.dt-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-x { background: transparent; border: 0; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 3px; color: inherit; padding: 0; opacity: .7; }
+.dt-x:hover { background: var(--hover); opacity: 1; }
+.dt.start, .dt.plus { min-width: 30px; padding: 0 9px; justify-content: center; }
+
+/* ---------- workarea ---------- */
+.workarea { flex: 1; display: flex; min-height: 0; position: relative; background: var(--canvas); }
+.dock { display: flex; flex: none; position: relative; background: var(--chrome-2); border-right: 1px solid var(--border); width: 300px; }
+.dock-right { border-right: 0; border-left: 1px solid var(--border); }
+.viewport { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); outline: none; }
+.cv { position: absolute; left: 0; top: 0; display: block; }
+.cv.over { cursor: none; touch-action: none; }
+.layouttabs { display: flex; height: 24px; background: var(--chrome); border-top: 1px solid var(--border); flex: none; align-items: center; padding: 0 6px; gap: 2px; }
+.layouttabs:empty { display: none; }
+
+/* ---------- status bar ---------- */
+.statusbar { display: flex; align-items: center; height: 30px; background: var(--chrome); border-top: 1px solid var(--border); padding: 0 6px; gap: 2px; flex: none; }
+.sb-coords { min-width: 220px; height: 24px; background: transparent; border: 0; text-align: left; font: 12px var(--mono); color: var(--text-2); padding: 0 8px; border-radius: 3px; }
+.sb-coords:hover { background: var(--hover); }
+.sb-sep { width: 1px; height: 18px; background: var(--sep); margin: 0 4px; }
+.sb-group { display: flex; align-items: center; gap: 1px; }
+.sb-cell { display: flex; align-items: center; }
+.sb { height: 24px; min-width: 28px; display: flex; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 0; border-radius: 3px; padding: 0 5px; color: var(--text-2); }
+.sb:hover { background: var(--hover); }
+.sb .ico .l { stroke: var(--ic-k); } .sb .ico .a { stroke: var(--ic-k); } .sb .ico .o { stroke: var(--ic-k); } .sb .ico .g { stroke: var(--ic-k); } .sb .ico .fa { fill: var(--ic-k); }
+.sb.on { background: var(--accent-soft); color: var(--text); }
+.sb.on .ico .l, .sb.on .ico .a { stroke: var(--accent-2); } .sb.on .ico .o { stroke: var(--accent-2); } .sb.on .ico .g { stroke: var(--accent-2); } .sb.on .ico .fa { fill: var(--accent-2); }
+.sb-arrow { width: 12px; height: 24px; background: transparent; border: 0; padding: 0; display: grid; place-items: center; border-radius: 3px; color: var(--text-3); }
+.sb-arrow:hover { background: var(--hover); color: var(--text); }
+.sb-label { font-size: 11px; font-weight: 600; letter-spacing: .03em; }
+.sb.text { padding: 0 8px; font-size: 12px; }
+.sb.cust { width: 28px; }
+.sb-text { white-space: nowrap; }
+.app.clean .titlebar, .app.clean .doctabs, .clean .titlebar, .clean .ribbon-host, .clean .doctabs, .clean .menubar, .clean .dock, .clean .layouttabs, .clean .statusbar { display: none; }

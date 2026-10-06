@@ -40,7 +40,7 @@ export const registry = {
     const pool = [...this.commands.keys(), ...extra];
     const starts = pool.filter(n => n.startsWith(t)).sort((a, b) => a.length - b.length || a.localeCompare(b));
     const mid = midString ? pool.filter(n => !n.startsWith(t) && n.includes(t)).sort() : [];
-    const aliasHit = this.aliases.has(t) && !starts.includes(this.aliases.get(t)) ? [this.aliases.get(t)] : [];
-    return [...new Set([...aliasHit, ...starts, ...mid])].slice(0, limit);
+    const target = this.userAliases.get(t) || this.aliases.get(t) || (this.commands.has(t) ? t : null);   // what Enter would run
+    return [...new Set([...(target ? [target] : []), ...starts, ...mid])].slice(0, limit);
   },
 };

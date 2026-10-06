@@ -1,0 +1,69 @@
+.ribbon-host { background: var(--ribbon); border-bottom: 1px solid var(--border); flex: none; position: relative; }
+.rtabs { display: flex; align-items: flex-end; height: 26px; padding: 0 6px; background: var(--chrome); gap: 1px; }
+.rtab { height: 24px; padding: 0 14px; background: transparent; border: 0; color: var(--text-2); border-radius: 3px 3px 0 0; }
+.rtab:hover { color: var(--text); background: var(--chrome-2); }
+.rtab.active { background: var(--ribbon); color: var(--text); font-weight: 600; box-shadow: inset 0 2px 0 var(--accent); }
+.rtab.contextual { color: #ffd37a; } .rtab.contextual.active { box-shadow: inset 0 2px 0 #f0a51a; }
+.rmin { background: transparent; border: 0; width: 24px; height: 22px; display: grid; place-items: center; border-radius: 3px; color: var(--text-2); }
+.rmin:hover { background: var(--hover); }
+.rbody { display: flex; align-items: stretch; height: 94px; padding: 3px 4px 0; overflow-x: auto; overflow-y: hidden; }
+.ribbon-host[data-mode="1"] .rbody { display: none; }
+.ribbon-host[data-mode="1"].flyout .rbody { display: flex; position: absolute; left: 0; right: 0; top: 26px; z-index: 40; background: var(--ribbon); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+.ribbon-host[data-mode="2"] .rpanel-body { display: none; }
+.ribbon-host[data-mode="2"] .rbody { height: 22px; }
+.rsep { width: 1px; background: var(--sep); margin: 2px 3px 4px; flex: none; }
+.rpanel { display: flex; flex-direction: column; justify-content: space-between; position: relative; flex: none; }
+.rpanel-body { display: flex; align-items: stretch; gap: 2px; flex: 1; min-height: 0; padding: 0 2px; }
+.rpanel-title { display: flex; align-items: center; justify-content: center; gap: 4px; height: 17px; color: var(--text-3); font-size: 11px; white-space: nowrap; user-select: none; position: relative; }
+.rpanel-title.expandable { cursor: pointer; }
+.rpanel-title.expandable:hover { color: var(--text); background: var(--ribbon-title); }
+.rlaunch { position: absolute; right: 0; top: 2px; background: transparent; border: 0; padding: 0; width: 14px; height: 14px; display: grid; place-items: center; color: var(--text-3); }
+.rlaunch:hover { color: var(--text); }
+.rpanel.open .rpanel-title { background: var(--ribbon-title); color: var(--text); }
+.rslideout { position: absolute; z-index: 30; left: 0; top: 100%; margin-top: 0; min-width: 100%; background: var(--ribbon); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 6px; display: flex; flex-direction: column; gap: 1px; }
+
+/* buttons */
+.rb { display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid transparent; border-radius: 3px; color: var(--text); padding: 0 6px; text-align: left; white-space: nowrap; }
+.rb:hover { background: var(--hover); border-color: var(--sep); }
+.rb:active, .rb.active { background: var(--press); border-color: var(--accent); }
+.rb.large { flex-direction: column; justify-content: flex-start; gap: 2px; width: 52px; min-width: 52px; height: 72px; padding: 4px 2px 2px; text-align: center; }
+.rb.large .rb-label { white-space: normal; line-height: 1.15; font-size: 11.5px; text-align: center; }
+.rb.large .rb-caret { display: none; }
+.rb.small { height: 23px; min-width: 24px; }
+.rb.icon { width: 24px; height: 23px; padding: 0; justify-content: center; }
+.rb-label { font-size: 12px; }
+.rb.primary .ico .l { stroke: var(--ok); }
+.rsplit { display: flex; align-items: stretch; }
+.rsplit > .rb { border-top-right-radius: 0; border-bottom-right-radius: 0; flex: 1; }
+.rsplit.large { flex-direction: column; align-items: stretch; width: 54px; }
+.rsplit.large > .rb.large { border-radius: 3px 3px 0 0; height: 56px; width: 100%; }
+.rb-arrow { width: 14px; background: transparent; border: 1px solid transparent; border-left: 0; border-radius: 0 3px 3px 0; color: var(--text-2); display: grid; place-items: center; padding: 0; }
+.rb-arrow:hover { background: var(--hover); border-color: var(--sep); color: var(--text); }
+.rsplit.large > .rb-arrow { width: 100%; height: 16px; border: 1px solid transparent; border-radius: 0 0 3px 3px; }
+.rstack, .rcol { display: flex; flex-direction: column; justify-content: flex-start; gap: 1px; }
+.rrow { display: flex; gap: 0; }
+.rstack .rb, .rstack .rsplit { width: 100%; }
+.rfly { position: fixed; z-index: 230; background: var(--ribbon); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 4px 0; display: flex; }
+.rb.large.collapsed .rb-label { display: flex; flex-direction: column; align-items: center; }
+
+/* combo boxes */
+.rcombo { display: flex; align-items: center; gap: 6px; height: 23px; width: 190px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; padding: 0 6px; color: var(--text); text-align: left; }
+.rcombo:hover { border-color: var(--accent); }
+.rcombo .ctext { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rcombo .ccaret { opacity: .7; }
+.rcombo.visualstyle { width: 160px; }
+.cstate { display: inline-flex; gap: 2px; align-items: center; }
+.cswatch { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(255, 255, 255, .45); border-radius: 2px; flex: none; vertical-align: -2px; }
+:root[data-theme="light"] .cswatch { border-color: rgba(0, 0, 0, .35); }
+.lwsample { display: inline-block; width: 34px; background: currentColor; vertical-align: middle; border-radius: 1px; }
+.ltsample { color: var(--text); flex: none; }
+.ltm svg { vertical-align: middle; }
+
+/* hatch creation */
+.patgrid { display: grid; grid-template-columns: repeat(7, 60px); gap: 3px; align-content: start; max-width: 470px; }
+.pat { background: transparent; border: 1px solid var(--border); border-radius: 3px; padding: 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--text-2); }
+.pat:hover { border-color: var(--accent); } .pat.sel { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2); color: var(--text); }
+.pat-thumb { width: 54px; height: 30px; border-radius: 2px; } .pat-name { font-size: 10px; }
+.hprops { gap: 3px; } .hrow { display: flex; align-items: center; gap: 6px; font-size: 12px; } .hrow > span { width: 40px; color: var(--text-2); }
+.hrow input { width: 70px; height: 21px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; color: var(--text); padding: 0 4px; }
+.hcolor { display: flex; gap: 6px; align-items: center; height: 21px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; padding: 0 6px; width: 110px; }

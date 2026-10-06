@@ -129,13 +129,15 @@ export class Runtime {
     this.emit();
   }
 
-  _refreshPreview() {
+  /** Recompute the rubber-band preview. Pointer moves only need an overlay repaint, not a scene redraw. */
+  _refreshPreview(overlayOnly = false) {
     const ctx = this.ctx, p = ctx?.pending;
     this.preview = [];
-    if (!ctx) return;
-    const fn = p?.preview || ctx.previewFn;
-    if (fn) { try { this.preview = fn(this.cursor.pt, p) || []; } catch (e) { this.preview = []; } }
-    this.emit();
+    if (ctx) {
+      const fn = p?.preview || ctx.previewFn;
+      if (fn) { try { this.preview = fn(this.cursor.pt, p) || []; } catch (e) { this.preview = []; } }
+    }
+    if (overlayOnly) this.app.emit('overlay'); else this.emit();
   }
 
   _deliver(ctx, result) {
@@ -212,7 +214,7 @@ export class Runtime {
     const p = this.pending, r = this.resolve(raw, p);
     this.cursor.pt = r.pt; this.cursor.snap = r.snap; this.cursor.track = r.track;
     this.snapper.noteHover(r.snap, this.app.now());
-    this._refreshPreview();
+    this._refreshPreview(true);
   }
 
   // ------------------------------------------------------------ clicks
@@ -451,11 +453,17 @@ export class Runtime {
     }
     const base = p.fromStage === 'offset' ? p.fromBase : p.base;
     const rel = this.dynamicTyping && this.sv.pointerInput && !!p.base && p.fromStage !== 'offset';
+    const scaleMatch = p.acceptNumber && t.match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*(xp|x)$/i);
+    if (scaleMatch) return this._deliver(ctx, { value: Number(scaleMatch[1]), rel: scaleMatch[2].toLowerCase(), typed: true });
     const r = parseInput(t, { base: p.fromStage === 'offset' ? p.fromBase : base, relativeDefault: rel || p.fromStage === 'offset' });
     if (!r) { this.log('Point or option keyword required.', 'error'); return; }
     if (p.fromStage === 'base') { p.fromBase = r.pt || this.cursor.pt; p.fromStage = 'offset'; this.log('<Offset>:', 'prompt'); return; }
     if (r.kind === 'point') { p.fromStage = null; this.lastPoint = r.pt; return this._deliver(ctx, { pt: r.pt, typed: true }); }
-    // bare number: direct distance entry along the current cursor direction
+    // bare number: scale factors (ZOOM), or direct distance entry along the current cursor direction
+    if (r.kind === 'number' && p.acceptNumber) {
+      const m = t.match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*(xp|x)?$/i);
+      return this._deliver(ctx, { value: Number(m[1]), rel: m[2] ? m[2].toLowerCase() : null, typed: true });
+    }
     if (r.kind === 'number') {
       if (!p.base) { this.log('Point or option keyword required.', 'error'); return; }
       const dir = g.dist(p.base, this.cursor.pt) < 1e-12 ? { x: 1, y: 0 } : g.unit(g.sub(this.cursor.pt, p.base));
