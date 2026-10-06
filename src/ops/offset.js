@@ -1,6 +1,6 @@
 // OFFSET: parallel copies of lines, arcs, circles, polylines (with extended corners), ellipses and splines.
 import * as g from '../core/geom.js';
-import { E, segsOf, ellipsePoint, splinePoints } from '../core/entities.js';
+import { E, segsOf, ellipsePoint, ellipseSweep, ellipseIsFull, splinePoints } from '../core/entities.js';
 import { pathOf, entityFromSegs, inheritProps } from './path.js';
 
 /** Which side of a path (left=+1, right=-1) is the point on? */
@@ -92,10 +92,10 @@ export function offsetEntity(e, dist, sidePoint, doc) {
       return { result: entityFromSegs(segs, e, path.closed) };
     }
     case 'ellipse': case 'spline': {
-      const pts = e.type === 'ellipse' ? Array.from({ length: 129 }, (_, i) => ellipsePoint(e, e.t0 + g.sweepCCW(e.t0, e.t1 || g.TAU) * i / 128)) : splinePoints(e);
+      const pts = e.type === 'ellipse' ? Array.from({ length: 129 }, (_, i) => ellipsePoint(e, e.t0 + ellipseSweep(e) * i / 128)) : splinePoints(e);
       const lines = [];
       for (let i = 0; i + 1 < pts.length; i++) lines.push({ t: 'l', a: pts[i], b: pts[i + 1] });
-      const closed = e.type === 'ellipse' ? g.sweepCCW(e.t0, e.t1) < 1e-9 : !!e.closed;
+      const closed = e.type === 'ellipse' ? ellipseIsFull(e) : !!e.closed;
       const segs = offsetSegs(lines, dist * sideOf(lines, sidePoint), closed);
       if (!segs) return { error: 'The offset distance is too large.' };
       return { result: entityFromSegs(segs, e, closed), approximated: true };

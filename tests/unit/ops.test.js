@@ -182,3 +182,11 @@ test('boundary detection with bulged polyline and overlapping circles', () => {
   const a = Math.abs(g.plineArea(lens.loops[0]));
   near(a, 2 * 25 * Math.acos(3 / 5) - 6 * 4, 1e-3);          // lens area of two r=5 circles 6 apart
 });
+
+test('offset a full ellipse produces a closed outline around it', () => {
+  const d = doc();
+  const r = offsetEntity(E.ellipse(P(0, 0), P(10, 0), 0.5), 1, P(30, 0), d).result;
+  assert.equal(r.type, 'pline'); assert.ok(r.closed);
+  const b = g.ptsBounds(r.v);
+  near(b.maxX, 11, 0.05); near(b.minX, -11, 0.05); near(b.maxY, 6, 0.05);
+});

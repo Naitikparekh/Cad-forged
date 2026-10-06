@@ -4426,10 +4426,10 @@ button { cursor: pointer; }
       }
       case "ellipse":
       case "spline": {
-        const pts = e.type === "ellipse" ? Array.from({ length: 129 }, (_, i) => ellipsePoint(e, e.t0 + sweepCCW(e.t0, e.t1 || TAU) * i / 128)) : splinePoints(e);
+        const pts = e.type === "ellipse" ? Array.from({ length: 129 }, (_, i) => ellipsePoint(e, e.t0 + ellipseSweep(e) * i / 128)) : splinePoints(e);
         const lines = [];
         for (let i = 0; i + 1 < pts.length; i++) lines.push({ t: "l", a: pts[i], b: pts[i + 1] });
-        const closed = e.type === "ellipse" ? sweepCCW(e.t0, e.t1) < 1e-9 : !!e.closed;
+        const closed = e.type === "ellipse" ? ellipseIsFull(e) : !!e.closed;
         const segs = offsetSegs(lines, dist2 * sideOf(lines, sidePoint), closed);
         if (!segs) return { error: "The offset distance is too large." };
         return { result: entityFromSegs(segs, e, closed), approximated: true };
