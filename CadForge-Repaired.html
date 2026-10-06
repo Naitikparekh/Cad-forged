@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>CadForge • 2D CAD</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10151d;color:#d7e0ec;font:14px Segoe UI,Arial}header{height:62px;display:flex;align-items:center;gap:18px;padding:0 22px;background:#1c2532;border-bottom:1px solid #354152}h1{font-size:21px;margin:0;color:#63d9c0}button,input,select{background:#273447;color:#e7eef8;border:1px solid #46556b;border-radius:5px;padding:8px;cursor:pointer}button:hover,button.active{background:#286f68}main{display:flex;height:calc(100vh - 112px)}aside{width:220px;padding:16px;background:#18212e;overflow:auto}aside button{width:100%;text-align:left;margin:3px 0}label{display:block;margin:13px 0 5px;font-size:12px;color:#a9bbce}canvas{width:100%;height:100%;display:block;touch-action:none}#viewport{flex:1;min-width:0;position:relative}#hint{position:absolute;top:14px;left:18px;color:#9fb2c7;pointer-events:none}footer{height:50px;display:flex;align-items:center;padding:8px 15px;gap:14px;border-top:1px solid #354152}#command{flex:1}#status{min-width:250px;font:12px Consolas}small{color:#9fb2c7;line-height:1.6}hr{border:0;border-top:1px solid #354152;margin:18px 0}
+</style>
+<header><h1>CadForge</h1><span>2D drafting workspace</span><button id="new">New</button><button id="save">Save project</button><button id="open">Open project / DXF</button><button id="dxf">Export DXF</button><button id="svg">Export SVG</button><input type="file" id="file" hidden accept=".json,.dxf"></header>
+<main><aside><small>DRAW & EDIT</small><div id="tools"></div><hr><button id="undo">Undo · Ctrl+Z</button><button id="redo">Redo · Ctrl+Y</button><button id="fit">Fit drawing</button><label>Current layer</label><select id="layer"></select><button id="addLayer">Add layer</button><label>Layer color</label><input id="color" type="color" value="#63d9c0"><label><input id="visible" type="checkbox" checked> Layer visible</label><label><input id="snap" type="checkbox" checked> Grid / endpoint snap</label><label><input id="ortho" type="checkbox"> Orthogonal constraint</label><hr><small>Wheel: zoom<br>Middle / right drag: pan<br>Esc: cancel · Delete: erase<br>Coordinates: x,y in command bar<br>Drawing units are arbitrary.<br>Local autosave enabled.</small></aside><div id="viewport"><canvas id="canvas"></canvas><div id="hint"></div></div></main>
+<footer><span>Command</span><input id="command" placeholder="LINE, CIRCLE, RECTANGLE, MOVE, COPY, DELETE, FIT — or x,y"><span id="status"></span></footer>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),canvas=$('canvas'),ctx=canvas.getContext('2d');
+let doc={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[]},history=[],future=[],tool='select',points=[],selected=-1,mouse={x:0,y:0},pan=null,view={x:0,y:0,scale:4},W=0,H=0;
+const names={select:'Select',line:'Line',polyline:'Polyline',rectangle:'Rectangle',circle:'Circle',text:'Text',move:'Move',copy:'Copy',delete:'Erase'};
+const layer=()=>doc.layers.find(l=>l.name===$('layer').value)||doc.layers[0], distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function notify(s){$('hint').textContent=s}function persist(){try{localStorage.setItem('cadforge',JSON.stringify(doc))}catch(e){notify('Autosave unavailable; use Save project.')}}
+function checkpoint(){history.push(JSON.stringify(doc));if(history.length>100)history.shift();future=[]}
+function mutate(fn){checkpoint();fn();persist();render()}
+function syncLayers(){const old=$('layer').value;$('layer').replaceChildren(...doc.layers.map(l=>new Option(l.name,l.name)));if(doc.layers.some(l=>l.name===old))$('layer').value=old;$('color').value=layer().color;$('visible').checked=layer().visible}
+function setTool(t){tool=t;points=[];document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));notify(t==='select'?'Select an entity.':t==='move'||t==='copy'?'Select an entity, then specify base and destination.':t==='polyline'?'Specify vertices; Enter finishes polyline.':`Specify ${names[t].toLowerCase()} points.`);render()}
+for(const [t,n]of Object.entries(names)){const b=document.createElement('button');b.textContent=n;b.dataset.tool=t;b.onclick=()=>setTool(t);$('tools').append(b)}
+function screen(p){return{x:W/2+(p.x-view.x)*view.scale,y:H/2-(p.y-view.y)*view.scale}}function world(p){return{x:view.x+(p.x-W/2)/view.scale,y:view.y-(p.y-H/2)/view.scale}}
+function vertices(e){if(e.type==='circle')return[e.center];return e.points||[]}
+function snap(p){if($('snap').checked){let best=null,d=10/view.scale;for(const e of doc.entities){if(!doc.layers.find(l=>l.name===e.layer)?.visible)continue;for(const q of vertices(e)){const n=distance(p,q);if(n<d){d=n;best=q}}}p=best?{...best}:{x:Math.round(p.x/5)*5,y:Math.round(p.y/5)*5}}if($('ortho').checked&&points.length){const a=points[points.length-1];if(Math.abs(p.x-a.x)>Math.abs(p.y-a.y))p.y=a.y;else p.x=a.x}return p}
+function segmentDistance(p,a,b){const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));return distance(p,{x:a.x+t*dx,y:a.y+t*dy})}
+function hit(p){let idx=-1,best=9/view.scale;doc.entities.forEach((e,i)=>{if(!doc.layers.find(l=>l.name===e.layer)?.visible)return;let d=Infinity;if(e.type==='circle')d=Math.abs(distance(p,e.center)-e.radius);else if(e.type==='text')d=distance(p,e.points[0]);else{for(let j=1;j<e.points.length;j++)d=Math.min(d,segmentDistance(p,e.points[j-1],e.points[j]));if(e.closed)d=Math.min(d,segmentDistance(p,e.points.at(-1),e.points[0]))}if(d<best){best=d;idx=i}});return idx}
+function drawEntity(e,color,dashed=false){ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=1.5;ctx.setLineDash(dashed?[6,5]:[]);ctx.beginPath();if(e.type==='circle'){const p=screen(e.center);ctx.arc(p.x,p.y,e.radius*view.scale,0,Math.PI*2)}else if(e.type==='text'){const p=screen(e.points[0]);ctx.font=`${e.height*view.scale}px Segoe UI`;ctx.fillText(e.text,p.x,p.y)}else{e.points.forEach((p,i)=>{const q=screen(p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)});if(e.closed)ctx.closePath()}ctx.stroke();ctx.setLineDash([])}
+function shape(t,a,b){if(t==='circle')return{type:'circle',center:a,radius:distance(a,b)};if(t==='rectangle')return{type:'polyline',points:[a,{x:b.x,y:a.y},b,{x:a.x,y:b.y}],closed:true};return{type:t==='polyline'?'polyline':'line',points:[a,b]}}
+function render(){ctx.clearRect(0,0,W,H);let step=5;while(step*view.scale<22)step*=2;ctx.strokeStyle='#202c3a';ctx.lineWidth=1;const min=world({x:0,y:H}),max=world({x:W,y:0});ctx.beginPath();for(let x=Math.ceil(min.x/step)*step;x<max.x;x+=step){const p=screen({x,y:0});ctx.moveTo(p.x,0);ctx.lineTo(p.x,H)}for(let y=Math.ceil(min.y/step)*step;y<max.y;y+=step){const p=screen({x:0,y});ctx.moveTo(0,p.y);ctx.lineTo(W,p.y)}ctx.stroke();const o=screen({x:0,y:0});ctx.strokeStyle='#45546a';ctx.beginPath();ctx.moveTo(o.x,0);ctx.lineTo(o.x,H);ctx.moveTo(0,o.y);ctx.lineTo(W,o.y);ctx.stroke();doc.entities.forEach((e,i)=>{const l=doc.layers.find(l=>l.name===e.layer);if(l?.visible)drawEntity(e,i===selected?'#ffcb66':l.color)});if(points.length&&['line','rectangle','circle','polyline'].includes(tool)){const e=tool==='polyline'?{type:'polyline',points:[...points,mouse]}:shape(tool,points[0],mouse);drawEntity(e,'#ffffff',true)}const c=screen(mouse);ctx.strokeStyle='#b8cadb';ctx.beginPath();ctx.moveTo(c.x-9,c.y);ctx.lineTo(c.x+9,c.y);ctx.moveTo(c.x,c.y-9);ctx.lineTo(c.x,c.y+9);ctx.stroke();$('status').textContent=`X ${mouse.x.toFixed(2)} Y ${mouse.y.toFixed(2)} | ${doc.entities.length} entities`}
+function add(e){e.layer=layer().name;mutate(()=>doc.entities.push(e))}
+async function accept(p){if(tool==='select'||tool==='delete'){selected=hit(p);if(tool==='delete'&&selected>=0){mutate(()=>doc.entities.splice(selected,1));selected=-1}render();return}if(tool==='move'||tool==='copy'){if(selected<0){selected=hit(p);render();return}points.push(p);if(points.length===2){const dx=p.x-points[0].x,dy=p.y-points[0].y;mutate(()=>{const e=tool==='copy'?structuredClone(doc.entities[selected]):doc.entities[selected];if(e.center){e.center.x+=dx;e.center.y+=dy}else e.points.forEach(q=>{q.x+=dx;q.y+=dy});if(tool==='copy')doc.entities.push(e)});points=[]}return}if(tool==='text'){const text=await cadPrompt('Text');if(text)add({type:'text',points:[p],text,height:5});return}points.push(p);if(tool!=='polyline'&&points.length===2){const e=shape(tool,points[0],p);if(distance(points[0],p)>1e-9)add(e);points=[]}render()}
+function finish(){if(tool==='polyline'&&points.length>1)add({type:'polyline',points:[...points],closed:false});points=[];render()}
+canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);if(e.button===1||e.button===2){pan={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};return}accept(mouse=snap(world({x:e.offsetX,y:e.offsetY})))};
+canvas.onpointermove=e=>{if(pan){view.x=pan.vx-(e.clientX-pan.x)/view.scale;view.y=pan.vy+(e.clientY-pan.y)/view.scale}else mouse=snap(world({x:e.offsetX,y:e.offsetY}));render()};canvas.onpointerup=()=>pan=null;canvas.onpointercancel=()=>pan=null;canvas.oncontextmenu=e=>e.preventDefault();
+canvas.onwheel=e=>{e.preventDefault();const p={x:e.offsetX,y:e.offsetY},a=world(p);view.scale=Math.max(.01,Math.min(1000,view.scale*Math.exp(-e.deltaY*.001)));const b=world(p);view.x+=a.x-b.x;view.y+=a.y-b.y;render()};
+function fit(){const p=doc.entities.flatMap(e=>e.type==='circle'?[{x:e.center.x-e.radius,y:e.center.y-e.radius},{x:e.center.x+e.radius,y:e.center.y+e.radius}]:e.type==='text'?[e.points[0],{x:e.points[0].x+e.text.length*e.height*.6,y:e.points[0].y+e.height}]:vertices(e));if(!p.length){view={x:0,y:0,scale:4};render();return}const xs=p.map(q=>q.x),ys=p.map(q=>q.y),a=Math.min(...xs),b=Math.max(...xs),c=Math.min(...ys),d=Math.max(...ys);view={x:(a+b)/2,y:(c+d)/2,scale:Math.max(.01,Math.min(1000,Math.min(W/Math.max(20,b-a),H/Math.max(20,d-c))*.8))};render()}
+function undo(redo=false){const from=redo?future:history,to=redo?history:future;if(!from.length)return;to.push(JSON.stringify(doc));doc=JSON.parse(from.pop());selected=-1;points=[];syncLayers();persist();render()}
+$('undo').onclick=()=>undo();$('redo').onclick=()=>undo(true);$('fit').onclick=fit;
+$('layer').onchange=()=>{syncLayers();render()};$('color').onchange=()=>mutate(()=>layer().color=$('color').value);$('visible').onchange=()=>mutate(()=>layer().visible=$('visible').checked);$('addLayer').onclick=async()=>{const name=await cadPrompt('Layer name');if(name&&!doc.layers.some(l=>l.name===name)){mutate(()=>doc.layers.push({name,color:'#63d9c0',visible:true}));syncLayers();$('layer').value=name;syncLayers()}};
+function download(name,text,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([text],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+$('save').onclick=()=>download('drawing.cadforge.json',JSON.stringify(doc,null,2),'application/json');$('new').onclick=async()=>{if((doc.entities.length||doc.solids?.length)&&!await cadConfirm('Clear drawing? Save first if needed.'))return;mutate(()=>doc={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[]});selected=-1;points=[];syncLayers();fit()};
+function exportDXF(){const out=[],pair=(k,v)=>out.push(String(k),String(v));pair(0,'SECTION');pair(2,'HEADER');pair(9,'$ACADVER');pair(1,'AC1009');pair(0,'ENDSEC');pair(0,'SECTION');pair(2,'TABLES');pair(0,'TABLE');pair(2,'LAYER');pair(70,doc.layers.length);for(const l of doc.layers){pair(0,'LAYER');pair(2,l.name);pair(70,0);pair(62,l.visible?7:-7);pair(6,'CONTINUOUS')}pair(0,'ENDTAB');pair(0,'ENDSEC');pair(0,'SECTION');pair(2,'ENTITIES');for(const e of doc.entities){pair(0,e.type==='circle'?'CIRCLE':e.type==='text'?'TEXT':e.type==='line'?'LINE':'POLYLINE');pair(8,e.layer);if(e.type==='circle'){pair(10,e.center.x);pair(20,e.center.y);pair(30,0);pair(40,e.radius)}else if(e.type==='text'){pair(10,e.points[0].x);pair(20,e.points[0].y);pair(30,0);pair(40,e.height);pair(1,e.text)}else if(e.type==='line'){pair(10,e.points[0].x);pair(20,e.points[0].y);pair(30,0);pair(11,e.points[1].x);pair(21,e.points[1].y);pair(31,0)}else{pair(66,1);pair(70,e.closed?1:0);pair(10,0);pair(20,0);pair(30,0);for(const p of e.points){pair(0,'VERTEX');pair(8,e.layer);pair(10,p.x);pair(20,p.y);pair(30,0)}pair(0,'SEQEND');pair(8,e.layer)}}pair(0,'ENDSEC');pair(0,'EOF');return out.join('\r\n')+'\r\n'}
+function importDXF(text){const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/),records=[];let r=null;for(let i=0;i+1<lines.length;i+=2){const k=Number(lines[i].trim()),v=lines[i+1].trim();if(k===0){r={type:v,pairs:[]};records.push(r)}else if(r)r.pairs.push([k,v])}const result={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[]};let poly=null,section='',skipped=0;const val=(r,k,def=0)=>r.pairs.find(p=>p[0]===k)?.[1]??def,num=(r,k,def=0)=>Number(val(r,k,def)),pt=(r,k=10)=>({x:num(r,k),y:num(r,k+10)});for(const r of records){if(r.type==='SECTION'){section=val(r,2,'');continue}if(r.type==='ENDSEC'){section='';poly=null;continue}if(section==='TABLES'&&r.type==='LAYER'){const name=val(r,2,'0');const l={name,color:'#63d9c0',visible:num(r,62,7)>0};const i=result.layers.findIndex(x=>x.name===name);if(i>=0)result.layers[i]=l;else result.layers.push(l);continue}if(section!=='ENTITIES')continue;const name=String(val(r,8,'0'));if(!result.layers.some(l=>l.name===name))result.layers.push({name,color:'#63d9c0',visible:true});let e;if(r.type==='LINE')e={type:'line',points:[pt(r),pt(r,11)]};else if(r.type==='CIRCLE')e={type:'circle',center:pt(r),radius:num(r,40)};else if(r.type==='TEXT')e={type:'text',points:[pt(r)],text:String(val(r,1,'')),height:num(r,40,5)};else if(r.type==='POLYLINE'){e={type:'polyline',points:[],closed:!!(num(r,70)&1)};poly=e}else if(r.type==='VERTEX'&&poly){poly.points.push(pt(r));continue}else if(r.type==='SEQEND'){poly=null;continue}else if(r.type==='LWPOLYLINE'){const ps=[];for(const [k,v]of r.pairs){if(k===10)ps.push({x:Number(v),y:0});if(k===20&&ps.length)ps.at(-1).y=Number(v)}e={type:'polyline',points:ps,closed:!!(num(r,70)&1)};if(r.pairs.some(([k,v])=>k===42&&Number(v)!==0))skipped++}else{skipped++;continue}e.layer=name;result.entities.push(e)}result.entities=result.entities.filter(e=>e.type!=='polyline'||e.points.length>1);validate(result);return{doc:result,skipped}}
+function validate(d){if(!d||!Array.isArray(d.layers)||!d.layers.length||!Array.isArray(d.entities))throw Error('Invalid project');const finite=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);for(const l of d.layers)if(typeof l.name!=='string'||!/^#[0-9a-f]{6}$/i.test(l.color)||typeof l.visible!=='boolean')throw Error('Invalid layer');for(const e of d.entities){if(!d.layers.some(l=>l.name===e.layer))throw Error('Missing layer');if(e.type==='circle'){if(!finite(e.center)||!Number.isFinite(e.radius)||e.radius<=0)throw Error('Invalid circle')}else if(!['line','polyline','text'].includes(e.type)||!Array.isArray(e.points)||!e.points.every(finite)||e.points.length<(e.type==='text'?1:2))throw Error('Invalid entity');if(e.type==='text'&&(typeof e.text!=='string'||!Number.isFinite(e.height)||e.height<=0))throw Error('Invalid text')}}
+$('dxf').onclick=()=>download('drawing.dxf',exportDXF(),'application/dxf');$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const text=await f.text(),r=f.name.toLowerCase().endsWith('.dxf')?importDXF(text):{doc:JSON.parse(text),skipped:0};validate(r.doc);mutate(()=>doc=r.doc);selected=-1;points=[];syncLayers();fit();notify(r.skipped?`Imported with ${r.skipped} unsupported records or curved polylines; inspect geometry.`:'Drawing imported.')}catch(err){notify('Import failed: '+err.message)}e.target.value=''};
+$('svg').onclick=()=>{const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));const elements=doc.entities.filter(e=>doc.layers.find(l=>l.name===e.layer)?.visible).map(e=>{const color=doc.layers.find(l=>l.name===e.layer).color;if(e.type==='circle')return `<circle cx="${e.center.x}" cy="${-e.center.y}" r="${e.radius}" stroke="${color}" fill="none"/>`;if(e.type==='text')return `<text x="${e.points[0].x}" y="${-e.points[0].y}" font-size="${e.height}" fill="${color}">${esc(e.text)}</text>`;return `<${e.closed?'polygon':'polyline'} points="${e.points.map(p=>p.x+','+-p.y).join(' ')}" stroke="${color}" fill="none"/>`});download('drawing.svg',`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${view.x-W/2/view.scale} ${-view.y-H/2/view.scale} ${W/view.scale} ${H/view.scale}" stroke-width="${1/view.scale}">${elements.join('')}</svg>`,'image/svg+xml')};
+$('command').onkeydown=e=>{if(e.key!=='Enter')return;const s=e.target.value.trim().toLowerCase();e.target.value='';const m=s.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);if(m)accept({x:Number(m[1]),y:Number(m[2])});else if(s==='fit'||s==='zoom')fit();else if(s==='undo')undo();else if(s==='redo')undo(true);else if(s==='rectangle'||s==='rect')setTool('rectangle');else if(names[s])setTool(s);else if(s==='erase')setTool('delete');else if(!s)finish();else notify('Unknown command: '+s)};
+document.onkeydown=e=>{if(e.target.matches('input,select'))return;if(e.key==='Escape'){points=[];selected=-1;setTool('select')}else if(e.key==='Enter')finish();else if(e.key==='Delete'&&selected>=0){mutate(()=>doc.entities.splice(selected,1));selected=-1;render()}else if(e.ctrlKey&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();undo(e.key.toLowerCase()==='y')}};
+new ResizeObserver(()=>{const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height;canvas.width=W*d;canvas.height=H*d;ctx.setTransform(d,0,0,d,0,0);render()}).observe(canvas);
+try{const saved=localStorage.getItem('cadforge');if(saved){const d=JSON.parse(saved);validate(d);doc=d}}catch(e){}syncLayers();setTool('select');
+
+
+
+
+</script><script>'use strict';
+// Accessible in-app dialogs work in browsers that disable window.prompt.
+const dialogStyle=document.createElement('style');dialogStyle.textContent='dialog{background:#252d39;color:#e5edf7;border:1px solid #718096;border-radius:6px;width:390px;padding:24px;box-shadow:0 12px 60px #0008}dialog::backdrop{background:#0008}dialog input{width:100%;margin:14px 0}dialog .actions{display:flex;justify-content:flex-end;gap:8px}dialog h2{font-size:17px;margin:0 0 12px}';document.head.append(dialogStyle);
+const inputDialog=document.createElement('dialog');inputDialog.innerHTML='<form method="dialog"><h2>CadForge</h2><label id="dialogLabel" for="dialogValue"></label><input id="dialogValue" autocomplete="off"><div class="actions"><button value="cancel" type="button" id="dialogCancel">Cancel</button><button value="ok" id="dialogOk">OK</button></div></form>';document.body.append(inputDialog);
+let pendingDialog=null;
+function cadPrompt(message,initial=''){return new Promise(resolve=>{if(pendingDialog)pendingDialog(null);pendingDialog=resolve;$('dialogLabel').textContent=message;$('dialogValue').value=initial;$('dialogValue').hidden=false;inputDialog.showModal();$('dialogValue').focus();$('dialogValue').select()})}
+function cadConfirm(message){const result=cadPrompt(message);$('dialogValue').hidden=true;$('dialogOk').focus();return result.then(v=>v!==null)}
+inputDialog.querySelector('form').onsubmit=e=>{e.preventDefault();const value=$('dialogValue').value;inputDialog.close();const resolve=pendingDialog;pendingDialog=null;resolve?.(value)};
+$('dialogCancel').onclick=()=>{inputDialog.close();const resolve=pendingDialog;pendingDialog=null;resolve?.(null)};
+inputDialog.oncancel=e=>{e.preventDefault();$('dialogCancel').click()};
+
+
+</script><script>/* CadForge extended workspace */
+const extraStyle=document.createElement('style');extraStyle.textContent=`
+body{font-size:12px;background:#171a20}header{height:42px;background:#252a33;padding:0 12px;gap:12px}h1{font-size:18px;color:#eef2f7}header button{padding:5px 9px}button,input,select{border-radius:2px;background:#303641;border-color:#49515f}button:hover,button.active{background:#3c638d}#ribbon{height:114px;background:#30353e;border-bottom:1px solid #12151b;display:flex;padding:6px 12px;gap:12px;overflow-x:auto}.rgroup{border-right:1px solid #515762;padding-right:12px;min-width:140px}.rgroup strong{display:block;font-size:11px;color:#abb7c7;text-align:center;margin-top:5px}.rbuttons{display:flex;flex-wrap:wrap;gap:4px;max-width:285px}.rbuttons button{min-width:65px;height:34px}.tabs{height:29px;background:#22262e;padding:6px 20px;word-spacing:20px}.drawingtab{height:27px;padding:6px 18px;background:#20242b;color:#b5c9e0}main{height:calc(100vh - 322px)}aside{width:210px;padding:12px;background:#272c35}#tools{display:none}#properties{width:240px;background:#272c35;padding:14px;overflow:auto}#properties input,#properties select{width:100%;margin:4px 0}#properties button{margin-top:5px}#historylog{height:30px;background:#20242a;font:12px Consolas;padding:7px 16px;white-space:nowrap;overflow:hidden;color:#b4bdc9}footer{height:50px;background:#252a32}#hint{background:#202833cc;padding:7px;border-radius:3px}.viewbadge{position:absolute;right:16px;top:16px;border:2px solid #7d8da0;padding:18px;color:#c9d6e4;background:#303a47}.statusbar{height:30px;background:#252b35;padding:5px 15px;display:flex;gap:20px;color:#a6b8cc}@media(max-width:1000px){#properties{width:180px}aside{width:160px}header span{display:none}}`;
+document.head.append(extraStyle);
+const tabbar=document.createElement('div');tabbar.className='tabs';tabbar.textContent='HOME   INSERT   ANNOTATE   VIEW   MANAGE';document.querySelector('header').after(tabbar);
+const ribbon=document.createElement('div');ribbon.id='ribbon';tabbar.after(ribbon);
+function group(title,items){const g=document.createElement('div');g.className='rgroup';const bs=document.createElement('div');bs.className='rbuttons';for(const [label,fn,t]of items){const b=document.createElement('button');b.textContent=label;b.onclick=fn;if(t)b.dataset.tool=t;bs.append(b)}const caption=document.createElement('strong');caption.textContent=title;g.append(bs,caption);ribbon.append(g)}
+const drawItems=['line','polyline','rectangle','circle','text'].map(t=>[names[t],()=>setTool(t),t]);
+names.arc='Arc';names.dimension='Dimension';names.rotate='Rotate';names.scale='Scale';names.mirror='Mirror';names.offset='Offset';names.trim='Trim';
+group('Draw', [...drawItems,['Arc',()=>setTool('arc'),'arc']]);
+group('Modify',['move','copy','rotate','scale','mirror','offset','trim','delete'].map(t=>[names[t],()=>setTool(t),t]));
+group('Annotation',[['Dimension',()=>setTool('dimension'),'dimension'],['Text',()=>setTool('text'),'text'],['Measure',measure]]);
+group('View / Output',[['Extents',fit],['Undo',()=>undo()],['Redo',()=>undo(true)],['Plot',()=>window.print()]]);
+const dt=document.createElement('div');dt.className='drawingtab';dt.textContent='Drawing 1  /  Model space';ribbon.after(dt);
+const badge=document.createElement('div');badge.className='viewbadge';badge.textContent='TOP';$('viewport').append(badge);
+const props=document.createElement('section');props.id='properties';props.innerHTML='<strong>PROPERTIES</strong><label id="entityKind">No entity selected</label><label>Entity layer</label><select id="entityLayer"></select><label>Text content</label><input id="entityText"><label>Text height / Circle radius</label><input id="entitySize" type="number" min="0.001" step="0.1"><button id="applyProps">Apply changes</button><hr><small>Select an entity to inspect it.<br><br>2D model space<br>World coordinate system<br>DXF R12 export<br><br>Dimension and arc geometry is exported as editable primitives.</small>';
+document.querySelector('main').append(props);
+const log=document.createElement('div');log.id='historylog';document.querySelector('footer').before(log);
+const sb=document.createElement('div');sb.className='statusbar';sb.innerHTML='<span>MODEL</span><span>F8 Ortho</span><span>F9 Grid snap</span><span>Endpoint snap</span><span>Units: drawing units</span><span>LOCAL</span>';document.querySelector('footer').after(sb);
+const baseNotify=notify;notify=function(s){baseNotify(s);log.textContent=s};
+const baseRender=render;render=function(){baseRender();const e=doc.entities[selected];$('entityKind').textContent=e?e.type.toUpperCase()+' · '+(selected+1):'No entity selected';if(document.activeElement?.closest('#properties'))return;$('entityLayer').replaceChildren(...doc.layers.map(l=>new Option(l.name,l.name)));if(e){$('entityLayer').value=e.layer;$('entityText').value=e.text||'';$('entitySize').value=e.type==='circle'?e.radius:e.type==='text'?e.height:''}else{$('entityText').value='';$('entitySize').value=''}};
+$('applyProps').onclick=()=>{const e=doc.entities[selected];if(!e)return;const size=Number($('entitySize').value);if(['circle','text'].includes(e.type)&&(!Number.isFinite(size)||size<=0)){notify('Enter a positive size.');return}mutate(()=>{e.layer=$('entityLayer').value;if(e.type==='text'){e.text=$('entityText').value;e.height=size}if(e.type==='circle')e.radius=size})};
+function measure(){const e=doc.entities[selected];if(!e){notify('Select an entity to measure.');return}let len=0,area=0;if(e.type==='circle'){len=2*Math.PI*e.radius;area=Math.PI*e.radius**2}else{const ps=e.points;for(let i=1;i<ps.length;i++)len+=distance(ps[i-1],ps[i]);if(e.closed){len+=distance(ps.at(-1),ps[0]);for(let i=0;i<ps.length;i++){const a=ps[i],b=ps[(i+1)%ps.length];area+=a.x*b.y-b.x*a.y}area=Math.abs(area)/2}}notify(`Length: ${len.toFixed(4)}   Area: ${area.toFixed(4)}`)}
+function transformEntity(e,fn){if(e.center)e.center=fn(e.center);else e.points=e.points.map(fn)}
+function lineIntersection(a,b,c,d){const den=(b.x-a.x)*(d.y-c.y)-(b.y-a.y)*(d.x-c.x);if(Math.abs(den)<1e-10)return null;const t=((c.x-a.x)*(d.y-c.y)-(c.y-a.y)*(d.x-c.x))/den,u=((c.x-a.x)*(b.y-a.y)-(c.y-a.y)*(b.x-a.x))/den;return t>1e-9&&t<1-1e-9&&u>=0&&u<=1?{x:a.x+t*(b.x-a.x),y:a.y+t*(b.y-a.y),t}:null}
+function trimAt(p){const idx=hit(p),e=doc.entities[idx];if(!e||e.type!=='line'){notify('Trim supports intersecting straight lines; click the end to remove.');return}const cuts=[];doc.entities.forEach((other,i)=>{if(i===idx||other.type!=='line')return;const q=lineIntersection(...e.points,...other.points);if(q)cuts.push(q)});if(!cuts.length){notify('No crossing line found.');return}const removeStart=distance(p,e.points[0])<distance(p,e.points[1]);cuts.sort((a,b)=>a.t-b.t);mutate(()=>e.points[removeStart?0:1]=removeStart?cuts[0]:cuts.at(-1));notify('Line trimmed.')}
+const baseAccept=accept;accept=async function(p){
+if(tool==='trim'){trimAt(p);return}
+if(['rotate','scale','mirror','offset'].includes(tool)){
+ if(selected<0){selected=hit(p);render();notify('Specify base point (offset: click once after selecting).');return}
+ const source=doc.entities[selected];
+ if(tool==='offset'){const raw=await cadPrompt('Offset distance (signed for straight lines)','5');if(raw===null)return;const amount=Number(raw);if(!Number.isFinite(amount)){notify('Invalid distance');return}const e=structuredClone(source);if(e.type==='circle'){if(e.radius+amount<=0){notify('Offset would produce a nonpositive radius.');return}e.radius+=amount}else if(e.type==='line'){const [a,b]=e.points,len=distance(a,b);if(len<1e-9)return;const dx=-(b.y-a.y)/len*amount,dy=(b.x-a.x)/len*amount;transformEntity(e,q=>({x:q.x+dx,y:q.y+dy}))}else{notify('Offset currently supports lines and circles.');return}add(e);return}
+ points.push(p);if(tool==='mirror'&&points.length<2){notify('Specify second point of mirror axis.');return}
+ const a=points[0];let fn,factor=1;
+ if(tool==='rotate'){const raw=await cadPrompt('Rotation angle in degrees','90');if(raw===null){points=[];return}const angle=Number(raw)*Math.PI/180;if(!Number.isFinite(angle)){points=[];return}fn=q=>({x:a.x+(q.x-a.x)*Math.cos(angle)-(q.y-a.y)*Math.sin(angle),y:a.y+(q.x-a.x)*Math.sin(angle)+(q.y-a.y)*Math.cos(angle)})}
+ if(tool==='scale'){const raw=await cadPrompt('Scale factor','2');if(raw===null){points=[];return}factor=Number(raw);if(!Number.isFinite(factor)||factor<=0){points=[];notify('Enter a positive scale factor.');return}fn=q=>({x:a.x+(q.x-a.x)*factor,y:a.y+(q.y-a.y)*factor})}
+ if(tool==='mirror'){const b=points[1],len=distance(a,b);if(len<1e-9){points=[];return}const ux=(b.x-a.x)/len,uy=(b.y-a.y)/len;fn=q=>{const vx=q.x-a.x,vy=q.y-a.y,dot=vx*ux+vy*uy;return{x:a.x+2*dot*ux-vx,y:a.y+2*dot*uy-vy}}}
+ mutate(()=>{transformEntity(source,fn);if(source.type==='circle')source.radius*=factor;if(source.type==='text')source.height*=factor});points=[];notify('Transformation complete. Text stays horizontal.');return
+}
+if(tool==='arc'){points.push(p);if(points.length===1)notify('Specify arc start point.');else if(points.length===2)notify('Specify arc end point (counterclockwise).');else{const [c,a,b]=points,r=distance(c,a);if(r>1e-9){let start=Math.atan2(a.y-c.y,a.x-c.x),end=Math.atan2(b.y-c.y,b.x-c.x);while(end<=start)end+=Math.PI*2;const count=Math.max(16,Math.ceil((end-start)*32)),ps=[];for(let i=0;i<=count;i++){const t=start+(end-start)*i/count;ps.push({x:c.x+r*Math.cos(t),y:c.y+r*Math.sin(t)})}add({type:'polyline',points:ps,closed:false});notify('Arc created as segmented polyline.')}points=[]}render();return}
+if(tool==='dimension'){points.push(p);if(points.length===1)notify('Specify second measurement point.');else if(points.length===2)notify('Specify dimension line position.');else{const [a,b,pos]=points,len=distance(a,b);if(len>1e-9){const ux=(b.x-a.x)/len,uy=(b.y-a.y)/len,nx=-uy,ny=ux,off=(pos.x-a.x)*nx+(pos.y-a.y)*ny,A={x:a.x+nx*off,y:a.y+ny*off},B={x:b.x+nx*off,y:b.y+ny*off},size=Math.min(3,len/8),ents=[{type:'line',points:[a,A]},{type:'line',points:[b,B]},{type:'line',points:[A,B]},{type:'text',points:[{x:(A.x+B.x)/2+nx*2,y:(A.y+B.y)/2+ny*2}],text:len.toFixed(2),height:3}];for(const [p,dir]of [[A,1],[B,-1]])for(const side of [-1,1])ents.push({type:'line',points:[p,{x:p.x+dir*ux*size+nx*side*size*.35,y:p.y+dir*uy*size+ny*side*size*.35}]});mutate(()=>doc.entities.push(...ents.map(e=>({...e,layer:layer().name}))));notify('Dimension created as independent lines and text.')}points=[]}render();return}
+baseAccept(p)};
+const baseCommand=$('command').onkeydown;$('command').onkeydown=e=>{if(e.key==='Enter'){const s=e.target.value.trim().toLowerCase(),aliases={l:'line',pl:'polyline',c:'circle',rec:'rectangle',m:'move',co:'copy',e:'delete',ro:'rotate',sc:'scale',mi:'mirror',o:'offset',tr:'trim',dim:'dimension',a:'arc'};if(s==='measure'){measure();e.target.value='';return}if(aliases[s])e.target.value=aliases[s];const relative=e.target.value.match(/^@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);if(relative&&points.length){const a=points.at(-1);accept({x:a.x+Number(relative[1]),y:a.y+Number(relative[2])});e.target.value='';return}}baseCommand(e)};
+const baseKeys=document.onkeydown;document.onkeydown=e=>{if(e.key==='F8'||e.key==='F9'){e.preventDefault();const el=$(e.key==='F8'?'ortho':'snap');el.checked=!el.checked;notify((e.key==='F8'?'Ortho':'Snap')+(el.checked?' on':' off'));return}baseKeys(e)};
+const printStyle=document.createElement('style');printStyle.textContent='@media print{header,.tabs,#ribbon,.drawingtab,aside,#properties,footer,#historylog,.statusbar,#hint,.viewbadge{display:none!important}main{height:95vh}body{background:white}canvas{background:#10151d} }';document.head.append(printStyle);
+setTool('select');
+
+
+// Ribbon tabs expose the relevant command panels.
+tabbar.textContent='';
+for(const tabName of ['Home','Insert','Annotate','View','Manage']){
+ const button=document.createElement('button');button.textContent=tabName;button.style.cssText='padding:3px 14px;border:0;margin-top:-4px';
+ button.onclick=()=>{tabbar.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b===button));ribbon.querySelectorAll('.rgroup').forEach((g,i)=>{g.style.display=tabName==='Home'||(tabName==='Insert'&&i===0)||(tabName==='Annotate'&&i===2)||(tabName==='View'&&i===3)||(tabName==='Manage'&&i===4)?'block':'none'})};
+ tabbar.append(button);
+}
+group('Project / Layers',[['Open',()=>$('file').click()],['Save',()=>$('save').click()],['Add layer',()=>$('addLayer').click()],['DXF',()=>$('dxf').click()]]);
+tabbar.querySelector('button').click();
+
+</script><script>'use strict';
+// Selection sets, reusable block definitions and drafting operations.
+let selectionSet=new Set(),shiftSelection=false,blockSerial=0,insertName=null;
+const gid=()=>`g${Date.now().toString(36)}_${++blockSerial}`;
+function chosen(){const valid=[...selectionSet].filter(i=>i>=0&&i<doc.entities.length);if(selected>=0&&!valid.includes(selected))valid.push(selected);const groups=new Set(valid.map(i=>doc.entities[i].group).filter(Boolean));doc.entities.forEach((e,i)=>{if(groups.has(e.group)&&!valid.includes(i))valid.push(i)});return valid}
+function clearSelection(){selected=-1;selectionSet.clear();points=[]}
+function selectAll(){selectionSet=new Set(doc.entities.map((e,i)=>i).filter(i=>doc.layers.find(l=>l.name===doc.entities[i].layer)?.visible));selected=selectionSet.values().next().value??-1;notify(`${chosen().length} entities selected`);render()}
+async function createBlock(){const ids=chosen();if(!ids.length){notify('Select entities first. Shift-click adds entities, or use SELECTALL.');return}const name=await cadPrompt('Block name');if(!name?.trim())return;if(doc.blocks?.[name]){notify('A block with that name already exists.');return}const ps=ids.flatMap(i=>vertices(doc.entities[i])),base=ps[0]||{x:0,y:0},items=ids.map(i=>{const e=structuredClone(doc.entities[i]);delete e.group;transformEntity(e,p=>({x:p.x-base.x,y:p.y-base.y}));return e});mutate(()=>{doc.blocks??={};doc.blocks[name]={items};const id=gid();ids.forEach(i=>{doc.entities[i].group=id;doc.entities[i].blockName=name})});notify(`Block ${name} defined. Click Insert block to place another instance.`)}
+async function startInsert(){const available=Object.keys(doc.blocks||{});if(!available.length){notify('Create a block first.');return}const name=await cadPrompt('Block name: '+available.join(', '),available[0]);if(!doc.blocks[name]){notify('Block not found.');return}insertName=name;setTool('insert');notify(`Specify insertion point for ${name}.`)}
+function explode(){const ids=chosen();if(!ids.length){notify('Select a block or polyline first.');return}mutate(()=>{const result=[];doc.entities.forEach((e,i)=>{if(!ids.includes(i)){result.push(e);return}if(e.group){delete e.group;delete e.blockName;result.push(e)}else if(e.type==='polyline'){for(let j=1;j<e.points.length;j++)result.push({type:'line',layer:e.layer,points:[e.points[j-1],e.points[j]]});if(e.closed)result.push({type:'line',layer:e.layer,points:[e.points.at(-1),e.points[0]]})}else result.push(e)});doc.entities=result});clearSelection();render();notify('Exploded selected objects.')}
+async function hatch(){const e=doc.entities[selected];if(!e||!(e.closed&&e.type==='polyline'||e.type==='circle')){notify('Select a closed polyline or circle boundary.');return}const raw=await cadPrompt('Hatch spacing','5');if(raw===null)return;const spacing=Number(raw);if(!Number.isFinite(spacing)||spacing<=0){notify('Enter positive spacing.');return}const ps=e.type==='circle'?Array.from({length:128},(_,i)=>({x:e.center.x+e.radius*Math.cos(i*Math.PI/64),y:e.center.y+e.radius*Math.sin(i*Math.PI/64)})):e.points;const transformed=ps.map(p=>({u:(p.x+p.y)/Math.SQRT2,v:(p.y-p.x)/Math.SQRT2})),lo=Math.min(...transformed.map(p=>p.v)),hi=Math.max(...transformed.map(p=>p.v));if((hi-lo)/spacing>3000){notify('Spacing too small; maximum 3000 hatch rows.');return}const ents=[],id=gid();for(let v=Math.ceil(lo/spacing)*spacing;v<hi;v+=spacing){const us=[];for(let i=0;i<transformed.length;i++){const a=transformed[i],b=transformed[(i+1)%transformed.length];if((a.v<=v&&b.v>v)||(b.v<=v&&a.v>v))us.push(a.u+(v-a.v)*(b.u-a.u)/(b.v-a.v))}us.sort((a,b)=>a-b);for(let i=0;i+1<us.length;i+=2)ents.push({type:'line',layer:e.layer,group:id,hatch:true,points:[us[i],us[i+1]].map(u=>({x:(u-v)/Math.SQRT2,y:(u+v)/Math.SQRT2}))})}if(!ents.length){notify('No hatch lines at this spacing.');return}mutate(()=>doc.entities.push(...ents));notify(`Hatch created: ${ents.length} editable lines.`)}
+function extendAt(p){const idx=hit(p),e=doc.entities[idx];if(!e||e.type!=='line'){notify('Extend: click a line endpoint side.');return}const start=distance(p,e.points[0])<distance(p,e.points[1]),a=e.points[start?1:0],b=e.points[start?0:1],dx=b.x-a.x,dy=b.y-a.y,candidates=[];for(const other of doc.entities){if(other===e||other.type!=='line')continue;const [c,d]=other.points,ex=d.x-c.x,ey=d.y-c.y,den=dx*ey-dy*ex;if(Math.abs(den)<1e-10)continue;const t=((c.x-a.x)*ey-(c.y-a.y)*ex)/den,u=((c.x-a.x)*dy-(c.y-a.y)*dx)/den;if(t>1+1e-9&&u>=0&&u<=1)candidates.push({t,x:a.x+t*dx,y:a.y+t*dy})}candidates.sort((a,b)=>a.t-b.t);if(!candidates.length){notify('No boundary line found in that direction.');return}mutate(()=>e.points[start?0:1]={x:candidates[0].x,y:candidates[0].y});notify('Line extended to nearest boundary.')}
+async function chamfer(){const ids=chosen();if(ids.length!==2||ids.some(i=>doc.entities[i].type!=='line')){notify('Shift-select two lines with a shared endpoint.');return}const [e,f]=ids.map(i=>doc.entities[i]);let ei=-1,fi=-1;for(let i=0;i<2;i++)for(let j=0;j<2;j++)if(distance(e.points[i],f.points[j])<1e-7){ei=i;fi=j}if(ei<0){notify('Lines must share an endpoint.');return}const raw=await cadPrompt('Equal chamfer distance','5');if(raw===null)return;const amount=Number(raw),c=e.points[ei],a=e.points[1-ei],b=f.points[1-fi],la=distance(c,a),lb=distance(c,b);if(!Number.isFinite(amount)||amount<=0||amount>=Math.min(la,lb)){notify('Distance must be positive and shorter than both lines.');return}const A={x:c.x+(a.x-c.x)*amount/la,y:c.y+(a.y-c.y)*amount/la},B={x:c.x+(b.x-c.x)*amount/lb,y:c.y+(b.y-c.y)*amount/lb};mutate(()=>{e.points[ei]=A;f.points[fi]=B;doc.entities.push({type:'line',layer:e.layer,points:[A,B]})});notify('Chamfer created.')}
+const oldCanvasDown=canvas.onpointerdown;canvas.onpointerdown=e=>{shiftSelection=e.shiftKey;oldCanvasDown(e);shiftSelection=false};
+const previousAccept=accept;accept=async function(p){
+if(tool==='select'){const i=hit(p);if(shiftSelection){if(selectionSet.has(i))selectionSet.delete(i);else if(i>=0)selectionSet.add(i);selected=selectionSet.values().next().value??-1}else{selectionSet.clear();selected=i;if(i>=0)selectionSet.add(i)}render();notify(`${chosen().length} entities selected. Shift-click adds or removes.`);return}
+if(tool==='window'){points.push(p);if(points.length===2){const [a,b]=points;selectionSet=new Set();doc.entities.forEach((e,i)=>{const ps=e.type==='circle'?[{x:e.center.x-e.radius,y:e.center.y-e.radius},{x:e.center.x+e.radius,y:e.center.y+e.radius}]:vertices(e);if(doc.layers.find(l=>l.name===e.layer)?.visible&&ps.every(q=>q.x>=Math.min(a.x,b.x)&&q.x<=Math.max(a.x,b.x)&&q.y>=Math.min(a.y,b.y)&&q.y<=Math.max(a.y,b.y)))selectionSet.add(i)});selected=selectionSet.values().next().value??-1;points=[];notify(`${chosen().length} entities selected.`);render()}return}
+if(tool==='insert'){const id=gid(),items=structuredClone(doc.blocks[insertName].items);items.forEach(e=>{transformEntity(e,q=>({x:q.x+p.x,y:q.y+p.y}));e.group=id;e.blockName=insertName;e.layer=layer().name});mutate(()=>doc.entities.push(...items));notify(`Inserted ${insertName}.`);return}
+if(tool==='extend'){extendAt(p);return}
+if(tool==='delete'){const idx=hit(p);if(idx<0)return;selected=idx;selectionSet=new Set([idx]);const ids=chosen();mutate(()=>doc.entities=doc.entities.filter((e,i)=>!ids.includes(i)));clearSelection();render();return}
+if(['move','copy','rotate','scale','mirror'].includes(tool)){
+if(selected<0){selected=hit(p);selectionSet=new Set(selected<0?[]:[selected]);render();notify('Specify base point.');return}
+points.push(p);if(['move','copy','mirror'].includes(tool)&&points.length<2){notify('Specify destination / second axis point.');return}
+const ids=chosen(),a=points[0];let fn,factor=1;
+if(tool==='move'||tool==='copy'){const b=points[1];fn=q=>({x:q.x+b.x-a.x,y:q.y+b.y-a.y})}
+if(tool==='rotate'){const raw=await cadPrompt('Rotation angle in degrees','90');if(raw===null){points=[];return}const t=Number(raw)*Math.PI/180;if(!Number.isFinite(t)){points=[];return}fn=q=>({x:a.x+(q.x-a.x)*Math.cos(t)-(q.y-a.y)*Math.sin(t),y:a.y+(q.x-a.x)*Math.sin(t)+(q.y-a.y)*Math.cos(t)})}
+if(tool==='scale'){const raw=await cadPrompt('Scale factor','2');if(raw===null){points=[];return}factor=Number(raw);if(!Number.isFinite(factor)||factor<=0){points=[];notify('Positive factor required.');return}fn=q=>({x:a.x+(q.x-a.x)*factor,y:a.y+(q.y-a.y)*factor})}
+if(tool==='mirror'){const b=points[1],len=distance(a,b);if(len<1e-9){points=[];return}const ux=(b.x-a.x)/len,uy=(b.y-a.y)/len;fn=q=>{const vx=q.x-a.x,vy=q.y-a.y,dot=vx*ux+vy*uy;return{x:a.x+2*dot*ux-vx,y:a.y+2*dot*uy-vy}}}
+mutate(()=>{const groups={};for(const i of ids){const e=tool==='copy'?structuredClone(doc.entities[i]):doc.entities[i];transformEntity(e,fn);if(e.type==='circle')e.radius*=factor;if(e.type==='text')e.height*=factor;if(tool==='copy'){if(e.group)e.group=groups[e.group]??=gid();doc.entities.push(e)}}});points=[];notify(`${ids.length} entities ${tool==='copy'?'copied':'transformed'}.`);return}
+previousAccept(p)};
+const earlierDraw=drawEntity;drawEntity=function(e,color,dashed){const ids=chosen();if(ids.some(i=>doc.entities[i]===e))color='#ffcb66';earlierDraw(e,color,dashed)};
+const previousKeys=document.onkeydown;document.onkeydown=e=>{if(e.target.matches('input,select')){previousKeys(e);return}if(e.ctrlKey&&e.key.toLowerCase()==='a'){e.preventDefault();selectAll();return}if(e.key==='Escape')selectionSet.clear();if(e.key==='Delete'){const ids=chosen();if(ids.length){mutate(()=>doc.entities=doc.entities.filter((e,i)=>!ids.includes(i)));clearSelection();render();return}}previousKeys(e)};
+// Save view-based layout presets and print on a white sheet.
+async function saveLayout(){const name=await cadPrompt('Layout name','Sheet 1');if(!name)return;mutate(()=>{doc.layouts??={};doc.layouts[name]={view:structuredClone(view),paper:'A4',landscape:true}});notify(`Layout ${name} saved with current view.`)}
+async function restoreLayout(){const keys=Object.keys(doc.layouts||{});if(!keys.length){notify('Save a layout first.');return}const name=await cadPrompt('Layout: '+keys.join(', '),keys[0]);if(!doc.layouts[name])return;view=structuredClone(doc.layouts[name].view);dt.textContent=name+' / Saved model view';render();notify('Layout view restored. Layouts save view extents, not separate paper-space entities.')}
+async function plotSheet(){const raw=await cadPrompt('Paper size: A4, A3 or LETTER','A4');if(!raw)return;const paper=raw.toUpperCase();if(!['A4','A3','LETTER'].includes(paper)){notify('Unsupported paper size.');return}const win=window.open('','_blank');if(!win){notify('Allow pop-ups to open the print sheet.');return}const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));let svg='';for(const e of doc.entities){if(!doc.layers.find(l=>l.name===e.layer)?.visible)continue;if(e.type==='circle')svg+=`<circle cx="${e.center.x}" cy="${-e.center.y}" r="${e.radius}"/>`;else if(e.type==='text')svg+=`<text x="${e.points[0].x}" y="${-e.points[0].y}" font-size="${e.height}" fill="black" stroke="none">${esc(e.text)}</text>`;else svg+=`<${e.closed?'polygon':'polyline'} points="${e.points.map(p=>p.x+','+-p.y).join(' ')}"/>`}const w=W/view.scale,h=H/view.scale;win.document.write(`<!doctype html><title>CadForge Print Sheet</title><style>@page{size:${paper==='LETTER'?'letter':paper} landscape;margin:12mm}body{margin:0;font:12px Arial}svg{width:100%;height:85vh}button{padding:10px;margin:10px}@media print{button{display:none}svg{height:160mm}}</style><button onclick="window.print()">Print / Save as PDF</button><svg xmlns="http://www.w3.org/2000/svg" viewBox="${view.x-w/2} ${-view.y-h/2} ${w} ${h}" fill="none" stroke="black" stroke-width="${.7/view.scale}">${svg}</svg>`);win.document.close();notify('Print sheet opened. Use Print / Save as PDF.')}
+names.window='Window select';names.insert='Insert block';names.extend='Extend';
+group('Blocks / Drafting',[['Window select',()=>setTool('window'),'window'],['Select all',selectAll],['Create block',createBlock],['Insert block',startInsert],['Explode',explode],['Hatch',hatch],['Extend',()=>setTool('extend'),'extend'],['Chamfer',chamfer]]);
+group('Layouts',[['Save layout',saveLayout],['Restore layout',restoreLayout],['Print sheet',plotSheet],['Model',()=>{dt.textContent='Drawing 1 / Model space';fit()}]]);
+const advancedCommand=$('command').onkeydown;$('command').onkeydown=e=>{if(e.key==='Enter'){const s=e.target.value.trim().toLowerCase(),actions={selectall:selectAll,block:createBlock,insert:startInsert,explode,hatch,chamfer,layout:saveLayout,restorelayout:restoreLayout,plot:plotSheet};if(actions[s]){e.target.value='';actions[s]();return}if(s==='ex')e.target.value='extend'}advancedCommand(e)};
+const origValidate=validate;validate=function(d){origValidate(d);if(d.blocks){if(typeof d.blocks!=='object'||Array.isArray(d.blocks))throw Error('Invalid blocks');for(const block of Object.values(d.blocks))origValidate({layers:d.layers,entities:block.items})}if(d.layouts){for(const l of Object.values(d.layouts)){if(!l.view||![l.view.x,l.view.y,l.view.scale].every(Number.isFinite)||l.view.scale<=0)throw Error('Invalid layout')}}};
+// Explicit tab mappings include the new functional panels.
+for(const b of tabbar.querySelectorAll('button'))b.onclick=()=>{tabbar.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));ribbon.querySelectorAll('.rgroup').forEach((g,i)=>{g.style.display=b.textContent==='Home'||(b.textContent==='Insert'&&[0,5].includes(i))||(b.textContent==='Annotate'&&[2,5].includes(i))||(b.textContent==='View'&&[3,6].includes(i))||(b.textContent==='Manage'&&[4,6].includes(i))?'block':'none'})};
+notify('Ready. Shift-click for multiple selection; blocks, hatching and saved layouts available.');render();
+
+</script><script>'use strict';
+// Mesh extrusion and an orthographic 3D inspection workspace.
+let mode3D=false,orbitDrag=null,camera3={yaw:-.7,pitch:.65,scale:3},meshCenter={x:0,y:0,z:0};
+function polygonArea(ps){let sum=0;for(let i=0;i<ps.length;i++){const a=ps[i],b=ps[(i+1)%ps.length];sum+=a.x*b.y-b.x*a.y}return sum/2}
+function triangulatePolygon(input){let ps=input.map(p=>({...p}));if(ps.length>2&&distance(ps[0],ps.at(-1))<1e-8)ps.pop();if(ps.length<3)throw Error('At least three boundary vertices required.');if(polygonArea(ps)<0)ps.reverse();const cross=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);let changed=true;while(changed&&ps.length>3){changed=false;for(let i=0;i<ps.length;i++){if(Math.abs(cross(ps[(i+ps.length-1)%ps.length],ps[i],ps[(i+1)%ps.length]))<1e-10){ps.splice(i,1);changed=true;break}}}const ids=ps.map((_,i)=>i),tris=[];let guard=ps.length**2;while(ids.length>3&&guard-->0){let found=false;for(let i=0;i<ids.length;i++){const a=ids[(i+ids.length-1)%ids.length],b=ids[i],c=ids[(i+1)%ids.length];if(cross(ps[a],ps[b],ps[c])<=1e-10)continue;const inside=ids.some(j=>j!==a&&j!==b&&j!==c&&cross(ps[a],ps[b],ps[j])>=-1e-10&&cross(ps[b],ps[c],ps[j])>=-1e-10&&cross(ps[c],ps[a],ps[j])>=-1e-10);if(inside)continue;tris.push([a,b,c]);ids.splice(i,1);found=true;break}if(!found)throw Error('Boundary must be a simple polygon without holes or intersections.')}if(ids.length!==3)throw Error('Unable to triangulate boundary.');tris.push([...ids]);return{ps,tris}}
+function makeExtrusion(boundary,height,name='Extrusion'){if(!Number.isFinite(height)||height<=0)throw Error('Height must be positive.');const {ps,tris}=triangulatePolygon(boundary),n=ps.length,vertices=[...ps.map(p=>({...p,z:0})),...ps.map(p=>({...p,z:height}))],faces=[];for(const t of tris){faces.push([...t].reverse());faces.push(t.map(i=>i+n))}for(let i=0;i<n;i++){const j=(i+1)%n;faces.push([i,j,j+n],[i,j+n,i+n])}return{name,vertices,faces,color:layer().color}}
+async function extrude(){const e=doc.entities[selected];if(!e||(e.type!=='circle'&&!(e.type==='polyline'&&e.closed))){notify('Select a closed polyline or circle in Model space first.');return}const raw=await cadPrompt('Extrusion height','20');if(raw===null)return;const ps=e.type==='circle'?Array.from({length:64},(_,i)=>({x:e.center.x+e.radius*Math.cos(i*Math.PI/32),y:e.center.y+e.radius*Math.sin(i*Math.PI/32)})):e.points;try{const mesh=makeExtrusion(ps,Number(raw));mutate(()=>{doc.solids??=[];doc.solids.push(mesh)});show3D();notify('Extruded to a triangle mesh. Source boundary remains in Model space.')}catch(err){notify(err.message)}}
+async function box3D(){const raw=await cadPrompt('Box width, depth, height','100,60,30');if(raw===null)return;const [w,d,h]=raw.split(',').map(Number);if(raw.split(',').length!==3||![w,d,h].every(v=>Number.isFinite(v)&&v>0)){notify('Enter three positive dimensions separated by commas.');return}const mesh=makeExtrusion([{x:0,y:0},{x:w,y:0},{x:w,y:d},{x:0,y:d}],h,'Box');mutate(()=>{doc.solids??=[];doc.solids.push(mesh)});show3D()}
+function fit3D(){const vs=(doc.solids||[]).flatMap(s=>s.vertices);if(!vs.length)return;const bounds=['x','y','z'].map(k=>[Math.min(...vs.map(p=>p[k])),Math.max(...vs.map(p=>p[k]))]);meshCenter={x:(bounds[0][0]+bounds[0][1])/2,y:(bounds[1][0]+bounds[1][1])/2,z:(bounds[2][0]+bounds[2][1])/2};const size=Math.hypot(...bounds.map(b=>b[1]-b[0]));camera3.scale=Math.min(W,H)*.7/Math.max(1,size)}
+function show3D(){mode3D=true;clearSelection();dt.textContent='3D mesh workspace / Orthographic';badge.textContent='ORBIT';fit3D();render();notify('Drag to orbit; wheel to zoom. Meshes support extrusion and OBJ export. Return to Model for drafting.')}
+function showModel(){mode3D=false;badge.textContent='TOP';dt.textContent='Drawing 1 / Model space';fit();render()}
+function project3(p){const x=p.x-meshCenter.x,y=p.y-meshCenter.y,z=p.z-meshCenter.z,cy=Math.cos(camera3.yaw),sy=Math.sin(camera3.yaw),cp=Math.cos(camera3.pitch),sp=Math.sin(camera3.pitch),u=x*cy-y*sy,v=x*sy+y*cy;return{x:W/2+u*camera3.scale,y:H/2-(v*sp+z*cp)*camera3.scale,depth:v*cp-z*sp}}
+const beforeMeshRender=render;render=function(){if(!mode3D){beforeMeshRender();return}ctx.clearRect(0,0,W,H);ctx.fillStyle='#151d27';ctx.fillRect(0,0,W,H);const faces=[];for(const s of doc.solids||[]){const ps=s.vertices.map(project3);for(const f of s.faces)faces.push({ps:f.map(i=>ps[i]),color:shadeMeshFace(s.color,s.vertices,f),depth:f.reduce((v,i)=>v+ps[i].depth,0)/f.length})}faces.sort((a,b)=>b.depth-a.depth);for(const f of faces){ctx.beginPath();f.ps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();const signed=(f.ps[1].x-f.ps[0].x)*(f.ps[2].y-f.ps[0].y)-(f.ps[1].y-f.ps[0].y)*(f.ps[2].x-f.ps[0].x);if(signed>=0)continue;ctx.globalAlpha=1;ctx.fillStyle=f.color;ctx.fill();ctx.strokeStyle=f.color;ctx.lineWidth=.3;ctx.stroke()}for(const [axis,color]of [['x','#ef7676'],['y','#83cc8b'],['z','#82aafa']]){const a=project3(meshCenter),b=project3({...meshCenter,[axis]:meshCenter[axis]+30});ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.fillStyle=color;ctx.font='12px Segoe UI';ctx.fillText(axis.toUpperCase(),b.x,b.y)}$('status').textContent=`3D | ${(doc.solids||[]).length} meshes | ${faces.length} triangles`;$('entityKind').textContent='3D mesh workspace'};
+const meshDown=canvas.onpointerdown,meshMove=canvas.onpointermove,meshUp=canvas.onpointerup,meshWheel=canvas.onwheel;
+canvas.onpointerdown=e=>{if(!mode3D){meshDown(e);return}canvas.setPointerCapture(e.pointerId);orbitDrag={x:e.clientX,y:e.clientY,yaw:camera3.yaw,pitch:camera3.pitch}};
+canvas.onpointermove=e=>{if(!mode3D){meshMove(e);return}if(orbitDrag){camera3.yaw=orbitDrag.yaw+(e.clientX-orbitDrag.x)*.008;camera3.pitch=Math.max(-1.5,Math.min(1.5,orbitDrag.pitch+(e.clientY-orbitDrag.y)*.008));render()}};
+canvas.onpointerup=e=>{orbitDrag=null;meshUp(e)};canvas.onpointercancel=()=>{orbitDrag=null;pan=null};canvas.onwheel=e=>{if(!mode3D){meshWheel(e);return}e.preventDefault();camera3.scale=Math.max(.01,Math.min(1000,camera3.scale*Math.exp(-e.deltaY*.001)));render()};
+const draftSetTool=setTool;setTool=function(t){if(mode3D)showModel();draftSetTool(t)};
+function exportOBJ(){if(!doc.solids?.length){notify('Create a box or extrusion first.');return}const out=['# CadForge triangle meshes; drawing units'],safe=s=>s.replace(/[^a-z0-9_-]/gi,'_');let offset=1;for(const s of doc.solids){out.push('o '+safe(s.name));for(const p of s.vertices)out.push(`v ${p.x} ${p.y} ${p.z}`);for(const f of s.faces)out.push('f '+f.map(i=>i+offset).join(' '));offset+=s.vertices.length}download('drawing.obj',out.join('\n')+'\n','text/plain');notify('OBJ exported. Mesh geometry is separate from 2D DXF output.')}
+async function clearMeshes(){if(!doc.solids?.length)return;if(!await cadConfirm('Remove all meshes? Undo can restore them.'))return;mutate(()=>doc.solids=[]);render()}
+group('3D Mesh',[['Extrude',extrude],['Box',box3D],['Orbit view',show3D],['Model 2D',showModel],['Fit meshes',()=>{fit3D();render()}],['Export OBJ',exportOBJ],['Clear meshes',clearMeshes]]);
+const meshCommand=$('command').onkeydown;$('command').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const s=e.target.value.trim().toLowerCase(),actions={extrude,box:box3D,orbit:show3D,model:showModel,obj:exportOBJ};if(actions[s]){e.target.value='';actions[s]();return}}meshCommand(e)};
+const meshValidate=validate;validate=function(d){meshValidate(d);if(d.solids){if(!Array.isArray(d.solids))throw Error('Invalid meshes');for(const s of d.solids){if(typeof s.name!=='string'||!/^#[0-9a-f]{6}$/i.test(s.color)||!Array.isArray(s.vertices)||!Array.isArray(s.faces)||s.vertices.length>1000000||s.faces.length>2000000)throw Error('Invalid mesh');if(!s.vertices.every(p=>p&&[p.x,p.y,p.z].every(Number.isFinite))||!s.faces.every(f=>Array.isArray(f)&&f.length===3&&f.every(i=>Number.isInteger(i)&&i>=0&&i<s.vertices.length)))throw Error('Invalid mesh geometry')}}};
+const selectionUndo=undo;undo=function(redo=false){selectionSet.clear();selected=-1;selectionUndo(redo);if(mode3D){fit3D();render()}};
+const meshFit=fit;fit=function(){if(mode3D){fit3D();render()}else meshFit()};
+for(const b of tabbar.querySelectorAll('button'))b.onclick=()=>{tabbar.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));ribbon.querySelectorAll('.rgroup').forEach((g,i)=>{g.style.display=b.textContent==='Home'||(b.textContent==='Insert'&&[0,5].includes(i))||(b.textContent==='Annotate'&&[2,5].includes(i))||(b.textContent==='View'&&[3,6,7].includes(i))||(b.textContent==='Manage'&&[4,6,7].includes(i))?'block':'none'})};
+const clearNew=$('new').onclick;$('new').onclick=async()=>{const before=doc;await clearNew();if(before!==doc){clearSelection();mode3D=false;badge.textContent='TOP';dt.textContent='Drawing 1 / Model space';render()}};
+notify('Ready: 2D drafting, blocks, hatching, saved views and 3D mesh extrusion.');
+
+
+
+
+function shadeMeshFace(color,vertices,face){const [a,b,c]=face.map(i=>vertices[i]),u={x:b.x-a.x,y:b.y-a.y,z:b.z-a.z},v={x:c.x-a.x,y:c.y-a.y,z:c.z-a.z},n={x:u.y*v.z-u.z*v.y,y:u.z*v.x-u.x*v.z,z:u.x*v.y-u.y*v.x},length=Math.hypot(n.x,n.y,n.z)||1;const shade=.4+.6*Math.max(0,(n.x*.35-n.y*.45+n.z*.8)/length);return '#'+[1,3,5].map(i=>Math.round(parseInt(color.slice(i,i+2),16)*shade).toString(16).padStart(2,'0')).join('')}
+</script><script>'use strict';
+// DXF block instances plus tessellated ARC and bulged-polyline import.
+function dxfRecords(text){if(text.startsWith('AutoCAD Binary DXF'))throw Error('Binary DXF is unsupported. Export ASCII DXF.');const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/),records=[];let r;for(let i=0;i+1<lines.length;i+=2){const k=Number(lines[i].trim()),v=lines[i+1].trim();if(!Number.isInteger(k))throw Error('Malformed DXF group code.');if(k===0){r={type:v,pairs:[]};records.push(r)}else if(r)r.pairs.push([k,v])}return records}
+function dxfValue(r,k,defaultValue=0){return r.pairs.find(p=>p[0]===k)?.[1]??defaultValue}
+function dxfRecordText(r){return ['0',r.type,...r.pairs.flatMap(([k,v])=>[String(k),String(v)])].join('\r\n')+'\r\n'}
+function dxfWrapped(records,tables=[]){return '0\r\nSECTION\r\n2\r\nTABLES\r\n'+tables.map(dxfRecordText).join('')+'0\r\nENDSEC\r\n0\r\nSECTION\r\n2\r\nENTITIES\r\n'+records.map(dxfRecordText).join('')+'0\r\nENDSEC\r\n0\r\nEOF\r\n'}
+function bulgeSegment(a,b,bulge){if(Math.abs(bulge)<1e-12)return[a,b];const chord=distance(a,b);if(chord<1e-12)return[a];const theta=4*Math.atan(bulge),ux=(b.x-a.x)/chord,uy=(b.y-a.y)/chord,offset=chord*(1-bulge*bulge)/(4*bulge),center={x:(a.x+b.x)/2-uy*offset,y:(a.y+b.y)/2+ux*offset},radius=distance(a,center),start=Math.atan2(a.y-center.y,a.x-center.x),steps=Math.min(2048,Math.max(4,Math.ceil(Math.abs(theta)*32)));return Array.from({length:steps+1},(_,i)=>{if(i===0)return{x:a.x,y:a.y};if(i===steps)return{x:b.x,y:b.y};const t=start+theta*i/steps;return{x:center.x+radius*Math.cos(t),y:center.y+radius*Math.sin(t)}})}
+const simpleDXFImport=importDXF;
+importDXF=function(text){const records=dxfRecords(text),defs=new Map(),tables=[],model=[];let section='',current=null;for(const r of records){if(r.type==='SECTION'){section=dxfValue(r,2,'');continue}if(r.type==='ENDSEC'){section='';current=null;continue}if(section==='TABLES')tables.push(r);else if(section==='BLOCKS'){if(r.type==='BLOCK'){current={name:String(dxfValue(r,2,'')),base:{x:Number(dxfValue(r,10)),y:Number(dxfValue(r,20))},records:[]};defs.set(current.name,current)}else if(r.type==='ENDBLK')current=null;else if(current)current.records.push(r)}else if(section==='ENTITIES')model.push(r)}let skipped=0,approximated=0,expanded=0;const layers=simpleDXFImport(dxfWrapped([],tables)).doc.layers;
+function parse(rs,depth=0){if(depth>16)throw Error('Nested block limit exceeded.');const entities=[];let primitive=[];function flush(){if(!primitive.length)return;const res=simpleDXFImport(dxfWrapped(primitive,tables));entities.push(...res.doc.entities);skipped+=res.skipped;primitive=[]}for(const r of rs){if(r.type==='ARC'){flush();const c={x:Number(dxfValue(r,10)),y:Number(dxfValue(r,20))},radius=Number(dxfValue(r,40)),start=Number(dxfValue(r,50))*Math.PI/180;let end=Number(dxfValue(r,51))*Math.PI/180;while(end<=start)end+=Math.PI*2;const steps=Math.min(2048,Math.max(4,Math.ceil((end-start)*32)));entities.push({type:'polyline',layer:String(dxfValue(r,8,'0')),closed:false,points:Array.from({length:steps+1},(_,i)=>({x:c.x+radius*Math.cos(start+(end-start)*i/steps),y:c.y+radius*Math.sin(start+(end-start)*i/steps)}))});approximated++;continue}
+if(r.type==='LWPOLYLINE'&&r.pairs.some(([k,v])=>k===42&&Number(v)!==0)){flush();const vertices=[];for(const [k,v]of r.pairs){if(k===10)vertices.push({x:Number(v),y:0,bulge:0});else if(k===20&&vertices.length)vertices.at(-1).y=Number(v);else if(k===42&&vertices.length)vertices.at(-1).bulge=Number(v)}const closed=!!(Number(dxfValue(r,70))&1),ps=[];for(let i=0;i<vertices.length-(closed?0:1);i++){const samples=bulgeSegment(vertices[i],vertices[(i+1)%vertices.length],vertices[i].bulge);ps.push(...samples.slice(0,-1))}if(!closed&&vertices.length)ps.push({x:vertices.at(-1).x,y:vertices.at(-1).y});entities.push({type:'polyline',layer:String(dxfValue(r,8,'0')),closed,points:ps});approximated++;continue}
+if(r.type==='INSERT'){flush();const name=String(dxfValue(r,2,'')),def=defs.get(name);if(!def){skipped++;continue}if(Number(dxfValue(r,70,1))!==1||Number(dxfValue(r,71,1))!==1){skipped++;continue}const items=parse(def.records,depth+1),sx=Number(dxfValue(r,41,1)),sy=Number(dxfValue(r,42,1)),angle=Number(dxfValue(r,50))*Math.PI/180,tx=Number(dxfValue(r,10)),ty=Number(dxfValue(r,20)),id=gid(),insertLayer=String(dxfValue(r,8,'0'));const fn=p=>{const x=(p.x-def.base.x)*sx,y=(p.y-def.base.y)*sy;return{x:tx+x*Math.cos(angle)-y*Math.sin(angle),y:ty+x*Math.sin(angle)+y*Math.cos(angle)}};for(let e of items){if(e.type==='circle'&&Math.abs(Math.abs(sx)-Math.abs(sy))>1e-8){const ps=Array.from({length:128},(_,i)=>({x:e.center.x+e.radius*Math.cos(i*Math.PI/64),y:e.center.y+e.radius*Math.sin(i*Math.PI/64)}));e={type:'polyline',points:ps,closed:true,layer:e.layer};approximated++}transformEntity(e,fn);if(e.type==='circle')e.radius*=Math.abs(sx);if(e.type==='text')e.height*=Math.abs(sy);if(e.layer==='0')e.layer=insertLayer;e.group=id;e.blockName=name;entities.push(e);if(++expanded>200000)throw Error('Expanded block entity limit exceeded.')}continue}primitive.push(r)}flush();return entities}
+const entities=parse(model),blocks={};for(const def of defs.values()){if(def.name.startsWith('*'))continue;const items=parse(def.records).map(e=>{const clone=structuredClone(e);delete clone.group;delete clone.blockName;transformEntity(clone,p=>({x:p.x-def.base.x,y:p.y-def.base.y}));return clone});blocks[def.name]={items}}for(const e of [...entities,...Object.values(blocks).flatMap(b=>b.items)])if(!layers.some(l=>l.name===e.layer))layers.push({name:e.layer,color:'#63d9c0',visible:true});const result={layers,entities,blocks};validate(result);return{doc:result,skipped,approximated}}
+const primitiveExport=exportDXF;
+function primitiveDXFText(items){const original=doc;try{doc={layers:original.layers,entities:items};const text=primitiveExport(),marker='0\r\nSECTION\r\n2\r\nENTITIES\r\n';return text.split(marker)[1].split('0\r\nENDSEC\r\n')[0]}finally{doc=original}}
+exportDXF=function(){const text=primitiveExport(),groups=new Map(),loose=[];for(const e of doc.entities){if(e.group){if(!groups.has(e.group))groups.set(e.group,[]);groups.get(e.group).push(e)}else loose.push(e)}let definitions='',instances='',serial=0;for(const items of groups.values()){const name='CF_INSTANCE_'+(++serial);definitions+=`0\r\nBLOCK\r\n8\r\n0\r\n2\r\n${name}\r\n70\r\n0\r\n10\r\n0\r\n20\r\n0\r\n30\r\n0\r\n3\r\n${name}\r\n1\r\n\r\n`+primitiveDXFText(items)+'0\r\nENDBLK\r\n8\r\n0\r\n';instances+=`0\r\nINSERT\r\n8\r\n0\r\n2\r\n${name}\r\n10\r\n0\r\n20\r\n0\r\n30\r\n0\r\n`}const marker='0\r\nSECTION\r\n2\r\nENTITIES\r\n',prefix=text.split(marker)[0];return prefix+'0\r\nSECTION\r\n2\r\nBLOCKS\r\n'+definitions+'0\r\nENDSEC\r\n'+marker+primitiveDXFText(loose)+instances+'0\r\nENDSEC\r\n0\r\nEOF\r\n'};
+$('file').accept='.json,.dxf,.dwg';$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.name.toLowerCase().endsWith('.dwg'))throw Error('Native DWG needs a DWG engine. Export ASCII DXF from your CAD application first.');const text=await f.text(),res=f.name.toLowerCase().endsWith('.dxf')?importDXF(text):{doc:JSON.parse(text),skipped:0,approximated:0};validate(res.doc);clearSelection();mode3D=false;mutate(()=>doc=res.doc);syncLayers();showModel();notify(`Imported ${doc.entities.length} entities. ${res.skipped||0} unsupported records; ${res.approximated||0} curve approximations. Inspect before use.`)}catch(err){notify('Import failed: '+err.message)}e.target.value=''};
+// Clearer workspace labels and compact Home ribbon.
+document.querySelector('header span').textContent='Drafting & mesh modeling';
+for(const b of tabbar.querySelectorAll('button'))b.onclick=()=>{tabbar.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));ribbon.querySelectorAll('.rgroup').forEach((g,i)=>{g.style.display=(b.textContent==='Home'&&[0,1,2,3].includes(i))||(b.textContent==='Insert'&&[0,5].includes(i))||(b.textContent==='Annotate'&&[2,5].includes(i))||(b.textContent==='View'&&[3,6,7].includes(i))||(b.textContent==='Manage'&&[4,6,7].includes(i))?'block':'none'})};
+tabbar.querySelector('button').click();
+</script><script id="cadforge-csg">// Constructive Solid Geometry (CSG) is a modeling technique that uses Boolean
+// operations like union and intersection to combine 3D solids. This library
+// implements CSG operations on meshes elegantly and concisely using BSP trees,
+// and is meant to serve as an easily understandable implementation of the
+// algorithm. All edge cases involving overlapping coplanar polygons in both
+// solids are correctly handled.
+// 
+// Example usage:
+// 
+//     var cube = CSG.cube();
+//     var sphere = CSG.sphere({ radius: 1.3 });
+//     var polygons = cube.subtract(sphere).toPolygons();
+// 
+// ## Implementation Details
+// 
+// All CSG operations are implemented in terms of two functions, `clipTo()` and
+// `invert()`, which remove parts of a BSP tree inside another BSP tree and swap
+// solid and empty space, respectively. To find the union of `a` and `b`, we
+// want to remove everything in `a` inside `b` and everything in `b` inside `a`,
+// then combine polygons from `a` and `b` into one solid:
+// 
+//     a.clipTo(b);
+//     b.clipTo(a);
+//     a.build(b.allPolygons());
+// 
+// The only tricky part is handling overlapping coplanar polygons in both trees.
+// The code above keeps both copies, but we need to keep them in one tree and
+// remove them in the other tree. To remove them from `b` we can clip the
+// inverse of `b` against `a`. The code for union now looks like this:
+// 
+//     a.clipTo(b);
+//     b.clipTo(a);
+//     b.invert();
+//     b.clipTo(a);
+//     b.invert();
+//     a.build(b.allPolygons());
+// 
+// Subtraction and intersection naturally follow from set operations. If
+// union is `A | B`, subtraction is `A - B = ~(~A | B)` and intersection is
+// `A & B = ~(~A | ~B)` where `~` is the complement operator.
+// 
+// ## License
+// 
+// Copyright (c) 2011 Evan Wallace (http://madebyevan.com/), under the MIT license.
+
+// # class CSG
+
+// Holds a binary space partition tree representing a 3D solid. Two solids can
+// be combined using the `union()`, `subtract()`, and `intersect()` methods.
+
+CSG = function() {
+  this.polygons = [];
+};
+
+// Construct a CSG solid from a list of `CSG.Polygon` instances.
+CSG.fromPolygons = function(polygons) {
+  var csg = new CSG();
+  csg.polygons = polygons;
+  return csg;
+};
+
+CSG.prototype = {
+  clone: function() {
+    var csg = new CSG();
+    csg.polygons = this.polygons.map(function(p) { return p.clone(); });
+    return csg;
+  },
+
+  toPolygons: function() {
+    return this.polygons;
+  },
+
+  // Return a new CSG solid representing space in either this solid or in the
+  // solid `csg`. Neither this solid nor the solid `csg` are modified.
+  // 
+  //     A.union(B)
+  // 
+  //     +-------+            +-------+
+  //     |       |            |       |
+  //     |   A   |            |       |
+  //     |    +--+----+   =   |       +----+
+  //     +----+--+    |       +----+       |
+  //          |   B   |            |       |
+  //          |       |            |       |
+  //          +-------+            +-------+
+  // 
+  union: function(csg) {
+    var a = new CSG.Node(this.clone().polygons);
+    var b = new CSG.Node(csg.clone().polygons);
+    a.clipTo(b);
+    b.clipTo(a);
+    b.invert();
+    b.clipTo(a);
+    b.invert();
+    a.build(b.allPolygons());
+    return CSG.fromPolygons(a.allPolygons());
+  },
+
+  // Return a new CSG solid representing space in this solid but not in the
+  // solid `csg`. Neither this solid nor the solid `csg` are modified.
+  // 
+  //     A.subtract(B)
+  // 
+  //     +-------+            +-------+
+  //     |       |            |       |
+  //     |   A   |            |       |
+  //     |    +--+----+   =   |    +--+
+  //     +----+--+    |       +----+
+  //          |   B   |
+  //          |       |
+  //          +-------+
+  // 
+  subtract: function(csg) {
+    var a = new CSG.Node(this.clone().polygons);
+    var b = new CSG.Node(csg.clone().polygons);
+    a.invert();
+    a.clipTo(b);
+    b.clipTo(a);
+    b.invert();
+    b.clipTo(a);
+    b.invert();
+    a.build(b.allPolygons());
+    a.invert();
+    return CSG.fromPolygons(a.allPolygons());
+  },
+
+  // Return a new CSG solid representing space both this solid and in the
+  // solid `csg`. Neither this solid nor the solid `csg` are modified.
+  // 
+  //     A.intersect(B)
+  // 
+  //     +-------+
+  //     |       |
+  //     |   A   |
+  //     |    +--+----+   =   +--+
+  //     +----+--+    |       +--+
+  //          |   B   |
+  //          |       |
+  //          +-------+
+  // 
+  intersect: function(csg) {
+    var a = new CSG.Node(this.clone().polygons);
+    var b = new CSG.Node(csg.clone().polygons);
+    a.invert();
+    b.clipTo(a);
+    b.invert();
+    a.clipTo(b);
+    b.clipTo(a);
+    a.build(b.allPolygons());
+    a.invert();
+    return CSG.fromPolygons(a.allPolygons());
+  },
+
+  // Return a new CSG solid with solid and empty space switched. This solid is
+  // not modified.
+  inverse: function() {
+    var csg = this.clone();
+    csg.polygons.map(function(p) { p.flip(); });
+    return csg;
+  }
+};
+
+// Construct an axis-aligned solid cuboid. Optional parameters are `center` and
+// `radius`, which default to `[0, 0, 0]` and `[1, 1, 1]`. The radius can be
+// specified using a single number or a list of three numbers, one for each axis.
+// 
+// Example code:
+// 
+//     var cube = CSG.cube({
+//       center: [0, 0, 0],
+//       radius: 1
+//     });
+CSG.cube = function(options) {
+  options = options || {};
+  var c = new CSG.Vector(options.center || [0, 0, 0]);
+  var r = !options.radius ? [1, 1, 1] : options.radius.length ?
+           options.radius : [options.radius, options.radius, options.radius];
+  return CSG.fromPolygons([
+    [[0, 4, 6, 2], [-1, 0, 0]],
+    [[1, 3, 7, 5], [+1, 0, 0]],
+    [[0, 1, 5, 4], [0, -1, 0]],
+    [[2, 6, 7, 3], [0, +1, 0]],
+    [[0, 2, 3, 1], [0, 0, -1]],
+    [[4, 5, 7, 6], [0, 0, +1]]
+  ].map(function(info) {
+    return new CSG.Polygon(info[0].map(function(i) {
+      var pos = new CSG.Vector(
+        c.x + r[0] * (2 * !!(i & 1) - 1),
+        c.y + r[1] * (2 * !!(i & 2) - 1),
+        c.z + r[2] * (2 * !!(i & 4) - 1)
+      );
+      return new CSG.Vertex(pos, new CSG.Vector(info[1]));
+    }));
+  }));
+};
+
+// Construct a solid sphere. Optional parameters are `center`, `radius`,
+// `slices`, and `stacks`, which default to `[0, 0, 0]`, `1`, `16`, and `8`.
+// The `slices` and `stacks` parameters control the tessellation along the
+// longitude and latitude directions.
+// 
+// Example usage:
+// 
+//     var sphere = CSG.sphere({
+//       center: [0, 0, 0],
+//       radius: 1,
+//       slices: 16,
+//       stacks: 8
+//     });
+CSG.sphere = function(options) {
+  options = options || {};
+  var c = new CSG.Vector(options.center || [0, 0, 0]);
+  var r = options.radius || 1;
+  var slices = options.slices || 16;
+  var stacks = options.stacks || 8;
+  var polygons = [], vertices;
+  function vertex(theta, phi) {
+    theta *= Math.PI * 2;
+    phi *= Math.PI;
+    var dir = new CSG.Vector(
+      Math.cos(theta) * Math.sin(phi),
+      Math.cos(phi),
+      Math.sin(theta) * Math.sin(phi)
+    );
+    vertices.push(new CSG.Vertex(c.plus(dir.times(r)), dir));
+  }
+  for (var i = 0; i < slices; i++) {
+    for (var j = 0; j < stacks; j++) {
+      vertices = [];
+      vertex(i / slices, j / stacks);
+      if (j > 0) vertex((i + 1) / slices, j / stacks);
+      if (j < stacks - 1) vertex((i + 1) / slices, (j + 1) / stacks);
+      vertex(i / slices, (j + 1) / stacks);
+      polygons.push(new CSG.Polygon(vertices));
+    }
+  }
+  return CSG.fromPolygons(polygons);
+};
+
+// Construct a solid cylinder. Optional parameters are `start`, `end`,
+// `radius`, and `slices`, which default to `[0, -1, 0]`, `[0, 1, 0]`, `1`, and
+// `16`. The `slices` parameter controls the tessellation.
+// 
+// Example usage:
+// 
+//     var cylinder = CSG.cylinder({
+//       start: [0, -1, 0],
+//       end: [0, 1, 0],
+//       radius: 1,
+//       slices: 16
+//     });
+CSG.cylinder = function(options) {
+  options = options || {};
+  var s = new CSG.Vector(options.start || [0, -1, 0]);
+  var e = new CSG.Vector(options.end || [0, 1, 0]);
+  var ray = e.minus(s);
+  var r = options.radius || 1;
+  var slices = options.slices || 16;
+  var axisZ = ray.unit(), isY = (Math.abs(axisZ.y) > 0.5);
+  var axisX = new CSG.Vector(isY, !isY, 0).cross(axisZ).unit();
+  var axisY = axisX.cross(axisZ).unit();
+  var start = new CSG.Vertex(s, axisZ.negated());
+  var end = new CSG.Vertex(e, axisZ.unit());
+  var polygons = [];
+  function point(stack, slice, normalBlend) {
+    var angle = slice * Math.PI * 2;
+    var out = axisX.times(Math.cos(angle)).plus(axisY.times(Math.sin(angle)));
+    var pos = s.plus(ray.times(stack)).plus(out.times(r));
+    var normal = out.times(1 - Math.abs(normalBlend)).plus(axisZ.times(normalBlend));
+    return new CSG.Vertex(pos, normal);
+  }
+  for (var i = 0; i < slices; i++) {
+    var t0 = i / slices, t1 = (i + 1) / slices;
+    polygons.push(new CSG.Polygon([start, point(0, t0, -1), point(0, t1, -1)]));
+    polygons.push(new CSG.Polygon([point(0, t1, 0), point(0, t0, 0), point(1, t0, 0), point(1, t1, 0)]));
+    polygons.push(new CSG.Polygon([end, point(1, t1, 1), point(1, t0, 1)]));
+  }
+  return CSG.fromPolygons(polygons);
+};
+
+// # class Vector
+
+// Represents a 3D vector.
+// 
+// Example usage:
+// 
+//     new CSG.Vector(1, 2, 3);
+//     new CSG.Vector([1, 2, 3]);
+//     new CSG.Vector({ x: 1, y: 2, z: 3 });
+
+CSG.Vector = function(x, y, z) {
+  if (arguments.length == 3) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  } else if ('x' in x) {
+    this.x = x.x;
+    this.y = x.y;
+    this.z = x.z;
+  } else {
+    this.x = x[0];
+    this.y = x[1];
+    this.z = x[2];
+  }
+};
+
+CSG.Vector.prototype = {
+  clone: function() {
+    return new CSG.Vector(this.x, this.y, this.z);
+  },
+
+  negated: function() {
+    return new CSG.Vector(-this.x, -this.y, -this.z);
+  },
+
+  plus: function(a) {
+    return new CSG.Vector(this.x + a.x, this.y + a.y, this.z + a.z);
+  },
+
+  minus: function(a) {
+    return new CSG.Vector(this.x - a.x, this.y - a.y, this.z - a.z);
+  },
+
+  times: function(a) {
+    return new CSG.Vector(this.x * a, this.y * a, this.z * a);
+  },
+
+  dividedBy: function(a) {
+    return new CSG.Vector(this.x / a, this.y / a, this.z / a);
+  },
+
+  dot: function(a) {
+    return this.x * a.x + this.y * a.y + this.z * a.z;
+  },
+
+  lerp: function(a, t) {
+    return this.plus(a.minus(this).times(t));
+  },
+
+  length: function() {
+    return Math.sqrt(this.dot(this));
+  },
+
+  unit: function() {
+    return this.dividedBy(this.length());
+  },
+
+  cross: function(a) {
+    return new CSG.Vector(
+      this.y * a.z - this.z * a.y,
+      this.z * a.x - this.x * a.z,
+      this.x * a.y - this.y * a.x
+    );
+  }
+};
+
+// # class Vertex
+
+// Represents a vertex of a polygon. Use your own vertex class instead of this
+// one to provide additional features like texture coordinates and vertex
+// colors. Custom vertex classes need to provide a `pos` property and `clone()`,
+// `flip()`, and `interpolate()` methods that behave analogous to the ones
+// defined by `CSG.Vertex`. This class provides `normal` so convenience
+// functions like `CSG.sphere()` can return a smooth vertex normal, but `normal`
+// is not used anywhere else.
+
+CSG.Vertex = function(pos, normal) {
+  this.pos = new CSG.Vector(pos);
+  this.normal = new CSG.Vector(normal);
+};
+
+CSG.Vertex.prototype = {
+  clone: function() {
+    return new CSG.Vertex(this.pos.clone(), this.normal.clone());
+  },
+
+  // Invert all orientation-specific data (e.g. vertex normal). Called when the
+  // orientation of a polygon is flipped.
+  flip: function() {
+    this.normal = this.normal.negated();
+  },
+
+  // Create a new vertex between this vertex and `other` by linearly
+  // interpolating all properties using a parameter of `t`. Subclasses should
+  // override this to interpolate additional properties.
+  interpolate: function(other, t) {
+    return new CSG.Vertex(
+      this.pos.lerp(other.pos, t),
+      this.normal.lerp(other.normal, t)
+    );
+  }
+};
+
+// # class Plane
+
+// Represents a plane in 3D space.
+
+CSG.Plane = function(normal, w) {
+  this.normal = normal;
+  this.w = w;
+};
+
+// `CSG.Plane.EPSILON` is the tolerance used by `splitPolygon()` to decide if a
+// point is on the plane.
+CSG.Plane.EPSILON = 1e-5;
+
+CSG.Plane.fromPoints = function(a, b, c) {
+  var n = b.minus(a).cross(c.minus(a)).unit();
+  return new CSG.Plane(n, n.dot(a));
+};
+
+CSG.Plane.prototype = {
+  clone: function() {
+    return new CSG.Plane(this.normal.clone(), this.w);
+  },
+
+  flip: function() {
+    this.normal = this.normal.negated();
+    this.w = -this.w;
+  },
+
+  // Split `polygon` by this plane if needed, then put the polygon or polygon
+  // fragments in the appropriate lists. Coplanar polygons go into either
+  // `coplanarFront` or `coplanarBack` depending on their orientation with
+  // respect to this plane. Polygons in front or in back of this plane go into
+  // either `front` or `back`.
+  splitPolygon: function(polygon, coplanarFront, coplanarBack, front, back) {
+    var COPLANAR = 0;
+    var FRONT = 1;
+    var BACK = 2;
+    var SPANNING = 3;
+
+    // Classify each point as well as the entire polygon into one of the above
+    // four classes.
+    var polygonType = 0;
+    var types = [];
+    for (var i = 0; i < polygon.vertices.length; i++) {
+      var t = this.normal.dot(polygon.vertices[i].pos) - this.w;
+      var type = (t < -CSG.Plane.EPSILON) ? BACK : (t > CSG.Plane.EPSILON) ? FRONT : COPLANAR;
+      polygonType |= type;
+      types.push(type);
+    }
+
+    // Put the polygon in the correct list, splitting it when necessary.
+    switch (polygonType) {
+      case COPLANAR:
+        (this.normal.dot(polygon.plane.normal) > 0 ? coplanarFront : coplanarBack).push(polygon);
+        break;
+      case FRONT:
+        front.push(polygon);
+        break;
+      case BACK:
+        back.push(polygon);
+        break;
+      case SPANNING:
+        var f = [], b = [];
+        for (var i = 0; i < polygon.vertices.length; i++) {
+          var j = (i + 1) % polygon.vertices.length;
+          var ti = types[i], tj = types[j];
+          var vi = polygon.vertices[i], vj = polygon.vertices[j];
+          if (ti != BACK) f.push(vi);
+          if (ti != FRONT) b.push(ti != BACK ? vi.clone() : vi);
+          if ((ti | tj) == SPANNING) {
+            var t = (this.w - this.normal.dot(vi.pos)) / this.normal.dot(vj.pos.minus(vi.pos));
+            var v = vi.interpolate(vj, t);
+            f.push(v);
+            b.push(v.clone());
+          }
+        }
+        if (f.length >= 3) front.push(new CSG.Polygon(f, polygon.shared));
+        if (b.length >= 3) back.push(new CSG.Polygon(b, polygon.shared));
+        break;
+    }
+  }
+};
+
+// # class Polygon
+
+// Represents a convex polygon. The vertices used to initialize a polygon must
+// be coplanar and form a convex loop. They do not have to be `CSG.Vertex`
+// instances but they must behave similarly (duck typing can be used for
+// customization).
+// 
+// Each convex polygon has a `shared` property, which is shared between all
+// polygons that are clones of each other or were split from the same polygon.
+// This can be used to define per-polygon properties (such as surface color).
+
+CSG.Polygon = function(vertices, shared) {
+  this.vertices = vertices;
+  this.shared = shared;
+  this.plane = CSG.Plane.fromPoints(vertices[0].pos, vertices[1].pos, vertices[2].pos);
+};
+
+CSG.Polygon.prototype = {
+  clone: function() {
+    var vertices = this.vertices.map(function(v) { return v.clone(); });
+    return new CSG.Polygon(vertices, this.shared);
+  },
+
+  flip: function() {
+    this.vertices.reverse().map(function(v) { v.flip(); });
+    this.plane.flip();
+  }
+};
+
+// # class Node
+
+// Holds a node in a BSP tree. A BSP tree is built from a collection of polygons
+// by picking a polygon to split along. That polygon (and all other coplanar
+// polygons) are added directly to that node and the other polygons are added to
+// the front and/or back subtrees. This is not a leafy BSP tree since there is
+// no distinction between internal and leaf nodes.
+
+CSG.Node = function(polygons) {
+  this.plane = null;
+  this.front = null;
+  this.back = null;
+  this.polygons = [];
+  if (polygons) this.build(polygons);
+};
+
+CSG.Node.prototype = {
+  clone: function() {
+    var node = new CSG.Node();
+    node.plane = this.plane && this.plane.clone();
+    node.front = this.front && this.front.clone();
+    node.back = this.back && this.back.clone();
+    node.polygons = this.polygons.map(function(p) { return p.clone(); });
+    return node;
+  },
+
+  // Convert solid space to empty space and empty space to solid space.
+  invert: function() {
+    for (var i = 0; i < this.polygons.length; i++) {
+      this.polygons[i].flip();
+    }
+    this.plane.flip();
+    if (this.front) this.front.invert();
+    if (this.back) this.back.invert();
+    var temp = this.front;
+    this.front = this.back;
+    this.back = temp;
+  },
+
+  // Recursively remove all polygons in `polygons` that are inside this BSP
+  // tree.
+  clipPolygons: function(polygons) {
+    if (!this.plane) return polygons.slice();
+    var front = [], back = [];
+    for (var i = 0; i < polygons.length; i++) {
+      this.plane.splitPolygon(polygons[i], front, back, front, back);
+    }
+    if (this.front) front = this.front.clipPolygons(front);
+    if (this.back) back = this.back.clipPolygons(back);
+    else back = [];
+    return front.concat(back);
+  },
+
+  // Remove all polygons in this BSP tree that are inside the other BSP tree
+  // `bsp`.
+  clipTo: function(bsp) {
+    this.polygons = bsp.clipPolygons(this.polygons);
+    if (this.front) this.front.clipTo(bsp);
+    if (this.back) this.back.clipTo(bsp);
+  },
+
+  // Return a list of all polygons in this BSP tree.
+  allPolygons: function() {
+    var polygons = this.polygons.slice();
+    if (this.front) polygons = polygons.concat(this.front.allPolygons());
+    if (this.back) polygons = polygons.concat(this.back.allPolygons());
+    return polygons;
+  },
+
+  // Build a BSP tree out of `polygons`. When called on an existing tree, the
+  // new polygons are filtered down to the bottom of the tree and become new
+  // nodes there. Each set of polygons is partitioned using the first polygon
+  // (no heuristic is used to pick a good split).
+  build: function(polygons) {
+    if (!polygons.length) return;
+    if (!this.plane) this.plane = polygons[0].plane.clone();
+    var front = [], back = [];
+    for (var i = 0; i < polygons.length; i++) {
+      this.plane.splitPolygon(polygons[i], this.polygons, this.polygons, front, back);
+    }
+    if (front.length) {
+      if (!this.front) this.front = new CSG.Node();
+      this.front.build(front);
+    }
+    if (back.length) {
+      if (!this.back) this.back = new CSG.Node();
+      this.back.build(back);
+    }
+  }
+};
+</script><script>'use strict';
+// Adapt CadForge triangle meshes to the bundled MIT-licensed csg.js library.
+function meshToCSG(mesh){return CSG.fromPolygons(mesh.faces.map(f=>{const ps=f.map(i=>new CSG.Vector(mesh.vertices[i])),n=ps[1].minus(ps[0]).cross(ps[2].minus(ps[0]));if(n.length()<1e-10)return null;const normal=n.unit();return new CSG.Polygon(ps.map(p=>new CSG.Vertex(p,normal)))}).filter(Boolean))}
+function csgToMesh(csg,name,color){const vertices=[],faces=[],lookup=new Map();function index(p){const key=[p.x,p.y,p.z].map(v=>v.toFixed(8)).join(',');if(lookup.has(key))return lookup.get(key);const i=vertices.length;vertices.push({x:p.x,y:p.y,z:p.z});lookup.set(key,i);return i}for(const polygon of csg.toPolygons()){const ids=polygon.vertices.map(v=>index(v.pos));for(let i=1;i+1<ids.length;i++){const a=vertices[ids[0]],b=vertices[ids[i]],c=vertices[ids[i+1]],u={x:b.x-a.x,y:b.y-a.y,z:b.z-a.z},v={x:c.x-a.x,y:c.y-a.y,z:c.z-a.z},area=Math.hypot(u.y*v.z-u.z*v.y,u.z*v.x-u.x*v.z,u.x*v.y-u.y*v.x);if(area>1e-10)faces.push([ids[0],ids[i],ids[i+1]])}}return{name,color,vertices,faces}}
+function booleanMeshes(a,b,operation){if(!['union','subtract','intersect'].includes(operation))throw Error('Invalid operation.');if(a.faces.length+b.faces.length>5000)throw Error('Mesh boolean limit: 5000 input triangles.');return csgToMesh(meshToCSG(a)[operation](meshToCSG(b)),operation+' result',a.color)}
+const meshPanel=document.createElement('div');meshPanel.innerHTML='<hr><strong>MESH OPERATIONS</strong><label for="meshA">Mesh A</label><select id="meshA"></select><label for="meshB">Mesh B</label><select id="meshB"></select><small>Boolean operations replace A and B with the result. Undo restores operands.</small><div id="booleanButtons"></div>';
+props.append(meshPanel);
+for(const op of ['union','subtract','intersect']){const b=document.createElement('button');b.textContent=op==='subtract'?'Subtract A − B':op[0].toUpperCase()+op.slice(1);b.onclick=()=>applyBoolean(op);$('booleanButtons').append(b)}
+function syncMeshChoices(){for(const [id,defaultIndex]of [['meshA',0],['meshB',1]]){const old=$(id).value;$(id).replaceChildren(...(doc.solids||[]).map((s,i)=>new Option(`${i+1}: ${s.name}`,String(i))));$(id).value=old!==''&&Number.isInteger(Number(old))&&Number(old)>=0&&Number(old)<(doc.solids||[]).length?old:String(Math.min(defaultIndex,(doc.solids||[]).length-1))}}
+function applyBoolean(op){const ia=Number($('meshA').value),ib=Number($('meshB').value),a=doc.solids?.[ia],b=doc.solids?.[ib];if(!a||!b||ia===ib){notify('Choose two different meshes in the properties panel.');return}try{const result=booleanMeshes(a,b,op);mutate(()=>{doc.solids=doc.solids.filter((s,i)=>i!==ia&&i!==ib);if(result.faces.length)doc.solids.push(result)});show3D();notify(result.faces.length?`${op} complete: ${result.faces.length} triangles.`:'Boolean result is empty; operands removed. Undo restores them.')}catch(err){notify('Boolean failed: '+err.message)}}
+async function translateMesh(){const e=doc.solids?.[Number($('meshA').value)];if(!e){notify('Choose Mesh A first.');return}const raw=await cadPrompt('Mesh displacement dx,dy,dz','0,0,0');if(raw===null)return;const delta=raw.split(',').map(Number);if(delta.length!==3||!delta.every(Number.isFinite)){notify('Enter three finite numbers.');return}mutate(()=>e.vertices.forEach(p=>{p.x+=delta[0];p.y+=delta[1];p.z+=delta[2]}));show3D()}
+function duplicateMesh(){const e=doc.solids?.[Number($('meshA').value)];if(!e){notify('Choose Mesh A first.');return}mutate(()=>{const copy=structuredClone(e);copy.name+=' copy';doc.solids.push(copy)});show3D()}
+function exportSTL(){if(!doc.solids?.length){notify('Create meshes first.');return}const out=['solid CadForge'];for(const mesh of doc.solids)for(const f of mesh.faces){const ps=f.map(i=>new CSG.Vector(mesh.vertices[i])),n=ps[1].minus(ps[0]).cross(ps[2].minus(ps[0])).unit();out.push(`facet normal ${n.x} ${n.y} ${n.z}`,' outer loop',...ps.map(p=>`  vertex ${p.x} ${p.y} ${p.z}`),' endloop','endfacet')}out.push('endsolid CadForge');download('drawing.stl',out.join('\n')+'\n','model/stl')}
+group('Mesh editing',[['Union',()=>applyBoolean('union')],['Subtract',()=>applyBoolean('subtract')],['Intersect',()=>applyBoolean('intersect')],['Move mesh',translateMesh],['Copy mesh',duplicateMesh],['Export STL',exportSTL]]);
+const boolRender=render;render=function(){boolRender();if(document.activeElement?.id!=='meshA'&&document.activeElement?.id!=='meshB')syncMeshChoices()};
+const boolCommand=$('command').onkeydown;$('command').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const s=e.target.value.trim().toLowerCase(),actions={union:()=>applyBoolean('union'),subtract:()=>applyBoolean('subtract'),intersect:()=>applyBoolean('intersect'),movemesh:translateMesh,copymesh:duplicateMesh,stl:exportSTL};if(actions[s]){e.target.value='';actions[s]();return}}boolCommand(e)};
+for(const b of tabbar.querySelectorAll('button'))b.onclick=()=>{tabbar.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));ribbon.querySelectorAll('.rgroup').forEach((g,i)=>{g.style.display=(b.textContent==='Home'&&[0,1,2,3].includes(i))||(b.textContent==='Insert'&&[0,5].includes(i))||(b.textContent==='Annotate'&&[2,5].includes(i))||(b.textContent==='View'&&[3,6,7,8].includes(i))||(b.textContent==='Manage'&&[4,6,7,8].includes(i))?'block':'none'})};
+syncMeshChoices();tabbar.querySelector('button').click();
+
+</script><script>'use strict';
+// Workflow repair: input routing, selection, previews and current handler dispatch.
+const repairStyle=document.createElement('style');repairStyle.textContent='body{height:100vh;display:flex;flex-direction:column;overflow:hidden}header,.tabs,#ribbon,.drawingtab,#historylog,footer,.statusbar{flex-shrink:0}main{height:auto!important;flex:1;min-height:120px}#viewport{min-height:120px}#ribbon{height:116px;overflow-y:hidden}.rgroup{flex-shrink:0}.rbuttons{max-width:280px}#hint{max-width:calc(100% - 115px);font-size:12px}.statusbar button{padding:1px 8px}#command{min-width:120px}#status{min-width:180px}';document.head.append(repairStyle);
+const repairDrawGroup=ribbon.querySelector('.rbuttons');
+const selectButton=document.createElement('button');selectButton.textContent='Select';selectButton.dataset.tool='select';selectButton.onclick=()=>setTool('select');repairDrawGroup.prepend(selectButton);
+// Read hit positions before snapping; snapped construction coordinates are independent.
+canvas.onpointerdown=e=>{canvas.focus();canvas.setPointerCapture(e.pointerId);if(mode3D){orbitDrag={x:e.clientX,y:e.clientY,yaw:camera3.yaw,pitch:camera3.pitch};return}if(e.button===1||e.button===2){pan={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};return}const raw=world({x:e.offsetX,y:e.offsetY});shiftSelection=e.shiftKey;mouse=['select','delete','trim','extend'].includes(tool)||(['move','copy','rotate','scale','mirror','offset'].includes(tool)&&selected<0)?raw:snap(raw);Promise.resolve(accept(mouse)).catch(err=>notify('Action failed: '+err.message));shiftSelection=false};
+canvas.tabIndex=0;
+const oldHit=hit;hit=function(p){let idx=oldHit(p),best=idx>=0?9/view.scale:Infinity;doc.entities.forEach((e,i)=>{if(e.type!=='text'||!doc.layers.find(l=>l.name===e.layer)?.visible)return;const a=e.points[0],width=e.text.length*e.height*.6;if(p.x>=a.x&&p.x<=a.x+width&&p.y>=a.y-e.height*.25&&p.y<=a.y+e.height){idx=i;best=0}});return idx};
+function eraseSelection(){const ids=new Set(chosen());if(!ids.size){notify('Select objects to erase.');return}mutate(()=>doc.entities=doc.entities.filter((e,i)=>!ids.has(i)));clearSelection();render();notify(`${ids.size} entities erased.`)}
+const repairSetTool=setTool;setTool=function(t){if(t==='select')points=[];repairSetTool(t);if(t==='delete'&&chosen().length){eraseSelection();setTool('select');return}const hints={select:'Select an object. Shift-click adds/removes; drag or use Window select for a selection box.',line:'Line: specify start, then endpoint. Enter coordinates in the command bar.',polyline:'Polyline: specify vertices. Enter finishes; CLOSE joins the last point to the first.',circle:'Circle: specify center, then a point on the circumference, or enter a radius.',rectangle:'Rectangle: specify opposite corners.',window:'Window select: specify opposite corners. Selection points bypass Ortho.',move:'Move: select objects if needed, then specify base point and destination.',copy:'Copy: select objects if needed, then specify base point and destination.',rotate:'Rotate: select objects, click a pivot, then enter the angle.',scale:'Scale: select objects, click a base point, then enter the scale factor.',mirror:'Mirror: select objects, specify two points on the mirror axis.',offset:'Offset: select a line or circle, then click to enter the offset distance.',arc:'Arc: center, start point, then end direction (counterclockwise).',dimension:'Dimension: first point, second point, then label position.',trim:'Trim: click the line end to remove. Boundary lines must intersect it.',extend:'Extend: click the line end to extend toward another boundary.',insert:'Insert block: specify an insertion point.'};notify(hints[t]||'Ready.');canvas.style.cursor=t==='select'?'default':'crosshair'};
+const repairSnap=snap;snap=function(p){if(tool==='window'){const saved=$('ortho').checked;$('ortho').checked=false;const q=repairSnap(p);$('ortho').checked=saved;return q}return repairSnap(p)};
+const repairRender=render;render=function(){repairRender();if(!mode3D&&tool==='window'&&points.length){const a=screen(points[0]),b=screen(mouse);ctx.fillStyle='#468bd52b';ctx.strokeStyle='#80b8ff';ctx.lineWidth=1;ctx.fillRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y));ctx.strokeRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y))}};
+const repairAccept=accept;accept=async function(p){await repairAccept(p);if(tool==='window')render()};
+// A property layer change applies to the full selected set, not one block member.
+$('applyProps').onclick=()=>{const ids=chosen(),e=doc.entities[selected];if(!e)return;const size=Number($('entitySize').value),name=$('entityLayer').value;if(!doc.layers.some(l=>l.name===name))return;if(['circle','text'].includes(e.type)&&(!Number.isFinite(size)||size<=0)){notify('Enter a positive size.');return}mutate(()=>{for(const i of ids)doc.entities[i].layer=name;if(e.type==='circle')e.radius=size;if(e.type==='text'){e.text=$('entityText').value;e.height=size}});notify('Properties applied to selection.')};
+// Command keyboard shortcuts remain available while entering commands.
+const repairCommand=$('command').onkeydown;$('command').onkeydown=e=>{if(e.key!=='Enter')return;const s=e.target.value.trim().toLowerCase();if((s==='close'||s==='c')&&tool==='polyline'&&points.length>2){e.preventDefault();add({type:'polyline',points:structuredClone(points),closed:true});points=[];e.target.value='';render();notify('Closed polyline created.');return}if(s==='select'){e.preventDefault();setTool('select');e.target.value='';return}if(tool==='circle'&&points.length===1&&/^\d*\.?\d+$/.test(s)){e.preventDefault();const radius=Number(s);if(radius>0){add({type:'circle',center:structuredClone(points[0]),radius});points=[];render();notify('Circle created.')}e.target.value='';return}repairCommand(e)};
+document.onkeydown=e=>{if(inputDialog.open||document.querySelector('#plotDialog')?.open)return;const input=e.target.matches('input,select,textarea'),command=e.target===$('command');if(e.key==='Escape'){e.preventDefault();clearSelection();setTool('select');$('command').value='';canvas.focus();return}if(e.key==='F8'||e.key==='F9'){e.preventDefault();const el=$(e.key==='F8'?'ortho':'snap');el.checked=!el.checked;notify(`${e.key==='F8'?'Ortho':'Snap'} ${el.checked?'on':'off'}`);return}if(e.ctrlKey&&['z','y'].includes(e.key.toLowerCase())&&(!input||command)){e.preventDefault();undo(e.key.toLowerCase()==='y');return}if(e.ctrlKey&&e.key.toLowerCase()==='a'&&!input){e.preventDefault();selectAll();return}if(e.key==='Delete'&&(!input||command&&e.target.value==='')){e.preventDefault();eraseSelection();return}if(e.key==='Enter'&&!input){e.preventDefault();finish()}};
+// Buttons call the latest functions; Model switches back from 3D.
+for(const button of ribbon.querySelectorAll('button')){const dispatch={Extents:()=>fit(),'Model':()=>showModel(),'Plot':()=>plotSheet(),'Save layout':()=>saveLayout(),'Restore layout':()=>restoreLayout()};if(dispatch[button.textContent])button.onclick=dispatch[button.textContent]}
+$('fit').onclick=()=>fit();
+// Model-space snapping buttons are actual controls rather than status text.
+sb.replaceChildren();for(const [label,id]of [['Ortho F8','ortho'],['Snap F9','snap']]){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{$(id).checked=!$(id).checked;b.classList.toggle('active',$(id).checked);notify(`${label} ${$(id).checked?'on':'off'}`)};sb.append(b)}const modelButton=document.createElement('button');modelButton.textContent='Model 2D';modelButton.onclick=showModel;sb.prepend(modelButton);
+const repairInfo=document.createElement('span');repairInfo.textContent='CadForge · local project · drawing units';sb.append(repairInfo);
+// Block definition templates use a clean insertion origin and preserve source layer assignments.
+const repairInsert=accept;accept=async function(p){if(tool==='insert'){const definition=doc.blocks?.[insertName];if(!definition){notify('Choose an existing block before inserting.');return}const items=structuredClone(definition.items),id=gid();items.forEach(e=>{transformEntity(e,q=>({x:q.x+p.x,y:q.y+p.y}));e.group=id;e.blockName=insertName;if(e.layer==='0')e.layer=layer().name});mutate(()=>doc.entities.push(...items));notify(`Inserted ${insertName}. Escape ends insertion.`);return}return repairInsert(p)};
+// Report uncaught workflow failures visibly instead of silently abandoning a command.
+window.addEventListener('unhandledrejection',e=>{notify('Action failed: '+(e.reason?.message||e.reason));e.preventDefault()});
+window.addEventListener('error',e=>notify('Action failed: '+e.message));
+notify('Workflow repair build ready. Select is available on Home; Escape cancels from the command bar.');
+// Offset geometry is independent of its source block/hatch group.
+const ungroupedAdd=add;add=function(e){if(tool==='offset'){delete e.group;delete e.blockName;delete e.uuid}ungroupedAdd(e)};
+// Compute selection once per frame rather than once for every hatch segment.
+let selectedEntitiesForFrame=new Set();
+const cachedRender=render;render=function(){selectedEntitiesForFrame=new Set(chosen().map(i=>doc.entities[i]));cachedRender()};
+drawEntity=function(e,color,dashed=false){earlierDraw(e,selectedEntitiesForFrame.has(e)?'#ffcb66':color,dashed)};
+
+document.title='CadForge — Workflow Repair';
+repairInfo.textContent='CadForge repair build · local project · drawing units';
+// Layout presets restore a 2D view even when invoked from the mesh workspace.
+const modelRestoreLayout=restoreLayout;restoreLayout=async function(){if(mode3D)showModel();return modelRestoreLayout()};
+const modelSaveLayout=saveLayout;saveLayout=async function(){if(mode3D)showModel();return modelSaveLayout()};
+</script><script>'use strict';
+// Closed profiles and explicitly additive/subtractive extrusion workflows.
+function profileFromLines(lines){if(lines.length<3)throw Error('Select at least three connected lines forming a closed outline.');const tolerance=1e-6,nodes=[],edges=[];const node=p=>{let i=nodes.findIndex(q=>distance(p,q.p)<=tolerance);if(i<0){i=nodes.length;nodes.push({p:{...p},edges:[]})}return i};for(const e of lines){if(e.type!=='line')throw Error('Join profile accepts LINE entities only.');const a=node(e.points[0]),b=node(e.points[1]);if(a===b)throw Error('Zero-length edge in profile.');const i=edges.length;edges.push([a,b]);nodes[a].edges.push(i);nodes[b].edges.push(i)}if(nodes.some(n=>n.edges.length!==2))throw Error('Outline is open or branches. Every endpoint must meet exactly one other line.');const used=new Set(),ps=[];let n=edges[0][0],start=n;while(used.size<edges.length){ps.push({...nodes[n].p});const i=nodes[n].edges.find(i=>!used.has(i));if(i===undefined)break;used.add(i);n=edges[i][0]===n?edges[i][1]:edges[i][0];if(n===start)break}if(n!==start||used.size!==edges.length)throw Error('Select a single closed loop, without separate loops.');triangulatePolygon(ps);return ps}
+function ensureEntityIDs(){const seen=new Set();for(const e of doc.entities){if(!e.uuid||seen.has(e.uuid))e.uuid=gid();seen.add(e.uuid)}}
+ensureEntityIDs();
+const profileMutation=mutate;mutate=function(fn){return profileMutation(()=>{fn();ensureEntityIDs()})};
+async function joinProfile(){try{const ids=chosen();if(!ids.length)throw Error('Select connected lines first. Use Shift-click or Window select.');const boundary=profileFromLines(ids.map(i=>doc.entities[i])),name=doc.entities[ids[0]].layer;mutate(()=>{const discard=new Set(ids);doc.entities=doc.entities.filter((e,i)=>!discard.has(i));doc.entities.push({type:'polyline',closed:true,points:boundary,layer:name})});clearSelection();selected=doc.entities.length-1;selectionSet.add(selected);setTool('select');notify('Connected lines joined into a closed extrusion profile. Click Extrude.')}catch(err){await showMessage('Cannot join profile',err.message)}}
+async function showMessage(title,message){notify(title+': '+message);await cadConfirm(title+' — '+message)}
+function closedProfiles(){return doc.entities.map((e,i)=>({e,i})).filter(({e})=>e.type==='circle'||e.type==='polyline'&&e.closed)}
+function boundaryOf(e){if(e.type==='circle')return Array.from({length:64},(_,i)=>({x:e.center.x+e.radius*Math.cos(i*Math.PI/32),y:e.center.y+e.radius*Math.sin(i*Math.PI/32)}));if(e.type==='polyline'&&e.closed)return structuredClone(e.points);throw Error('Source is not a closed extrusion profile.')}
+function featureMesh(feature){const e=doc.entities.find(e=>e.uuid===feature.profile);if(!e)throw Error('The source profile was deleted. Select another closed profile and extrude again.');const mesh=makeExtrusion(boundaryOf(e),Math.abs(feature.height),'Extrusion');mesh.vertices.forEach(p=>p.z+=feature.startZ+(feature.height<0?feature.height:0));return mesh}
+// The CSG worker executes complex operations without blocking drafting input.
+booleanMeshes=function(a,b,operation){if(!['union','subtract','intersect'].includes(operation))throw Error('Invalid operation.');if(a.faces.length+b.faces.length>100000)throw Error('Input exceeds 100000 triangles.');return csgToMesh(meshToCSG(a)[operation](meshToCSG(b)),operation+' result',a.color)};
+async function computeBoolean(a,b,op){if(typeof Worker==='undefined')return booleanMeshes(a,b,op);const code=booleanWorkerSource();const url=URL.createObjectURL(new Blob([code],{type:'text/javascript'})),worker=new Worker(url);URL.revokeObjectURL(url);return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{worker.terminate();reject(Error('Operation exceeded 45 seconds. Try simpler profiles or smaller meshes.'))},45000);worker.onmessage=e=>{clearTimeout(timer);worker.terminate();e.data.error?reject(Error(e.data.error)):resolve(e.data.result)};worker.onerror=e=>{clearTimeout(timer);worker.terminate();reject(Error(e.message||'Mesh computation failed.'))};worker.postMessage({a,b,op})})}
+let computingMesh=false,extrusionGeneration=0;
+applyBoolean=async function(op){if(computingMesh)return;const ia=Number($('meshA').value),ib=Number($('meshB').value),a=doc.solids?.[ia],b=doc.solids?.[ib];if(!a||!b||ia===ib){await showMessage('Choose operands','Choose two different meshes in Mesh A and Mesh B.');return}computingMesh=true;notify(`Computing ${op}…`);try{const result=await computeBoolean(a,b,op);if(doc.solids?.[ia]!==a||doc.solids?.[ib]!==b)throw Error('The drawing changed during computation; operation cancelled.');mutate(()=>{doc.solids=doc.solids.filter((s,i)=>i!==ia&&i!==ib);if(result.faces.length)doc.solids.push(result)});show3D();notify(result.faces.length?`${op} completed: ${result.faces.length} triangles.`:'Result is empty. Undo restores operands.')}catch(err){await showMessage('Boolean failed',err.message)}finally{computingMesh=false}};
+const extrusionDialog=document.createElement('dialog');extrusionDialog.id='extrusionDialog';extrusionDialog.innerHTML='<form id="extrusionForm"><h2>Extrude a closed profile</h2><label for="extrusionProfile">Source outline</label><select id="extrusionProfile"></select><label for="extrusionDepth">Extrusion depth</label><input id="extrusionDepth" type="number" value="20" step="any" required><label for="extrusionStart">Start elevation Z</label><input id="extrusionStart" type="number" value="0" step="any" required><label for="extrusionOperation">Result</label><select id="extrusionOperation"><option value="new">Create a separate part</option><option value="union">Add material to an existing part</option><option value="subtract">Cut material from an existing part</option></select><label for="extrusionTarget">Existing part</label><select id="extrusionTarget"></select><p id="extrusionHelp">Depth extends from Start Z. Sketch lines must form a closed outline. Source changes take effect with Update extrusion.</p><p id="extrusionError" role="alert"></p><div class="actions"><button type="button" id="extrusionCancel">Cancel</button><button id="extrusionApply" type="submit">Extrude</button></div></form>';document.body.append(extrusionDialog);
+const extrusionCSS=document.createElement('style');extrusionCSS.textContent='#extrusionDialog{width:480px}#extrusionDialog select{width:100%;margin:6px 0}#extrusionHelp{color:#aabbd0;line-height:1.5}#extrusionError{color:#ffaf91}';document.head.append(extrusionCSS);
+extrude=async function(){extrusionGeneration++;if(mode3D)showModel();const ids=chosen();if(ids.length>=3&&ids.every(i=>doc.entities[i].type==='line')){try{const ps=profileFromLines(ids.map(i=>doc.entities[i]));mutate(()=>doc.entities.push({type:'polyline',points:ps,closed:true,layer:doc.entities[ids[0]].layer}));clearSelection();selected=doc.entities.length-1;selectionSet.add(selected)}catch(err){await showMessage('Cannot extrude lines',err.message+' Use Join profile after closing the outline.');return}}const available=closedProfiles();if(!available.length){await showMessage('No closed profile','Open lines cannot define a face. Close the outline, select its edges, and choose Join profile. Then choose Extrude.');return}ensureEntityIDs();$('extrusionProfile').replaceChildren(...available.map(({e,i})=>new Option(`${i+1}: ${e.type==='circle'?'Circle':'Closed outline'} · ${e.layer}`,e.uuid)));const chosenSource=available.find(({i})=>i===selected)||available.at(-1);$('extrusionProfile').value=chosenSource.e.uuid;const meshes=doc.solids||[];$('extrusionTarget').replaceChildren(...meshes.map((m,i)=>new Option(`${i+1}: ${m.name}`,String(i))));const currentMesh=Number($('meshA').value);$('extrusionTarget').value=String(currentMesh>=0&&currentMesh<meshes.length?currentMesh:0);$('extrusionOperation').value=meshes.length?'union':'new';$('extrusionDepth').value='20';$('extrusionStart').value='0';$('extrusionError').textContent='';extrusionDialog.showModal();$('extrusionDepth').focus();$('extrusionDepth').select()};
+$('extrusionCancel').onclick=()=>{extrusionGeneration++;extrusionDialog.close()};extrusionDialog.oncancel=e=>{e.preventDefault();document.getElementById('extrusionCancel').click()};
+$('extrusionForm').onsubmit=async e=>{e.preventDefault();if(computingMesh)return;const height=Number($('extrusionDepth').value),startZ=Number($('extrusionStart').value),operation=$('extrusionOperation').value,profile=$('extrusionProfile').value,index=Number($('extrusionTarget').value),target=doc.solids?.[index];if(!Number.isFinite(height)||height===0||!Number.isFinite(startZ)){$('extrusionError').textContent='Enter a nonzero depth and a finite start elevation.';return}if(operation!=='new'&&!target){$('extrusionError').textContent='Choose an existing part or create a separate part.';return}computingMesh=true;$('extrusionApply').disabled=true;$('extrusionError').textContent='Computing extrusion…';try{const generation=extrusionGeneration,feature={profile,height,startZ,operation};let result=featureMesh(feature);if(operation!=='new'){result=await computeBoolean(target,result,operation);if(!result.faces.length)throw Error('This operation leaves an empty part. Change the depth, elevation or source profile.')}if(generation!==extrusionGeneration){notify('Extrusion cancelled.');return}result.name=operation==='new'?'Extrusion':target.name;result.extrusionProgram=operation==='new'?{base:null,features:[feature]}:target.extrusionProgram?{base:structuredClone(target.extrusionProgram.base),features:[...structuredClone(target.extrusionProgram.features),feature]}:{base:{name:target.name,color:target.color,vertices:structuredClone(target.vertices),faces:structuredClone(target.faces)},features:[feature]};mutate(()=>{doc.solids??=[];if(operation==='new')doc.solids.push(result);else doc.solids[index]=result});extrusionDialog.close();show3D();notify(operation==='new'?'New extruded part created.':operation==='union'?'Existing part updated with added material.':'Material cut from existing part.')}catch(err){$('extrusionError').textContent=err.message}finally{computingMesh=false;$('extrusionApply').disabled=false}};
+async function updateExtrusion(){const index=Number($('meshA').value),target=doc.solids?.[index],program=target?.extrusionProgram;if(!program){await showMessage('No linked extrusion','This part has no editable extrusion history. Select its new outline and choose Extrude → Add material, or create a new linked extrusion.');return}if(computingMesh)return;computingMesh=true;notify('Rebuilding extrusion from source profiles…');try{let result=program.base?structuredClone(program.base):null;for(const feature of program.features){const mesh=featureMesh(feature);result=feature.operation==='new'||!result?mesh:await computeBoolean(result,mesh,feature.operation)}if(doc.solids?.[index]!==target)throw Error('Part changed while rebuilding.');if(!result.faces.length)throw Error('Updated extrusion is empty.');result.name=target.name;result.extrusionProgram=structuredClone(program);mutate(()=>doc.solids[index]=result);show3D();notify('Part rebuilt from the current source outlines.')}catch(err){await showMessage('Update failed',err.message)}finally{computingMesh=false}}
+// Replace captured Extrude button handlers and expose profile controls.
+for(const b of ribbon.querySelectorAll('button'))if(b.textContent==='Extrude')b.onclick=()=>extrude();
+const profileGroup=document.createElement('div');profileGroup.className='rgroup';const profileButtons=document.createElement('div');profileButtons.className='rbuttons';for(const [label,fn]of [['Join profile',joinProfile],['Extrude profile',()=>extrude()],['Update extrusion',updateExtrusion]]){const b=document.createElement('button');b.textContent=label;b.onclick=fn;profileButtons.append(b)}const profileCaption=document.createElement('strong');profileCaption.textContent='Profiles / Features';profileGroup.append(profileButtons,profileCaption);ribbon.append(profileGroup);
+for(const b of tabbar.querySelectorAll('button')){const old=b.onclick;b.onclick=()=>{old();profileGroup.style.display=['Home','View','Insert'].includes(b.textContent)?'block':'none'}}
+const profileCommand=$('command').onkeydown;$('command').onkeydown=e=>{if(e.key==='Enter'){const s=e.target.value.trim().toLowerCase();if(['join','joinprofile','extrude','updateextrusion'].includes(s)){e.preventDefault();e.target.value='';({join:joinProfile,joinprofile:joinProfile,extrude:()=>extrude(),updateextrusion:updateExtrusion})[s]();return}}profileCommand(e)};
+// Prevent global Enter/Escape handlers from cancelling an active extrusion form.
+const profileKeys=document.onkeydown;document.onkeydown=e=>{if(extrusionDialog.open)return;profileKeys(e)};
+// Discover closed line loops so a freshly drawn outline appears in Extrude immediately.
+const pendingProfiles=new Map();
+const savedClosedProfiles=closedProfiles;
+closedProfiles=function(){pendingProfiles.clear();const result=savedClosedProfiles(),lines=doc.entities.map((e,i)=>({e,i})).filter(({e})=>e.type==='line'&&!e.hatch&&!e.group);if(lines.length>5000)return result;const visited=new Set();for(let root=0;root<lines.length;root++){if(visited.has(root))continue;const component=[],queue=[root];visited.add(root);while(queue.length){const k=queue.pop(),line=lines[k];component.push(line);for(let j=0;j<lines.length;j++){if(visited.has(j))continue;if(line.e.points.some(a=>lines[j].e.points.some(b=>distance(a,b)<=1e-6))){visited.add(j);queue.push(j)}}}if(component.length<3)continue;try{const ps=profileFromLines(component.map(x=>x.e)),uuid=gid(),e={type:'polyline',closed:true,points:ps,layer:component[0].e.layer,uuid};pendingProfiles.set(uuid,{entity:e,sources:component.map(x=>x.e.uuid)});result.push({e,i:Math.max(...component.map(x=>x.i)),fromLines:true})}catch(err){/* Open/branching edges are left for explicit Join profile. */}}return result};
+const initialFeatureMesh=featureMesh;featureMesh=function(feature){const candidate=pendingProfiles.get(feature.profile);if(!candidate)return initialFeatureMesh(feature);const mesh=makeExtrusion(boundaryOf(candidate.entity),Math.abs(feature.height),'Extrusion');mesh.vertices.forEach(p=>p.z+=feature.startZ+(feature.height<0?feature.height:0));return mesh};
+const sourceProfileMutation=mutate;mutate=function(fn){return sourceProfileMutation(()=>{fn();for(const solid of doc.solids||[])for(const feature of solid.extrusionProgram?.features||[]){const candidate=pendingProfiles.get(feature.profile);if(candidate&&!doc.entities.some(e=>e.uuid===feature.profile)){const remove=new Set(candidate.sources);doc.entities=doc.entities.filter(e=>!remove.has(e.uuid));doc.entities.push(structuredClone(candidate.entity))}}})};
+
+const extrusionSchemaValidate=validate;validate=function(d){extrusionSchemaValidate(d);for(const mesh of d.solids||[]){const program=mesh.extrusionProgram;if(!program)continue;if(!Array.isArray(program.features)||!program.features.length)throw Error('Invalid extrusion history.');for(const f of program.features)if(!f||typeof f.profile!=='string'||!Number.isFinite(f.height)||f.height===0||!Number.isFinite(f.startZ)||!['new','union','subtract','intersect'].includes(f.operation))throw Error('Invalid extrusion feature.');if(program.base)extrusionSchemaValidate({layers:d.layers,entities:[],solids:[program.base]})}};
+
+function booleanWorkerSource(){const library=document.getElementById('cadforge-csg').textContent;return library+'\n'+meshToCSG.toString()+'\n'+csgToMesh.toString()+'\nconst booleanMeshes='+booleanMeshes.toString()+';\nonmessage=function(e){try{postMessage({result:booleanMeshes(e.data.a,e.data.b,e.data.op)})}catch(err){postMessage({error:err.message})}}'}
+</script><script>'use strict';
+// Local vector sheet preview and PDF download; no pop-up window required.
+const plotDialog=document.createElement('dialog');plotDialog.id='plotDialog';plotDialog.innerHTML='<h2>Drawing sheet</h2><div class="sheetControls"><label>Paper <select id="sheetPaper"><option>A4</option><option>A3</option><option>LETTER</option></select></label><label>Orientation <select id="sheetOrientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label><label>Scale <select id="sheetScale"><option value="fit">Fit drawing</option><option value="1">1:1</option><option value="2">1:2</option><option value="5">1:5</option><option value="10">1:10</option></select></label></div><div id="sheetPreview"></div><p id="sheetNote">Drawing units are treated as millimetres for fixed scales.</p><div class="actions"><button id="sheetPDF">Download PDF</button><button id="sheetSVG">Download SVG</button><button id="sheetClose">Close</button></div>';document.body.append(plotDialog);
+const sheetCSS=document.createElement('style');sheetCSS.textContent='#plotDialog{width:min(1000px,95vw);max-width:95vw}#plotDialog .sheetControls{display:flex;gap:20px}#plotDialog .sheetControls label{margin:0}#sheetPreview{background:white;margin:12px 0;max-height:60vh;overflow:auto}#sheetPreview svg{display:block;width:100%;height:auto;max-height:55vh}#sheetNote{color:#aebfd2}';document.head.append(sheetCSS);
+function entityBounds(entities){let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const e of entities){const ps=e.type==='circle'?[{x:e.center.x-e.radius,y:e.center.y-e.radius},{x:e.center.x+e.radius,y:e.center.y+e.radius}]:e.type==='text'?[e.points[0],{x:e.points[0].x+e.text.length*e.height*.6,y:e.points[0].y+e.height}]:e.points;for(const p of ps){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}}return Number.isFinite(minX)?{minX,minY,maxX,maxY}:{minX:0,minY:0,maxX:100,maxY:100}}
+function sheetConfig(){const paper=$('sheetPaper').value,portrait=$('sheetOrientation').value==='portrait';let [width,height]=paper==='A3'?[420,297]:paper==='LETTER'?[279.4,215.9]:[297,210];if(portrait)[width,height]=[height,width];const entities=doc.entities.filter(e=>doc.layers.find(l=>l.name===e.layer)?.visible),b=entityBounds(entities),margin=12,fitted=Math.min((width-margin*2)/Math.max(1,b.maxX-b.minX),(height-margin*2)/Math.max(1,b.maxY-b.minY)),scale=$('sheetScale').value==='fit'?fitted:1/Number($('sheetScale').value),offsetX=(width-(b.maxX-b.minX)*scale)/2-b.minX*scale,offsetY=(height-(b.maxY-b.minY)*scale)/2-b.minY*scale;return{width,height,scale,offsetX,offsetY,entities,overflow:scale>fitted+1e-9}}
+function sheetSVG(config){const {width,height,scale,offsetX,offsetY,entities}=config,esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));const X=x=>offsetX+x*scale,Y=y=>height-offsetY-y*scale;let content='';for(const e of entities){if(e.type==='circle')content+=`<circle cx="${X(e.center.x)}" cy="${Y(e.center.y)}" r="${e.radius*scale}"/>`;else if(e.type==='text')content+=`<text x="${X(e.points[0].x)}" y="${Y(e.points[0].y)}" font-size="${e.height*scale}" font-family="Arial" stroke="none" fill="black">${esc(e.text)}</text>`;else content+=`<${e.closed?'polygon':'polyline'} points="${e.points.map(p=>X(p.x)+','+Y(p.y)).join(' ')}"/>`}return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="white"/><g fill="none" stroke="black" stroke-width=".25">${content}</g></svg>`}
+function makeSheetPDF(config){const pt=72/25.4,{width,height,scale,offsetX,offsetY,entities}=config,X=x=>(offsetX+x*scale)*pt,Y=y=>(offsetY+y*scale)*pt,num=v=>Number(v.toFixed(5)).toString(),content=['0 G','0 g','0.7 w'];const point=p=>`${num(X(p.x))} ${num(Y(p.y))}`;for(const e of entities){if(e.type==='text'){const text=e.text.replace(/[^\x20-\x7e]/g,'?').replace(/[\\()]/g,'\\$&');content.push(`BT /F1 ${num(e.height*scale*pt)} Tf ${point(e.points[0])} Td (${text}) Tj ET`)}else if(e.type==='circle'){const x=X(e.center.x),y=Y(e.center.y),r=e.radius*scale*pt,k=r*.552284749831;content.push(`${num(x+r)} ${num(y)} m`,`${num(x+r)} ${num(y+k)} ${num(x+k)} ${num(y+r)} ${num(x)} ${num(y+r)} c`,`${num(x-k)} ${num(y+r)} ${num(x-r)} ${num(y+k)} ${num(x-r)} ${num(y)} c`,`${num(x-r)} ${num(y-k)} ${num(x-k)} ${num(y-r)} ${num(x)} ${num(y-r)} c`,`${num(x+k)} ${num(y-r)} ${num(x+r)} ${num(y-k)} ${num(x+r)} ${num(y)} c S`)}else{content.push(point(e.points[0])+' m');for(const p of e.points.slice(1))content.push(point(p)+' l');if(e.closed)content.push('h');content.push('S')}}const stream=content.join('\n')+'\n',objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>',`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(width*pt)} ${num(height*pt)}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',`<< /Length ${stream.length} >>\nstream\n${stream}endstream`];let pdf='%PDF-1.4\n',offsets=[0];objects.forEach((obj,i)=>{offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`});const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;return pdf}
+function refreshSheet(){const c=sheetConfig();$('sheetPreview').innerHTML=sheetSVG(c);$('sheetNote').textContent=c.overflow?'The fixed scale exceeds this sheet. Choose Fit drawing, larger paper, or a smaller scale.':'Preview and PDF use the same drawing extents. Fixed scales treat drawing units as millimetres.'}
+plotSheet=function(){if(!doc.entities.length){notify('Draw 2D geometry before creating a sheet.');return}if(mode3D)showModel();refreshSheet();plotDialog.showModal()};
+for(const id of ['sheetPaper','sheetOrientation','sheetScale'])$(id).onchange=refreshSheet;
+$('sheetClose').onclick=()=>plotDialog.close();$('sheetPDF').onclick=()=>download('drawing-sheet.pdf',makeSheetPDF(sheetConfig()),'application/pdf');$('sheetSVG').onclick=()=>download('drawing-sheet.svg',sheetSVG(sheetConfig()),'image/svg+xml');
+for(const b of ribbon.querySelectorAll('button'))if(['Plot','Print sheet'].includes(b.textContent))b.onclick=()=>plotSheet();
+const sheetKeys=document.onkeydown;document.onkeydown=e=>{if(plotDialog.open)return;sheetKeys(e)};
+// Exports offer a visible file link and inspectable content in embedded browsers.
+const exportDialog=document.createElement('dialog');exportDialog.id='exportDialog';exportDialog.innerHTML='<h2 id="exportTitle">Export file</h2><p>Use Download file to save. If your embedded browser prevents downloads, open CadForge.html in Chrome or Edge. The file contents are also available below.</p><a id="exportLink" class="exportDownload">Download file</a><label for="exportContent">File contents</label><textarea id="exportContent" readonly spellcheck="false"></textarea><div class="actions"><button id="exportClose">Close</button></div>';document.body.append(exportDialog);
+const exportCSS=document.createElement('style');exportCSS.textContent='#exportDialog{width:700px;max-width:95vw}#exportContent{width:100%;height:220px;background:#101923;color:#dce8f4;border:1px solid #66798f;font:11px Consolas}.exportDownload{display:inline-block;background:#38679b;padding:10px 18px;color:white;text-decoration:none;border-radius:4px}';document.head.append(exportCSS);
+let exportURL=null;download=function(name,text,type){if(exportURL)URL.revokeObjectURL(exportURL);exportURL=URL.createObjectURL(new Blob([text],{type}));$('exportTitle').textContent=name;$('exportLink').href=exportURL;$('exportLink').download=name;$('exportContent').value=text;exportDialog.showModal()};
+$('exportClose').onclick=()=>exportDialog.close();
+const exportKeys=document.onkeydown;document.onkeydown=e=>{if(exportDialog.open)return;exportKeys(e)};
+</script></html>

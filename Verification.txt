@@ -1,0 +1,43 @@
+CadForge verification — 2026-10-06
+
+PASS: bundled application initialization
+PASS: block creation/insertion and grouped transformations
+PASS: hatch creation with undo/redo
+PASS: explode, line extend and equal-distance chamfer
+PASS: saved-view restoration
+PASS: DXF BLOCK/INSERT round trip
+PASS: ARC and bulge tessellation endpoints
+PASS: invalid project and binary DXF rejection
+PASS: convex/concave extrusion
+PASS: closed edge incidence and signed volume for basic extrusions
+PASS: union/subtract/intersect signed volumes for overlapping boxes
+PASS: identical subtraction and disjoint boolean cases
+PASS: drilled L-bracket volume 103295.1773 drawing units cubed
+
+Browser verification: rectangle command input and extents; ribbon tabs;
+in-app dialogs; extrusion; mesh movement and union; sample project import.
+
+Not verified against AutoCAD or production DWG files. Mesh tests do not
+establish CAD-grade accuracy or manifold topology for every boolean result.
+
+Run: node Verify.cjs
+
+Repair-build regression checks:
+PASS: raw off-grid object selection (snapping no longer changes hit locations)
+PASS: Escape from focused command input
+PASS: automatic closed line-loop discovery
+PASS: adding an extruded outline updates one existing part
+PASS: saved browser-generated part volume changes 4000 → 5000
+PASS: retained source outline and extrusion history
+PASS: generated worker script parses and executes boolean union
+PASS: PDF header, page dimensions and cross-reference offset
+
+Browser proof: imported a 20×20×10 part; drew four LINE edges for an adjacent
+10×10 outline; Extrude selected that outline and Add material by default;
+10-unit extrusion yielded one mesh with 34 triangles. Undo restored the
+12-triangle base; redo restored the addition. Reload and Update extrusion
+rebuilt the same part. In-app sheet preview generated a vector PDF.
+
+The Codex embedded preview did not expose file download events in testing.
+Explicit Download file links are available, and exported contents remain
+visible. Chrome or Edge is recommended for saving files from the application.
