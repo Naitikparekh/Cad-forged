@@ -1,0 +1,14 @@
+[package]
+name = "cadforge-core"
+description = "CadForge core: geometry, drawing database, command engine, solids and file formats (no GUI dependencies)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+approx = "0.5"

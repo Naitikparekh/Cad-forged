@@ -1,0 +1,423 @@
+{
+ "format": "cadforge",
+ "version": 2,
+ "name": "L-Bracket",
+ "settings": {
+  "units": {
+   "type": "decimal",
+   "precision": 4,
+   "angPrecision": 0,
+   "insUnits": 4
+  },
+  "ltscale": 1,
+  "celtscale": 1,
+  "pdmode": 0,
+  "pdsize": 0,
+  "textHeight": 2.5,
+  "textStyle": "Standard",
+  "dimStyles": {
+   "Standard": {
+    "name": "Standard",
+    "scale": 1,
+    "txt": 2.5,
+    "asz": 2.5,
+    "exo": 0.625,
+    "exe": 1.25,
+    "gap": 0.625,
+    "cen": 2.5,
+    "dec": 2,
+    "tad": 1,
+    "tih": false,
+    "zin": 0,
+    "lfac": 1,
+    "pre": "",
+    "suf": "",
+    "blk": "closed"
+   }
+  },
+  "curDimStyle": "Standard",
+  "filletRadius": 0,
+  "chamferD1": 0,
+  "chamferD2": 0,
+  "offsetGap": 0,
+  "plinewid": 0
+ },
+ "layers": [
+  {
+   "name": "0",
+   "color": 7,
+   "ltype": "Continuous",
+   "lw": 25,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  },
+  {
+   "name": "Outline",
+   "color": 7,
+   "ltype": "Continuous",
+   "lw": 50,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  },
+  {
+   "name": "Holes",
+   "color": 4,
+   "ltype": "Continuous",
+   "lw": 25,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  },
+  {
+   "name": "Centre",
+   "color": 1,
+   "ltype": "CENTER",
+   "lw": 13,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  },
+  {
+   "name": "Dimensions",
+   "color": 3,
+   "ltype": "Continuous",
+   "lw": 13,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  },
+  {
+   "name": "Hatch",
+   "color": 8,
+   "ltype": "Continuous",
+   "lw": 9,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  },
+  {
+   "name": "Notes",
+   "color": 2,
+   "ltype": "Continuous",
+   "lw": 13,
+   "on": true,
+   "frozen": false,
+   "locked": false,
+   "plot": true,
+   "desc": ""
+  }
+ ],
+ "blocks": {},
+ "model": {
+  "entities": [
+   {
+    "type": "pline",
+    "v": [
+     {
+      "x": 0,
+      "y": 0,
+      "b": 0
+     },
+     {
+      "x": 120,
+      "y": 0,
+      "b": 0
+     },
+     {
+      "x": 120,
+      "y": 30,
+      "b": 0
+     },
+     {
+      "x": 30,
+      "y": 30,
+      "b": 0
+     },
+     {
+      "x": 30,
+      "y": 90,
+      "b": 0
+     },
+     {
+      "x": 0,
+      "y": 90,
+      "b": 0
+     }
+    ],
+    "closed": true,
+    "layer": "Outline",
+    "id": 1
+   },
+   {
+    "type": "circle",
+    "c": {
+     "x": 75,
+     "y": 15
+    },
+    "r": 5,
+    "layer": "Holes",
+    "id": 2
+   },
+   {
+    "type": "line",
+    "a": {
+     "x": 66,
+     "y": 15
+    },
+    "b": {
+     "x": 84,
+     "y": 15
+    },
+    "layer": "Centre",
+    "id": 3
+   },
+   {
+    "type": "line",
+    "a": {
+     "x": 75,
+     "y": 6
+    },
+    "b": {
+     "x": 75,
+     "y": 24
+    },
+    "layer": "Centre",
+    "id": 4
+   },
+   {
+    "type": "circle",
+    "c": {
+     "x": 15,
+     "y": 60
+    },
+    "r": 5,
+    "layer": "Holes",
+    "id": 5
+   },
+   {
+    "type": "line",
+    "a": {
+     "x": 6,
+     "y": 60
+    },
+    "b": {
+     "x": 24,
+     "y": 60
+    },
+    "layer": "Centre",
+    "id": 6
+   },
+   {
+    "type": "line",
+    "a": {
+     "x": 15,
+     "y": 51
+    },
+    "b": {
+     "x": 15,
+     "y": 69
+    },
+    "layer": "Centre",
+    "id": 7
+   },
+   {
+    "type": "circle",
+    "c": {
+     "x": 15,
+     "y": 75
+    },
+    "r": 5,
+    "layer": "Holes",
+    "id": 8
+   },
+   {
+    "type": "line",
+    "a": {
+     "x": 6,
+     "y": 75
+    },
+    "b": {
+     "x": 24,
+     "y": 75
+    },
+    "layer": "Centre",
+    "id": 9
+   },
+   {
+    "type": "line",
+    "a": {
+     "x": 15,
+     "y": 66
+    },
+    "b": {
+     "x": 15,
+     "y": 84
+    },
+    "layer": "Centre",
+    "id": 10
+   },
+   {
+    "type": "hatch",
+    "loops": [
+     [
+      {
+       "x": 0,
+       "y": 0,
+       "b": 0
+      },
+      {
+       "x": 8,
+       "y": 0,
+       "b": 0
+      },
+      {
+       "x": 8,
+       "y": 30,
+       "b": 0
+      },
+      {
+       "x": 0,
+       "y": 30,
+       "b": 0
+      }
+     ]
+    ],
+    "pattern": "ANSI31",
+    "ps": 1.2,
+    "pa": 0,
+    "layer": "Hatch",
+    "id": 11
+   },
+   {
+    "type": "dim",
+    "kind": "lin",
+    "p1": {
+     "x": 0,
+     "y": 0
+    },
+    "p2": {
+     "x": 120,
+     "y": 0
+    },
+    "dp": {
+     "x": 60,
+     "y": -16
+    },
+    "ang": 0,
+    "layer": "Dimensions",
+    "id": 12
+   },
+   {
+    "type": "dim",
+    "kind": "lin",
+    "p1": {
+     "x": 0,
+     "y": 0
+    },
+    "p2": {
+     "x": 0,
+     "y": 90
+    },
+    "dp": {
+     "x": -16,
+     "y": 45
+    },
+    "ang": 1.5707963267948966,
+    "layer": "Dimensions",
+    "id": 13
+   },
+   {
+    "type": "dim",
+    "kind": "lin",
+    "p1": {
+     "x": 120,
+     "y": 0
+    },
+    "p2": {
+     "x": 120,
+     "y": 30
+    },
+    "dp": {
+     "x": 136,
+     "y": 15
+    },
+    "ang": 1.5707963267948966,
+    "layer": "Dimensions",
+    "id": 14
+   },
+   {
+    "type": "dim",
+    "kind": "dia",
+    "c": {
+     "x": 75,
+     "y": 15
+    },
+    "pt": {
+     "x": 78.53553390593274,
+     "y": 18.535533905932738
+    },
+    "dp": {
+     "x": 94,
+     "y": 29
+    },
+    "layer": "Dimensions",
+    "id": 15
+   },
+   {
+    "type": "leader",
+    "pts": [
+     {
+      "x": 15,
+      "y": 75
+     },
+     {
+      "x": 52,
+      "y": 100
+     }
+    ],
+    "s": "Ø10 THRU, 2 HOLES",
+    "h": 3.5,
+    "layer": "Notes",
+    "id": 16
+   },
+   {
+    "type": "text",
+    "p": {
+     "x": 0,
+     "y": -42
+    },
+    "h": 4,
+    "s": "L-BRACKET\nMaterial: 6061-T6 aluminium\nScale 1:1",
+    "w": 100,
+    "rot": 0,
+    "jh": "left",
+    "jv": "top",
+    "multi": true,
+    "layer": "Notes",
+    "id": 17
+   }
+  ]
+ },
+ "layouts": [],
+ "solids": [],
+ "views": {},
+ "cur": {
+  "layer": "Outline"
+ },
+ "nextId": 18,
+ "view": null
+}

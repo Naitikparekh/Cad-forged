@@ -1,3 +1,4 @@
 node_modules/
 tests/browser/out/
 *.log
+target/
