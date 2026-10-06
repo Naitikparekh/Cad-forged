@@ -341,7 +341,6 @@ export function transformEntity(e, m, doc) {
     case 'viewport': e.c = mp(e.c); break;
     default: break;
   }
-  void doc;
   return e;
 }
 

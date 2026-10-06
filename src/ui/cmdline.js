@@ -3,7 +3,6 @@ import { h, svgIcon, clear } from './dom.js';
 import { showMenu } from './menu.js';
 import { optionName } from '../engine/parse.js';
 import { registry } from '../engine/registry.js';
-import { flush } from '../engine/runtime.js';
 
 export class CommandLine {
   constructor(ui, host) {
@@ -160,4 +159,3 @@ export class CommandLine {
   hideSuggest() { this.sug.hidden = true; this.sugs = []; this.sugIdx = -1; }
 }
 
-void flush;

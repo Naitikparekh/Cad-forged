@@ -1,7 +1,6 @@
 // Blocks, groups, purge and rename.
-import * as g from '../core/geom.js';
 import { M } from '../core/geom.js';
-import { E, clone, boundsOf, transformEntity, insertMatrix } from '../core/entities.js';
+import { E, clone, transformEntity } from '../core/entities.js';
 import { registry } from '../engine/registry.js';
 import { memory } from './helpers.js';
 
@@ -119,4 +118,3 @@ def({
   },
 });
 
-void g; void boundsOf; void insertMatrix;

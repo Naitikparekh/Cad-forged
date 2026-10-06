@@ -1,6 +1,6 @@
 // Layer, color, linetype and lineweight commands.
 import { registry } from '../engine/registry.js';
-import { LINETYPES, ltypeKey, LINEWEIGHTS, LW_BYLAYER, newLayer, lwDisplay, describeColor } from '../core/style.js';
+import { ltypeKey, LINEWEIGHTS, describeColor } from '../core/style.js';
 import { parseColor } from '../engine/sysvars.js';
 
 const def = d => registry.define({ group: 'Layers', ...d });
@@ -148,4 +148,3 @@ def({
   async run(c) { const v = await c.number({ prompt: 'Enter new linetype scale factor', default: c.doc.settings.ltscale, min: 1e-9 }); if (v.value) c.setvar('LTSCALE', v.value); },
 });
 
-void LINETYPES; void LW_BYLAYER; void newLayer; void lwDisplay;

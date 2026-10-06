@@ -1,6 +1,5 @@
 // Plotting: lays a drawing out on a sheet and renders it with the scene renderer into any 2D context
 // (a real canvas for preview/PNG, or a RecordingContext for PDF/SVG). Device unit = 0.1 mm.
-import { M } from '../core/geom.js';
 import * as g from '../core/geom.js';
 import { boundsOf } from '../core/entities.js';
 import { View } from '../engine/view.js';
@@ -72,4 +71,3 @@ export function exportVector(doc, o, viewBounds) {
   return { data: writePDF(rec.ops, page, { unitMm: UNIT_MM, title: o.title }), mime: 'application/pdf', ext: 'pdf', layout };
 }
 
-void M;

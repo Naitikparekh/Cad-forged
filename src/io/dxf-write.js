@@ -1,6 +1,6 @@
 // DXF writer (AutoCAD R2000 / AC1015). DOM-free. Output is validated against ezdxf in tests/dxf.
 import * as g from '../core/geom.js';
-import { boundsOf, splineBeziers, ellipseSweep, segsOf } from '../core/entities.js';
+import { boundsOf, splineBeziers, ellipseSweep } from '../core/entities.js';
 import { dimGeometry, arrowPolygon, arrowLines } from '../core/dim.js';
 import { PATTERNS } from '../core/hatch.js';
 import { LINETYPES, hexToAci, LW_BYLAYER } from '../core/style.js';
@@ -108,7 +108,6 @@ export function writeDXF(doc) {
   table('APPID', 'appid', 1, () => { o.c(0, 'APPID').c(5, hs.appidRec).c(330, hs.appid).c(100, 'AcDbSymbolTableRecord').c(100, 'AcDbRegAppTableRecord').c(2, 'ACAD').c(70, 0); });
   const dimBlocks = [];     // anonymous *D blocks, filled while writing entities
   // DIMSTYLE and BLOCK_RECORD tables are written after the entities are known (dimension blocks)
-  const tablesEndMark = o.lines.length;
 
   // ---------- entity writers (collected per space)
   const entityOut = (list, ownerHandle, blockName) => {
@@ -268,7 +267,6 @@ export function writeDXF(doc) {
   o.c(0, 'ENDSEC');
   o.lines = savedLines;
   o.lines.push(...tail.lines);
-  void tablesEndMark;
 
   // ---------- BLOCKS
   o.c(0, 'SECTION').c(2, 'BLOCKS');
@@ -297,4 +295,3 @@ export function writeDXF(doc) {
   return o.toString().replace('__HANDSEED__', handle.toString(16).toUpperCase());
 }
 
-void segsOf;

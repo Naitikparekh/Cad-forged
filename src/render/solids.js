@@ -27,11 +27,12 @@ function derived(s, rev) {
     const l = Math.hypot(...acc) || 1;
     return [acc[0] / l, acc[1] / l, acc[2] / l];
   });
-  const map = new Map();
+  const map = new Map(), adj = F.map(() => [-1, -1, -1]), feat = F.map(() => [true, true, true]);
   F.forEach((f, fi) => {
     for (let k = 0; k < 3; k++) {
       const a = f[k], b = f[(k + 1) % 3], key = a < b ? a * 4294967296 + b : b * 4294967296 + a, e = map.get(key);
-      if (e) e.n2 = fn[fi].n; else map.set(key, { a, b, n1: fn[fi].n, n2: null });
+      if (e) { e.n2 = fn[fi].n; adj[fi][k] = e.fi; adj[e.fi][e.k] = fi; const sharp = e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2] < EDGE_ANGLE; feat[fi][k] = feat[e.fi][e.k] = sharp; }
+      else map.set(key, { a, b, n1: fn[fi].n, n2: null, fi, k });
     }
   });
   const edges = [];
@@ -39,7 +40,7 @@ function derived(s, rev) {
     if (!e.n2) { edges.push([e.a, e.b]); continue; }
     if (e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2] < EDGE_ANGLE) edges.push([e.a, e.b]);
   }
-  const d = { rev, nv: V.length, nf: F.length, fn, smooth, edges };
+  const d = { rev, nv: V.length, nf: F.length, fn, smooth, edges, adj, feat };
   cache.set(s, d);
   return d;
 }
@@ -51,7 +52,7 @@ function baseColor(rc, s) {
   let col = s.color !== undefined ? s.color : layer.color;
   if (typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color)) col = s.color;
   if (col === 7 || col === undefined || col === 'BYBLOCK') return rc.theme.dark ? '#c3ccd6' : '#8695a4';
-  return colorToCss(col, { dark: rc.theme.dark });
+  return colorToCss(col, { dark: rc.theme.dark, contrast: rc.theme.contrast });
 }
 
 export function drawSolids(rc, style = '2D Wireframe') {
@@ -69,30 +70,39 @@ export function drawSolids(rc, style = '2D Wireframe') {
     const sel = rc.sel.has(s.id) || rc.tempSel.has(s.id);
     const base = baseColor(rc, s), m = /^#([0-9a-f]{6})$/i.exec(base), rgb = m ? [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16)) : [160, 170, 180];
     if (fill) {
+      const front = P2 => (P2[1].x - P2[0].x) * (P2[2].y - P2[0].y) - (P2[1].y - P2[0].y) * (P2[2].x - P2[0].x) < 0;
+      const faceFront = s.faces.map(f => front([P[f[0]], P[f[1]], P[f[2]]]));
       s.faces.forEach((f, i) => {
-        const a = P[f[0]], b = P[f[1]], c = P[f[2]];
-        if ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0) return;                    // back face
-        const n = camN(D.smooth[i]);
+        if (!faceFront[i]) return;                                                                  // back face
+        const a = P[f[0]], b = P[f[1]], c = P[f[2]], n = camN(D.smooth[i]);
         const lum = style === 'Hidden' ? 1 : .3 + .7 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
-        polys.push({ pts: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3, col: style === 'Hidden' ? theme.canvas : `rgb(${rgb.map(x => Math.min(255, Math.round(x * lum * 1.08)))})` });
+        // edges are painted with their face so nearer faces cover them: feature edges and silhouettes only
+        const pe = [];
+        for (let k = 0; k < 3; k++) { const o = D.adj[i][k]; if ((edges || sel) && (D.feat[i][k] || o < 0 || !faceFront[o])) pe.push([P[f[k]], P[f[(k + 1) % 3]]]); }
+        polys.push({ pts: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3, col: style === 'Hidden' ? theme.canvas : `rgb(${rgb.map(x => Math.min(255, Math.round(x * lum * 1.08)))})`, pe, sel });
       });
     }
     edgePaths.push({ P, D, sel });
   }
   polys.sort((p, q) => q.depth - p.depth);
+  const edgeCol = theme.dark ? 'rgba(8,14,20,.9)' : 'rgba(10,20,30,.85)';
   for (const p of polys) {
     ctx.beginPath(); ctx.moveTo(p.pts[0].x, p.pts[0].y); ctx.lineTo(p.pts[1].x, p.pts[1].y); ctx.lineTo(p.pts[2].x, p.pts[2].y); ctx.closePath();
     ctx.fillStyle = p.col; ctx.fill(); ctx.strokeStyle = p.col; ctx.lineWidth = .7; ctx.lineJoin = 'round'; ctx.stroke();
+    if (p.pe.length) {
+      ctx.beginPath(); for (const [u, v] of p.pe) { ctx.moveTo(u.x, u.y); ctx.lineTo(v.x, v.y); }
+      ctx.strokeStyle = p.sel ? theme.select : edgeCol; ctx.lineWidth = p.sel ? 2 : 1; ctx.stroke();
+    }
   }
-  if (edges || wire) {
+  if (wire) {
     ctx.beginPath();
     for (const { P, D, sel } of edgePaths) if (!sel) for (const [a, b] of D.edges) { ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); }
-    ctx.strokeStyle = wire ? (theme.dark ? '#7fd0ff' : '#0b5a96') : (theme.dark ? 'rgba(8,14,20,.9)' : 'rgba(10,20,30,.85)'); ctx.lineWidth = wire ? 1.15 : 1; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.strokeStyle = theme.dark ? '#7fd0ff' : '#0b5a96'; ctx.lineWidth = 1.15; ctx.lineJoin = 'round'; ctx.stroke();
   }
   for (const { P, D, sel } of edgePaths) {
-    if (!sel) continue;
+    if (!sel || !wire) continue;
     ctx.beginPath();
     for (const [a, b] of D.edges) { ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); }
-    ctx.strokeStyle = theme.select; ctx.lineWidth = 2.2; ctx.setLineDash([]); ctx.stroke();
+    ctx.strokeStyle = theme.select; ctx.lineWidth = 2.2; ctx.stroke();
   }
 }

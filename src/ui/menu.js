@@ -42,7 +42,7 @@ export function showMenu(items, x, y, opts = {}) {
     const el = h('div.mi' + (it.disabled ? '.disabled' : ''), { role: 'menuitem' },
       h('span.mi-check', it.checked ? svgIcon('check', 12) : null),
       h('span.mi-ico', it.icon ? svgIcon(it.icon, 16) : null),
-      h('span.mi-label', it.html ? { html: it.html } : null, it.html ? null : it.label),
+      h('span.mi-label', it.el ? it.el : it.html ? { html: it.html } : null, it.el || it.html ? null : it.label),
       h('span.mi-short', it.shortcut || ''),
       h('span.mi-arrow', it.submenu ? svgIcon('chevright', 10) : null));
     if (it.tip) attachTip(el, it.tip);

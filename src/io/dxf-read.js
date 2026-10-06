@@ -68,10 +68,10 @@ const pt = (r, i = 0) => ({ x: firstNum(r, 10 + i), y: firstNum(r, 20 + i) });
 // ---------------------------------------------------------------- sections
 
 function sections(recs) {
-  const out = {}; let name = null, list = null;
+  const out = {}; let list = null;
   for (const r of recs) {
-    if (r.type === 'SECTION') { name = null; list = null; const n = first(r, 2); if (n) { name = n; list = out[n] = []; } }
-    else if (r.type === 'ENDSEC') { name = null; list = null; } else if (list) list.push(r);
+    if (r.type === 'SECTION') { const n = first(r, 2); list = n ? (out[n] = []) : null; }
+    else if (r.type === 'ENDSEC') list = null; else if (list) list.push(r);
   }
   return out;
 }
@@ -152,14 +152,14 @@ function hatchLoops(r) {
     const flags = num(92);
     if (Number.isNaN(flags)) break;
     if (flags & 2) {                                   // polyline path
-      const hasBulge = num(72), closed = num(73), nv = num(93);
+      const hasBulge = num(72), nv = num(93);
+      num(73);
       const verts = [];
       for (let k = 0; k < nv; k++) {
         const x = num(10), y = num(20); let b = 0;
         if (hasBulge && gs[i] && gs[i][0] === 42) b = parseFloat(gs[i++][1]);
         verts.push({ x, y, b });
       }
-      void closed;
       if (verts.length > 2) loops.push(verts);
     } else {                                           // edge path
       const ne = num(93), edges = [];

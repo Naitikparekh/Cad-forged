@@ -135,7 +135,7 @@ def({
     if (!lines) { const f = await c.app.ui?.openText?.('.scr,.txt'); if (!f) { c.log('No script selected.'); return; } lines = f.text.split(/\r?\n/); }
     c.log(`Running script (${lines.length} lines)`);
     // scripts feed the same input channel as the command line
-    queueMicrotask(() => c.rt.script(lines));
+    Promise.resolve().then(() => c.rt.script(lines));
   },
 });
 

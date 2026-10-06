@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim, near } from './sim.js';
-import { E, segsOf } from '../../src/core/entities.js';
-import * as g from '../../src/core/geom.js';
+import { E } from '../../src/core/entities.js';
 
 const P = (x, y) => ({ x, y });
 const addLine = (s, a, b) => s.doc.add(E.line(a, b));

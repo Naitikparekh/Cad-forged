@@ -168,7 +168,7 @@ button { cursor: pointer; }
 .rlaunch { position: absolute; right: 0; top: 2px; background: transparent; border: 0; padding: 0; width: 14px; height: 14px; display: grid; place-items: center; color: var(--text-3); }
 .rlaunch:hover { color: var(--text); }
 .rpanel.open .rpanel-title { background: var(--ribbon-title); color: var(--text); }
-.rslideout { position: absolute; z-index: 30; left: 0; top: 100%; margin-top: 0; min-width: 100%; background: var(--ribbon); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 6px; display: flex; flex-direction: column; gap: 1px; }
+.rslideout { position: fixed; z-index: 230; background: var(--ribbon); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 6px; display: flex; flex-direction: column; gap: 1px; }
 
 /* buttons */
 .rb { display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid transparent; border-radius: 3px; color: var(--text); padding: 0 6px; text-align: left; white-space: nowrap; }
@@ -208,10 +208,10 @@ button { cursor: pointer; }
 .ltm svg { vertical-align: middle; }
 
 /* hatch creation */
-.patgrid { display: grid; grid-template-columns: repeat(7, 60px); gap: 3px; align-content: start; max-width: 470px; }
+.patgrid { display: grid; grid-template-columns: repeat(7, 60px); gap: 3px; align-content: start; max-width: 470px; max-height: 72px; overflow-y: auto; }
 .pat { background: transparent; border: 1px solid var(--border); border-radius: 3px; padding: 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--text-2); }
 .pat:hover { border-color: var(--accent); } .pat.sel { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2); color: var(--text); }
-.pat-thumb { width: 54px; height: 30px; border-radius: 2px; } .pat-name { font-size: 10px; }
+.pat-thumb { width: 54px; height: 24px; border-radius: 2px; } .pat-name { display: none; }
 .hprops { gap: 3px; } .hrow { display: flex; align-items: center; gap: 6px; font-size: 12px; } .hrow > span { width: 40px; color: var(--text-2); }
 .hrow input { width: 70px; height: 21px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; color: var(--text); padding: 0 4px; }
 .hcolor { display: flex; gap: 6px; align-items: center; height: 21px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; padding: 0 6px; width: 110px; }
@@ -302,7 +302,7 @@ button { cursor: pointer; }
 .mi.disabled { opacity: .45; pointer-events: none; }
 .mi-check { width: 18px; display: grid; place-items: center; color: var(--accent-2); } .mi-ico { width: 22px; display: grid; place-items: center; } .mi-label { flex: 1; padding: 0 6px 0 2px; display: flex; align-items: center; gap: 6px; } .mi-short { color: var(--text-3); padding-left: 24px; } .mi-arrow { width: 14px; display: grid; place-items: center; color: var(--text-3); }
 .msep { height: 1px; background: var(--border); margin: 3px 0; } .mhead { padding: 3px 10px; color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.lrow { display: flex; align-items: center; gap: 2px; } .lstate { background: transparent; border: 0; padding: 2px; border-radius: 3px; display: grid; } .lstate:hover { background: var(--hover); } .lname { margin-left: 4px; } .lname.cur { font-weight: 700; color: var(--accent-2); }
+.mi-label:has(> .lrow) { padding: 0; } .lrow { display: flex; align-items: center; gap: 2px; } .lstate { background: transparent; border: 0; padding: 2px; border-radius: 3px; display: grid; } .lstate:hover { background: var(--hover); } .lname { margin-left: 4px; } .lname.cur { font-weight: 700; color: var(--accent-2); }
 .tooltip { position: fixed; z-index: 400; max-width: 300px; padding: 8px 10px; background: var(--chrome-2); border: 1px solid var(--sep); border-radius: 3px; box-shadow: var(--shadow); pointer-events: none; opacity: 0; transition: opacity .1s; font-size: 12px; }
 .tooltip.show { opacity: 1; } .tt-title { font-weight: 700; margin-bottom: 3px; } .tt-desc { color: var(--text-2); line-height: 1.4; } .tt-cmd { margin-top: 6px; color: var(--text-3); font-size: 11px; } .tt-cmd b { color: var(--text); font-family: var(--mono); } .tt-extra { margin-top: 4px; color: var(--text-3); font-size: 11px; }
 
@@ -1329,10 +1329,18 @@ button { cursor: pointer; }
     }
     return best;
   }
-  function colorToCss(value, { dark = true } = {}) {
+  function colorToCss(value, { dark = true, contrast = false } = {}) {
     if (typeof value === "string" && value[0] === "#") return value;
     if (value === 7 || value === void 0) return dark ? "#ffffff" : "#000000";
-    return aciHex(value);
+    const hex = aciHex(value);
+    return contrast && !dark ? darkenForLight(hex) : hex;
+  }
+  function darkenForLight(hex) {
+    const n = parseInt(hex.slice(1), 16), c2 = [n >> 16 & 255, n >> 8 & 255, n & 255];
+    const L2 = (0.2126 * c2[0] + 0.7152 * c2[1] + 0.0722 * c2[2]) / 255;
+    if (L2 <= 0.5) return hex;
+    const k = 0.5 / L2;
+    return "#" + c2.map((v) => Math.round(v * k).toString(16).padStart(2, "0")).join("");
   }
   function describeColor(v) {
     if (v === void 0 || v === "BYLAYER") return "ByLayer";
@@ -2022,7 +2030,6 @@ button { cursor: pointer; }
       default:
         break;
     }
-    void doc;
     return e;
   }
   function stretchEntity(e, win, d, doc) {
@@ -3965,11 +3972,10 @@ button { cursor: pointer; }
         c2.add(E.ellipse(center, m2, ratio));
         return;
       }
-      const major = Math.atan2(m2.y, m2.x), param = (pt3) => {
+      const param = (pt3) => {
         const v = sub(pt3, center), x = dot(v, unit(m2)) / len(m2), y = dot(v, unit({ x: -m2.y, y: m2.x })) / (len(m2) * ratio);
         return Math.atan2(y, x);
       };
-      void major;
       const s = await c2.point({ prompt: "Specify start angle", options: ["Parameter"], base: center, preview: (pt3) => [E.line(center, pt3)] });
       if (!s.pt) return;
       const t0 = param(s.pt);
@@ -4756,7 +4762,6 @@ button { cursor: pointer; }
       }
     }
     c2.clearSel();
-    void args;
   };
   var centroidPair = (sel, doc) => {
     let b = null;
@@ -5446,7 +5451,7 @@ button { cursor: pointer; }
     repeatable: false,
     group: "Internal",
     async run(c2, { grip: grip2 }) {
-      const ed = c2.editor, hot = grip2.grip, orig = grip2.entity;
+      const ed = c2.editor, hot = grip2.grip;
       const sels = ed.selected;
       let mode = hot.kind === "move" || hot.kind === "radius" ? hot.kind === "move" ? "MOVE" : "STRETCH" : "STRETCH";
       if (hot.kind === "move") mode = "MOVE";
@@ -5457,7 +5462,7 @@ button { cursor: pointer; }
         const rotMode = mode === "ROTATE", scaleMode = mode === "SCALE";
         const label = `** ${mode} ${copy ? "(multiple) " : ""}**
 ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move point" : mode === "ROTATE" ? "Specify rotation angle" : mode === "SCALE" ? "Specify scale factor" : "Specify second point"}`;
-        const result = rotMode ? await c2.angle({ prompt: label, options: opts, base, default: 0, allowEnter: true, preview: (pt4) => gripPreview(pt4) }) : scaleMode ? await c2.distance({ prompt: label, options: opts, base, default: 1, allowEnter: true, preview: (pt4) => gripPreview(pt4) }) : await c2.point({ prompt: label, options: opts, base: mode === "MOVE" || mode === "MIRROR" ? base : hot.pt, allowEnter: true, preview: (pt4) => gripPreview(pt4) });
+        const result = rotMode ? await c2.angle({ prompt: label, options: opts, base, default: 0, allowEnter: true, preview: (pt3) => gripPreview(pt3) }) : scaleMode ? await c2.distance({ prompt: label, options: opts, base, default: 1, allowEnter: true, preview: (pt3) => gripPreview(pt3) }) : await c2.point({ prompt: label, options: opts, base: mode === "MOVE" || mode === "MIRROR" ? base : hot.pt, allowEnter: true, preview: (pt3) => gripPreview(pt3) });
         if (result.kw === "eXit") return;
         if (result.kw === "Copy") {
           copy = true;
@@ -5477,10 +5482,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           mode = GRIP_MODES[(GRIP_MODES.indexOf(mode) + 1) % GRIP_MODES.length];
           continue;
         }
-        const pt3 = result.pt;
         applyGrip(result);
         if (!copy) return;
-        void pt3;
       }
       function matrixFor(r) {
         if (mode === "MOVE") return M.translate(r.pt.x - base.x, r.pt.y - base.y);
@@ -5526,7 +5529,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         if (copy) addCopies(c2.doc, sels, m2);
         else applyTransform(c2.doc, sels, m2);
       }
-      void orig;
     }
   });
 
@@ -5935,8 +5937,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         }
       }
       const set = /* @__PURE__ */ new Map();
-      const result = await this.ask({ kind: "select", message: spec.prompt || "Select objects", ...spec, set, remove: false, window: null, previous: spec.previous });
-      void result;
+      await this.ask({ kind: "select", message: spec.prompt || "Select objects", ...spec, set, remove: false, window: null, previous: spec.previous });
       const vals = [...set.values()], ents = vals.filter((v) => !v.vertices);
       ents.solids = vals.filter((v) => v.vertices);
       return ents;
@@ -7167,7 +7168,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (!second.pt) return;
       p2 = second.pt;
     } else return;
-    let fixed = kind === "ali" ? null : args.angle ?? null, override = null, ang = 0;
+    let fixed = kind === "ali" ? null : args.angle ?? null, override = null;
     const make = (dp) => {
       const e = E.dim(kind, { p1, p2, dp, ...dimDefaults(c2) });
       if (kind === "lin") e.ang = fixed ?? hOrV(p1, p2, dp);
@@ -7203,7 +7204,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const e = c2.add(make(r.pt));
       c2.app.mem ??= {};
       c2.app.mem.lastDim = e;
-      void ang;
       return;
     }
   }
@@ -7550,7 +7550,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     icon: "area",
     desc: "Calculates the area and perimeter of objects or of defined areas.",
     async run(c2) {
-      let total = 0, mode = "add-first";
+      let total = 0;
       const r0 = await c2.point({ prompt: "Specify first corner point or", options: ["Object", "Add area", "Subtract area", "eXit"] });
       if (r0.kw === "Object" || r0.kw === "Add area" || r0.kw === "Subtract area") {
         let sign2 = r0.kw === "Subtract area" ? -1 : 1;
@@ -7577,7 +7577,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       const area2 = Math.abs(polygonArea(pts)), per = plineLength(pts.map((p) => ({ ...p, b: 0 })), true);
       c2.log(`Area = ${f(c2, area2)},  Perimeter = ${f(c2, per)}`);
-      void mode;
     }
   });
   var describe = (c2, e) => {
@@ -8521,7 +8520,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         delete doc.views[n];
         doc.touch();
       }
-      void args;
     }
   });
   def6({
@@ -9304,8 +9302,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         const l = await c2.distance({ prompt: "Specify length", base: a, default: mem.length, nonzero: true });
         if (l.value === void 0) return null;
         mem.length = l.value;
-        const rot = unit(sub(c2.rt.cursor.pt, a));
-        void rot;
         return centre ? { x0: a.x - l.value / 2, y0: a.y - l.value / 2, w: l.value, d: l.value, h: l.value, cube: true } : { x0: a.x, y0: a.y, w: l.value, d: l.value, h: l.value, cube: true };
       }
       if (o.kw === "Length") {
@@ -9549,7 +9545,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   });
   def8({
     name: "PRESSPULL",
-    aliases: ["PRESSPULL"],
+    aliases: ["PP"],
     title: "Presspull",
     icon: "presspull",
     desc: "Presses or pulls bounded areas into 3D.",
@@ -9954,7 +9950,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         lines = f5.text.split(/\r?\n/);
       }
       c2.log(`Running script (${lines.length} lines)`);
-      queueMicrotask(() => c2.rt.script(lines));
+      Promise.resolve().then(() => c2.rt.script(lines));
     }
   });
   var ui = (name, method, extra = {}) => def9({
@@ -11100,7 +11096,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
         { role: "menuitem" },
         h("span.mi-check", it.checked ? svgIcon("check", 12) : null),
         h("span.mi-ico", it.icon ? svgIcon(it.icon, 16) : null),
-        h("span.mi-label", it.html ? { html: it.html } : null, it.html ? null : it.label),
+        h("span.mi-label", it.el ? it.el : it.html ? { html: it.html } : null, it.el || it.html ? null : it.label),
         h("span.mi-short", it.shortcut || ""),
         h("span.mi-arrow", it.submenu ? svgIcon("chevright", 10) : null)
       );
@@ -11591,11 +11587,17 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       this.closeSlideout();
       const sl = h("div.rslideout", p.slideout.map((it) => this.item(it)).filter(Boolean));
-      el.append(sl);
+      document.getElementById("overlay-root").append(sl);
+      const r = el.getBoundingClientRect();
+      sl.style.left = Math.max(2, Math.min(r.left, innerWidth - sl.offsetWidth - 4)) + "px";
+      sl.style.top = r.bottom + "px";
+      sl.style.minWidth = r.width + "px";
       el.classList.add("open");
+      this._sl = sl;
+      this.refresh();
       const off = (ev) => {
-        if (!el.contains(ev.target)) this.closeSlideout();
-        else if (ev.target.closest(".rb") && !ev.target.closest(".rpanel-title") && !this.pinned) setTimeout(() => this.closeSlideout(), 0);
+        if (!sl.contains(ev.target) && !el.contains(ev.target)) this.closeSlideout();
+        else if (sl.contains(ev.target) && ev.target.closest(".rb") && !this.pinned) setTimeout(() => this.closeSlideout(), 0);
       };
       this._off = off;
       setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
@@ -11604,7 +11606,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     closeSlideout() {
       if (!this._open) return;
       this._open.classList.remove("open");
-      this._open.querySelector(".rslideout")?.remove();
+      this._sl?.remove();
+      this._sl = null;
       document.removeEventListener("pointerdown", this._off, true);
       this._open = null;
     }
@@ -11706,8 +11709,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
           const l = st.layerObj;
           txt.textContent = st.layer;
           clear(ic);
-          if (l) ic.append(svgIcon(l.on ? "sun" : "eyeoff", 14), svgIcon(l.frozen ? "snow" : "sun", 0), svgIcon(l.locked ? "lock" : "unlock", 13));
-          ic.querySelector("svg:nth-child(2)")?.remove();
+          if (l) ic.append(svgIcon(l.on ? "eye" : "eyeoff", 14), svgIcon(l.frozen ? "snow" : "sun", 14), svgIcon(l.locked ? "lock" : "unlock", 14));
           sw.style.background = l ? colorToCss(l.color, { dark: true }) : "";
           sw.hidden = !l;
         } else if (it.kind === "color") {
@@ -11797,37 +11799,24 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     }
     layerDropdown(anchor) {
       const ui2 = this.ui, doc = this.app.doc;
-      const items = [...doc.layers].sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true })).map((l) => {
-        const row3 = h(
+      const state = (l, key, off, on, title) => h("button.lstate", { title, onclick: (e) => {
+        e.stopPropagation();
+        ui2.layerToggle(l, key);
+        this.layerDropdown(anchor);
+      } }, svgIcon(l[key] ? on : off, 14));
+      const items = [...doc.layers].sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true })).map((l) => ({
+        action: () => ui2.chooseLayer(l.name),
+        el: h(
           "div.lrow",
-          h("button.lstate", { title: l.on ? "Turn layer off" : "Turn layer on", onclick: (e) => {
-            e.stopPropagation();
-            ui2.layerToggle(l, "on");
-            this.layerDropdown(anchor);
-          } }, svgIcon(l.on ? "sun" : "eyeoff", 14)),
-          h("button.lstate", { title: l.frozen ? "Thaw layer" : "Freeze layer", onclick: (e) => {
-            e.stopPropagation();
-            ui2.layerToggle(l, "frozen");
-            this.layerDropdown(anchor);
-          } }, svgIcon(l.frozen ? "snow" : "sun", 14)),
-          h("button.lstate", { title: l.locked ? "Unlock layer" : "Lock layer", onclick: (e) => {
-            e.stopPropagation();
-            ui2.layerToggle(l, "locked");
-            this.layerDropdown(anchor);
-          } }, svgIcon(l.locked ? "lock" : "unlock", 14)),
+          state(l, "on", "eyeoff", "eye", l.on ? "Turn layer off" : "Turn layer on"),
+          state(l, "frozen", "sun", "snow", l.frozen ? "Thaw layer" : "Freeze layer"),
+          state(l, "locked", "unlock", "lock", l.locked ? "Unlock layer" : "Lock layer"),
           h("span.cswatch", { style: { background: colorToCss(l.color) } }),
           h("span.lname" + (l.name === doc.cur.layer ? ".cur" : ""), l.name)
-        );
-        return { html: row3.outerHTML, _row: row3, label: l.name, action: () => ui2.chooseLayer(l.name) };
-      });
-      const menu = showMenu(items.map((i) => ({ label: i.label, html: "", action: i.action })), anchor.getBoundingClientRect().left, anchor.getBoundingClientRect().bottom + 1, { minWidth: 230 });
-      [...menu.querySelectorAll(":scope > .mi")].forEach((el, i) => {
-        const lbl = el.querySelector(".mi-label");
-        lbl.replaceChildren(items[i]._row);
-        el.querySelector(".mi-check").remove();
-        el.querySelector(".mi-ico").remove();
-      });
-      return menu;
+        )
+      }));
+      const r = anchor.getBoundingClientRect();
+      return showMenu(items, r.left, r.bottom + 1, { minWidth: 230, noGutter: true });
     }
     // ------------------------------------------------------------ hatch creation widgets
     hatchPick() {
@@ -12005,10 +11994,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const d = this.app.doc;
       this.titleEl.textContent = d ? `CadForge   ${d.fileName || d.name}${d.dirty ? " *" : ""}` : "CadForge";
       document.title = d ? `${d.name}${d.dirty ? " *" : ""} \u2014 CadForge` : "CadForge";
-      const rt = this.app.runtime;
       for (const b of this.qat.querySelectorAll('[data-cmd="U"]')) b.classList.toggle("disabled", !d?.canUndo);
       for (const b of this.qat.querySelectorAll('[data-cmd="REDO"]')) b.classList.toggle("disabled", !d?.canRedo);
-      void rt;
     }
     // ------------------------------------------------------------ InfoCenter search
     buildSearch() {
@@ -12202,7 +12189,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     const fade = layer.locked && rc.fade ? Math.max(0.12, 1 - rc.fade) : 1;
     return {
       rawColor: color,
-      color: rc.mono ? "#000000" : colorToCss(color, { dark: rc.theme.dark }),
+      color: rc.mono ? "#000000" : colorToCss(color, { dark: rc.theme.dark, contrast: rc.theme.contrast }),
       ltype,
       lw,
       lts: (e.lts ?? 1) * (parent?.lts ?? 1),
@@ -12281,13 +12268,11 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     const lt = LINETYPES[style.ltype];
     if (!lt || !lt.pattern.length) return null;
     const unit2 = rc.ltscale * style.lts * rc.k;
-    const arr = lt.pattern.map((v) => Math.max(Math.abs(v) < 1e-9 ? 0.01 : Math.abs(v) * unit2, Math.abs(v) < 1e-9 ? 0.01 : 0.6)).map((v, i) => v);
     const out = [];
-    lt.pattern.forEach((v, i) => out.push(v === 0 ? 0.01 : Math.abs(v) * unit2));
+    lt.pattern.forEach((v) => out.push(v === 0 ? 0.01 : Math.abs(v) * unit2));
     const total = out.reduce((a, b) => a + b, 0);
     if (total < 3.5 || total > 2e4) return null;
     if (out.length % 2) out.push(...out);
-    void arr;
     return out;
   }
   function strokeCurrent(rc, style, { selected = false, hover = false, forceWidth = 0 } = {}) {
@@ -12401,7 +12386,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     ctx.globalAlpha = 1;
   }
   function drawTextAt(rc, t, color, alpha, selected, hover) {
-    const ctx = rc.ctx, lay = textLayout(t), kpx = rc.k * lay.em;
+    const ctx = rc.ctx, lay = textLayout(t);
     const m2 = M.mul(rc.worldM, M.mul(M.translate(t.p.x, t.p.y), M.rotate(t.rot || 0)));
     const d = rc.dpr;
     const apply = () => ctx.setTransform(d * m2[0], d * m2[1], d * m2[2], d * m2[3], d * m2[4], d * m2[5]);
@@ -12421,7 +12406,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       ctx.globalAlpha = 1;
       return;
     }
-    void kpx;
     apply();
     ctx.scale(1, -1);
     ctx.font = `${lay.em}px ${FONT}`;
@@ -12505,7 +12489,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   }
   function drawHatch(rc, e, style, selected, hover) {
     const ctx = rc.ctx;
-    const color = e.color !== void 0 && !rc.mono ? colorToCss(e.color, { dark: rc.theme.dark }) : style.color;
+    const color = e.color !== void 0 && !rc.mono ? colorToCss(e.color, { dark: rc.theme.dark, contrast: rc.theme.contrast }) : style.color;
     if (e.pattern === "SOLID") {
       if (rc.fill) {
         loopsPath(rc, e.loops);
@@ -12697,6 +12681,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
   };
   THEMES.dark.gridAlpha = 0.07;
   THEMES.light.gridAlpha = 0.09;
+  THEMES.light.contrast = true;
 
   // src/render/overlay.js
   var YELLOW = "#ffe14d";
@@ -12934,12 +12919,17 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const l = Math.hypot(...acc) || 1;
       return [acc[0] / l, acc[1] / l, acc[2] / l];
     });
-    const map = /* @__PURE__ */ new Map();
+    const map = /* @__PURE__ */ new Map(), adj = F.map(() => [-1, -1, -1]), feat = F.map(() => [true, true, true]);
     F.forEach((f5, fi) => {
       for (let k = 0; k < 3; k++) {
         const a = f5[k], b = f5[(k + 1) % 3], key = a < b ? a * 4294967296 + b : b * 4294967296 + a, e = map.get(key);
-        if (e) e.n2 = fn[fi].n;
-        else map.set(key, { a, b, n1: fn[fi].n, n2: null });
+        if (e) {
+          e.n2 = fn[fi].n;
+          adj[fi][k] = e.fi;
+          adj[e.fi][e.k] = fi;
+          const sharp = e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2] < EDGE_ANGLE;
+          feat[fi][k] = feat[e.fi][e.k] = sharp;
+        } else map.set(key, { a, b, n1: fn[fi].n, n2: null, fi, k });
       }
     });
     const edges = [];
@@ -12950,7 +12940,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       if (e.n1[0] * e.n2[0] + e.n1[1] * e.n2[1] + e.n1[2] * e.n2[2] < EDGE_ANGLE) edges.push([e.a, e.b]);
     }
-    const d = { rev: rev2, nv: V.length, nf: F.length, fn, smooth, edges };
+    const d = { rev: rev2, nv: V.length, nf: F.length, fn, smooth, edges, adj, feat };
     cache.set(s, d);
     return d;
   }
@@ -12963,7 +12953,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     let col2 = s.color !== void 0 ? s.color : layer.color;
     if (typeof s.color === "string" && /^#[0-9a-f]{6}$/i.test(s.color)) col2 = s.color;
     if (col2 === 7 || col2 === void 0 || col2 === "BYBLOCK") return rc.theme.dark ? "#c3ccd6" : "#8695a4";
-    return colorToCss(col2, { dark: rc.theme.dark });
+    return colorToCss(col2, { dark: rc.theme.dark, contrast: rc.theme.contrast });
   }
   function drawSolids(rc, style = "2D Wireframe") {
     const solids = rc.doc.solids;
@@ -12983,17 +12973,24 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       const sel = rc.sel.has(s.id) || rc.tempSel.has(s.id);
       const base = baseColor(rc, s), m2 = /^#([0-9a-f]{6})$/i.exec(base), rgb2 = m2 ? [0, 2, 4].map((i) => parseInt(m2[1].slice(i, i + 2), 16)) : [160, 170, 180];
       if (fill) {
+        const front = (P22) => (P22[1].x - P22[0].x) * (P22[2].y - P22[0].y) - (P22[1].y - P22[0].y) * (P22[2].x - P22[0].x) < 0;
+        const faceFront = s.faces.map((f5) => front([P2[f5[0]], P2[f5[1]], P2[f5[2]]]));
         s.faces.forEach((f5, i) => {
-          const a = P2[f5[0]], b = P2[f5[1]], c2 = P2[f5[2]];
-          if ((b.x - a.x) * (c2.y - a.y) - (b.y - a.y) * (c2.x - a.x) >= 0) return;
-          const n = camN(D.smooth[i]);
+          if (!faceFront[i]) return;
+          const a = P2[f5[0]], b = P2[f5[1]], c2 = P2[f5[2]], n = camN(D.smooth[i]);
           const lum = style === "Hidden" ? 1 : 0.3 + 0.7 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
-          polys.push({ pts: [a, b, c2], depth: (a.depth + b.depth + c2.depth) / 3, col: style === "Hidden" ? theme.canvas : `rgb(${rgb2.map((x) => Math.min(255, Math.round(x * lum * 1.08)))})` });
+          const pe = [];
+          for (let k = 0; k < 3; k++) {
+            const o = D.adj[i][k];
+            if ((edges || sel) && (D.feat[i][k] || o < 0 || !faceFront[o])) pe.push([P2[f5[k]], P2[f5[(k + 1) % 3]]]);
+          }
+          polys.push({ pts: [a, b, c2], depth: (a.depth + b.depth + c2.depth) / 3, col: style === "Hidden" ? theme.canvas : `rgb(${rgb2.map((x) => Math.min(255, Math.round(x * lum * 1.08)))})`, pe, sel });
         });
       }
       edgePaths.push({ P: P2, D, sel });
     }
     polys.sort((p, q) => q.depth - p.depth);
+    const edgeCol = theme.dark ? "rgba(8,14,20,.9)" : "rgba(10,20,30,.85)";
     for (const p of polys) {
       ctx.beginPath();
       ctx.moveTo(p.pts[0].x, p.pts[0].y);
@@ -13006,20 +13003,30 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       ctx.lineWidth = 0.7;
       ctx.lineJoin = "round";
       ctx.stroke();
+      if (p.pe.length) {
+        ctx.beginPath();
+        for (const [u, v] of p.pe) {
+          ctx.moveTo(u.x, u.y);
+          ctx.lineTo(v.x, v.y);
+        }
+        ctx.strokeStyle = p.sel ? theme.select : edgeCol;
+        ctx.lineWidth = p.sel ? 2 : 1;
+        ctx.stroke();
+      }
     }
-    if (edges || wire) {
+    if (wire) {
       ctx.beginPath();
       for (const { P: P2, D, sel } of edgePaths) if (!sel) for (const [a, b] of D.edges) {
         ctx.moveTo(P2[a].x, P2[a].y);
         ctx.lineTo(P2[b].x, P2[b].y);
       }
-      ctx.strokeStyle = wire ? theme.dark ? "#7fd0ff" : "#0b5a96" : theme.dark ? "rgba(8,14,20,.9)" : "rgba(10,20,30,.85)";
-      ctx.lineWidth = wire ? 1.15 : 1;
+      ctx.strokeStyle = theme.dark ? "#7fd0ff" : "#0b5a96";
+      ctx.lineWidth = 1.15;
       ctx.lineJoin = "round";
       ctx.stroke();
     }
     for (const { P: P2, D, sel } of edgePaths) {
-      if (!sel) continue;
+      if (!sel || !wire) continue;
       ctx.beginPath();
       for (const [a, b] of D.edges) {
         ctx.moveTo(P2[a].x, P2[a].y);
@@ -13027,7 +13034,6 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       }
       ctx.strokeStyle = theme.select;
       ctx.lineWidth = 2.2;
-      ctx.setLineDash([]);
       ctx.stroke();
     }
   }
@@ -13478,6 +13484,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
     buildControlsText() {
       const s = this.vpctl.querySelector(".vp-view span");
       if (s) s.textContent = this.editor.view.presetName();
+      const t = this.vpctl.querySelector(".vp-style span");
+      if (t) t.textContent = this.ui.visualStyle();
       this.cube.draw();
     }
     // ------------------------------------------------------------ drawing
@@ -13486,6 +13494,8 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       if (!ed || !this.size.w) return;
       const { w, h: hh, dpr } = this.size, theme = this.ui.theme, prefs = this.app.sysvars.prefs;
       if (this.sceneDirty) {
+        const t = this.vpctl.querySelector(".vp-style span");
+        if (t && t.textContent !== this.ui.visualStyle()) t.textContent = this.ui.visualStyle();
         this.sceneDirty = false;
         ed.view.w = w;
         ed.view.h = hh;
@@ -14518,8 +14528,7 @@ ${mode === "STRETCH" ? "Specify stretch point" : mode === "MOVE" ? "Specify move
       let sel = cur === void 0 || cur === "BYLAYER" ? "Continuous" : cur;
       const list = h("div.lt-list");
       const draw = () => list.replaceChildren(...Object.keys(LINETYPES).map((n) => {
-        const pat = LINETYPES[n].pattern, svg = ui2.ribbon.ltSample(n);
-        void pat;
+        const svg = ui2.ribbon.ltSample(n);
         return h("div.lt-row" + (n === sel ? ".sel" : ""), { onclick: () => {
           sel = n;
           draw();
@@ -15447,20 +15456,13 @@ ${xref}
   var pt2 = (r, i = 0) => ({ x: firstNum(r, 10 + i), y: firstNum(r, 20 + i) });
   function sections(recs) {
     const out = {};
-    let name = null, list = null;
+    let list = null;
     for (const r of recs) {
       if (r.type === "SECTION") {
-        name = null;
-        list = null;
         const n = first(r, 2);
-        if (n) {
-          name = n;
-          list = out[n] = [];
-        }
-      } else if (r.type === "ENDSEC") {
-        name = null;
-        list = null;
-      } else if (list) list.push(r);
+        list = n ? out[n] = [] : null;
+      } else if (r.type === "ENDSEC") list = null;
+      else if (list) list.push(r);
     }
     return out;
   }
@@ -15544,7 +15546,8 @@ ${xref}
       const flags = num4(92);
       if (Number.isNaN(flags)) break;
       if (flags & 2) {
-        const hasBulge = num4(72), closed = num4(73), nv = num4(93);
+        const hasBulge = num4(72), nv = num4(93);
+        num4(73);
         const verts = [];
         for (let k = 0; k < nv; k++) {
           const x = num4(10), y = num4(20);
@@ -15552,7 +15555,6 @@ ${xref}
           if (hasBulge && gs[i] && gs[i][0] === 42) b = parseFloat(gs[i++][1]);
           verts.push({ x, y, b });
         }
-        void closed;
         if (verts.length > 2) loops.push(verts);
       } else {
         const ne = num4(93), edges = [];
@@ -16032,7 +16034,6 @@ ${xref}
       o.c(0, "APPID").c(5, hs.appidRec).c(330, hs.appid).c(100, "AcDbSymbolTableRecord").c(100, "AcDbRegAppTableRecord").c(2, "ACAD").c(70, 0);
     });
     const dimBlocks = [];
-    const tablesEndMark = o.lines.length;
     const entityOut = (list, ownerHandle, blockName) => {
       const out = new Out();
       const common = (type, e, sub2, extra = {}) => {
@@ -16245,7 +16246,6 @@ ${xref}
     o.c(0, "ENDSEC");
     o.lines = savedLines;
     o.lines.push(...tail.lines);
-    void tablesEndMark;
     o.c(0, "SECTION").c(2, "BLOCKS");
     const block = (name, h2, endH, ownerRec, body, base = { x: 0, y: 0 }, layer = "0") => {
       o.c(0, "BLOCK").c(5, h2).c(330, ownerRec).c(100, "AcDbEntity").c(8, layer).c(100, "AcDbBlockBegin").c(2, name).c(70, name.startsWith("*") && !/^\*(Model|Paper)_Space/.test(name) ? 1 : 0).pt(base).c(3, name).c(1, "");
@@ -17218,21 +17218,17 @@ ${xref}
       this.startRename(`Layer${i}`);
     }
     deleteSel() {
-      const names = [...this.sel];
-      let n = 0;
-      for (const nm of names) {
+      for (const nm of [...this.sel]) {
         try {
           this.ui.edit("Delete layer", (d) => {
             d.deleteLayer(nm);
           });
-          n++;
         } catch (e) {
           this.ui.toast(e.message);
         }
       }
       this.sel.clear();
       this.refresh();
-      void n;
     }
     setCurrent() {
       const n = [...this.sel][0];
@@ -17313,7 +17309,7 @@ ${xref}
           } },
           h("div.c-s", l.name === doc.cur.layer ? svgIcon("check", 13) : doc.layerUsage(l.name) ? h("span.lm-used") : null),
           h("div.c-name", l.name),
-          h("div.c-on", toggle2(l, "on", ["eyeoff", "sun"])),
+          h("div.c-on", toggle2(l, "on", ["eyeoff", "eye"])),
           h("div.c-fr", toggle2(l, "frozen", ["sun", "snow"])),
           h("div.c-lk", toggle2(l, "locked", ["unlock", "lock"])),
           h("div.c-col", h("button.lm-btn", { onclick: async (e) => {
@@ -17824,7 +17820,6 @@ ${xref}
     async realtime(mode, ctx) {
       this.viewport.canvasFocus();
       await this.viewport.startRealtime(mode);
-      void ctx;
     }
     openText(accept = ".txt") {
       return this.files.pickText(accept);
@@ -18089,7 +18084,6 @@ ${xref}
     toggleSv(name, bit, invert) {
       const sv = this.app.sysvars, v = sv.prefs[name];
       sv.set(name, bit ? v ^ bit : v ? 0 : 1);
-      void invert;
       this.viewport.invalidate();
       this.statusbar.refresh();
     }

@@ -225,7 +225,6 @@ const arrayCommand = (kind) => async function run(c, args) {
     }
   }
   c.clearSel();
-  void args;
 };
 const centroidPair = (sel, doc) => { let b = null; for (const e of sel) b = g.unionBounds(b, boundsOf(e, doc)); const m = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }; return [m, m]; };
 def({ name: 'ARRAY', aliases: ['AR'], title: 'Array', icon: 'arrayrect', desc: 'Creates copies of objects arranged in a pattern.', run: arrayCommand(null) });
@@ -640,7 +639,7 @@ const GRIP_MODES = ['STRETCH', 'MOVE', 'ROTATE', 'SCALE', 'MIRROR'];
 registry.define({
   name: '_GRIPEDIT', silent: true, repeatable: false, group: 'Internal',
   async run(c, { grip }) {
-    const ed = c.editor, hot = grip.grip, orig = grip.entity;
+    const ed = c.editor, hot = grip.grip;
     const sels = ed.selected;
     let mode = hot.kind === 'move' || hot.kind === 'radius' ? (hot.kind === 'move' ? 'MOVE' : 'STRETCH') : 'STRETCH';
     if (hot.kind === 'move') mode = 'MOVE';
@@ -659,10 +658,8 @@ registry.define({
       if (result.kw === 'Undo') continue;
       if (result.enter && result.pt === undefined && result.value === undefined) { mode = GRIP_MODES[(GRIP_MODES.indexOf(mode) + 1) % GRIP_MODES.length]; continue; }
       if (result.enter && (result.value !== undefined || result.pt)) { mode = GRIP_MODES[(GRIP_MODES.indexOf(mode) + 1) % GRIP_MODES.length]; continue; }
-      const pt = result.pt;
       applyGrip(result);
       if (!copy) return;
-      void pt;
     }
     function matrixFor(r) {
       if (mode === 'MOVE') return M.translate(r.pt.x - base.x, r.pt.y - base.y);
@@ -693,7 +690,6 @@ registry.define({
       if (!m) return;
       if (copy) addCopies(c.doc, sels, m); else applyTransform(c.doc, sels, m);
     }
-    void orig;
   },
 });
 

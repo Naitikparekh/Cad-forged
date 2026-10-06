@@ -1,13 +1,12 @@
 // The drawing viewport: canvases, pointer interaction, viewport controls, navigation bar, ViewCube.
 import { h, svgIcon, raf } from './dom.js';
 import { showMenu, dropdown, attachTip } from './menu.js';
-import { renderScene, THEMES } from '../render/renderer.js';
+import { renderScene } from '../render/renderer.js';
 import { drawOverlay } from '../render/overlay.js';
 import { drawSolids } from '../render/solids.js';
-import { pickAt, rectOf } from '../engine/select.js';
+import { pickAt } from '../engine/select.js';
 import { ViewCube } from './viewcube.js';
 import { DynInput } from './dyninput.js';
-import * as g from '../core/geom.js';
 
 const DRAG_PX = 5;
 
@@ -101,6 +100,7 @@ export class Viewport {
   viewChanged() { this.sceneDirty = true; this.overlayDirty = true; this.schedule(); this.buildControlsText(); }
   buildControlsText() {
     const s = this.vpctl.querySelector('.vp-view span'); if (s) s.textContent = this.editor.view.presetName();
+    const t = this.vpctl.querySelector('.vp-style span'); if (t) t.textContent = this.ui.visualStyle();
     this.cube.draw();
   }
 
@@ -111,6 +111,7 @@ export class Viewport {
     if (!ed || !this.size.w) return;
     const { w, h: hh, dpr } = this.size, theme = this.ui.theme, prefs = this.app.sysvars.prefs;
     if (this.sceneDirty) {
+      const t = this.vpctl.querySelector('.vp-style span'); if (t && t.textContent !== this.ui.visualStyle()) t.textContent = this.ui.visualStyle();
       this.sceneDirty = false;
       ed.view.w = w; ed.view.h = hh;
       renderScene(this.base.getContext('2d'), w, hh, dpr, ed, prefs, theme, { solids: rc => drawSolids(rc, this.ui.visualStyle()) });
@@ -225,4 +226,3 @@ export class Viewport {
 }
 
 function o_capture(el, e) { try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
-void THEMES; void g; void rectOf;

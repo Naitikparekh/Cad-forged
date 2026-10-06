@@ -7,9 +7,7 @@ import path from 'node:path';
 import { writeDXF } from '../../src/io/dxf-write.js';
 import { readDXF, decodeMText, decodeText } from '../../src/io/dxf-read.js';
 import { sampleDrawing } from '../../src/io/sample.js';
-import { Drawing } from '../../src/core/drawing.js';
 import { E, splineBeziers, splinePoints } from '../../src/core/entities.js';
-import { newLayer } from '../../src/core/style.js';
 
 const near = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `expected ${b}, got ${a}`);
 
@@ -110,7 +108,6 @@ test('output validates with ezdxf (skipped when python/ezdxf is unavailable)', t
   assert.match(r.stdout, /audit errors: \[\]/);
 });
 
-void Drawing; void newLayer;
 
 test('reads a DXF produced by ezdxf (independent writer)', () => {
   const file = path.resolve('tests/dxf/fixtures/ezdxf-sample.dxf');

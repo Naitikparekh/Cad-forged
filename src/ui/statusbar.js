@@ -1,6 +1,6 @@
 // Status bar: coordinates readout, drafting-aid toggles, units, workspace and customization.
 import { h, svgIcon, clear } from './dom.js';
-import { showMenu, dropdown, attachTip } from './menu.js';
+import { showMenu, attachTip } from './menu.js';
 import { OS_BITS, OS_FULL } from '../engine/parse.js';
 import * as g from '../core/geom.js';
 import { fmtNum } from '../core/style.js';

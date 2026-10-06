@@ -2,9 +2,9 @@
 // input (clicks, typed text, Enter, Escape) to whatever prompt is pending. DOM-free: tests drive it directly.
 import * as g from '../core/geom.js';
 import { Snapper, activeMask } from './snap.js';
-import { parseInput, parseOverride, matchOption, optionName, optionsText, OS_BITS, OS_FULL } from './parse.js';
+import { parseInput, parseOverride, matchOption, optionName, optionsText, OS_BITS } from './parse.js';
 import { pickAt, selectRect, selectPolygon, selectFence, rectOf } from './select.js';
-import { gripsOf, boundsOf } from '../core/entities.js';
+import { gripsOf } from '../core/entities.js';
 import { pickSolid, solidsInScreenRect } from '../solid/pick.js';
 
 export class Cancel extends Error { constructor() { super('*Cancel*'); this.cancel = true; } }
@@ -62,8 +62,7 @@ class Ctx {
       if (pre.length || preSolids.length) { this.log(`${pre.length + preSolids.length} found`); ed.tempSel = new Set([...pre, ...preSolids].map(e => e.id)); pre.solids = preSolids; return pre; }
     }
     const set = new Map();
-    const result = await this.ask({ kind: 'select', message: spec.prompt || 'Select objects', ...spec, set, remove: false, window: null, previous: spec.previous });
-    void result;
+    await this.ask({ kind: 'select', message: spec.prompt || 'Select objects', ...spec, set, remove: false, window: null, previous: spec.previous });
     const vals = [...set.values()], ents = vals.filter(v => !v.vertices);
     ents.solids = vals.filter(v => v.vertices);
     return ents;

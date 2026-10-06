@@ -180,7 +180,5 @@ test('boundary detection with bulged polyline and overlapping circles', () => {
   const lens = findRegion(d, P(3, 0));
   assert.ok(!lens.error, lens.error);
   const a = Math.abs(g.plineArea(lens.loops[0]));
-  const expected = 2 * 25 * Math.acos(3 / 5) - 3 * Math.sqrt(25 - 9) * 2 / 1;      // lens area of two r=5 circles 6 apart
-  near(a, 2 * 25 * Math.acos(3 / 5) - 6 * 4, 1e-3);
-  void expected;
+  near(a, 2 * 25 * Math.acos(3 / 5) - 6 * 4, 1e-3);          // lens area of two r=5 circles 6 apart
 });

@@ -37,7 +37,7 @@ export function entityArea(e, doc) {
 def({
   name: 'AREA', aliases: ['AA'], title: 'Area', icon: 'area', desc: 'Calculates the area and perimeter of objects or of defined areas.',
   async run(c) {
-    let total = 0, mode = 'add-first';
+    let total = 0;
     const r0 = await c.point({ prompt: 'Specify first corner point or', options: ['Object', 'Add area', 'Subtract area', 'eXit'] });
     if (r0.kw === 'Object' || r0.kw === 'Add area' || r0.kw === 'Subtract area') {
       let sign = r0.kw === 'Subtract area' ? -1 : 1;
@@ -59,7 +59,6 @@ def({
     if (pts.length < 3) { c.log('At least three points are required.', 'error'); return; }
     const area = Math.abs(g.polygonArea(pts)), per = g.plineLength(pts.map(p => ({ ...p, b: 0 })), true);
     c.log(`Area = ${f(c, area)},  Perimeter = ${f(c, per)}`);
-    void mode;
   },
 });
 

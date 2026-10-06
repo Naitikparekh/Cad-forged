@@ -4,8 +4,7 @@ import { showMenu, dropdown, attachTip, closeMenus } from './menu.js';
 import { RIBBON, HATCH_TAB, HATCHEDIT_TAB } from './ribbon-data.js';
 import { registry } from '../engine/registry.js';
 import { PATTERNS, hatchLines } from '../core/hatch.js';
-import { colorToCss, aciHex, LINETYPES, LINEWEIGHTS, lwDisplay, describeColor, ltypeKey } from '../core/style.js';
-import * as g from '../core/geom.js';
+import { colorToCss, aciHex, LINETYPES, LINEWEIGHTS, lwDisplay, describeColor } from '../core/style.js';
 
 const aliasOf = name => { let best = null; for (const [a, n] of registry.aliases) if (n === name && (!best || a.length < best.length)) best = a; return best; };
 const plain = s => String(s).replace(/\n/g, ' ');
@@ -124,9 +123,13 @@ export class Ribbon {
     if (el.classList.contains('open')) { this.closeSlideout(); return; }
     this.closeSlideout();
     const sl = h('div.rslideout', p.slideout.map(it => this.item(it)).filter(Boolean));
-    el.append(sl);
+    document.getElementById('overlay-root').append(sl);
+    const r = el.getBoundingClientRect();
+    sl.style.left = Math.max(2, Math.min(r.left, innerWidth - sl.offsetWidth - 4)) + 'px'; sl.style.top = r.bottom + 'px'; sl.style.minWidth = r.width + 'px';
     el.classList.add('open');
-    const off = ev => { if (!el.contains(ev.target)) this.closeSlideout(); else if (ev.target.closest('.rb') && !ev.target.closest('.rpanel-title') && !this.pinned) setTimeout(() => this.closeSlideout(), 0); };
+    this._sl = sl;
+    this.refresh();
+    const off = ev => { if (!sl.contains(ev.target) && !el.contains(ev.target)) this.closeSlideout(); else if (sl.contains(ev.target) && ev.target.closest('.rb') && !this.pinned) setTimeout(() => this.closeSlideout(), 0); };
     this._off = off;
     setTimeout(() => document.addEventListener('pointerdown', off, true), 0);
     this._open = el;
@@ -135,7 +138,7 @@ export class Ribbon {
   closeSlideout() {
     if (!this._open) return;
     this._open.classList.remove('open');
-    this._open.querySelector('.rslideout')?.remove();
+    this._sl?.remove(); this._sl = null;
     document.removeEventListener('pointerdown', this._off, true);
     this._open = null;
   }
@@ -215,8 +218,7 @@ export class Ribbon {
       if (it.kind === 'layer') {
         const l = st.layerObj;
         txt.textContent = st.layer;
-        clear(ic); if (l) ic.append(svgIcon(l.on ? 'sun' : 'eyeoff', 14), svgIcon(l.frozen ? 'snow' : 'sun', 0), svgIcon(l.locked ? 'lock' : 'unlock', 13));
-        ic.querySelector('svg:nth-child(2)')?.remove();
+        clear(ic); if (l) ic.append(svgIcon(l.on ? 'eye' : 'eyeoff', 14), svgIcon(l.frozen ? 'snow' : 'sun', 14), svgIcon(l.locked ? 'lock' : 'unlock', 14));
         sw.style.background = l ? colorToCss(l.color, { dark: true }) : '';
         sw.hidden = !l;
       } else if (it.kind === 'color') {
@@ -275,18 +277,17 @@ export class Ribbon {
 
   layerDropdown(anchor) {
     const ui = this.ui, doc = this.app.doc;
-    const items = [...doc.layers].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(l => {
-      const row = h('div.lrow',
-        h('button.lstate', { title: l.on ? 'Turn layer off' : 'Turn layer on', onclick: e => { e.stopPropagation(); ui.layerToggle(l, 'on'); this.layerDropdown(anchor); } }, svgIcon(l.on ? 'sun' : 'eyeoff', 14)),
-        h('button.lstate', { title: l.frozen ? 'Thaw layer' : 'Freeze layer', onclick: e => { e.stopPropagation(); ui.layerToggle(l, 'frozen'); this.layerDropdown(anchor); } }, svgIcon(l.frozen ? 'snow' : 'sun', 14)),
-        h('button.lstate', { title: l.locked ? 'Unlock layer' : 'Lock layer', onclick: e => { e.stopPropagation(); ui.layerToggle(l, 'locked'); this.layerDropdown(anchor); } }, svgIcon(l.locked ? 'lock' : 'unlock', 14)),
-        h('span.cswatch', { style: { background: colorToCss(l.color) } }), h('span.lname' + (l.name === doc.cur.layer ? '.cur' : ''), l.name));
-      return { html: row.outerHTML, _row: row, label: l.name, action: () => ui.chooseLayer(l.name) };
-    });
-    const menu = showMenu(items.map(i => ({ label: i.label, html: '' , action: i.action })), anchor.getBoundingClientRect().left, anchor.getBoundingClientRect().bottom + 1, { minWidth: 230 });
-    // replace placeholder contents with live row elements (so toggle buttons work without closing)
-    [...menu.querySelectorAll(':scope > .mi')].forEach((el, i) => { const lbl = el.querySelector('.mi-label'); lbl.replaceChildren(items[i]._row); el.querySelector('.mi-check').remove(); el.querySelector('.mi-ico').remove(); });
-    return menu;
+    const state = (l, key, off, on, title) => h('button.lstate', { title, onclick: e => { e.stopPropagation(); ui.layerToggle(l, key); this.layerDropdown(anchor); } }, svgIcon(l[key] ? on : off, 14));
+    const items = [...doc.layers].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(l => ({
+      action: () => ui.chooseLayer(l.name),
+      el: h('div.lrow',
+        state(l, 'on', 'eyeoff', 'eye', l.on ? 'Turn layer off' : 'Turn layer on'),
+        state(l, 'frozen', 'sun', 'snow', l.frozen ? 'Thaw layer' : 'Freeze layer'),
+        state(l, 'locked', 'unlock', 'lock', l.locked ? 'Unlock layer' : 'Lock layer'),
+        h('span.cswatch', { style: { background: colorToCss(l.color) } }), h('span.lname' + (l.name === doc.cur.layer ? '.cur' : ''), l.name)),
+    }));
+    const r = anchor.getBoundingClientRect();
+    return showMenu(items, r.left, r.bottom + 1, { minWidth: 230, noGutter: true });
   }
 
   // ------------------------------------------------------------ hatch creation widgets
@@ -344,4 +345,3 @@ export class Ribbon {
   }
 }
 
-void g; void ltypeKey;

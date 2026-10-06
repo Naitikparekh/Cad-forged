@@ -3,7 +3,7 @@ import { h } from './dom.js';
 import { row, num, text, select, check, tabs, note, group } from './dialogs-kit.js';
 import { OS_BITS, OS_FULL } from '../engine/parse.js';
 import { registry } from '../engine/registry.js';
-import { describeColor, lwDisplay, defaultDimStyle } from '../core/style.js';
+import { describeColor, lwDisplay } from '../core/style.js';
 import { labelOf } from '../core/entities.js';
 import { PREF_DEFAULTS } from '../engine/sysvars.js';
 
@@ -205,4 +205,3 @@ export const SETTINGS = {
   },
 };
 
-void defaultDimStyle;

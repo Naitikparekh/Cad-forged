@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { Sim, near } from './sim.js';
 import { registry } from '../../src/engine/registry.js';
 import { E } from '../../src/core/entities.js';
-import * as g from '../../src/core/geom.js';
 
 const P = (x, y) => ({ x, y });
 

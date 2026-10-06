@@ -20,7 +20,7 @@
 .rlaunch { position: absolute; right: 0; top: 2px; background: transparent; border: 0; padding: 0; width: 14px; height: 14px; display: grid; place-items: center; color: var(--text-3); }
 .rlaunch:hover { color: var(--text); }
 .rpanel.open .rpanel-title { background: var(--ribbon-title); color: var(--text); }
-.rslideout { position: absolute; z-index: 30; left: 0; top: 100%; margin-top: 0; min-width: 100%; background: var(--ribbon); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 6px; display: flex; flex-direction: column; gap: 1px; }
+.rslideout { position: fixed; z-index: 230; background: var(--ribbon); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 6px; display: flex; flex-direction: column; gap: 1px; }
 
 /* buttons */
 .rb { display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid transparent; border-radius: 3px; color: var(--text); padding: 0 6px; text-align: left; white-space: nowrap; }
@@ -60,10 +60,10 @@
 .ltm svg { vertical-align: middle; }
 
 /* hatch creation */
-.patgrid { display: grid; grid-template-columns: repeat(7, 60px); gap: 3px; align-content: start; max-width: 470px; }
+.patgrid { display: grid; grid-template-columns: repeat(7, 60px); gap: 3px; align-content: start; max-width: 470px; max-height: 72px; overflow-y: auto; }
 .pat { background: transparent; border: 1px solid var(--border); border-radius: 3px; padding: 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--text-2); }
 .pat:hover { border-color: var(--accent); } .pat.sel { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2); color: var(--text); }
-.pat-thumb { width: 54px; height: 30px; border-radius: 2px; } .pat-name { font-size: 10px; }
+.pat-thumb { width: 54px; height: 24px; border-radius: 2px; } .pat-name { display: none; }
 .hprops { gap: 3px; } .hrow { display: flex; align-items: center; gap: 6px; font-size: 12px; } .hrow > span { width: 40px; color: var(--text-2); }
 .hrow input { width: 70px; height: 21px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; color: var(--text); padding: 0 4px; }
 .hcolor { display: flex; gap: 6px; align-items: center; height: 21px; background: var(--input); border: 1px solid var(--border); border-radius: 3px; padding: 0 6px; width: 110px; }

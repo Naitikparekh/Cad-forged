@@ -1,6 +1,6 @@
 // The application shell: builds every UI component, owns global keyboard handling, context menus,
 // palettes, dialogs and the `app.ui` interface the command layer talks to.
-import { h, svgIcon } from './dom.js';
+import { h } from './dom.js';
 import { showMenu, closeMenus } from './menu.js';
 import { Ribbon } from './ribbon.js';
 import { TitleBar } from './titlebar.js';
@@ -16,9 +16,8 @@ import { TextEditor } from './texteditor.js';
 import { TextWindow } from './textwindow.js';
 import { Files } from './files.js';
 import { THEMES } from '../render/renderer.js';
-import { registry } from '../engine/registry.js';
-import { OS_BITS, OS_FULL } from '../engine/parse.js';
-import { LINETYPES, LW_BYLAYER } from '../core/style.js';
+import { OS_FULL } from '../engine/parse.js';
+import { LW_BYLAYER } from '../core/style.js';
 
 const VARIES = '*VARIES*';
 
@@ -221,7 +220,6 @@ export class UI {
   async realtime(mode, ctx) {
     this.viewport.canvasFocus();
     await this.viewport.startRealtime(mode);
-    void ctx;
   }
 
   openText(accept = '.txt') { return this.files.pickText(accept); }
@@ -360,7 +358,6 @@ export class UI {
   toggleSv(name, bit, invert) {
     const sv = this.app.sysvars, v = sv.prefs[name];
     sv.set(name, bit ? v ^ bit : (v ? 0 : 1));
-    void invert;
     this.viewport.invalidate(); this.statusbar.refresh();
   }
   toggleOrtho() { const sv = this.app.sysvars; sv.set('ORTHOMODE', sv.prefs.ORTHOMODE ? 0 : 1); if (sv.prefs.ORTHOMODE) sv.set('POLARMODE', 0); this.viewport.invalidate(); this.statusbar.refresh(); }
@@ -368,4 +365,3 @@ export class UI {
   toggleDyn() { const sv = this.app.sysvars; const d = sv.prefs.DYNMODE; sv.set('DYNMODE', d > 0 ? -d : (Math.abs(d) || 3)); this.viewport.invalidate(); this.statusbar.refresh(); }
 }
 
-void svgIcon; void registry; void OS_BITS; void LINETYPES;

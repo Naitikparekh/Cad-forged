@@ -1,6 +1,6 @@
 // Title bar: application menu, Quick Access Toolbar, document title and InfoCenter search.
 import { h, svgIcon, clear } from './dom.js';
-import { showMenu, dropdown, attachTip, closeMenus } from './menu.js';
+import { showMenu, dropdown, attachTip } from './menu.js';
 import { registry } from '../engine/registry.js';
 
 const DEFAULT_QAT = [
@@ -71,10 +71,8 @@ export class TitleBar {
     const d = this.app.doc;
     this.titleEl.textContent = d ? `CadForge   ${d.fileName || d.name}${d.dirty ? ' *' : ''}` : 'CadForge';
     document.title = d ? `${d.name}${d.dirty ? ' *' : ''} — CadForge` : 'CadForge';
-    const rt = this.app.runtime;
     for (const b of this.qat.querySelectorAll('[data-cmd="U"]')) b.classList.toggle('disabled', !d?.canUndo);
     for (const b of this.qat.querySelectorAll('[data-cmd="REDO"]')) b.classList.toggle('disabled', !d?.canRedo);
-    void rt;
   }
 
   // ------------------------------------------------------------ InfoCenter search
@@ -98,4 +96,3 @@ export class TitleBar {
   }
 }
 
-void closeMenus;

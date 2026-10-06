@@ -1,6 +1,6 @@
 // Dockable / floating palettes: Properties, Layer Properties Manager, Tool Palettes and Quick Properties.
 import { h, svgIcon, clear, raf } from './dom.js';
-import { showMenu, attachTip } from './menu.js';
+import { attachTip } from './menu.js';
 import { labelOf, segsOf } from '../core/entities.js';
 import { entityArea } from '../commands/inquiry.js';
 import * as g from '../core/geom.js';
@@ -305,10 +305,8 @@ class LayerManager {
   }
 
   deleteSel() {
-    const names = [...this.sel]; let n = 0;
-    for (const nm of names) { try { this.ui.edit('Delete layer', d => { d.deleteLayer(nm); }); n++; } catch (e) { this.ui.toast(e.message); } }
+    for (const nm of [...this.sel]) { try { this.ui.edit('Delete layer', d => { d.deleteLayer(nm); }); } catch (e) { this.ui.toast(e.message); } }
     this.sel.clear(); this.refresh();
-    void n;
   }
 
   setCurrent() { const n = [...this.sel][0]; if (!n) return; try { this.ui.chooseLayer(n); } catch (e) { this.ui.toast(e.message); } this.refresh(); }
@@ -341,7 +339,7 @@ class LayerManager {
       const row = h('div.lm-row' + (this.sel.has(l.name) ? '.sel' : ''), { dataset: { name: l.name }, role: 'row', onclick: e => { if (e.ctrlKey || e.metaKey) { if (this.sel.has(l.name)) this.sel.delete(l.name); else this.sel.add(l.name); } else if (e.shiftKey && this.sel.size) { const names = list.map(x => x.name), a = names.indexOf([...this.sel].pop()), b = names.indexOf(l.name); this.sel = new Set(names.slice(Math.min(a, b), Math.max(a, b) + 1)); } else this.sel = new Set([l.name]); this.refresh(); }, ondblclick: e => { if (e.target.closest('.c-name') && l.name !== '0') this.startRename(l.name); else if (!e.target.closest('button')) { ui.chooseLayer(l.name); this.refresh(); } } },
         h('div.c-s', l.name === doc.cur.layer ? svgIcon('check', 13) : doc.layerUsage(l.name) ? h('span.lm-used') : null),
         h('div.c-name', l.name),
-        h('div.c-on', toggle(l, 'on', ['eyeoff', 'sun'])), h('div.c-fr', toggle(l, 'frozen', ['sun', 'snow'])), h('div.c-lk', toggle(l, 'locked', ['unlock', 'lock'])),
+        h('div.c-on', toggle(l, 'on', ['eyeoff', 'eye'])), h('div.c-fr', toggle(l, 'frozen', ['sun', 'snow'])), h('div.c-lk', toggle(l, 'locked', ['unlock', 'lock'])),
         h('div.c-col', h('button.lm-btn', { onclick: async e => { e.stopPropagation(); const v = await ui.dialog('color', { value: l.color, allowByLayer: false }); if (v !== null && v !== undefined) { ui.edit('Layer color', d => { d.willChange(); for (const nm of this.sel.has(l.name) ? this.sel : [l.name]) { const x = d.layer(nm); if (x) x.color = v; } d.touch(); }); this.refresh(); } } }, h('span.cswatch', { style: { background: colorToCss(l.color) } }), describeColor(l.color))),
         h('div.c-lt', h('button.lm-btn', { onclick: async e => { e.stopPropagation(); const v = await ui.dialog('linetype', { value: l.ltype, pick: true }); if (v) { ui.edit('Layer linetype', d => { d.willChange(); for (const nm of this.sel.has(l.name) ? this.sel : [l.name]) { const x = d.layer(nm); if (x) x.ltype = v; } d.touch(); }); this.refresh(); } } }, ltypeDisplay(l.ltype || 'Continuous'))),
         h('div.c-lw', h('button.lm-btn', { onclick: async e => { e.stopPropagation(); const v = await ui.dialog('lweight', { value: l.lw, pick: true }); if (v !== null && v !== undefined && v !== 'BYLAYER') { ui.edit('Layer lineweight', d => { d.willChange(); for (const nm of this.sel.has(l.name) ? this.sel : [l.name]) { const x = d.layer(nm); if (x) x.lw = v; } d.touch(); }); this.refresh(); } } }, lwDisplay(l.lw))),
@@ -374,4 +372,3 @@ class QuickProps {
   }
 }
 
-void showMenu;

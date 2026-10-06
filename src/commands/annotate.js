@@ -1,11 +1,10 @@
 // Annotation commands: TEXT, MTEXT, TEXTEDIT, dimensions, LEADER, hatch commands and BOUNDARY.
 import * as g from '../core/geom.js';
-import { E, segsOf, boundsOf, hatchSegments } from '../core/entities.js';
-import { PATTERNS } from '../core/hatch.js';
+import { E, segsOf } from '../core/entities.js';
 import { registry } from '../engine/registry.js';
 import { Cancel } from '../engine/runtime.js';
 import { findRegion } from '../ops/boundary.js';
-import { memory, num } from './helpers.js';
+import { memory } from './helpers.js';
 
 const def = d => registry.define({ group: 'Annotation', pickfirst: false, ...d });
 
@@ -124,7 +123,7 @@ async function linearLike(c, kind, args = {}) {
     p1 = first.pt;
     const second = await c.point({ prompt: 'Specify second extension line origin', base: p1 }); if (!second.pt) return; p2 = second.pt;
   } else return;
-  let fixed = kind === 'ali' ? null : args.angle ?? null, override = null, ang = 0;
+  let fixed = kind === 'ali' ? null : args.angle ?? null, override = null;
   const make = dp => { const e = E.dim(kind, { p1, p2, dp, ...dimDefaults(c) }); if (kind === 'lin') e.ang = fixed ?? hOrV(p1, p2, dp); if (override !== null) e.txt = override; return e; };
   for (;;) {
     const opts = kind === 'lin' ? ['Mtext', 'Text', 'Angle', 'Horizontal', 'Vertical', 'Rotated'] : ['Mtext', 'Text', 'Angle'];
@@ -137,7 +136,6 @@ async function linearLike(c, kind, args = {}) {
     if (!r.pt) return;
     const e = c.add(make(r.pt));
     c.app.mem ??= {}; c.app.mem.lastDim = e;
-    void ang;
     return;
   }
 }
@@ -336,4 +334,3 @@ def({
   },
 });
 
-void boundsOf; void hatchSegments; void PATTERNS; void num;

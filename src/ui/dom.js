@@ -30,7 +30,6 @@ export function append(el, kids) {
 }
 
 /** Element holding an inline SVG icon. */
-export const ico = (name, size = 16) => { const t = document.createElement('span'); t.className = 'ico-wrap'; t.innerHTML = icon(name, size); return t.firstElementChild ? Object.assign(t, { }) : t; };
 export const svgIcon = (name, size = 16) => { const t = document.createElement('template'); t.innerHTML = icon(name, size); return t.content.firstElementChild; };
 
 export const $ = (sel, root = document) => root.querySelector(sel);

@@ -15,7 +15,6 @@ page.on('pageerror', e => errors.push(`[pageerror] ${e.message}\n${e.stack?.spli
 await page.goto(pathToFileURL(path.join(root, 'CadForge.html')).href);
 await page.waitForTimeout(300);
 const shot = async n => { await page.waitForTimeout(200); await page.screenshot({ path: path.join(outDir, n + '.png') }); };
-const steps = JSON.parse(process.argv[3] || '[]');
 await shot('01-empty');
 await page.evaluate(() => window.cadforge.ui.files.openSample());
 await page.waitForTimeout(300);

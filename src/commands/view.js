@@ -93,7 +93,6 @@ def({
     if (r.kw === 'Save') { doc.willChange(); doc.views[n] = c.view.state(); doc.touch(); c.log(`View ${n} saved.`); }
     else if (r.kw === 'Restore') { const v = doc.views[n]; if (!v) { c.log(`View ${n} not found.`, 'error'); return; } c.view.push(); c.view.setState(v); c.rt.emit(); }
     else if (r.kw === 'Delete') { doc.willChange(); delete doc.views[n]; doc.touch(); }
-    void args;
   },
 });
 

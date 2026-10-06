@@ -1,6 +1,6 @@
 // Plot / export dialog: sheet setup with a live preview, writing PDF, SVG or PNG files.
 import { h } from './dom.js';
-import { row, num, select, check, note } from './dialogs-kit.js';
+import { row, num, select, check } from './dialogs-kit.js';
 import { PAPERS, SCALES, defaultPlotOptions, plotLayout, renderPlot, exportVector, UNIT_MM } from '../io/plot.js';
 import { download } from './files.js';
 
@@ -63,4 +63,3 @@ export const PLOT = {
     };
   },
 };
-void note;

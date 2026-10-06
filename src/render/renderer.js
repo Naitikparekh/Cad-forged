@@ -4,9 +4,9 @@
 import * as g from '../core/geom.js';
 import { M, TAU } from '../core/geom.js';
 import { colorToCss, LINETYPES, lwPixels, LW_DEFAULT } from '../core/style.js';
-import { segsOf, ellipseSweep, splinePoints, textsOf, hatchSegments, insertMatrix, leaderText, boundsOf } from '../core/entities.js';
+import { segsOf, ellipseSweep, splinePoints, hatchSegments, insertMatrix, leaderText, boundsOf } from '../core/entities.js';
 import { dimGeometry, arrowPolygon, arrowLines } from '../core/dim.js';
-import { textLayout, emSize, platform, FONT } from '../core/text.js';
+import { textLayout, FONT } from '../core/text.js';
 
 const MAX_DEPTH = 8;
 
@@ -41,7 +41,7 @@ export function styleOf(rc, e, parent) {
   const transp = e.transp ?? layer.transp ?? 0;
   const fade = layer.locked && rc.fade ? Math.max(.12, 1 - rc.fade) : 1;
   return {
-    rawColor: color, color: rc.mono ? '#000000' : colorToCss(color, { dark: rc.theme.dark }), ltype, lw, lts: (e.lts ?? 1) * (parent?.lts ?? 1),
+    rawColor: color, color: rc.mono ? '#000000' : colorToCss(color, { dark: rc.theme.dark, contrast: rc.theme.contrast }), ltype, lw, lts: (e.lts ?? 1) * (parent?.lts ?? 1),
     alpha: (rc.transpOn ? 1 - Math.min(90, transp) / 100 : 1) * fade,
   };
 }
@@ -99,13 +99,11 @@ function dashFor(rc, style) {
   const lt = LINETYPES[style.ltype];
   if (!lt || !lt.pattern.length) return null;
   const unit = rc.ltscale * style.lts * rc.k;
-  const arr = lt.pattern.map(v => Math.max(Math.abs(v) < 1e-9 ? .01 : Math.abs(v) * unit, Math.abs(v) < 1e-9 ? .01 : .6)).map((v, i) => v);
   // pattern alternates dash,gap; zero-length dashes (dots) remain at ~0
-  const out = []; lt.pattern.forEach((v, i) => out.push(v === 0 ? .01 : Math.abs(v) * unit));
+  const out = []; lt.pattern.forEach(v => out.push(v === 0 ? .01 : Math.abs(v) * unit));
   const total = out.reduce((a, b) => a + b, 0);
   if (total < 3.5 || total > 20000) return null;      // too dense to be useful: draw solid
   if (out.length % 2) out.push(...out);
-  void arr;
   return out;
 }
 
@@ -186,7 +184,7 @@ function drawPoint(rc, e, style, selected, hover) {
 
 /** Draw a text entity (also used by dimensions and leaders). */
 export function drawTextAt(rc, t, color, alpha, selected, hover) {
-  const ctx = rc.ctx, lay = textLayout(t), kpx = rc.k * lay.em;
+  const ctx = rc.ctx, lay = textLayout(t);
   const m = M.mul(rc.worldM, M.mul(M.translate(t.p.x, t.p.y), M.rotate(t.rot || 0)));
   const d = rc.dpr;
   const apply = () => ctx.setTransform(d * m[0], d * m[1], d * m[2], d * m[3], d * m[4], d * m[5]);
@@ -196,7 +194,6 @@ export function drawTextAt(rc, t, color, alpha, selected, hover) {
     for (const l of lay.lines) { const a = M.apply(m, { x: l.x, y: l.y }), b = M.apply(m, { x: l.x + l.w, y: l.y }); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
     ctx.stroke(); ctx.globalAlpha = 1; return;
   }
-  void kpx;
   apply(); ctx.scale(1, -1);
   ctx.font = `${lay.em}px ${FONT}`; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = hover ? rc.theme.hover : color; ctx.globalAlpha = alpha;
   for (const l of lay.lines) ctx.fillText(l.str, l.x, -l.y);
@@ -253,7 +250,7 @@ function loopsPath(rc, loops) {
 
 function drawHatch(rc, e, style, selected, hover) {
   const ctx = rc.ctx;
-  const color = e.color !== undefined && !rc.mono ? colorToCss(e.color, { dark: rc.theme.dark }) : style.color;
+  const color = e.color !== undefined && !rc.mono ? colorToCss(e.color, { dark: rc.theme.dark, contrast: rc.theme.contrast }) : style.color;
   if (e.pattern === 'SOLID') {
     if (rc.fill) { loopsPath(rc, e.loops); setScreen(rc); ctx.globalAlpha = style.alpha * .9; ctx.fillStyle = hover ? rc.theme.hover : color; ctx.fill('evenodd'); ctx.globalAlpha = 1; }
     else { loopsPath(rc, e.loops); strokeCurrent(rc, { ...style, color }, {}); }
@@ -358,6 +355,5 @@ export const THEMES = {
   dark: { dark: true, canvas: '#212830', grid: '#ffffff', gridMajor: 'rgba(255,255,255,.10)', select: '#4aa8ff', hover: '#9fd3ff', cross: '#ffffff' },
   light: { dark: false, canvas: '#ffffff', grid: '#000000', gridMajor: 'rgba(0,0,0,.12)', select: '#1769c2', hover: '#2a8be0', cross: '#000000' },
 };
-THEMES.dark.gridAlpha = .07; THEMES.light.gridAlpha = .09;
+THEMES.dark.gridAlpha = .07; THEMES.light.gridAlpha = .09; THEMES.light.contrast = true;
 
-void platform; void emSize; void g;

@@ -1,5 +1,5 @@
 // System variables. Application preferences live in `prefs`; drawing variables are backed by the Drawing.
-import { LINETYPES, ltypeKey, LW_BYLAYER, LINEWEIGHTS } from '../core/style.js';
+import { ltypeKey, LW_BYLAYER, LINEWEIGHTS } from '../core/style.js';
 
 export const PREF_DEFAULTS = {
   OSMODE: 4133, AUTOSNAP: 63, APERTURE: 10, PICKBOX: 3, GRIPSIZE: 5, GRIPS: 2, GRIPOBJLIMIT: 100, PICKFIRST: 1, PICKADD: 2, PICKAUTO: 1, PICKDRAG: 0,
@@ -129,4 +129,3 @@ export class Sysvars {
   get dimensionInput() { return (this.prefs.DYNMODE & 2) === 2; }
 }
 
-void LINETYPES;

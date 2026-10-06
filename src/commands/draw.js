@@ -440,8 +440,7 @@ def({
     } else if (d.pt) { const n = g.unit({ x: -m.y, y: m.x }); ratio = Math.abs(g.dot(g.sub(d.pt, center), n)) / g.len(m); } else return;
     ratio = Math.max(1e-4, Math.min(1, ratio));
     if (!arc) { c.add(E.ellipse(center, m, ratio)); return; }
-    const major = Math.atan2(m.y, m.x), param = pt => { const v = g.sub(pt, center), x = g.dot(v, g.unit(m)) / g.len(m), y = g.dot(v, g.unit({ x: -m.y, y: m.x })) / (g.len(m) * ratio); return Math.atan2(y, x); };
-    void major;
+    const param = pt => { const v = g.sub(pt, center), x = g.dot(v, g.unit(m)) / g.len(m), y = g.dot(v, g.unit({ x: -m.y, y: m.x })) / (g.len(m) * ratio); return Math.atan2(y, x); };
     const s = await c.point({ prompt: 'Specify start angle', options: ['Parameter'], base: center, preview: pt => [E.line(center, pt)] }); if (!s.pt) return;
     const t0 = param(s.pt);
     const e = await c.point({ prompt: 'Specify end angle', base: center, preview: pt => [E.ellipse(center, m, ratio, t0, g.normAngle(param(pt)))] }); if (!e.pt) return;

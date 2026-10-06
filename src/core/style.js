@@ -39,10 +39,20 @@ export function hexToAci(hex) {
  *   value: undefined|'BYLAYER'|'BYBLOCK'|aci number|'#rrggbb'
  * ACI 7 is white on dark backgrounds and black on light ones (and always black when plotting).
  */
-export function colorToCss(value, { dark = true } = {}) {
+export function colorToCss(value, { dark = true, contrast = false } = {}) {
   if (typeof value === 'string' && value[0] === '#') return value;
   if (value === 7 || value === undefined) return dark ? '#ffffff' : '#000000';
-  return aciHex(value);
+  const hex = aciHex(value);
+  return contrast && !dark ? darkenForLight(hex) : hex;
+}
+
+/** Bright ACI colors (yellow, cyan...) are unreadable on a white background: scale them toward a readable luminance. */
+function darkenForLight(hex) {
+  const n = parseInt(hex.slice(1), 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255];
+  const L = (.2126 * c[0] + .7152 * c[1] + .0722 * c[2]) / 255;
+  if (L <= .5) return hex;
+  const k = .5 / L;
+  return '#' + c.map(v => Math.round(v * k).toString(16).padStart(2, '0')).join('');
 }
 
 export function describeColor(v) {

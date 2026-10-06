@@ -38,8 +38,6 @@ async function boxFootprint(c, mem) {
     if (o.kw === 'Cube') {
       const l = await c.distance({ prompt: 'Specify length', base: a, default: mem.length, nonzero: true }); if (l.value === undefined) return null;
       mem.length = l.value;
-      const rot = g.unit(g.sub(c.rt.cursor.pt, a));
-      void rot;
       return centre ? { x0: a.x - l.value / 2, y0: a.y - l.value / 2, w: l.value, d: l.value, h: l.value, cube: true } : { x0: a.x, y0: a.y, w: l.value, d: l.value, h: l.value, cube: true };
     }
     if (o.kw === 'Length') {
@@ -215,7 +213,7 @@ def({
 });
 
 def({
-  name: 'PRESSPULL', aliases: ['PRESSPULL'], title: 'Presspull', icon: 'presspull', desc: 'Presses or pulls bounded areas into 3D.',
+  name: 'PRESSPULL', aliases: ['PP'], title: 'Presspull', icon: 'presspull', desc: 'Presses or pulls bounded areas into 3D.',
   async run(c) {
     const mem = solidMem(c);
     const r = await c.point({ prompt: 'Click inside bounded areas to press or pull', allowEnter: false }); if (!r.pt) return;
@@ -328,4 +326,3 @@ for (const [name, fmt, title] of [['OBJOUT', 'obj', 'Export OBJ'], ['STLOUT', 's
   });
 }
 
-void memory;

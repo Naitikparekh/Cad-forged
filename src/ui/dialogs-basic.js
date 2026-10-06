@@ -1,7 +1,7 @@
 // General-purpose dialogs: confirm/prompt, About, Help, colour, linetype, lineweight, insert, hatch, purge, layer states, QuickCalc.
 import { h, svgIcon } from './dom.js';
 import { row, num, text, select, check, tabs, swatch, note, group } from './dialogs-kit.js';
-import { aciHex, colorToCss, describeColor, LINETYPES, ltypeDisplay, LINEWEIGHTS, lwDisplay, hexToAci, newLayer } from '../core/style.js';
+import { aciHex, colorToCss, describeColor, LINETYPES, ltypeDisplay, LINEWEIGHTS, lwDisplay } from '../core/style.js';
 import { PATTERNS } from '../core/hatch.js';
 import { registry } from '../engine/registry.js';
 
@@ -113,8 +113,7 @@ export const BASIC = {
     let sel = cur === undefined || cur === 'BYLAYER' ? 'Continuous' : cur;
     const list = h('div.lt-list');
     const draw = () => list.replaceChildren(...Object.keys(LINETYPES).map(n => {
-      const pat = LINETYPES[n].pattern, svg = ui.ribbon.ltSample(n);
-      void pat;
+      const svg = ui.ribbon.ltSample(n);
       return h('div.lt-row' + (n === sel ? '.sel' : ''), { onclick: () => { sel = n; draw(); }, ondblclick: () => ui.dialogs.top().commit() }, h('span.lt-name', ltypeDisplay(n)), h('span.lt-desc', LINETYPES[n].desc || ''), svg);
     }));
     draw();
@@ -207,4 +206,3 @@ export const BASIC = {
   },
 };
 
-void hexToAci; void newLayer;

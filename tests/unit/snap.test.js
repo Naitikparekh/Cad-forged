@@ -10,7 +10,6 @@ import { pickAt, selectRect, selectPolygon, selectFence, rectOf } from '../../sr
 const near = (a, b, t = 1e-6) => assert.ok(Math.abs(a - b) <= t, `${a} != ${b}`);
 const P = (x, y) => ({ x, y });
 const opts = (extra = {}) => ({ scale: 10, aperturePx: 12, osmask: 0, ...extra });
-const ALL = Object.values(OS_BITS).reduce((a, b) => a | b, 0) & ~(OS_BITS.QUI | OS_BITS.APP | OS_BITS.EXT | OS_BITS.PAR);
 
 function scene() {
   const d = new Drawing();
@@ -87,7 +86,6 @@ test('grid snap with spacing, base and angle', () => {
   const r = s.resolve(d, P(3.2, 4.9), opts({ grid: { on: true, sx: 2.5, sy: 2.5, base: P(0, 0), angle: 0 } })); near(r.pt.x, 2.5); near(r.pt.y, 5);
   assert.equal(activeMask(4133, null), 4133 & ~(16384 | 1024)); assert.equal(activeMask(4133 | 16384, null), 0);
   assert.equal(activeMask(4133, 'none'), 0); assert.equal(activeMask(4133, OS_BITS.MID), OS_BITS.MID);
-  void ALL;
 });
 
 test('picking: nearest wins; hatches yield to lines; locked layers are skipped', () => {
