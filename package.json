@@ -1,0 +1,15 @@
+{
+  "name": "cadforge",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CadForge: a self-contained browser CAD application with an AutoCAD-style interface and command set.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:browser": "node tests/browser/run.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

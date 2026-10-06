@@ -1,3 +1,4 @@
+// Evan Wallace's csg.js (MIT, see CSG-LICENSE.txt). Only change: wrapped as an ES module.
 // Constructive Solid Geometry (CSG) is a modeling technique that uses Boolean
 // operations like union and intersection to combine 3D solids. This library
 // implements CSG operations on meshes elegantly and concisely using BSP trees,
@@ -48,6 +49,7 @@
 // Holds a binary space partition tree representing a 3D solid. Two solids can
 // be combined using the `union()`, `subtract()`, and `intersect()` methods.
 
+let CSG;
 CSG = function() {
   this.polygons = [];
 };
@@ -593,3 +595,5 @@ CSG.Node.prototype = {
     }
   }
 };
+
+export default CSG;
