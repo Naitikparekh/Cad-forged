@@ -1,0 +1,15 @@
+[package]
+name = "cadforge-engine"
+description = "CadForge command engine: input pipeline, object snaps, selection, async command runtime and the AutoCAD-style command set"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cadforge-core = { path = "../cadforge-core" }
+indexmap = { version = "2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+approx = "0.5"
