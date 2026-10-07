@@ -1,5 +1,7 @@
 //! Persistent defaults between command runs (last radius, polygon sides, hatch settings...).
 use cadforge_core::style::Color;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HatchMemory {
@@ -26,6 +28,14 @@ pub struct ArrayPolar {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct SolidMemory {
+    pub radius: f64,
+    pub height: f64,
+    pub length: f64,
+    pub top: f64,
+}
+
+#[derive(Clone, Debug)]
 pub struct Memory {
     pub circle_radius: f64,
     pub polygon_sides: i64,
@@ -35,7 +45,8 @@ pub struct Memory {
     pub rect_fillet: f64,
     pub rect_chamfer: [f64; 2],
     pub fillet_radius: Option<f64>,
-    pub hatch: HatchMemory,
+    /// Shared with the UI's hatch editor so edits show up in the live preview.
+    pub hatch: Rc<RefCell<HatchMemory>>,
     pub array_rect: ArrayRect,
     pub array_polar: ArrayPolar,
     pub text_height: f64,
@@ -48,6 +59,10 @@ pub struct Memory {
     pub erased: Option<Vec<cadforge_core::entities::Entity>>,
     pub edge_extend: bool,
     pub fillet_trim: bool,
+    pub last_dim: Option<u64>,
+    pub last_distance: f64,
+    pub group_serial: u32,
+    pub solid: SolidMemory,
 }
 
 impl Default for Memory {
@@ -61,7 +76,7 @@ impl Default for Memory {
             rect_fillet: 0.0,
             rect_chamfer: [0.0, 0.0],
             fillet_radius: None,
-            hatch: HatchMemory { pattern: "ANSI31".into(), scale: 1.0, angle: 0.0, color: None, island: "normal".into() },
+            hatch: Rc::new(RefCell::new(HatchMemory { pattern: "ANSI31".into(), scale: 1.0, angle: 0.0, color: None, island: "normal".into() })),
             array_rect: ArrayRect { rows: 3, cols: 4, dr: 10.0, dc: 10.0 },
             array_polar: ArrayPolar { n: 6, fill: 360.0, rotate: true },
             text_height: 2.5,
@@ -73,6 +88,10 @@ impl Default for Memory {
             erased: None,
             edge_extend: false,
             fillet_trim: true,
+            last_dim: None,
+            last_distance: 0.0,
+            group_serial: 0,
+            solid: SolidMemory { radius: 10.0, height: 20.0, length: 30.0, top: 0.0 },
         }
     }
 }

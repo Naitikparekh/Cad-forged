@@ -62,6 +62,8 @@ pub enum ArgVal {
     Bool(bool),
     Pt(Pt),
     Grip(GripRef),
+    Ids(Vec<u64>),
+    Lines(Vec<String>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,6 +110,25 @@ impl Args {
     pub fn pt(&self, k: &str) -> Option<Pt> {
         match self.0.get(k) {
             Some(ArgVal::Pt(p)) => Some(*p),
+            _ => None,
+        }
+    }
+    /// A boolean argument if it was supplied at all.
+    pub fn opt_bool(&self, k: &str) -> Option<bool> {
+        match self.0.get(k) {
+            Some(ArgVal::Bool(b)) => Some(*b),
+            _ => None,
+        }
+    }
+    pub fn lines(&self, k: &str) -> Option<&[String]> {
+        match self.0.get(k) {
+            Some(ArgVal::Lines(v)) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn ids(&self, k: &str) -> Option<&[u64]> {
+        match self.0.get(k) {
+            Some(ArgVal::Ids(v)) => Some(v),
             _ => None,
         }
     }
@@ -307,7 +328,27 @@ pub enum DialogReq {
     Lweight,
     Hatch,
     DSettings { tab: String },
-    EditText { text: String, title: String, multi: bool },
+    /// In-place text editor.
+    EditText(TextEditSpec),
+    /// Contextual hatch editor bound to the active hatch session; resolves when the user closes it.
+    HatchEdit,
+    /// Interactive pan / zoom / orbit driven by the mouse until the user stops.
+    Realtime(&'static str),
+}
+
+/// Where and how the in-place text editor should appear.
+#[derive(Clone, Debug)]
+pub struct TextEditSpec {
+    pub prompt: String,
+    pub p: Pt,
+    pub h: f64,
+    pub rot: f64,
+    pub jh: cadforge_core::text::HJust,
+    pub jv: cadforge_core::text::VJust,
+    pub multi: bool,
+    pub w: Option<f64>,
+    pub initial: Option<String>,
+    pub editing: Option<u64>,
 }
 
 #[derive(Clone, Debug)]

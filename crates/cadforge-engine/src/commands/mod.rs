@@ -5,9 +5,17 @@ use crate::runtime::{Args, CmdResult};
 use std::future::Future;
 use std::rc::Rc;
 
+pub mod aliases;
+pub mod annotate;
+pub mod blocks;
 pub mod draw;
 pub mod helpers;
+pub mod inquiry;
+pub mod layer;
+pub mod view;
 pub mod modify;
+pub mod solids;
+pub mod system;
 
 /// Wrap an `async fn(Ctx, Args) -> CmdResult<()>` as a registry entry point.
 pub fn run<F, Fut>(f: F) -> RunFn
@@ -28,5 +36,13 @@ pub fn build_registry() -> Registry {
     let mut r = Registry::default();
     draw::register(&mut r);
     modify::register(&mut r);
+    annotate::register(&mut r);
+    inquiry::register(&mut r);
+    layer::register(&mut r);
+    view::register(&mut r);
+    blocks::register(&mut r);
+    solids::register(&mut r);
+    system::register(&mut r);
+    aliases::install(&mut r);
     r
 }

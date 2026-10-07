@@ -454,6 +454,15 @@ impl Ctx {
 
     /// Run another command inline (the JS `c.rt.run(name)`); it follows the transparency rules.
     pub async fn sub(&self, name: &str, args: Args) {
+        self.sub_inner(name, args, false).await
+    }
+
+    /// Run another command inline, ignoring whether it is transparent (`run(name, {transparent: true})`).
+    pub async fn sub_forced(&self, name: &str, args: Args) {
+        self.sub_inner(name, args, true).await
+    }
+
+    async fn sub_inner(&self, name: &str, args: Args, force: bool) {
         let started = self.app(|a| {
             let root = a.rt.tasks.get(&self.task).map(|t| t.root);
             let def = match a.registry.find(name) {
@@ -463,7 +472,7 @@ impl Ctx {
                     return None;
                 }
             };
-            if !def.transparent {
+            if !def.transparent && !force {
                 a.log("That command may not be used transparently.", "error");
                 return None;
             }

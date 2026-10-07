@@ -55,8 +55,14 @@ pub enum Event {
     ShowHistory,
     Regen,
     HatchSession,
-    /// Show (true) or toggle a UI palette by name.
-    Palette(String),
+    /// Show / hide / toggle (`None`) a UI palette by name.
+    Palette { name: String, show: Option<bool> },
+    /// A command delegates to the host UI (open/save/plot/settings dialogs...).
+    UiAction { name: String, args: Args },
+    /// Write these entities to a new drawing file (WBLOCK).
+    Export(Vec<Entity>),
+    /// Export solids as `obj` / `stl`.
+    ExportMesh(String),
     /// A command asked for a modal dialog (see [`App::pending`]).
     Dialog,
 }
@@ -65,6 +71,14 @@ pub enum Event {
 pub struct Clipboard {
     pub entities: Vec<Entity>,
     pub base: Pt,
+}
+
+/// An active HATCH / HATCHEDIT session (drives the contextual hatch editor in the UI).
+#[derive(Clone)]
+pub struct HatchSession {
+    pub settings: Rc<RefCell<crate::memory::HatchMemory>>,
+    pub editing: Option<u64>,
+    pub count: Rc<std::cell::Cell<usize>>,
 }
 
 /// What the host UI can do for commands.
@@ -88,11 +102,13 @@ pub struct App {
     /// Incremented on every `Change` event; hosts repaint when it moves.
     pub rev: u64,
     pub recent: Vec<String>,
+    pub hatch_session: Option<HatchSession>,
     events: Vec<Event>,
     counter: u32,
     next_editor_id: u64,
     me: Weak<RefCell<App>>,
     deferred_start: Option<(String, Args)>,
+    script: std::collections::VecDeque<String>,
 }
 
 impl App {
@@ -110,11 +126,13 @@ impl App {
             ui: UiCaps::default(),
             rev: 0,
             recent: vec![],
+            hatch_session: None,
             events: vec![],
             counter: 0,
             next_editor_id: 1,
             me: Weak::new(),
             deferred_start: None,
+            script: Default::default(),
         }
     }
 
@@ -235,6 +253,15 @@ impl App {
         self.deferred_start.take()
     }
 
+    /// Feed lines to the command line one at a time (SCRIPT), skipping `;` comments.
+    pub fn queue_script(&mut self, lines: Vec<String>) {
+        self.script.extend(lines.into_iter().filter(|l| !l.trim_start().starts_with(';')));
+    }
+
+    pub(crate) fn next_script_line(&mut self) -> Option<String> {
+        self.script.pop_front()
+    }
+
     /// Queue a command to start as soon as the current one has unwound.
     pub fn start_deferred(&mut self, name: &str, args: Args) {
         self.deferred_start = Some((name.to_string(), args));
@@ -286,7 +313,17 @@ impl Handle {
                         self.0.borrow_mut().run(&name, args, false);
                         continue;
                     }
-                    None => break,
+                    None => {
+                        // scripts feed the same input channel as the command line
+                        let line = self.0.borrow_mut().next_script_line();
+                        match line {
+                            Some(l) => {
+                                self.0.borrow_mut().text(&l, false);
+                                continue;
+                            }
+                            None => break,
+                        }
+                    }
                 }
             };
             let fut = self.0.borrow_mut().rt.tasks.get_mut(&id).and_then(|t| t.fut.take());

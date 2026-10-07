@@ -54,12 +54,27 @@ pub struct Layout {
     pub entities: Vec<Entity>,
 }
 
-/// A named view: centre and scale (VIEW command).
+/// A named view: centre and scale (VIEW command), plus the 3D orientation when saved from a 3D view.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NamedView {
     pub cx: f64,
     pub cy: f64,
     pub scale: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cz: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub yaw: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pitch: Option<f64>,
+}
+
+impl NamedView {
+    pub fn from_state(s: &ViewState) -> NamedView {
+        NamedView { cx: s.cx, cy: s.cy, scale: s.scale, cz: Some(s.cz), yaw: Some(s.yaw), pitch: Some(s.pitch) }
+    }
+    pub fn to_state(&self) -> ViewState {
+        ViewState { cx: self.cx, cy: self.cy, cz: self.cz.unwrap_or(0.0), scale: self.scale, yaw: self.yaw.unwrap_or(0.0), pitch: self.pitch.unwrap_or(std::f64::consts::FRAC_PI_2) }
+    }
 }
 
 /// Persisted camera state.
@@ -167,6 +182,8 @@ pub struct Drawing {
     /// Entities skipped / paper-space objects ignored by the last DXF import.
     pub skipped: Vec<String>,
     pub paper_skipped: usize,
+    /// Layer on/lock states saved by LAYISO (not persisted).
+    pub layer_iso: Option<Vec<(String, bool, bool)>>,
     undo_stack: Vec<UndoStep>,
     redo_stack: Vec<UndoStep>,
     pre: Option<String>,
@@ -223,6 +240,7 @@ impl Drawing {
             file_name: None,
             skipped: Vec::new(),
             paper_skipped: 0,
+            layer_iso: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             pre: None,
@@ -448,6 +466,16 @@ impl Drawing {
         found
     }
 
+    /// Move the given entities to the front (end of the list) or back (start) of the active space's draw order.
+    pub fn reorder(&mut self, ids: &[u64], front: bool) {
+        self.will_change();
+        let sp = self.space.clone();
+        let arr = self.space_entities_mut(&sp);
+        let (moved, rest): (Vec<Entity>, Vec<Entity>) = arr.drain(..).partition(|e| ids.contains(&e.id));
+        *arr = if front { rest.into_iter().chain(moved).collect() } else { moved.into_iter().chain(rest).collect() };
+        self.touch();
+    }
+
     /// Run a mutation inside a change notification.
     pub fn change<R>(&mut self, f: impl FnOnce(&mut Drawing) -> R) -> R {
         self.will_change();
@@ -609,6 +637,17 @@ impl Drawing {
                 s.color = Some(c);
             }
         }
+        let id = s.id;
+        self.solids.push(s);
+        self.touch();
+        id
+    }
+
+    /// Add a solid exactly as given (fresh id, no current-property defaults).
+    pub fn insert_solid_raw(&mut self, mut s: Solid) -> u64 {
+        self.will_change();
+        s.id = self.next_id;
+        self.next_id += 1;
         let id = s.id;
         self.solids.push(s);
         self.touch();
@@ -968,7 +1007,7 @@ impl Drawing {
             for (vn, l) in ls {
                 if let Some(v) = l.get("view") {
                     if let (Some(x), Some(y), Some(s)) = (v.get("x").and_then(Value::as_f64), v.get("y").and_then(Value::as_f64), v.get("scale").and_then(Value::as_f64)) {
-                        d.views.insert(vn.clone(), NamedView { cx: x, cy: y, scale: s });
+                        d.views.insert(vn.clone(), NamedView { cx: x, cy: y, scale: s, cz: None, yaw: None, pitch: None });
                     }
                 }
             }
