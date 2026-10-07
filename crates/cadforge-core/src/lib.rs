@@ -5,6 +5,8 @@ pub mod entities;
 pub mod geom;
 pub mod hatch;
 pub mod ops;
+pub mod sample;
 pub mod solid;
 pub mod style;
 pub mod text;
+pub mod view;

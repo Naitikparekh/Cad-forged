@@ -1,0 +1,12 @@
+[package]
+name = "cadforge-render"
+description = "CadForge scene renderer: turns a drawing into backend-independent draw operations, plus plot layout and PDF/SVG writers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cadforge-core = { path = "../cadforge-core" }
+
+[dev-dependencies]
+approx = "0.5"
