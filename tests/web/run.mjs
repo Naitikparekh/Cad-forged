@@ -68,6 +68,61 @@ await test('ViewCube click changes the view; SW Iso preset via the cube home', a
   assert.ok(s.view.pitch < 1.0, `pitch ${s.view.pitch}`);
 });
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { root } from './harness.mjs';
+const sample = f => path.join(root, 'samples', f);
+const download = async (trigger) => {
+  const [d] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), trigger()]);
+  return { name: d.suggestedFilename(), data: fs.readFileSync(await d.path()) };
+};
+
+await test('OPEN a DXF through the file chooser', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('OPEN')]);
+  await fc.setFiles(sample('L-Bracket.dxf')); await page.waitForTimeout(600); await t.frame(4);
+  const s = await t.state();
+  assert.equal(s.name, 'L-Bracket'); assert.equal(s.entities, 5);
+});
+
+await test('OPEN a CadForge JSON project', async () => {
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('OPEN')]);
+  await fc.setFiles(sample('L-Bracket.cadforge.json')); await page.waitForTimeout(600); await t.frame(4);
+  const s = await t.state();
+  assert.equal(s.entities, 5); assert.equal(s.solids, 1); assert.ok(s.editors >= 3);
+});
+
+await test('DXFOUT downloads a DXF that round-trips through ezdxf', async () => {
+  const f = await download(() => t.cmd('DXFOUT'));
+  assert.equal(f.name, 'L-Bracket.dxf');
+  const text = f.data.toString('latin1').replace(/\r\n/g, '\n');
+  assert.ok(text.startsWith('  0\nSECTION') || text.startsWith('0\nSECTION'), text.slice(0, 20));
+  assert.ok(text.includes('AC1015'));
+  const tmp = path.join(root, 'target', 'tmp'); fs.mkdirSync(tmp, { recursive: true });
+  const file = path.join(tmp, 'web-export.dxf'); fs.writeFileSync(file, f.data);
+  try {
+    const out = execFileSync('python3', ['-I', '-c', 'import sys, ezdxf; d = ezdxf.readfile(sys.argv[1]); print(len(d.modelspace()))', file], { encoding: 'utf8' });
+    assert.ok(Number(out.trim()) >= 5, out);
+  } catch (e) { if (!/No module named 'ezdxf'/.test(String(e.stderr || e.message))) throw e; console.log('       (ezdxf not installed: skipped validation)'); }
+});
+
+await test('PLOT dialog downloads a PDF', async () => {
+  await t.cmd('PLOT'); await t.frame(4);
+  const pdf = await download(() => page.mouse.click(971, 634));
+  assert.equal(pdf.name, 'L-Bracket.pdf'); assert.ok(pdf.data.subarray(0, 5).toString() === '%PDF-');
+  assert.ok(pdf.data.length > 2000);
+  await t.frame(4);
+  await page.keyboard.press('Escape'); await t.frame(3);
+});
+
+await test('Layer Properties Manager lists the layers', async () => {
+  await t.cmd('LAYER'); await t.frame(4);
+  await t.shot(path.join(root, 'target', 'tmp', 'web-layers.png'));
+  await page.keyboard.press('Escape'); await t.frame(3);
+  assert.equal((await t.state()).busy, false);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();
