@@ -1212,6 +1212,12 @@ impl App {
                 self.set_pending_flag(task, |p| p.allow_off = true);
                 self.sel_add(task, &ids);
                 self.set_pending_flag(task, |p| p.allow_off = false);
+                if self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.spec.solids) {
+                    let solids: Vec<u64> = self.doc().map_or(vec![], |d| d.solids.iter().filter(|s| d.solid_visible(s) && !d.layer(if s.layer.is_empty() { "0" } else { &s.layer }).is_some_and(|l| l.locked)).map(|s| s.id).collect());
+                    if !solids.is_empty() {
+                        self.sel_add_solids(task, &solids, false);
+                    }
+                }
             }
             "W" | "WINDOW" | "C" | "CROSSING" => {
                 let mode = if t.starts_with('W') { 'W' } else { 'C' };

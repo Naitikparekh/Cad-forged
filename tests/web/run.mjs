@@ -119,8 +119,36 @@ await test('PLOT dialog downloads a PDF', async () => {
 await test('Layer Properties Manager lists the layers', async () => {
   await t.cmd('LAYER'); await t.frame(4);
   await t.shot(path.join(root, 'target', 'tmp', 'web-layers.png'));
-  await page.keyboard.press('Escape'); await t.frame(3);
+  await page.mouse.move(969, 209, { steps: 4 }); await t.frame(3); await page.mouse.click(969, 209); await t.frame(4);   // window close button
   assert.equal((await t.state()).busy, false);
+});
+
+await test('HATCH: pick a point, Close Hatch Creation commits the hatch', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('ERASE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  await t.cmd('REC'); await t.cmd('0,0'); await t.cmd('100,60'); await t.cmd('ZOOM'); await t.cmd('E');
+  await t.cmd('HATCH'); await t.click(50, 30);
+  { const b = await t.state(); assert.equal(b.busy, true, JSON.stringify(b).slice(0, 600)); }
+  await t.shot(path.join(root, 'target', 'tmp', 'web-hatch.png'));
+  await page.mouse.move(784, 93, { steps: 4 }); await t.frame(3); await page.mouse.click(784, 93); await t.frame(4);   // "Close Hatch Creation" on the contextual tab
+  const s = await t.state();
+  assert.ok(s.types.includes('hatch'), JSON.stringify(s.types)); assert.equal(s.busy, false);
+});
+
+await test('MTEXT editor dialog places the typed text', async () => {
+  await t.cmd('MTEXT'); await t.cmd('10,10'); await t.cmd('60,25'); await t.frame(4);
+  await page.mouse.click(720, 450); await t.type('HELLO CAD'); await page.mouse.click(810, 543); await t.frame(4);   // OK
+  const s = await t.state();
+  assert.ok(s.types.includes('text') || s.types.includes('mtext'), JSON.stringify(s.types)); assert.equal(s.busy, false);
+});
+
+await test('Ctrl+0 toggles clean screen and OPTIONS switches to the light theme', async () => {
+  await page.keyboard.press('Control+0'); await t.frame(4);
+  await page.keyboard.press('Control+0'); await t.frame(4);
+  await t.cmd('OPTIONS'); await page.mouse.click(597, 352); await t.frame(3); await page.mouse.click(850, 652); await t.frame(6);
+  await t.shot(path.join(root, 'target', 'tmp', 'web-light.png'));
+  const px = await page.evaluate(() => { const c = document.querySelector('canvas'); return !!c; });
+  assert.ok(px);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

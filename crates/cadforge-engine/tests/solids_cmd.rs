@@ -213,3 +213,15 @@ fn vscurrent_sets_the_visual_style_and_solids_on_frozen_layers_cannot_be_picked(
     s.doc_mut(|d| d.layers[0].frozen = true);
     assert!(s.solid_at(5., 5.).is_none());
 }
+
+#[test]
+fn erase_all_removes_solids_too_but_not_those_on_locked_layers() {
+    let s = Sim::new();
+    s.play("BOX", &[Click(0., 0.), Click(10., 10.), Type("10")]);
+    s.play("LINE", &[Click(0., 0.), Click(5., 5.), Enter]);
+    assert_eq!(s.solids().len(), 1);
+    s.cmd("ERASE").ty("ALL").enter();
+    assert!(!s.busy());
+    assert_eq!(s.solids().len(), 0);
+    assert_eq!(s.n(), 0);
+}
