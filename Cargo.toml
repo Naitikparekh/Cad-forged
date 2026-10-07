@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/cadforge-core", "crates/cadforge-render", "crates/cadforge-engine"]
+members = ["crates/cadforge-core", "crates/cadforge-render", "crates/cadforge-engine", "crates/cadforge-app"]
 
 [workspace.package]
 version = "2.0.0"
@@ -14,3 +14,10 @@ lto = "thin"
 
 [profile.dev]
 opt-level = 1
+
+# Faster-to-build optimized profile for iterating on the web build (`tools/build-web.sh dev`).
+[profile.web]
+inherits = "release"
+opt-level = 1
+lto = false
+debug = false

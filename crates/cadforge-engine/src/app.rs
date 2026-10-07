@@ -391,6 +391,10 @@ impl Handle {
     pub fn escape(&self) {
         self.with(|a| a.escape());
     }
+    /// Answer the modal dialog a command is waiting for.
+    pub fn answer_dialog(&self, reply: DialogReply) {
+        self.with(|a| a.answer_dialog(reply));
+    }
     pub fn keyword(&self, label: &str) {
         self.with(|a| a.keyword(label));
     }

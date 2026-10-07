@@ -554,6 +554,20 @@ impl App {
         prompt_text(self.pending())
     }
 
+    /// The modal dialog a command is waiting for, if any (the UI shows it and calls [`App::answer_dialog`]).
+    pub fn pending_dialog(&self) -> Option<DialogReq> {
+        self.pending().filter(|p| p.kind == PromptKind::Dialog).and_then(|p| p.dialog.clone())
+    }
+
+    /// UI → command: answer the pending dialog request.
+    pub fn answer_dialog(&mut self, reply: DialogReply) {
+        let Some(task) = self.top_task() else { return };
+        let is_dialog = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.kind == PromptKind::Dialog);
+        if is_dialog {
+            self.deliver(task, Reply::Dialog(reply));
+        }
+    }
+
     pub fn aperture_world(&self, px: Option<f64>) -> f64 {
         let scale = self.editor().map_or(1.0, |e| e.view.scale);
         px.unwrap_or(self.sysvars.real("APERTURE")) / scale

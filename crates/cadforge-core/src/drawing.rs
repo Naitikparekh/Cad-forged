@@ -780,6 +780,11 @@ impl Drawing {
         self.undo_stack.len()
     }
 
+    /// Labels of the most recent undo steps, newest first.
+    pub fn undo_labels(&self, n: usize) -> Vec<String> {
+        self.undo_stack.iter().rev().take(n).map(|s| s.label.clone()).collect()
+    }
+
     pub fn undo_label(&self) -> Option<&str> {
         self.undo_stack.last().map(|s| s.label.as_str())
     }

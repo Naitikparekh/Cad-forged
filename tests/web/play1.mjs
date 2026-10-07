@@ -1,0 +1,18 @@
+import { launch } from './harness.mjs';
+const S = process.argv[2];
+const t = await launch();
+const { page } = t;
+await page.mouse.move(700, 400);
+await t.cmd('L');
+await page.mouse.click(600, 500); await t.frame();
+await page.mouse.move(760, 430, { steps: 4 }); await t.frame(3);
+await t.shot(S + '/rs2.png');
+await page.mouse.click(800, 400); await t.frame();
+await page.keyboard.press('Enter'); await t.frame(3);
+await t.cmd('C');
+await page.mouse.click(700, 600); await t.frame();
+await page.mouse.move(760, 600, { steps: 3 }); await t.frame(3);
+await page.mouse.click(760, 600); await t.frame(3);
+await t.shot(S + '/rs3.png');
+console.log(t.logs.slice(-15).join('\n'));
+await t.close();

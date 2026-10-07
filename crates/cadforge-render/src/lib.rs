@@ -2,6 +2,7 @@
 pub mod ops;
 pub mod pdf;
 pub mod plot;
+pub mod raster;
 pub mod scene;
 pub mod solids;
 pub mod svg;

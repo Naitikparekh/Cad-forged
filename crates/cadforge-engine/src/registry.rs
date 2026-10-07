@@ -70,7 +70,8 @@ impl CommandDef {
 pub struct Registry {
     commands: IndexMap<String, Rc<CommandDef>>,
     aliases: HashMap<String, String>,
-    pub user_aliases: HashMap<String, String>,
+    /// User-defined aliases (edited from the UI while the registry is shared).
+    pub user_aliases: std::cell::RefCell<HashMap<String, String>>,
     pub synonyms: HashMap<String, String>,
 }
 
@@ -105,12 +106,25 @@ impl Registry {
         if t.is_empty() {
             return None;
         }
-        let key = self.user_aliases.get(&t).cloned().or_else(|| self.aliases.get(&t).cloned()).or_else(|| self.commands.contains_key(&t).then(|| t.clone())).or_else(|| self.synonyms.get(&t).cloned());
+        let key = self.user_aliases.borrow().get(&t).cloned().or_else(|| self.aliases.get(&t).cloned()).or_else(|| self.commands.contains_key(&t).then(|| t.clone())).or_else(|| self.synonyms.get(&t).cloned());
         match key {
             Some(k) => self.commands.get(&k).cloned(),
             None if t.starts_with('-') => self.commands.get(&t).cloned(),
             None => None,
         }
+    }
+
+    /// Every default alias with its command (sorted).
+    pub fn all_aliases(&self) -> Vec<(String, String)> {
+        let mut v: Vec<(String, String)> = self.aliases.iter().map(|(a, c)| (a.clone(), c.clone())).collect();
+        v.sort();
+        v
+    }
+
+    /// The shortest alias of a command (for tooltips).
+    pub fn alias_of(&self, name: &str) -> Option<String> {
+        let n = name.to_uppercase();
+        self.aliases.iter().filter(|(_, c)| **c == n).map(|(a, _)| a.clone()).min_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)))
     }
 
     pub fn names(&self) -> Vec<String> {
@@ -134,7 +148,7 @@ impl Registry {
         starts.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         let mut mid: Vec<&String> = if mid_string { pool.iter().filter(|n| !n.starts_with(&t) && n.contains(&t)).collect() } else { vec![] };
         mid.sort();
-        let target = self.user_aliases.get(&t).cloned().or_else(|| self.aliases.get(&t).cloned()).or_else(|| self.commands.contains_key(&t).then(|| t.clone()));
+        let target = self.user_aliases.borrow().get(&t).cloned().or_else(|| self.aliases.get(&t).cloned()).or_else(|| self.commands.contains_key(&t).then(|| t.clone()));
         let mut out: Vec<String> = vec![];
         for s in target.into_iter().chain(starts.into_iter().cloned()).chain(mid.into_iter().cloned()) {
             if !out.contains(&s) {

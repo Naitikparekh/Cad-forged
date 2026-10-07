@@ -1,0 +1,248 @@
+//! Application shell: owns the engine [`Handle`], UI state and lays the window out.
+use crate::data::RibbonData;
+use crate::dialogs::Dialog;
+use crate::icons::Icons;
+use crate::menu::Popup;
+use crate::palettes::PalState;
+use crate::platform::Inbox;
+use crate::theme::{self, Tokens};
+use crate::viewport::ViewportState;
+use cadforge_core::style::Color;
+use cadforge_engine::app::{App, Event, Handle};
+use cadforge_engine::commands::build_registry;
+use eframe::egui;
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::rc::Rc;
+
+/// Current text typed at the command line (with a caret) and its history recall / suggestion state.
+#[derive(Default)]
+pub struct CmdLine {
+    pub text: String,
+    pub caret: usize,
+    /// Typed through the dynamic-input route (shown at the cursor).
+    pub dynamic: bool,
+    pub recall: Option<usize>,
+    pub past: Vec<String>,
+    pub sugs: Vec<String>,
+    pub sug_idx: Option<usize>,
+    pub lines: usize,
+    pub lines_f: f32,
+}
+
+pub struct UiState {
+    pub ribbon_tab: String,
+    pub ribbon_mode: u8,
+    pub ribbon_hidden: HashSet<String>,
+    pub flyout: Option<String>,
+    pub dark: bool,
+    pub workspace: String,
+    pub cmd: CmdLine,
+    pub show_props: bool,
+    pub show_tools: bool,
+    pub show_cmd: bool,
+    pub show_menubar: bool,
+    pub clean: bool,
+    pub status_hidden: HashSet<String>,
+    pub coord_relative: bool,
+    pub search: String,
+    pub showing_start: bool,
+    pub toast: Option<(String, f64)>,
+    pub prev_tab: Option<String>,
+    pub text_window: bool,
+    pub slideout: Option<String>,
+    pub flyout_panel: Option<(String, egui::Rect)>,
+    pub layer_dd: Option<egui::Rect>,
+    pub layer_dd_frame: u64,
+    pub qat_custom: Vec<(String, Option<serde_json::Value>, String)>,
+    pub search_focus: bool,
+    pub app_menu: Option<(egui::Rect, Option<usize>)>,
+}
+
+pub struct CadForgeApp {
+    pub h: Handle,
+    pub t: Tokens,
+    pub icons: Icons,
+    pub rib: RibbonData,
+    pub ui: UiState,
+    pub vp: ViewportState,
+    pub popup: Option<Popup>,
+    pub time: f64,
+    /// Dialog to open (moved onto the dialog stack on the next frame).
+    pub dialog: Option<Dialog>,
+    pub dialogs: Vec<Dialog>,
+    pub dialog_counter: u64,
+    pub token_counter: u32,
+    pub ret_color: Option<(u32, Option<Color>)>,
+    pub ret_text: Option<(String, String)>,
+    pub ret_lw: Option<Option<i32>>,
+    pub inbox: Inbox,
+    pub save_dir: PathBuf,
+    pub context_menu_pending: Option<(egui::Pos2, bool, bool)>,
+    pub shift_prev: bool,
+    pub last_cmd_row: Option<egui::Rect>,
+    pub pal: PalState,
+    pub pending_theme: Option<bool>,
+    pub save_as_focused: bool,
+}
+
+impl CadForgeApp {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> CadForgeApp {
+        theme::install_fonts(&cc.egui_ctx);
+        cadforge_core::text::set_measure(cadforge_render::helvetica_width);
+        let t = theme::DARK;
+        theme::apply(&cc.egui_ctx, &t);
+        let registry = Rc::new(build_registry());
+        let mut app = App::new(registry);
+        app.ui.dialogs = true;
+        let h = Handle::new(app);
+        {
+            let mut a = h.borrow_mut();
+            a.new_drawing(None, false);
+            a.log("CadForge 2.0 — type a command, or choose one from the ribbon. Press F1 for help.", "info");
+        }
+        h.pump();
+        let rib = RibbonData::load();
+        let mut app = CadForgeApp {
+            h,
+            t,
+            icons: Icons::load(),
+            rib,
+            ui: UiState {
+                ribbon_tab: "home".into(),
+                ribbon_mode: 0,
+                ribbon_hidden: HashSet::new(),
+                flyout: None,
+                dark: true,
+                workspace: "Drafting & Annotation".into(),
+                cmd: CmdLine { lines: 3, lines_f: 3.0, ..Default::default() },
+                show_props: false,
+                show_tools: false,
+                show_cmd: true,
+                show_menubar: false,
+                clean: false,
+                status_hidden: HashSet::new(),
+                coord_relative: false,
+                search: String::new(),
+                showing_start: false,
+                toast: None,
+                prev_tab: None,
+                text_window: false,
+                slideout: None,
+                flyout_panel: None,
+                layer_dd: None,
+                layer_dd_frame: 0,
+                qat_custom: vec![],
+                search_focus: false,
+                app_menu: None,
+            },
+            vp: ViewportState::default(),
+            popup: None,
+            time: 0.0,
+            dialog: None,
+            dialogs: vec![],
+            dialog_counter: 0,
+            token_counter: 0,
+            ret_color: None,
+            ret_text: None,
+            ret_lw: None,
+            inbox: Default::default(),
+            save_dir: std::env::current_dir().unwrap_or_default(),
+            context_menu_pending: None,
+            shift_prev: false,
+            last_cmd_row: None,
+            pal: PalState::default(),
+            pending_theme: None,
+            save_as_focused: false,
+        };
+        app.load_user_aliases();
+        app
+    }
+
+    pub fn toast(&mut self, msg: &str) {
+        self.ui.toast = Some((msg.to_string(), self.time + 3.2));
+    }
+
+    pub fn set_dark(&mut self, ctx: &egui::Context, dark: bool) {
+        self.ui.dark = dark;
+        self.t = if dark { theme::DARK } else { theme::LIGHT };
+        theme::apply(ctx, &self.t);
+        let _ = self.h.borrow_mut().setvar("THEME", if dark { "dark" } else { "light" });
+    }
+
+    /// Start a command from the UI (ribbon, menu, QAT): cancels whatever is running.
+    pub fn run_command(&mut self, name: &str, args: cadforge_engine::runtime::Args) {
+        if self.h.borrow().active.is_none() {
+            return;
+        }
+        self.popup = None;
+        self.h.start(name, args);
+    }
+
+    pub fn escape(&mut self) {
+        self.ui.cmd = CmdLine { past: std::mem::take(&mut self.ui.cmd.past), lines: self.ui.cmd.lines, ..Default::default() };
+        if self.vp.realtime.is_some() {
+            self.end_realtime();
+            return;
+        }
+        self.popup = None;
+        self.h.escape();
+    }
+
+    fn process_events(&mut self, ctx: &egui::Context) {
+        let events = self.h.borrow_mut().take_events();
+        for ev in events {
+            match ev {
+                Event::Palette { name, show } => self.toggle_palette(&name, show),
+                Event::UiAction { name, args } => self.ui_action(ctx, &name, args),
+                Event::HatchSession => self.hatch_session_changed(),
+                _ => {}
+            }
+        }
+    }
+
+    pub fn toggle_palette(&mut self, name: &str, show: Option<bool>) {
+        let slot = match name {
+            "properties" => &mut self.ui.show_props,
+            "layers" => &mut self.pal.lm_open,
+            "tools" => &mut self.ui.show_tools,
+            "command" => &mut self.ui.show_cmd,
+            _ => return,
+        };
+        *slot = show.unwrap_or(!*slot);
+    }
+
+    fn hatch_session_changed(&mut self) {
+        let session = self.h.borrow().hatch_session.clone();
+        match session {
+            Some(s) => {
+                self.ui.prev_tab = Some(self.ui.ribbon_tab.clone());
+                self.ui.ribbon_tab = if s.editing.is_some() { "hatchedit".into() } else { "hatchcreate".into() };
+            }
+            None => {
+                if self.ui.ribbon_tab == "hatchedit" || self.ui.ribbon_tab == "hatchcreate" {
+                    self.ui.ribbon_tab = self.ui.prev_tab.take().unwrap_or_else(|| "home".into());
+                }
+            }
+        }
+    }
+}
+
+impl eframe::App for CadForgeApp {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        self.time = ctx.input(|i| i.time);
+        self.h.borrow_mut().now = self.time * 1000.0;
+        if let Some(dark) = self.pending_theme.take() {
+            self.set_dark(&ctx, dark);
+        }
+        self.handle_keys(&ctx);
+        self.process_events(&ctx);
+        self.layout(ui, &ctx);
+        self.show_popup(&ctx);
+        self.show_toast(&ctx);
+        if self.h.borrow().busy() {
+            ctx.request_repaint();
+        }
+    }
+}
