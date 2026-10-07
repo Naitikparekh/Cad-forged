@@ -180,7 +180,7 @@ pub struct Drawing {
     pub dirty: bool,
     pub file_name: Option<String>,
     /// Entities skipped / paper-space objects ignored by the last DXF import.
-    pub skipped: Vec<String>,
+    pub skipped: std::collections::BTreeMap<String, usize>,
     pub paper_skipped: usize,
     /// Layer on/lock states saved by LAYISO (not persisted).
     pub layer_iso: Option<Vec<(String, bool, bool)>>,
@@ -238,7 +238,7 @@ impl Drawing {
             view: None,
             dirty: false,
             file_name: None,
-            skipped: Vec::new(),
+            skipped: Default::default(),
             paper_skipped: 0,
             layer_iso: None,
             undo_stack: Vec::new(),
