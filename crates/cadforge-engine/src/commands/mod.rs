@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 pub mod draw;
 pub mod helpers;
+pub mod modify;
 
 /// Wrap an `async fn(Ctx, Args) -> CmdResult<()>` as a registry entry point.
 pub fn run<F, Fut>(f: F) -> RunFn
@@ -26,5 +27,6 @@ pub fn def(group: &str, name: &str, f: RunFn) -> CommandDef {
 pub fn build_registry() -> Registry {
     let mut r = Registry::default();
     draw::register(&mut r);
+    modify::register(&mut r);
     r
 }

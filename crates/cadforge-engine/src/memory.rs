@@ -44,6 +44,10 @@ pub struct Memory {
     pub insert_rot: f64,
     pub qp_open: bool,
     pub last_line_end: Option<cadforge_core::geom::Pt>,
+    /// Entities removed by the last ERASE (for OOPS).
+    pub erased: Option<Vec<cadforge_core::entities::Entity>>,
+    pub edge_extend: bool,
+    pub fillet_trim: bool,
 }
 
 impl Default for Memory {
@@ -66,6 +70,9 @@ impl Default for Memory {
             insert_rot: 0.0,
             qp_open: false,
             last_line_end: None,
+            erased: None,
+            edge_extend: false,
+            fillet_trim: true,
         }
     }
 }

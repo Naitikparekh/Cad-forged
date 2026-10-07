@@ -171,6 +171,20 @@ impl Sim {
         self.h.borrow_mut().editor_mut().expect("editor").doc.undo();
     }
 
+    pub fn sel_count(&self) -> usize {
+        self.h.borrow().editor().expect("editor").sel.len()
+    }
+
+    pub fn preview(&self) -> Vec<crate::runtime::PreviewItem> {
+        self.h.borrow().rt.preview.clone()
+    }
+
+    /// Name of the innermost running command.
+    pub fn running(&self) -> Option<String> {
+        let a = self.h.borrow();
+        a.top_task().and_then(|t| a.rt.tasks.get(&t)).map(|t| t.def.name.clone())
+    }
+
     pub fn view_scale(&self) -> f64 {
         self.h.borrow().editor().expect("editor").view.scale
     }

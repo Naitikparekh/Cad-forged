@@ -397,6 +397,57 @@ impl Drawing {
         true
     }
 
+    /// Position of an entity in the active space's draw order.
+    pub fn index_of(&self, id: u64) -> Option<usize> {
+        self.entities().iter().position(|e| e.id == id)
+    }
+
+    /// Replace `delete` entities starting at `idx` of the active space with `insert`. Inserted entities with id 0
+    /// get fresh ids; no defaults (layer, colour...) are filled in. Returns the ids of the inserted entities.
+    pub fn splice(&mut self, idx: usize, delete: usize, insert: Vec<Entity>) -> Vec<u64> {
+        self.will_change();
+        let mut ids = vec![];
+        let mut prepared = vec![];
+        for mut e in insert {
+            if e.id == 0 {
+                e.id = self.next_id;
+                self.next_id += 1;
+            } else if e.id >= self.next_id {
+                self.next_id = e.id + 1;
+            }
+            ids.push(e.id);
+            prepared.push(e);
+        }
+        let sp = self.space.clone();
+        let arr = self.space_entities_mut(&sp);
+        let idx = idx.min(arr.len());
+        let end = (idx + delete).min(arr.len());
+        arr.splice(idx..end, prepared);
+        self.touch();
+        ids
+    }
+
+    /// Append an entity to the active space with a fresh id but without filling in current-property defaults.
+    pub fn insert_raw(&mut self, e: Entity) -> u64 {
+        let n = self.entities().len();
+        self.splice(n, 0, vec![e])[0]
+    }
+
+    /// Overwrite an entity (any space) keeping its id. Returns false if it does not exist.
+    pub fn set_entity(&mut self, id: u64, mut e: Entity) -> bool {
+        self.will_change();
+        let found = match self.by_id_mut(id) {
+            Some(slot) => {
+                e.id = id;
+                *slot = e;
+                true
+            }
+            None => false,
+        };
+        self.touch();
+        found
+    }
+
     /// Run a mutation inside a change notification.
     pub fn change<R>(&mut self, f: impl FnOnce(&mut Drawing) -> R) -> R {
         self.will_change();

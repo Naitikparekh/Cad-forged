@@ -297,6 +297,20 @@ impl Ctx {
         self.ed(|e| e.prune());
     }
 
+    /// Clones of the entities with these ids (missing ids are skipped).
+    pub fn entities(&self, ids: &[u64]) -> Vec<Entity> {
+        self.doc(|d| ids.iter().filter_map(|id| d.by_id(*id).cloned()).collect())
+    }
+
+    /// Clones of the solids with these ids.
+    pub fn solids(&self, ids: &[u64]) -> Vec<cadforge_core::solid::Solid> {
+        self.doc(|d| ids.iter().filter_map(|id| d.solid_by_id(*id).cloned()).collect())
+    }
+
+    pub fn entity_by_id(&self, id: u64) -> Option<Entity> {
+        self.doc(|d| d.by_id(id).cloned())
+    }
+
     /// Add an entity to the active space; returns its id.
     pub fn add(&self, e: Entity) -> u64 {
         self.doc_mut(|d| d.add(e))

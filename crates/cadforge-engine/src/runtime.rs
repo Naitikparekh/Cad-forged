@@ -69,6 +69,7 @@ pub struct GripRef {
     pub entity: u64,
     pub id: String,
     pub pt: Pt,
+    pub kind: cadforge_core::entities::GripKind,
 }
 
 /// Optional arguments passed to a command by the UI (ribbon, menus, grips...).
@@ -960,7 +961,7 @@ impl App {
             }
             for g in grips_of(e, &ed.doc) {
                 if dist(g.pt, raw) <= tol {
-                    return Some(GripRef { entity: e.id, id: g.id, pt: g.pt });
+                    return Some(GripRef { entity: e.id, id: g.id, pt: g.pt, kind: g.kind });
                 }
             }
         }
