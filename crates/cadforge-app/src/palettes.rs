@@ -835,6 +835,7 @@ impl CadForgeApp {
                 });
             });
             ui.horizontal_top(|ui| {
+                ui.set_min_height(256.0);
                 // tree
                 ui.vertical(|ui| {
                     ui.set_width(130.0);
@@ -854,7 +855,9 @@ impl CadForgeApp {
                     }
                 });
                 // table
-                egui::ScrollArea::both().auto_shrink([false, false]).max_height(260.0).show(ui, |ui| {
+                egui::ScrollArea::both().auto_shrink([false, false]).min_scrolled_height(250.0).max_height(260.0).show(ui, |ui| {
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                     let cols: [(&str, f32); 10] = [("S", 24.0), ("Name", 150.0), ("On", 36.0), ("Freeze", 46.0), ("Lock", 40.0), ("Color", 100.0), ("Linetype", 100.0), ("Lineweight", 90.0), ("Plot", 36.0), ("Description", 120.0)];
                     let total_w: f32 = cols.iter().map(|c| c.1).sum();
                     let (hr, _) = ui.allocate_exact_size(vec2(total_w, 22.0), Sense::hover());
@@ -984,6 +987,7 @@ impl CadForgeApp {
                             }
                         }
                     }
+                    });
                 });
             });
             let (sr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::hover());

@@ -370,8 +370,8 @@ impl CadForgeApp {
                         self.icons.paint(ui.painter(), it.icon, Rect::from_center_size(Pos2::new(r.left() + 22.0, r.center().y), vec2(24.0, 24.0)), &t, Tint::Normal);
                         ui.painter().text(Pos2::new(r.left() + 46.0, r.center().y), Align2::LEFT_CENTER, it.label, FontId::proportional(13.0), t.text);
                         if !it.sub.is_empty() {
-                            crate::chrome::chevron(ui.painter(), Pos2::new(r.right() - 12.0, r.center().y), 3.5, false, t.text2);
-                            // rotate chevron: draw a right arrow instead
+                            let c = Pos2::new(r.right() - 12.0, r.center().y);
+                            ui.painter().add(egui::Shape::line(vec![c + vec2(-2.5, -4.5), c + vec2(2.0, 0.0), c + vec2(-2.5, 4.5)], Stroke::new(1.3, t.text2)));
                         }
                         if resp.clicked() {
                             if let Some(c) = it.cmd {

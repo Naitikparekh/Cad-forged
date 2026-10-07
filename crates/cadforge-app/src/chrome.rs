@@ -510,10 +510,10 @@ impl CadForgeApp {
         let prec = a.doc().map_or(4, |d| d.settings.units.precision.max(0) as usize).min(4);
         if self.ui.coord_relative {
             if let Some(b) = a.pending().and_then(|p| p.base()) {
-                return format!("{} < {}°, {}", fmt_num(cadforge_core::geom::dist(b, c), prec, true), fmt_num(cadforge_core::geom::deg(cadforge_core::geom::norm_angle(cadforge_core::geom::angle_of(b, c))), 0, true), fmt_num(0.0, prec, true));
+                return format!("{} < {}°, {}", fmt_num(cadforge_core::geom::dist(b, c), prec, false), fmt_num(cadforge_core::geom::deg(cadforge_core::geom::norm_angle(cadforge_core::geom::angle_of(b, c))), 0, false), fmt_num(0.0, prec, false));
             }
         }
-        format!("{}, {}, {}", fmt_num(c.x, prec, true), fmt_num(c.y, prec, true), fmt_num(0.0, prec, true))
+        format!("{}, {}, {}", fmt_num(c.x, prec, false), fmt_num(c.y, prec, false), fmt_num(0.0, prec, false))
     }
 }
 

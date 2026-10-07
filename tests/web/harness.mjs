@@ -34,6 +34,12 @@ export async function launch({ width = 1440, height = 900 } = {}) {
     page, logs, server, browser,
     async shot(file) { await page.screenshot({ path: file }); },
     async close() { await browser.close(); server.close(); },
+    state: () => page.evaluate(() => JSON.parse(window.cf.state_json())),
+    /** Page coordinates of a world point. */
+    async pt(x, y) { const [px, py] = await page.evaluate(([x, y]) => [...window.cf.world_to_page(x, y)], [x, y]); return { x: px, y: py }; },
+    async click(x, y, o) { const p = await t.pt(x, y); await page.mouse.move(p.x, p.y); await page.mouse.down(o); await page.mouse.up(o); await t.frame(3); },
+    async move(x, y, steps = 3) { const p = await t.pt(x, y); await page.mouse.move(p.x, p.y, { steps }); await t.frame(3); },
+    async drag(x0, y0, x1, y1) { const a = await t.pt(x0, y0), b = await t.pt(x1, y1); await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 }); await page.mouse.move(b.x, b.y, { steps: 4 }); await page.mouse.up(); await t.frame(4); },
     async frame(n = 2) { await page.waitForTimeout(n * 60); },
     async type(text) { await page.keyboard.type(text, { delay: 5 }); await t.frame(); },
     async cmd(text) { await page.keyboard.type(text, { delay: 5 }); await page.keyboard.press('Enter'); await t.frame(3); },

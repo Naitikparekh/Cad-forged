@@ -14,10 +14,11 @@
   <div id="loading">Loading CadForge…</div>
   <canvas id="cf_canvas"></canvas>
   <script type="module">
-    import init, { start } from './cadforge_app.js';
+    import init, * as cf from './cadforge_app.js';
+    window.cf = cf;
     try {
       await init();
-      await start('cf_canvas');
+      await cf.start('cf_canvas');
       document.getElementById('loading')?.remove();
     } catch (e) {
       document.getElementById('loading').textContent = 'Could not start CadForge: ' + e;

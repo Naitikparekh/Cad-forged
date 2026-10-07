@@ -147,6 +147,9 @@ impl CadForgeApp {
 
     fn viewport_input(&mut self, ctx: &egui::Context, resp: &egui::Response, rect: Rect) {
         let events = ctx.input(|i| i.events.clone());
+        if events.iter().any(|e| matches!(e, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_) | egui::Event::MouseWheel { .. })) {
+            self.input_dirty = true;
+        }
         let hover = resp.hovered();
         let blocked = self.vp.blocked.clone();
         let local = |p: Pos2| p - rect.min;

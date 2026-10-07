@@ -84,6 +84,10 @@ pub struct CadForgeApp {
     pub pal: PalState,
     pub pending_theme: Option<bool>,
     pub save_as_focused: bool,
+    /// Set when input changed state after the panels were drawn: schedules one more frame.
+    pub input_dirty: bool,
+    /// Viewport rectangle shared with the web test hook.
+    pub rect_hook: std::rc::Rc<std::cell::RefCell<Option<[f32; 4]>>>,
 }
 
 impl CadForgeApp {
@@ -154,7 +158,11 @@ impl CadForgeApp {
             pal: PalState::default(),
             pending_theme: None,
             save_as_focused: false,
+            input_dirty: false,
+            rect_hook: Default::default(),
         };
+        #[cfg(target_arch = "wasm32")]
+        crate::install_hook(app.h.clone(), app.rect_hook.clone());
         app.load_user_aliases();
         app
     }
@@ -239,10 +247,14 @@ impl eframe::App for CadForgeApp {
         self.handle_keys(&ctx);
         self.process_events(&ctx);
         self.layout(ui, &ctx);
+        if let Some(r) = self.vp.rect {
+            *self.rect_hook.borrow_mut() = Some([r.left(), r.top(), r.width(), r.height()]);
+        }
         self.show_popup(&ctx);
         self.show_toast(&ctx);
-        if self.h.borrow().busy() {
+        if self.h.borrow().busy() || self.input_dirty {
             ctx.request_repaint();
         }
+        self.input_dirty = false;
     }
 }
