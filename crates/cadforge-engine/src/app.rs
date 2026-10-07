@@ -133,6 +133,16 @@ impl App {
         self.editor().map(|e| &e.doc)
     }
 
+    pub fn getvar(&self, name: &str) -> Result<crate::sysvars::Value, String> {
+        self.sysvars.get(name, self.doc())
+    }
+
+    pub fn setvar(&mut self, name: &str, v: impl Into<crate::sysvars::Value>) -> Result<(), String> {
+        let i = self.active.unwrap_or(0);
+        let doc = self.editors.get_mut(i).map(|e| &mut e.doc);
+        self.sysvars.set(name, v, doc)
+    }
+
     pub fn emit(&mut self, e: Event) {
         if e == Event::Change {
             self.rev += 1;

@@ -43,6 +43,7 @@ pub struct Memory {
     pub insert_scale: f64,
     pub insert_rot: f64,
     pub qp_open: bool,
+    pub last_line_end: Option<cadforge_core::geom::Pt>,
 }
 
 impl Default for Memory {
@@ -64,6 +65,7 @@ impl Default for Memory {
             insert_scale: 1.0,
             insert_rot: 0.0,
             qp_open: false,
+            last_line_end: None,
         }
     }
 }

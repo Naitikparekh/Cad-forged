@@ -12,3 +12,5 @@ pub mod snap;
 pub mod solid_pick;
 pub mod sysvars;
 pub mod view;
+pub mod commands;
+pub mod sim;

@@ -33,6 +33,12 @@ pub enum PointR {
 }
 
 impl PointR {
+    pub fn kw(&self) -> Option<&str> {
+        match self {
+            PointR::Kw(k) => Some(k),
+            _ => None,
+        }
+    }
     /// The point picked, or the default when Enter was pressed.
     pub fn pt(&self) -> Option<Pt> {
         match self {
@@ -51,6 +57,12 @@ pub enum NumR {
 }
 
 impl NumR {
+    pub fn kw(&self) -> Option<&str> {
+        match self {
+            NumR::Kw(k) => Some(k),
+            _ => None,
+        }
+    }
     /// The number typed, or the default when Enter was pressed.
     pub fn value(&self) -> Option<f64> {
         match self {
@@ -70,6 +82,18 @@ pub enum MeasR {
 }
 
 impl MeasR {
+    pub fn kw(&self) -> Option<&str> {
+        match self {
+            MeasR::Kw(k) => Some(k),
+            _ => None,
+        }
+    }
+    pub fn pt(&self) -> Option<Pt> {
+        match self {
+            MeasR::Value { pt, .. } => *pt,
+            _ => None,
+        }
+    }
     pub fn value(&self) -> Option<f64> {
         match self {
             MeasR::Value { value, .. } => Some(*value),
@@ -92,11 +116,42 @@ pub enum KeyR {
     Enter(Option<String>),
 }
 
+impl KeyR {
+    /// The chosen option (or the default when Enter was pressed).
+    pub fn kw(&self) -> Option<&str> {
+        match self {
+            KeyR::Kw(k) => Some(k),
+            KeyR::Enter(k) => k.as_deref(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntR {
     Entity { id: u64, pt: Pt, shift: bool },
     Kw(String),
     Enter,
+}
+
+impl EntR {
+    pub fn kw(&self) -> Option<&str> {
+        match self {
+            EntR::Kw(k) => Some(k),
+            _ => None,
+        }
+    }
+    pub fn id(&self) -> Option<u64> {
+        match self {
+            EntR::Entity { id, .. } => Some(*id),
+            _ => None,
+        }
+    }
+    pub fn pt(&self) -> Option<Pt> {
+        match self {
+            EntR::Entity { pt, .. } => Some(*pt),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -198,19 +253,12 @@ impl Ctx {
     }
 
     pub fn var(&self, name: &str) -> Result<Value, String> {
-        self.app(|a| {
-            let doc = a.editors.get(a.active.unwrap_or(0)).map(|e| &e.doc);
-            a.sysvars.get(name, doc)
-        })
+        self.app(|a| a.getvar(name))
     }
 
     pub fn setvar(&self, name: &str, v: impl Into<Value>) -> Result<(), String> {
         let v = v.into();
-        self.app(|a| {
-            let i = a.active.unwrap_or(0);
-            let doc = a.editors.get_mut(i).map(|e| &mut e.doc);
-            a.sysvars.set(name, v, doc)
-        })
+        self.app(|a| a.setvar(name, v))
     }
 
     pub fn pref(&self, name: &str) -> f64 {
