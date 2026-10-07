@@ -185,6 +185,42 @@ impl Sim {
         a.top_task().and_then(|t| a.rt.tasks.get(&t)).map(|t| t.def.name.clone())
     }
 
+    pub fn with_view<R>(&self, f: impl FnOnce(&mut crate::view::View) -> R) -> R {
+        f(&mut self.h.borrow_mut().editor_mut().expect("editor").view)
+    }
+
+    pub fn registry(&self) -> std::rc::Rc<crate::registry::Registry> {
+        self.h.borrow().registry.clone()
+    }
+
+    pub fn pref(&self, name: &str) -> f64 {
+        self.h.borrow().sysvars.real(name)
+    }
+
+    pub fn set_visual_style(&self, name: &str) {
+        self.h.borrow_mut().editor_mut().expect("editor").visual_style = name.into();
+    }
+
+    pub fn solids(&self) -> Vec<cadforge_core::solid::Solid> {
+        self.doc(|d| d.solids.clone())
+    }
+
+    pub fn history_has(&self, needle: &str) -> bool {
+        self.h.borrow().history.iter().any(|l| l.text.contains(needle))
+    }
+
+    pub fn solid_at(&self, x: f64, y: f64) -> Option<u64> {
+        self.h.borrow().solid_at(pt(x, y), &crate::runtime::Mods::default())
+    }
+
+    pub fn set_sel(&self, ids: &[u64]) {
+        self.h.borrow_mut().editor_mut().expect("editor").sel = ids.iter().copied().collect();
+    }
+
+    pub fn selected_solid_count(&self) -> usize {
+        self.h.borrow().editor().expect("editor").selected_solids().len()
+    }
+
     pub fn view_scale(&self) -> f64 {
         self.h.borrow().editor().expect("editor").view.scale
     }
