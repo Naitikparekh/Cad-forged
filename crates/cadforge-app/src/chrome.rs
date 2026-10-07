@@ -18,26 +18,26 @@ impl CadForgeApp {
         let clean = self.ui.clean;
         let frame = |fill: Color32| egui::Frame::new().fill(fill).inner_margin(Margin::ZERO).stroke(Stroke::NONE);
         if !clean {
-            egui::Panel::top("titlebar").exact_size(TITLE_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show_inside(ui, |ui| self.titlebar(ui, ctx));
+            egui::Panel::top("titlebar").exact_size(TITLE_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show(ui, |ui| self.titlebar(ui, ctx));
             if self.ui.show_menubar {
-                egui::Panel::top("menubar").exact_size(24.0).resizable(false).show_separator_line(false).frame(frame(t.chrome2)).show_inside(ui, |ui| self.menubar(ui, ctx));
+                egui::Panel::top("menubar").exact_size(24.0).resizable(false).show_separator_line(false).frame(frame(t.chrome2)).show(ui, |ui| self.menubar(ui, ctx));
             }
             let rh = match self.ui.ribbon_mode {
                 0 => TABS_H + BODY_H + 2.0,
                 1 => TABS_H + 1.0,
                 _ => TABS_H + 22.0,
             };
-            egui::Panel::top("ribbon").exact_size(rh).resizable(false).show_separator_line(false).frame(frame(t.ribbon)).show_inside(ui, |ui| self.ribbon_ui(ui, ctx));
-            egui::Panel::top("doctabs").exact_size(DOCTABS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show_inside(ui, |ui| self.doctabs(ui, ctx));
-            egui::Panel::bottom("statusbar").exact_size(STATUS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show_inside(ui, |ui| self.statusbar(ui, ctx));
+            egui::Panel::top("ribbon").exact_size(rh).resizable(false).show_separator_line(false).frame(frame(t.ribbon)).show(ui, |ui| self.ribbon_ui(ui, ctx));
+            egui::Panel::top("doctabs").exact_size(DOCTABS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show(ui, |ui| self.doctabs(ui, ctx));
+            egui::Panel::bottom("statusbar").exact_size(STATUS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show(ui, |ui| self.statusbar(ui, ctx));
             if self.ui.show_cmd {
                 let lines = self.ui.cmd.lines as f32;
                 let h = lines * 17.0 + 36.0;
-                egui::Panel::bottom("cmdline").exact_size(h).resizable(false).show_separator_line(false).frame(frame(t.chrome2)).show_inside(ui, |ui| self.cmdline_ui(ui, ctx));
+                egui::Panel::bottom("cmdline").exact_size(h).resizable(false).show_separator_line(false).frame(frame(t.chrome2)).show(ui, |ui| self.cmdline_ui(ui, ctx));
             }
             self.palettes_ui(ui, ctx);
         }
-        egui::CentralPanel::no_frame().show_inside(ui, |ui| {
+        egui::CentralPanel::no_frame().show(ui, |ui| {
             if self.ui.showing_start || self.h.borrow().editors.is_empty() {
                 self.start_page(ui, ctx);
             } else {
@@ -772,7 +772,7 @@ impl CadForgeApp {
                 if !options.is_empty() && close > open {
                     let pre = &prompt[..open + 1];
                     let post = &prompt[close..];
-                    let mut put = |s: &str, color: Color32, x: &mut f32| {
+                    let put = |s: &str, color: Color32, x: &mut f32| {
                         let g = p.layout_no_wrap(s.to_string(), mono.clone(), color);
                         let w = g.size().x;
                         p.galley(Pos2::new(*x, row.center().y - g.size().y / 2.0), g, color);

@@ -85,10 +85,6 @@ pub fn render_theme(dark: bool) -> Theme {
     }
 }
 
-fn p2(p: Pt) -> [f64; 2] {
-    [p.x, p.y]
-}
-
 impl CadForgeApp {
     pub fn end_realtime(&mut self) {
         if self.vp.realtime.take().is_some() {

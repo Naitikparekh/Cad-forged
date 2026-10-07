@@ -1,8 +1,14 @@
 # CadForge 2.0
 
-A browser CAD application with an AutoCAD-style interface and command set: 2D drafting, annotation, hatching,
-blocks, layers, 3D solid modelling, DXF import/export and plotting to PDF/SVG/PNG. It builds into **one
-self-contained file, `CadForge.html`** (no server, no network, no install) — open it in a browser.
+A CAD application with an AutoCAD-style interface and command set: 2D drafting, annotation, hatching,
+blocks, layers, 3D solid modelling, DXF import/export and plotting to PDF/SVG/PNG.
+
+It exists in two forms that share one design:
+
+* **Rust** (`crates/`): a Cargo workspace whose UI is built with [egui](https://github.com/emilk/egui). It runs as a
+  **native desktop app** and compiles to **WebAssembly** for the browser (`dist-web/`).
+* **JavaScript** (`src/`): the original browser version, built into **one self-contained file,
+  `CadForge.html`**. Its modules and unit tests are the specification the Rust code was ported from.
 
 ![CadForge drafting](docs/screenshot.png)
 ![CadForge 3D](docs/screenshot-3d.png)
@@ -28,7 +34,24 @@ self-contained file, `CadForge.html`** (no server, no network, no install) — o
 * **Files**: CadForge JSON, **DXF R2000 export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by
   other tools), **plot to PDF / SVG / PNG** with paper size, scale, lineweights and monochrome options and a live preview.
 
-## Build, run, test
+## Rust app: build, run, test
+
+```sh
+cargo run -p cadforge-app --release --bin cadforge   # native desktop app
+cargo test --workspace                               # core / ops / engine / render / io tests (no GUI needed)
+tools/build-web.sh                                   # WebAssembly build -> dist-web/ (serve it over http)
+tools/build-web.sh dev                               # faster, less optimised wasm build
+node tests/web/run.mjs                               # drive the wasm build in headless Chromium (Playwright)
+node tests/web/tour3.mjs out/                        # screenshot tours (tour, tour2, tour3, tour4)
+node tools/gen-app-data.mjs                          # regenerate crates/cadforge-app/assets/{icons,ribbon}.json (ribbon model)
+```
+
+The wasm build needs the `wasm32-unknown-unknown` target and `wasm-bindgen-cli`
+(`rustup target add wasm32-unknown-unknown && cargo install wasm-bindgen-cli`). Files are opened and saved through the
+browser in the wasm build (hidden file input / download) and through an in-app file browser natively. Settings and
+recent files persist in `localStorage` (web) or a JSON file in the user's config directory (native).
+
+## JavaScript app: build, run, test
 
 ```sh
 npm install          # esbuild only
@@ -40,6 +63,19 @@ npm run test:browser # drives the real UI in headless Chromium (needs Playwright
 `node tools/gen-commands.mjs` regenerates the command reference. A lint configuration is in `eslint.config.mjs`.
 
 ## Layout
+
+Rust workspace:
+
+```
+crates/cadforge-core     geometry, entities, drawing database + undo, dimensions, hatch, text, solids (mesh/CSG/earcut), DXF & project io
+crates/cadforge-render   scene -> backend-independent draw ops; plot layout; PDF / SVG writers; PNG rasteriser (tiny-skia)
+crates/cadforge-engine   async command runtime (no executor crate), snapping, selection, system variables, command registry, ~160 commands, test `Sim`
+crates/cadforge-app      egui front end: ribbon, viewport + ViewCube, command line, palettes, dialogs, file/platform glue (native + wasm)
+tools/build-web.sh       wasm32 build + wasm-bindgen into dist-web/
+tests/web                headless-Chromium tests and screenshot tours for the wasm build
+```
+
+JavaScript version:
 
 ```
 src/core      DOM-free model: geometry, entities, drawing database, styles, dimensions, hatch patterns
@@ -55,7 +91,7 @@ legacy        the previous single-file version, kept for reference
 ```
 
 The core, ops, engine, commands, solid and io layers have no DOM dependency; the unit tests drive them headlessly
-with a scripted "user" (`tests/unit/sim.js`).
+with a scripted "user" (`tests/unit/sim.js` in JS, `cadforge_engine::sim::Sim` in Rust).
 
 ## Limitations
 
@@ -63,5 +99,7 @@ No DWG, no paper-space layouts/viewports (plotting is of model space), no B-rep 
 face editing of solids), no image/OLE/xref entities, limited DXF dimension-style import (dimensions are imported as
 their drawn geometry), and a single text font. See `HANDOFF.md`.
 
-Third-party: `csg.js` by Evan Wallace (MIT, `CSG-LICENSE.txt`), vendored in `src/solid/vendor`. Ear-clipping
-triangulation follows Mapbox's earcut (ISC).
+The egui build draws text with Liberation Sans (SIL OFL) and Inter, shipped in `crates/cadforge-app/assets/fonts`.
+
+Third-party: `csg.js` by Evan Wallace (MIT, `CSG-LICENSE.txt`), vendored in `src/solid/vendor` and ported to Rust in
+`cadforge-core`. Ear-clipping triangulation follows Mapbox's earcut (ISC); the Rust UI uses the `earcutr` crate.

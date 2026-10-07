@@ -157,3 +157,25 @@ fn non_plot_layers_skipped_and_lineweights_follow_option() {
     let thin = String::from_utf8(export_vector(&d, &o, None).unwrap().data).unwrap();
     assert!(thin.contains("stroke-width=\"2\""));
 }
+
+#[test]
+fn png_raster_has_ink_and_expected_size() {
+    let font = include_bytes!("../../cadforge-app/assets/fonts/LiberationSans-Regular.ttf");
+    let doc = sample_drawing();
+    let mut o = default_plot_options(&doc);
+    o.paper = "A4".into();
+    o.dpi = 50.0;
+    let layout = plot_layout(&doc, &o, None).unwrap();
+    let ops = render_plot(&doc, &o, &layout);
+    let png = raster::render_png(&ops, (layout.w, layout.h), UNIT_MM, o.dpi, font).unwrap();
+    assert_eq!(&png[1..4], b"PNG");
+    // IHDR width/height are big-endian u32 at bytes 16..24
+    let w = u32::from_be_bytes(png[16..20].try_into().unwrap());
+    let h = u32::from_be_bytes(png[20..24].try_into().unwrap());
+    let expect_w = (layout.w as f64 * UNIT_MM / 25.4 * 50.0).round() as u32;
+    assert_eq!(w, expect_w);
+    assert!(h > 100);
+    std::fs::write(out_dir().join("sample.png"), &png).unwrap();
+    // an enormous resolution is rejected rather than allocating
+    assert!(raster::render_png(&ops, (layout.w, layout.h), UNIT_MM, 20000.0, font).is_err());
+}

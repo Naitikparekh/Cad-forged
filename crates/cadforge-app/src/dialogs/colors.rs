@@ -36,7 +36,7 @@ impl CadForgeApp {
         let t = self.t;
         self.tab_strip(ui, &["Index Color", "True Color"], &mut s.tab);
         let mut dbl = false;
-        let mut cell = |ui: &mut egui::Ui, value: &mut Option<Color>, i: u8, size: f32, dbl: &mut bool| {
+        let cell = |ui: &mut egui::Ui, value: &mut Option<Color>, i: u8, size: f32, dbl: &mut bool| {
             let (r, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click());
             ui.painter().rect_filled(r, 0.0, aci_color(i));
             let sel = *value == Some(Color::Aci(i));

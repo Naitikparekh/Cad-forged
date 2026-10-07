@@ -22,7 +22,6 @@ enum Cls {
 struct Prim {
     cls: Cls,
     subs: Vec<(Vec<[f64; 2]>, bool)>,
-    evenodd: bool,
     opacity: f32,
 }
 
@@ -280,7 +279,6 @@ fn parse(svg: &str) -> Vec<Prim> {
         rest = &rest[i + j + 2..];
         let cls = cls_of(attr(tag, "class").unwrap_or("l"));
         let opacity = attr(tag, "opacity").and_then(|v| v.parse().ok()).unwrap_or(1.0);
-        let evenodd = attr(tag, "fill-rule") == Some("evenodd");
         let subs = if tag.starts_with("<path") {
             parse_path(attr(tag, "d").unwrap_or(""))
         } else if tag.starts_with("<circle") {
@@ -307,7 +305,7 @@ fn parse(svg: &str) -> Vec<Prim> {
         } else {
             continue;
         };
-        out.push(Prim { cls, subs, evenodd, opacity });
+        out.push(Prim { cls, subs, opacity });
     }
     out
 }

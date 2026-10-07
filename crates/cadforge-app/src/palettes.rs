@@ -1,7 +1,7 @@
 //! Palettes: Properties (docked), Tool Palettes (docked), Layer Properties Manager (floating) and Quick Properties.
 use crate::app::CadForgeApp;
 use crate::icons::Tint;
-use crate::ribbon::{color_rgb_of, lt_sample, swatch};
+use crate::ribbon::{color_rgb_of, swatch};
 use cadforge_core::drawing::Drawing;
 use cadforge_core::entities::{Entity, Kind};
 use cadforge_core::geom::*;
@@ -197,7 +197,7 @@ impl CadForgeApp {
         let t = self.t;
         if self.ui.show_props || self.ui.show_tools {
             let w = if self.pal.width > 0.0 { self.pal.width } else { 300.0 };
-            let resp = egui::Panel::left("palette").resizable(true).default_size(w).size_range(220.0..=560.0).show_separator_line(true).frame(egui::Frame::new().fill(t.chrome2).inner_margin(Margin::ZERO)).show_inside(ui, |ui| {
+            let resp = egui::Panel::left("palette").resizable(true).default_size(w).size_range(220.0..=560.0).show_separator_line(true).frame(egui::Frame::new().fill(t.chrome2).inner_margin(Margin::ZERO)).show(ui, |ui| {
                 if self.ui.show_props && !self.ui.show_tools {
                     self.properties_palette(ui, ctx);
                 } else {

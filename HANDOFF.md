@@ -27,5 +27,28 @@
 Layouts and paper-space viewports; DIMSTYLE import from DXF; MLEADER import; attributes; 3D snapping (osnap works on
 the z=0 plane only); face-level solid editing; DXF in AC1021+ (UTF-8) form; undo granularity inside long commands.
 
-## Rust port
-The DOM-free layers (`core`, `ops`, `engine`, `solid`, `io`) and their tests are the specification for a Rust port.
+## Rust port (done)
+The DOM-free layers were ported crate by crate and keep the same names and behaviour:
+
+| JS | Rust |
+| --- | --- |
+| `src/core`, `src/ops`, `src/solid`, `src/io` (DXF/project) | `cadforge-core` (`geom`, `entities`, `drawing`, `ops`, `solid`, `io`) |
+| `src/io` (plot, PDF/SVG), `src/render` | `cadforge-render` (`Op` list in device space -> egui shapes / PDF / SVG / tiny-skia PNG) |
+| `src/engine`, `src/commands` | `cadforge-engine` (`runtime.rs` async prompts via `Waker::noop` pump, `commands/*`, `Sim` test harness) |
+| `src/ui` | `cadforge-app` (egui; custom ribbon, command line, menus, dialogs are hand-drawn with painters) |
+
+Things worth knowing:
+* The command runtime has no async executor dependency: each command is a future polled by a tiny pump; prompts park
+  the future until input arrives. Dialog-style commands expose `pending_dialog()` and are answered with
+  `Handle::answer_dialog(DialogReply)` (the egui app mirrors those into `Dialog` modals).
+* Rendering produces `Op::{Stroke,Fill,Text}` lists; the egui painter, PDF/SVG writers and PNG rasteriser all consume
+  the same list, so screen and paper agree. The app caches ops keyed by (editor id, revision, view, selection, prefs).
+* egui 0.36 specifics: `eframe::App::ui` (not `update`), `Panel::show`, `Modal` for dialogs; a `ScrollArea` inherits the
+  parent layout direction, so wrap table bodies in `with_layout(top_down)`.
+* The ribbon model is generated: `node tools/gen-app-data.mjs` reads `src/ui/ribbon-data.js` and the command registry
+  into `crates/cadforge-app/assets/{icons,ribbon}.json`; rerun it after changing ribbon contents.
+* wasm test hook: `window.cf.state_json()` and `window.cf.world_to_page(x, y)` (see `crates/cadforge-app/src/lib.rs`)
+  are what `tests/web/harness.mjs` uses to assert on state and aim clicks. Headless Chromium needs
+  `--use-angle=swiftshader --enable-unsafe-swiftshader` for WebGL.
+
+Rust gaps relative to the JS app: none known in commands; solids' booleans run synchronously (no worker thread).
