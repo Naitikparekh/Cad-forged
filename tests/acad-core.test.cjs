@@ -20,6 +20,9 @@ module.exports=async({run,assert})=>{
  const b=g.bbox({type:'circle',center:{x:1,y:2},radius:3});assert.equal(b.minX,-2);assert.equal(b.maxY,5);
  CF.setSpace('layout');assert.equal(CF.space,'layout');setTool('line');assert.equal(CF.space,'model');setTool('select');
  doc.entities=[];mutate(()=>doc.entities.push({type:'line',layer:'0',points:[{x:0,y:0},{x:1,y:1}]}));assert.ok(CF.modified);CF.markSaved();assert.ok(!CF.modified);
+ const css=cfStyle.textContent,root=css.match(/:root\\{[^}]*\\}/)[0];
+ assert.ok(/color-scheme:dark/.test(root),'root declares color-scheme:dark');assert.ok(/scrollbar-color:var\\(--cf-scroll-thumb\\)/.test(root),'root themes scrollbars');
+ assert.ok(/--cf-scroll-thumb:#/.test(root)&&/--cf-scroll-track:#/.test(root),'scrollbar tokens defined');assert.ok(/::-webkit-scrollbar-thumb/.test(css),'webkit scrollbar fallback present');
  `);
  console.log('PASS: workspace contract registry, aliases, toggles, exclusive ortho/polar, selection helpers, geometry helpers, spaces and modified state');
 };

@@ -76,6 +76,37 @@ module.exports=async({run,assert})=>{
  render();assert.deepEqual(V.label(),['[\\u2013]','[Top]','[2D Wireframe]']);
  doc.entities=[{type:'line',layer:'0',points:[{x:1.25,y:1.75},{x:3.25,y:1.75}]}];view={x:0,y:0,scale:100};clearSelection();canvas.onpointerdown({button:0,offsetX:700,offsetY:175,clientX:700,clientY:175,pointerId:1,shiftKey:false});assert.equal(selected,0);clearSelection();
  doc.solids=[];
+ // ---- Regression: solids in the Top / plan view, stale camera on style change, UCS icon in every view, wireframe styles ----
+ {const sq2=(x,y,w,d)=>[{x,y},{x:x+w,y},{x:x+w,y:y+d},{x,y:y+d}],sol=(x,y,w,d,h,z=0,n='S')=>{const m=makeExtrusion(sq2(x,y,w,d),h,n);m.vertices.forEach(v=>v.z+=z);return m};
+  // A bare solid (no source sketch) is visible when looking straight down, and zoom extents frames it.
+  doc.solids=[sol(100,200,50,40,30,0,'Box')];doc.entities=[];CF.setViewPreset('se');CF.setViewPreset('top');assert.ok(!mode3D);render();
+  let P=V.planInfo();assert.equal(P.faces.length,2,'top face = 2 triangles');assert.equal(P.edges.length,1);assert.equal(P.edges[0].segs.length/4,4,'top rim = 4 visible edges');
+  assert.ok(near(view.x,125,1e-6)&&near(view.y,220,1e-6),'extents frame the solid: '+JSON.stringify(view));
+  for(const F of P.faces)for(let i=0;i<3;i++)assert.ok(F.x[i]>=0&&F.x[i]<=W&&F.y[i]>=0&&F.y[i]<=H,'plan faces land on the canvas');
+  // The plan geometry is drawn before (beneath) the 2D entities.
+  doc.entities=[{type:'line',layer:'0',points:[{x:100,y:200},{x:150,y:240}]}];let under=null;{const d0=drawEntity;drawEntity=function(...a){if(under===null)under=V.planInfo().sig!=='stale';return d0.apply(this,a)};V.planInfo().sig='stale';render();drawEntity=d0}assert.equal(under,true,'solids are painted under the entities');
+  // Zoom Extents (fit) in 2D covers entities and solids together.
+  doc.entities=[{type:'line',layer:'0',points:[{x:0,y:0},{x:10,y:0}]}];fit();assert.ok(near(view.x,75,1e-6)&&near(view.y,120,1e-6),'fit covers drawing + solid: '+JSON.stringify(view));
+  // Hidden-surface: a small solid completely under a bigger one contributes no edges and its top face is painted first.
+  doc.entities=[];doc.solids=[sol(0,0,40,40,10,0,'Big'),sol(10,10,10,10,5,0,'Under')];fit();render();P=V.planInfo();assert.equal(P.faces.length,4);assert.equal(P.edges.length,1,'hidden solid has no visible edges');
+  doc.solids=[sol(0,0,40,40,10,0,'Low'),sol(10,10,10,10,5,10,'Up')];render();P=V.planInfo();assert.equal(P.edges.length,2,'a solid standing on another shows its own rim');
+  doc.solids=[];render();
+  // Choosing a 3D visual style from the plan view goes to a predictable SE Isometric, never the last orbit camera.
+  doc.solids=[sol(0,0,10,10,10)];camera3.yaw=1.1;camera3.pitch=.3;CF.setViewPreset('top');assert.ok(!mode3D);
+  assert.equal(CF.setVisualStyle('Shaded'),true);assert.ok(mode3D);assert.equal(V.viewName(),'SE Isometric');assert.ok(near(camera3.yaw,-Math.PI/4,1e-9)&&near(camera3.pitch,.6155,1e-3));
+  camera3.yaw=-.4;camera3.pitch=.2;CF.setViewPreset('top');assert.equal(CF.setVisualStyle('2D Wireframe'),true);assert.ok(!mode3D,'2D Wireframe keeps the plan view');assert.ok(near(camera3.yaw,-.4,1e-9));
+  CF.setVisualStyle('shadededges');
+  // UCS icon: every axis tip and its label stays on the canvas in all ten preset views (Bottom pointed Y off the canvas).
+  for(const k of Object.keys(V.presets)){if(k==='top')continue;CF.setViewPreset(k);const u=V.ucs3D(),b=u.box;assert.ok(u.gx+b.x0>=8-1e-6&&u.gx+b.x1<=W-8+1e-6&&u.gy+b.y0>=8-1e-6&&u.gy+b.y1<=H-8+1e-6,'UCS icon inside canvas in '+k+' '+JSON.stringify(u.box));for(const a of u.axes){assert.ok(u.gx+a.dx>=0&&u.gx+a.dx<=W&&u.gy+a.dy>=0&&u.gy+a.dy<=H,k+' '+a.n)}}
+  CF.setViewPreset('bottom');{const u=V.ucs3D(),y=u.axes.find(a=>a.n==='Y');assert.ok(y.dy>30,'Bottom: Y points down');assert.ok(u.gy+y.dy+16<=H-8+1e-6,'Bottom: Y arrow and label inside');assert.ok(u.gy<H-30,'origin moved up')}
+  CF.setViewPreset('front');{const u=V.ucs3D();assert.equal(u.gx,30);assert.equal(u.gy,H-30,'normal views keep the corner placement')}
+  // 2D Wireframe is flat; Wireframe is depth-cued (several opacities, hidden edges fainter) over the same edges.
+  CF.setViewPreset('se');{const mm=makeExtrusion(sq2(0,0,10,10),10,'W'),P3=mm.vertices.map(project3),front=new Uint8Array(mm.faces.length);mm.faces.forEach((t,i)=>{const [a,b,c]=t.map(k=>P3[k]);if((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x)<0)front[i]=1});
+   const per=[{s:mm,info:V.meshEdges(mm),P:P3,front,rgb:[1,1,1],hl:0}],flat=V.wireGroups(per,'2dwireframe')[0],cued=V.wireGroups(per,'wireframe')[0];
+   assert.equal(new Set(flat.map(g=>g.alpha)).size,1);assert.equal(flat[0].alpha,1);assert.ok(new Set(cued.map(g=>g.alpha)).size>=3,'depth cue: several opacities');assert.ok(Math.min(...cued.map(g=>g.alpha))<.5&&Math.max(...cued.map(g=>g.alpha))===1);
+   assert.equal(flat.reduce((n,g)=>n+g.list.length/2,0),cued.reduce((n,g)=>n+g.list.length/2,0),'same edge set');}
+  for(const s of ['2dwireframe','wireframe'])CF.setVisualStyle(s),render();
+  doc.solids=[];doc.entities=[];}
  `);
- console.log('PASS: acad-views presets/orientation, Select keeps 3D, ViewCube zones, visual styles, feature edges (box/cylinder/T-junction), Mesh A/B picking, 3D pan/zoom/orbit, layout sheet transform, paper pan/zoom, chrome toggles, 2D delegation');
+ console.log('PASS: acad-views presets/orientation, Select keeps 3D, ViewCube zones, visual styles, feature edges (box/cylinder/T-junction), Mesh A/B picking, 3D pan/zoom/orbit, layout sheet transform, paper pan/zoom, chrome toggles, 2D delegation, plan-view solids (visible/hidden-surface/extents), style-from-Top camera, UCS icon on canvas, wireframe vs 2D wireframe');
 };

@@ -69,6 +69,29 @@ module.exports=async({run,assert})=>{
  CF.input={message:'LINE Specify next point or [Close/Undo]:',kind:'point',resolve(){}};labels=I.menuModel().map(i=>i.label);assert.ok(labels.includes('Enter')&&labels.includes('Close')&&labels.includes('Snap Overrides'));CF.input=null;
  assert.deepEqual(I.promptOptions('Specify rotation angle or [Copy/Reference] <0>:').map(o=>o.key),['C','R']);assert.equal(I.shortPrompt('LINE Specify next point or [Close/Undo]:').text,'Specify next point or');
  assert.ok(CF.openContextMenu(10,10));
+ // Typed one-shot osnap overrides (Osnap off): END/MID/CEN/QUA/INT/PER/TAN/NEA/INS/NON at any point prompt, applied to the next pick only.
+ doc.entities=[{type:'circle',layer:'0',center:{x:0,y:0},radius:10},{type:'line',layer:'0',points:[{x:30,y:-20},{x:30,y:20}]}];view={x:0,y:0,scale:4};W=1000;H=700;CF.deselect();CF.set('osnap',false,{quiet:true});CF.osnapOverride=null;setTool('select');points=[];
+ for(const [t,m] of [['cen','center'],['ENDP','endpoint'],['_int','intersection'],['nea','nearest'],['tan','tangent'],['per','perpendicular'],['mid','midpoint'],['qua','quadrant'],['ins','insertion'],['non','none'],['endpoint','endpoint']])assert.equal(I.snapKeyword(t),m,t);
+ for(const t of ['en','xyz','','l','10,20'])assert.equal(I.snapKeyword(t),null,'not a keyword: '+t);
+ assert.equal(I.typedSnap('cen'),false,'no point prompt at Command:');assert.equal(CF.osnapOverride,null);
+ setTool('line');points=[];assert.ok(I.pointPrompt());assert.equal(I.typedSnap('cen'),true);assert.equal(CF.osnapOverride,'center');
+ q=snap({x:7.5,y:-.5});assert.ok(near(q.x,0)&&near(q.y,0),'center override snaps although Osnap is off');assert.equal(I.state().mark.type,'center');
+ canvas.onpointerdown(px({x:7.5,y:-.5}));assert.ok(near(points[0].x,0)&&near(points[0].y,0),'the next click snaps to the typed point type');assert.equal(CF.osnapOverride,null,'override is one-shot');
+ q=snap({x:7.5,y:-.5});assert.ok(near(q.x,7.5),'later clicks are unsnapped again');points=[];
+ if(CF.commandLine?.submit){setTool('line');points=[];const n=CF.history.length;CF.commandLine.submit('end');assert.equal(CF.osnapOverride,'endpoint','command-line submit routes the keyword');assert.ok(!CF.history.slice(n).some(l=>/Point or option keyword required/.test(l)));CF.osnapOverride=null}
+ for(const k of['perpendicular','tangent'])assert.ok(I.menuModel('snap').some(i=>i.label===k[0].toUpperCase()+k.slice(1)),'snap override menu lists '+k);
+ // Tangent snap: tangent points of the circle seen from the base point (nearer one wins); none from inside the circle.
+ c=I.osnapCandidates({x:3,y:9.5},{modes:new Set(['tangent']),base:{x:30,y:0}});assert.equal(c[0].type,'tangent');assert.ok(near(c[0].x,10/3,1e-9)&&near(c[0].y,Math.sqrt(100-100/9),1e-9));
+ c=I.osnapCandidates({x:3,y:-9.5},{modes:new Set(['tangent']),base:{x:30,y:0}});assert.ok(near(c[0].y,-Math.sqrt(100-100/9),1e-9));
+ assert.equal(I.osnapCandidates({x:3,y:9.5},{modes:new Set(['tangent']),base:{x:1,y:0}}).length,0);assert.equal(I.osnapCandidates({x:3,y:9.5},{modes:new Set(['tangent']),base:null}).length,0);
+ // Keywords stay text/options/picks where they are not osnaps: text input, object selection and prompt options (ELLIPSE [Center]) unless written _cen.
+ CF.input={message:'Enter text:',kind:'text',resolve(){}};assert.equal(I.typedSnap('end'),false,'text prompts take the text');
+ CF.input={message:'ELLIPSE Specify axis endpoint of ellipse or [Center]:',kind:'point',resolve(){}};assert.equal(I.typedSnap('cen'),false,'prompt option wins');assert.equal(CF.osnapOverride,null);assert.equal(I.typedSnap('_cen'),true);assert.equal(CF.osnapOverride,'center');CF.osnapOverride=null;CF.input=null;
+ CF.picking={command:'move',message:'Select objects:',done(){},cancel(){}};assert.equal(I.typedSnap('end'),false,'object selection is not a point prompt');CF.picking=null;
+ setTool('select');CF.osnapOverride=null;
+ // Pointer enter only counts once a position is known (no stray crosshair parked at 0,0 when the Start page closes under the pointer).
+ I.state().over=false;canvas.onpointerenter({});assert.equal(I.state().over,false,'enter without coordinates does not show the crosshair');
+ canvas.onpointerenter({offsetX:120,offsetY:80,pointerId:1});assert.ok(I.state().over&&I.state().sx===120&&I.state().sy===80,'enter positions the crosshair at the pointer');I.state().over=false;
  // PAN mode, middle-drag pan and double-middle-click extents.
  CF.startPan();assert.ok(I.state().panMode);assert.match(CF.prompt(),/Press ESC or ENTER/);const vx=view.x;canvas.onpointerdown({...px({x:0,y:0}),clientX:100,clientY:100});canvas.onpointermove({offsetX:140,offsetY:100,clientX:140,clientY:100});canvas.onpointerup({offsetX:140,offsetY:100,clientX:140,clientY:100});assert.ok(near(view.x,vx-10));I.exitPan();assert.ok(!I.state().panMode);
  canvas.onpointerdown({offsetX:0,offsetY:0,clientX:0,clientY:0,button:1,pointerId:2});canvas.onpointermove({offsetX:-40,offsetY:0,clientX:-40,clientY:0});canvas.onpointerup({offsetX:-40,offsetY:0,clientX:-40,clientY:0,button:1});assert.ok(near(view.x,vx));
@@ -80,5 +103,5 @@ module.exports=async({run,assert})=>{
  mode3D=false;clearSelection();doc.entities=[{type:'line',layer:'0',points:[{x:1.25,y:1.75},{x:3.25,y:1.75}]}];view={x:0,y:0,scale:100};W=1000;H=700;setTool('select');
  canvas.onpointerdown({button:0,offsetX:700,offsetY:175,pointerId:1,shiftKey:false});assert.equal(selected,0);I.resetTransient();CF.deselect();
  `);
- console.log('PASS: acad-interact osnap endpoint/midpoint/intersection/center/quadrant/perpendicular/nearest, grid snap, ortho, polar, window/crossing/group rules, implicit windows, PICKADD/shift-remove, grip stretch/move/radius and hot-grip input, click-resolved inputs, shortcut menu, PAN, middle-button pan/extents, raw select');
+ console.log('PASS: acad-interact osnap endpoint/midpoint/intersection/center/quadrant/perpendicular/nearest, grid snap, ortho, polar, window/crossing/group rules, implicit windows, PICKADD/shift-remove, grip stretch/move/radius and hot-grip input, click-resolved inputs, typed one-shot osnap overrides and tangent snap, pointer-enter position, shortcut menu, PAN, middle-button pan/extents, raw select');
 };

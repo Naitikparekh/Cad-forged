@@ -39,11 +39,11 @@ module.exports=async({run,assert})=>{
  // ---- PLINE: absolute, polar, relative, close ----------------------------------------------------------------
  await run(`
  T.reset();await T.sub('PLINE');assert.equal(tool,'polyline');assert.equal(CF.prompt(),'PLINE Specify start point:');
- await T.sub('0,0');assert.equal(CF.prompt(),'PLINE Specify next point or [Close/Undo]:');
+ await T.sub('0,0');assert.equal(CF.prompt(),'PLINE Specify next point or [Arc/Length/Undo]:');
  await T.sub('@10<0');await T.sub('@0,10');await T.sub('@-10,0');assert.equal(points.length,4);
  await T.sub('C');assert.equal(doc.entities.length,1);const pl=doc.entities[0];assert.equal(pl.type,'polyline');assert.ok(pl.closed);
  T.eq(pl.points.map(p=>[p.x,p.y]),[[0,0],[10,0],[10,10],[0,10]]);assert.equal(tool,'select');assert.equal(CF.prompt(),'Command:');
- assert.ok(T.has('Command: PLINE'));assert.ok(T.has('PLINE Specify start point: 0,0'));assert.ok(T.has('PLINE Specify next point or [Close/Undo]: @10<0'));
+ assert.ok(T.has('Command: PLINE'));assert.ok(T.has('PLINE Specify start point: 0,0'));assert.ok(T.has('PLINE Specify next point or [Arc/Length/Undo]: @10<0'));
  // Enter finishes an open polyline; U removes the last vertex.
  T.reset();await T.sub('pl');await T.sub('0,0');await T.sub('5,0');await T.sub('5,5');await T.sub('U');assert.equal(points.length,2);await T.sub('9,9');await T.sub('');
  assert.equal(doc.entities.length,1);assert.ok(!doc.entities[0].closed);assert.equal(doc.entities[0].points.length,3);assert.equal(tool,'select');
@@ -108,7 +108,7 @@ module.exports=async({run,assert})=>{
 
  // ---- ARC and DIMALIGNED / DIMLINEAR -------------------------------------------------------------------------------
  await run(`
- T.reset();await T.sub('ARC');assert.equal(CF.prompt(),'ARC Specify center point of arc:');await T.sub('0,0');assert.equal(CF.prompt(),'ARC Specify start point of arc:');await T.sub('10,0');assert.equal(CF.prompt(),'ARC Specify end point of arc:');await T.sub('0,10');
+ T.reset();await T.sub('ARC');assert.equal(CF.prompt(),'ARC Specify start point of arc or [Center]:');await T.sub('C');assert.equal(CF.prompt(),'ARC Specify center point of arc:');await T.sub('0,0');assert.equal(CF.prompt(),'ARC Specify start point of arc:');await T.sub('10,0');assert.equal(CF.prompt(),'ARC Specify end point of arc or [Angle]:');await T.sub('0,10');
  assert.equal(doc.entities.length,1);assert.equal(doc.entities[0].type,'polyline');assert.ok(Math.abs(doc.entities[0].points.at(-1).y-10)<1e-6);assert.equal(tool,'select');
  T.reset();await T.sub('DAL');assert.equal(tool,'dimension');assert.equal(CF.prompt(),'DIMALIGNED Specify first extension line origin:');await T.sub('0,0');assert.equal(CF.prompt(),'DIMALIGNED Specify second extension line origin:');await T.sub('30,40');assert.equal(CF.prompt(),'DIMALIGNED Specify dimension line location:');await T.sub('10,10');
  assert.ok(doc.entities.some(e=>e.type==='text'&&e.text==='50.00'));assert.equal(tool,'select');
@@ -163,12 +163,12 @@ module.exports=async({run,assert})=>{
  await run(`
  T.reset();doc.entities=[T.line(0,0,10,0),T.line(0,5,10,5),T.line(50,50,60,60)];
  await T.sub('M');assert.ok(CF.picking,'selection phase starts');assert.equal(CF.picking.command,'MOVE');assert.equal(CF.prompt(),'MOVE Select objects:');assert.equal(tool,'select');
- CF.select([0,1],'add');await T.sub('');assert.equal(CF.picking,null);assert.equal(tool,'move');assert.equal(CF.prompt(),'MOVE Specify base point:');
- await T.sub('0,0');assert.equal(CF.prompt(),'MOVE Specify second point:');await T.sub('@5,10');
+ CF.select([0,1],'add');await T.sub('');assert.equal(CF.picking,null);assert.equal(tool,'move');assert.equal(CF.prompt(),'MOVE Specify base point or [Displacement] <Displacement>:');
+ await T.sub('0,0');assert.equal(CF.prompt(),'MOVE Specify second point or <use first point as displacement>:');await T.sub('@5,10');
  T.eq(doc.entities[0].points.map(p=>[p.x,p.y]),[[5,10],[15,10]]);T.eq(doc.entities[1].points.map(p=>[p.x,p.y]),[[5,15],[15,15]]);T.eq(doc.entities[2].points[0],{x:50,y:50});
  assert.equal(tool,'select');assert.equal(selected,-1,'selection clears after a modify command');
  // Noun-verb: with a selection the object phase is skipped.
- CF.select([2]);await T.sub('M');assert.equal(CF.picking,null);assert.equal(CF.prompt(),'MOVE Specify base point:');await T.sub('50,50');await T.sub('0,0');T.eq(doc.entities[2].points[0],{x:0,y:0});
+ CF.select([2]);await T.sub('M');assert.equal(CF.picking,null);assert.equal(CF.prompt(),'MOVE Specify base point or [Displacement] <Displacement>:');await T.sub('50,50');await T.sub('0,0');T.eq(doc.entities[2].points[0],{x:0,y:0});
  // Enter with nothing selected cancels the command.
  T.reset();await T.sub('M');await T.sub('');assert.equal(CF.picking,null);assert.equal(tool,'select');assert.equal(CF.prompt(),'Command:');
  // Esc in the selection phase cancels and clears.
@@ -185,8 +185,8 @@ module.exports=async({run,assert})=>{
 
  await run(`
  T.reset();doc.entities=[T.line(0,0,10,0),T.line(0,0,0,10)];CF.select([0,1],'add');
- await T.sub('CO');assert.equal(tool,'copy');assert.equal(CF.prompt(),'COPY Specify base point:');await T.sub('0,0');assert.equal(CF.prompt(),'COPY Specify second point or [Exit/Undo] <Exit>:');
- await T.sub('@20,0');assert.equal(doc.entities.length,4);assert.equal(points.length,1,'base point is kept for the next copy');await T.sub('@40,0');assert.equal(doc.entities.length,6);
+ await T.sub('CO');assert.equal(tool,'copy');assert.equal(CF.prompt(),'COPY Specify base point or [Displacement] <Displacement>:');await T.sub('0,0');assert.equal(CF.prompt(),'COPY Specify second point or <use first point as displacement>:');
+ await T.sub('@20,0');assert.equal(doc.entities.length,4);assert.equal(points.length,1,'base point is kept for the next copy');assert.equal(CF.prompt(),'COPY Specify second point or [Exit/Undo] <Exit>:','after the first copy Enter exits');await T.sub('@40,0');assert.equal(doc.entities.length,6);
  T.eq(doc.entities[4].points.map(p=>[p.x,p.y]),[[40,0],[50,0]]);
  await T.sub('U');assert.equal(doc.entities.length,4);assert.equal(chosen().length,2,'selection restored after undo');await T.sub('@0,30');assert.equal(doc.entities.length,6);
  await T.sub('');assert.equal(tool,'select');assert.equal(selected,-1);assert.equal(doc.entities.length,6);
@@ -222,8 +222,8 @@ module.exports=async({run,assert})=>{
  await T.sub('H');assert.equal(CF.picking.command,'HATCH');CF.select([0]);const hp=T.sub('');await T.tick();assert.ok(CF.input&&CF.input.message==='HATCH Specify hatch spacing <5>:',CF.prompt());await T.sub('2');await T.tick();assert.ok(doc.entities.length>5,'hatch lines created');
  T.reset();doc.entities=[T.line(0,0,3,4)];CF.select([0]);await T.sub('MEA');assert.ok(T.has('Length: 5.0000'));
  T.reset();doc.entities=[T.line(0,0,10,0),T.line(10,0,10,10),T.line(10,10,0,10),T.line(0,10,0,0)];CF.select([0,1,2,3],'add');await T.sub('J');await T.tick();assert.equal(doc.entities.length,1);assert.ok(doc.entities[0].closed);
- T.reset();doc.entities=[T.line(0,0,10,0)];CF.select([0]);const bl=T.sub('B');await T.tick();assert.equal(CF.input.message,'BLOCK Enter block name:');await T.sub('Tag');await T.tick();assert.ok(doc.blocks.Tag);
- await T.sub('INSERT');await T.tick();assert.equal(CF.input.message,'INSERT Enter block name to insert [Tag] <Tag>:');await T.sub('');await T.tick();assert.equal(tool,'insert');assert.equal(CF.prompt(),'INSERT Specify insertion point:');await T.sub('100,0');assert.equal(doc.entities.length,2);assert.equal(tool,'select');
+ T.reset();doc.entities=[T.line(0,0,10,0)];CF.select([0]);const bl=T.sub('B');await T.tick();assert.equal(CF.input.message,'BLOCK Enter block name:');await T.sub('Tag');await T.tick();assert.equal(CF.input.message,'BLOCK Specify insertion base point <0,0,0>:','BLOCK asks for the base point');await T.sub('');await T.tick();assert.ok(doc.blocks.Tag);
+ await T.sub('INSERT');await T.tick();assert.equal(CF.input.message,'INSERT Enter block name to insert [Tag] <Tag>:');await T.sub('');await T.tick();assert.equal(tool,'insert');assert.equal(CF.prompt(),'INSERT Specify insertion point or [Scale/Rotate]:');await T.sub('100,0');assert.equal(doc.entities.length,2);assert.equal(tool,'select');
  T.reset();doc.entities=[T.line(0,0,10,0),T.line(5,-5,5,5)];await T.sub('SELECTALL');assert.equal(chosen().length,2);await T.sub('UNDO');
  `);
  console.log('PASS: EXPLODE, HATCH boundary, MEASUREGEOM, JOIN, BLOCK, INSERT, SELECTALL');
@@ -374,6 +374,180 @@ module.exports=async({run,assert})=>{
  CF.commandLine.setPrompt('Custom [One/Two]:');T.eq(T.opts().map(o=>o.textContent),['One','Two']);T.reset();
  `);
  console.log('PASS: settings, view, export and workspace commands');
+
+ // ---- MOVE / COPY displacement ---------------------------------------------------------------------------------------------
+ await run(`
+ const circ=()=>({type:'circle',layer:'0',center:{x:0,y:0},radius:2});
+ // A typed base point is the displacement when Enter is pressed at the second-point prompt.
+ T.reset();doc.entities=[circ()];CF.select([0]);await T.sub('M');assert.equal(CF.prompt(),'MOVE Specify base point or [Displacement] <Displacement>:');
+ await T.sub('10,5');assert.equal(CF.prompt(),'MOVE Specify second point or <use first point as displacement>:');await T.sub('');await T.tick();
+ T.eq(doc.entities[0].center,{x:10,y:5});assert.equal(tool,'select');assert.equal(CF.prompt(),'Command:');assert.equal(selected,-1);assert.equal(doc.entities.length,1);
+ undo();T.eq(doc.entities[0].center,{x:0,y:0});
+ // COPY the same way: the original stays, one copy is made, the command ends.
+ T.reset();doc.entities=[T.line(0,0,10,0)];CF.select([0]);await T.sub('CO');await T.sub('5,5');await T.sub('');await T.tick();
+ assert.equal(doc.entities.length,2);T.eq(doc.entities[0].points,[{x:0,y:0},{x:10,y:0}]);T.eq(doc.entities[1].points,[{x:5,y:5},{x:15,y:5}]);assert.equal(tool,'select');
+ // Several selected objects all move; a clicked base point works the same way.
+ T.reset();doc.entities=[T.line(0,0,1,0),T.line(0,1,1,1),T.line(50,50,60,60)];CF.select([0,1],'add');await T.sub('M');await accept({x:3,y:-2});await T.tick();assert.equal(CF.input,null);CF.enter();await T.tick();
+ T.eq(doc.entities[0].points[0],{x:3,y:-2});T.eq(doc.entities[1].points[0],{x:3,y:-1});T.eq(doc.entities[2].points[0],{x:50,y:50});
+ // The [Displacement] option (typed, and as a clickable prompt option).
+ T.reset();doc.entities=[circ()];CF.select([0]);await T.sub('M');assert.ok(T.opts().some(o=>o.textContent==='Displacement'),'Displacement is a clickable option');
+ await T.sub('d');assert.ok(CF.input);assert.equal(CF.input.message,'MOVE Specify displacement <0,0,0>:');assert.equal(CF.input.kind,'point');await T.sub('@4,-3');await T.tick();T.eq(doc.entities[0].center,{x:4,y:-3});assert.equal(tool,'select');
+ T.reset();doc.entities=[circ()];CF.select([0]);await T.sub('CO');T.opts().find(o=>o.textContent==='Displacement').onclick();await T.tick();assert.equal(CF.input.message,'COPY Specify displacement <0,0,0>:');await T.sub('0,7');await T.tick();
+ assert.equal(doc.entities.length,2);T.eq(doc.entities[1].center,{x:0,y:7});assert.equal(tool,'select');
+ // Enter at the base prompt chooses <Displacement>; bad input re-asks; Esc cancels without moving.
+ T.reset();doc.entities=[circ()];CF.select([0]);await T.sub('M');await T.sub('');assert.equal(CF.input.message,'MOVE Specify displacement <0,0,0>:');await T.sub('banana');assert.ok(CF.input,'still asking');assert.ok(T.has('Point or option keyword required.'));
+ document.onkeydown({key:'Escape',target:$('command'),preventDefault(){}});await T.tick();assert.equal(CF.input,null);assert.equal(tool,'select');T.eq(doc.entities[0].center,{x:0,y:0});
+ // After the first copy Enter still exits (no extra displacement copy).
+ T.reset();doc.entities=[T.line(0,0,10,0)];CF.select([0]);await T.sub('CO');await T.sub('0,0');await T.sub('@0,5');assert.equal(doc.entities.length,2);await T.sub('');await T.tick();assert.equal(doc.entities.length,2);assert.equal(tool,'select');
+ `);
+ console.log('PASS: MOVE/COPY treat the base point as a displacement on Enter, [Displacement] option');
+
+ // ---- CIRCLE 3P / 2P / Ttr --------------------------------------------------------------------------------------------------
+ await run(`
+ const near=(a,b,msg)=>assert.ok(Math.abs(a-b)<1e-6,msg+': '+a+' vs '+b);
+ T.reset();await T.sub('C');assert.equal(CF.prompt(),'CIRCLE Specify center point for circle or [3P/2P/Ttr (tan tan radius)]:');
+ T.eq(T.opts().map(o=>o.textContent),['3P','2P','Ttr (tan tan radius)']);T.eq(T.opts().map(o=>o.title),['Enter 3P','Enter 2P','Enter T']);
+ // 3P: circumscribed circle; relative coordinates continue from the previous point.
+ await T.sub('3p');assert.equal(CF.prompt(),'CIRCLE Specify first point on circle:');assert.equal(tool,'circle');await T.sub('0,0');assert.equal(CF.prompt(),'CIRCLE Specify second point on circle:');
+ assert.equal(CF.previews.circle({x:5,y:5}).length,1,'3P preview is a line after one point');await T.sub('@10,0');assert.equal(CF.prompt(),'CIRCLE Specify third point on circle:');
+ const pv=CF.previews.circle({x:0,y:10});assert.equal(pv[0].type,'circle');near(pv[0].radius,Math.sqrt(50),'preview radius');await T.sub('0,10');
+ assert.equal(doc.entities.length,1);let e=doc.entities[0];assert.equal(e.type,'circle');near(e.center.x,5,'cx');near(e.center.y,5,'cy');near(e.radius,Math.sqrt(50),'r');assert.equal(tool,'select');assert.equal(CF.prompt(),'Command:');
+ // Clicking the prompt option starts the same flow; Enter at a point prompt cancels it.
+ T.reset();await T.sub('C');T.opts()[0].onclick();await T.tick();assert.equal(CF.prompt(),'CIRCLE Specify first point on circle:');await T.sub('');assert.equal(tool,'select');assert.equal(doc.entities.length,0);
+ // Collinear points have no circle.
+ T.reset();await T.sub('C');await T.sub('3P');await T.sub('0,0');await T.sub('5,0');await T.sub('10,0');assert.equal(doc.entities.length,0);assert.ok(T.has('Circle does not exist.'));assert.equal(tool,'select');
+ // 2P: diameter end points.
+ T.reset();await T.sub('C');await T.sub('2P');assert.equal(CF.prompt(),"CIRCLE Specify first end point of circle's diameter:");await T.sub('0,0');assert.equal(CF.prompt(),"CIRCLE Specify second end point of circle's diameter:");
+ assert.equal(CF.previews.circle({x:6,y:8})[0].radius,5);await T.sub('6,8');e=doc.entities[0];near(e.center.x,3,'2P cx');near(e.center.y,4,'2P cy');near(e.radius,5,'2P r');assert.equal(tool,'select');
+ // A canvas click is a point answer, and Esc cancels the flow.
+ T.reset();await T.sub('C');await T.sub('2p');await accept({x:0,y:0});await accept({x:10,y:0});await T.tick();assert.equal(doc.entities.length,1);near(doc.entities[0].radius,5,'click 2P');
+ T.reset();await T.sub('C');await T.sub('3P');await T.sub('1,1');document.onkeydown({key:'Escape',target:$('command'),preventDefault(){}});await T.tick();assert.equal(tool,'select');assert.equal(CF.prompt(),'Command:');assert.equal(doc.entities.length,0);assert.equal(CF.previews.circle({x:5,y:5}).length,0);
+ // Ordinary circles still work afterwards.
+ await T.sub('C');await T.sub('0,0');assert.equal(CF.prompt().indexOf('Specify radius of circle or [Diameter]'),7);await T.sub('4');assert.equal(doc.entities[0].radius,4);
+ // Pure helpers.
+ const L=CF.commandLine;assert.equal(L.circle3P({x:0,y:0},{x:1,y:1},{x:2,y:2}),null);assert.equal(L.circle2P({x:1,y:1},{x:1,y:1}),null);near(L.circle3P({x:-5,y:0},{x:5,y:0},{x:0,y:5}).radius,5,'3P radius');
+ assert.equal(L.optKey('3P'),'3P');assert.equal(L.optKey('Ttr (tan tan radius)'),'T');assert.equal(L.optKey('Displacement'),'D');assert.equal(L.optKey('3dModeling'),'M');assert.equal(L.optKey('shadedEdges'),'E');
+ // Ttr: two lines, a line and a circle, two circles.
+ const X={type:'line',layer:'0',points:[{x:-50,y:0},{x:50,y:0}]},Y={type:'line',layer:'0',points:[{x:0,y:-50},{x:0,y:50}]};
+ let r=L.circleTTR(X,{x:10,y:0},Y,{x:0,y:10},5);near(r.center.x,5,'TTR x');near(r.center.y,5,'TTR y');r=L.circleTTR(X,{x:-10,y:0},Y,{x:0,y:-10},5);near(r.center.x,-5,'TTR -x');near(r.center.y,-5,'TTR -y');
+ const C0={type:'circle',layer:'0',center:{x:0,y:10},radius:5};r=L.circleTTR(X,{x:10,y:0},C0,{x:4,y:10},3);near(r.center.y,3,'line-circle y');near(r.center.x,Math.sqrt(15),'line-circle x');r=L.circleTTR(X,{x:-10,y:0},C0,{x:-4,y:10},3);near(r.center.x,-Math.sqrt(15),'line-circle left');
+ const A={type:'circle',layer:'0',center:{x:0,y:0},radius:5},B={type:'circle',layer:'0',center:{x:20,y:0},radius:5};r=L.circleTTR(A,{x:5,y:0},B,{x:15,y:0},5);near(r.center.x,10,'circle-circle x');near(r.center.y,0,'circle-circle y');
+ assert.equal(L.circleTTR(X,{x:1,y:0},{type:'line',layer:'0',points:[{x:0,y:3},{x:10,y:3}]},{x:1,y:3},9),null,'parallel lines 3 apart need r=1.5');
+ // Ttr through the command line: pick two objects, then the radius.
+ T.reset();doc.entities=[X,Y];await T.sub('C');await T.sub('T');assert.equal(CF.prompt(),'CIRCLE Specify point on object for first tangent of circle:');assert.ok(CF.isPick(),'tangent picks are raw object picks');
+ await T.sub('10,0');assert.equal(CF.prompt(),'CIRCLE Specify point on object for second tangent of circle:');await T.sub('30,30');assert.ok(T.has('Select a line, polyline or circle.'),'empty space is rejected');await T.sub('0,10');
+ assert.ok(CF.input&&CF.input.message.indexOf('CIRCLE Specify radius of circle')===0);assert.ok(!CF.isPick());await T.sub('5');await T.tick();assert.equal(doc.entities.length,3);e=doc.entities[2];near(e.center.x,5,'cmd TTR x');near(e.center.y,5,'cmd TTR y');near(e.radius,5,'cmd TTR r');assert.equal(tool,'select');
+ // No tangent circle: radius too small for two parallel lines.
+ T.reset();doc.entities=[{type:'line',layer:'0',points:[{x:-50,y:0},{x:50,y:0}]},{type:'line',layer:'0',points:[{x:-50,y:10},{x:50,y:10}]}];await T.sub('C');await T.sub('TTR');await T.sub('0,0');await T.sub('0,10');await T.sub('2');await T.tick();assert.equal(doc.entities.length,2);assert.ok(T.has('Circle does not exist.'));
+ T.reset();
+ `);
+ console.log('PASS: CIRCLE 3P, 2P and Ttr (prompt options, flows, geometry, cancel)');
+
+ // ---- Select objects: Window / Crossing / polygon / fence keywords --------------------------------------------------------------
+ await run(`
+ const mk=()=>{doc.entities=[T.line(1,1,5,1),T.line(2,8,20,8),T.line(30,30,40,30),{type:'circle',layer:'0',center:{x:5,y:5},radius:2},{type:'circle',layer:'0',center:{x:10,y:10},radius:3},{type:'text',layer:'0',points:[{x:2,y:20}],text:'Hi',height:2}]};
+ const sel=()=>chosen().slice().sort((a,b)=>a-b);
+ // Window: fully enclosed objects only.
+ T.reset();mk();await T.sub('E');await T.sub('W');assert.equal(CF.prompt(),'ERASE Specify first corner:');assert.equal(CF.input.kind,'point');assert.ok(CF.picking,'still in the selection phase');
+ await T.sub('0,0');assert.equal(CF.prompt(),'ERASE Specify opposite corner:');assert.equal(CF.previews.select({x:9,y:9}).length,1,'rubber-band rectangle');await T.sub('10,10');T.eq(sel(),[0,3]);assert.ok(T.has('2 found'));assert.equal(CF.prompt(),'ERASE Select objects:');
+ // Crossing adds what touches the rectangle; the total is reported.
+ await T.sub('c');await T.sub('0,0');await T.sub('10,10');T.eq(sel(),[0,1,3,4]);assert.ok(T.lines().some(l=>l==='4 found'),T.lines().slice(-4).join('|'));
+ await T.sub('');await T.tick();assert.equal(doc.entities.length,2);assert.equal(tool,'select');
+ // Right-to-left BOX is a crossing, left-to-right a window.
+ T.reset();mk();await T.sub('E');await T.sub('BOX');await T.sub('0,0');await T.sub('10,10');T.eq(sel(),[0,3]);await T.sub('');
+ T.reset();mk();await T.sub('E');await T.sub('BOX');await T.sub('10,10');await T.sub('0,0');T.eq(sel(),[0,1,3,4]);await T.sub('');
+ // Relative opposite corner and the full keyword names.
+ T.reset();mk();await T.sub('E');await T.sub('window');await T.sub('0,0');await T.sub('@10,10');T.eq(sel(),[0,3]);CF.cancel();
+ // WPolygon / CPolygon with Undo, Enter to close.
+ T.reset();mk();await T.sub('E');await T.sub('WP');assert.equal(CF.prompt(),'ERASE First polygon point:');await T.sub('0,0');assert.equal(CF.prompt(),'ERASE Specify endpoint of line or [Undo]:');await T.sub('14,0');await T.sub('99,99');await T.sub('U');await T.sub('0,14');
+ assert.equal(CF.previews.select({x:1,y:1})[0].points.length,4);await T.sub('');T.eq(sel(),[0,3],'WP selects only fully inside');
+ T.reset();mk();await T.sub('E');await T.sub('CP');await T.sub('0,0');await T.sub('14,0');await T.sub('0,14');await T.sub('');T.eq(sel(),[0,1,3],'CP also takes the line it crosses');
+ T.reset();mk();await T.sub('E');await T.sub('CP');await T.sub('0,0');await T.sub('1,1');await T.sub('');assert.equal(chosen().length,0);assert.ok(T.has('A polygon needs at least three points.'));
+ // Fence selects what its path crosses.
+ T.reset();mk();await T.sub('E');await T.sub('F');assert.equal(CF.prompt(),'ERASE First fence point:');await T.sub('3,-5');await T.sub('3,3');await T.sub('');T.eq(sel(),[0],'fence crosses only the first line');
+ T.reset();mk();await T.sub('E');await T.sub('F');await T.sub('6,0');await T.sub('6,12');await T.sub('');T.eq(sel(),[1,3],'a vertical fence crosses the long line and the first circle');
+ // Objects already selected make the total differ from the found count.
+ T.reset();mk();await T.sub('E');await T.sub('3,1');T.eq(sel(),[0]);await T.sub('F');await T.sub('6,0');await T.sub('6,12');await T.sub('');T.eq(sel(),[0,1,3]);assert.ok(T.lines().some(l=>l==='2 found, 3 total'),T.lines().slice(-4).join('|'));
+ // Other commands share the phase: window select, then the base point prompt.
+ T.reset();mk();await T.sub('M');await T.sub('W');await T.sub('0,0');await T.sub('10,10');await T.sub('');assert.equal(tool,'move');assert.equal(CF.prompt(),'MOVE Specify base point or [Displacement] <Displacement>:');CF.cancel();
+ // Invalid keywords are reported with the real option list; single picks echo "1 found"; Esc inside a keyword cancels the command.
+ T.reset();mk();await T.sub('E');await T.sub('zzz');assert.ok(T.has('Invalid selection. Expects a point or Window/Crossing'));await T.sub('1,1');assert.ok(T.lines().some(l=>l==='1 found'),T.lines().slice(-3).join('|'));
+ await T.sub('W');document.onkeydown({key:'Escape',target:$('command'),preventDefault(){}});await T.tick();assert.equal(CF.picking,null);assert.equal(CF.input,null);assert.equal(tool,'select');assert.equal(CF.previews.select({x:1,y:1}).length,0);
+ // Pure geometry: groups are not split by a window, hidden layers are skipped, text boxes count.
+ T.reset();doc.entities=[{...T.line(0,0,4,0),group:'g'},{...T.line(0,5,40,5),group:'g'},T.line(2,2,3,3),{...T.line(1,1,2,2),layer:'Hidden'}];doc.layers.push({name:'Hidden',color:'#fff',visible:false});
+ T.eq(CF.commandLine.selectByShape('window',[{x:-1,y:-1},{x:10,y:-1},{x:10,y:10},{x:-1,y:10}]),[2],'partially enclosed group stays out of a window');T.eq(CF.commandLine.selectByShape('crossing',[{x:-1,y:-1},{x:10,y:-1},{x:10,y:10},{x:-1,y:10}]),[0,1,2]);
+ T.reset();
+ `);
+ console.log('PASS: select-objects keywords W, C, BOX, WP, CP and F with N found echo');
+
+ // ---- Layout tab cancels the running command ----------------------------------------------------------------------------------
+ await run(`
+ T.reset();await T.sub('L');assert.equal(tool,'line');assert.equal(CF.prompt(),'LINE Specify first point:');CF.setSpace('layout');
+ assert.equal(tool,'select','the running command is cancelled');assert.equal(CF.prompt(),'Command:');assert.ok(T.has('*Cancel*'));
+ await T.sub('GRID');assert.equal(CF.get('grid'),false,'typed words are commands in paper space, not LINE points');await T.sub('GRID');assert.equal(CF.get('grid'),true);CF.setSpace('model');
+ // Picking phase and pending prompts are cancelled as well.
+ T.reset();doc.entities=[T.line(0,0,1,0)];await T.sub('M');assert.ok(CF.picking);CF.setSpace('layout');assert.equal(CF.picking,null);assert.equal(tool,'select');CF.setSpace('model');
+ T.reset();const pr=cadPrompt('Layer name');assert.ok(CF.input);CF.setSpace('layout');assert.equal(await pr,null);assert.equal(CF.input,null);CF.setSpace('model');
+ // An idle switch prints nothing and starting a drawing tool still returns to model space.
+ T.reset();const n0=CF.history.length;CF.setSpace('layout');assert.equal(CF.history.length,n0,'nothing to cancel');await T.sub('L');assert.equal(CF.space,'model');assert.equal(tool,'line');CF.cancel();T.reset();
+ `);
+ console.log('PASS: switching to the Layout tab cancels the running command');
+
+ // ---- UNDO / REDO echo is the same from every route -----------------------------------------------------------------------------
+ await run(`
+ const add2=()=>{mutate(()=>doc.entities.push(T.line(0,0,5,5)));mutate(()=>doc.entities.push(T.line(1,1,6,6)))};
+ const last=(from)=>T.lines().slice(from);const kz=(k,extra)=>document.onkeydown({key:k,ctrlKey:true,target:document.body,preventDefault(){},...extra});
+ T.reset();add2();let n=CF.history.length;kz('z');const viaKey=last(n);n=CF.history.length;CF.run('REDO',{source:'ribbon'});const redoRibbon=last(n);
+ n=CF.history.length;CF.run('UNDO',{source:'qat'});const viaQat=last(n);n=CF.history.length;kz('y');const redoKey=last(n);
+ T.eq(viaKey,['Command: UNDO']);T.eq(viaQat,['Command: UNDO']);T.eq(redoRibbon,['Command: REDO']);T.eq(redoKey,['Command: REDO']);assert.equal(doc.entities.length,2);
+ // Typed U / UNDO / REDO echo the typed word like every other command and do the work.
+ n=CF.history.length;await T.sub('UNDO');T.eq(last(n),['Command: UNDO']);assert.equal(doc.entities.length,1);n=CF.history.length;await T.sub('REDO');T.eq(last(n),['Command: REDO']);assert.equal(doc.entities.length,2);
+ // Nothing to undo / redo is reported, not silent.
+ T.reset();n=CF.history.length;kz('z');T.eq(last(n),['Command: UNDO','Nothing to undo.']);n=CF.history.length;CF.run('REDO',{source:'ribbon'});T.eq(last(n),['Command: REDO','Nothing to redo.']);
+ // Inside LINE the key undoes the last segment and echoes it like typing U.
+ T.reset();await T.sub('L');await T.sub('0,0');await T.sub('5,0');await T.sub('5,5');n=CF.history.length;kz('z');T.eq(last(n),['LINE Specify next point or [Close/Undo]: U']);assert.equal(doc.entities.length,1);CF.cancel();T.reset();
+ `);
+ console.log('PASS: UNDO/REDO echo is consistent for Ctrl+Z/Y, ribbon/QAT commands and typed commands');
+
+ // ---- BLOCK base point and INSERT scale/rotation ------------------------------------------------------------------------------------
+ await run(`
+ T.reset();doc.entities=[T.line(10,10,20,10)];CF.select([0]);await T.sub('B');await T.sub('Q');assert.equal(CF.input.message,'BLOCK Specify insertion base point <0,0,0>:');await T.sub('10,10');await T.tick();
+ T.eq(doc.blocks.Q.items[0].points,[{x:0,y:0},{x:10,y:0}],'the base point becomes the block origin');assert.equal(selected,-1);assert.equal(chosen().length,0,'BLOCK releases the selection');assert.equal(tool,'select');assert.ok(T.has('Block "Q" defined.'));assert.ok(!T.lines().some(l=>/Click Insert block/.test(l)));
+ // Default base point is 0,0,0; an existing name is refused; Esc at the base prompt defines nothing.
+ T.reset();doc.entities=[T.line(10,10,20,10)];CF.select([0]);await T.sub('B');await T.sub('R');await T.sub('');await T.tick();T.eq(doc.blocks.R.items[0].points,[{x:10,y:10},{x:20,y:10}]);
+ doc.entities=[T.line(10,10,20,10)];CF.select([0]);await T.sub('B');await T.sub('R');await T.tick();assert.ok(T.has('A block with that name already exists.'));assert.equal(CF.input,null);
+ CF.select([0]);await T.sub('B');await T.sub('Z');document.onkeydown({key:'Escape',target:$('command'),preventDefault(){}});await T.tick();assert.ok(!doc.blocks.Z);
+ // INSERT: scale and rotation options, accurate wording, the command ends after the point.
+ T.reset();doc.entities=[];doc.blocks={Q:{items:[T.line(0,0,10,0)]}};await T.sub('I');await T.sub('Q');await T.tick();assert.equal(CF.prompt(),'INSERT Specify insertion point or [Scale/Rotate]:');T.eq(T.opts().map(o=>o.textContent),['Scale','Rotate']);
+ await T.sub('S');assert.equal(CF.input.message,'INSERT Specify scale factor <1>:');await T.sub('2');await T.tick();assert.equal(tool,'insert');await T.sub('R');assert.equal(CF.input.message,'INSERT Specify rotation angle <0>:');await T.sub('90');await T.tick();assert.equal(tool,'insert');
+ await T.sub('100,0');await T.tick();assert.equal(doc.entities.length,1);const p=doc.entities[0].points;assert.ok(Math.abs(p[0].x-100)<1e-9&&Math.abs(p[0].y)<1e-9&&Math.abs(p[1].x-100)<1e-9&&Math.abs(p[1].y-20)<1e-9,JSON.stringify(p));assert.equal(doc.entities[0].blockName,'Q');
+ assert.equal(tool,'select','INSERT ends after the insertion point');assert.ok(T.has('Inserted Q.'));assert.ok(!T.lines().some(l=>/Escape ends insertion/.test(l)));undo();assert.equal(doc.entities.length,0,'one undo step');
+ // A new INSERT starts again at scale 1 / rotation 0; the unscaled path uses the engine insert.
+ await T.sub('I');await T.sub('Q');await T.tick();await T.sub('10,10');await T.tick();T.eq(doc.entities[0].points,[{x:10,y:10},{x:20,y:10}]);
+ T.reset();
+ `);
+ console.log('PASS: BLOCK asks for the base point and releases the selection; INSERT Scale/Rotate and wording');
+
+ // ---- Real canvas clicks through acad-interact (only when that module is bundled) -------------------------------------------
+ if(await run("return CF.has('interact')")){
+ await run(`
+ const click=(x,y,extra={})=>{const s=screen({x,y});canvas.onpointerdown({button:0,offsetX:s.x,offsetY:s.y,clientX:s.x,clientY:s.y,pointerId:1,shiftKey:false,...extra});return T.tick()};
+ const near=(a,b,msg)=>assert.ok(Math.abs(a-b)<1e-6,msg+': '+a+' vs '+b);
+ // 3P by clicking three points.
+ T.reset();await T.sub('C');await T.sub('3P');await click(0,0);await click(10,0);await click(0,10);assert.equal(doc.entities.length,1);near(doc.entities[0].center.x,5,'3P click x');near(doc.entities[0].center.y,5,'3P click y');assert.equal(tool,'select');
+ // Ttr: clicks pick the objects (raw points), then the radius is typed.
+ T.reset();doc.entities=[{type:'line',layer:'0',points:[{x:-50,y:0},{x:50,y:0}]},{type:'line',layer:'0',points:[{x:0,y:-50},{x:0,y:50}]}];
+ await T.sub('C');await T.sub('T');await click(10,0.2);await click(0.2,10);assert.ok(CF.input&&/Specify radius of circle/.test(CF.input.message));await T.sub('5');await T.tick();
+ assert.equal(doc.entities.length,3);near(doc.entities[2].center.x,5,'Ttr click x');near(doc.entities[2].center.y,5,'Ttr click y');
+ // Window keyword corners by clicking; the right button ends the selection like Enter.
+ T.reset();doc.entities=[T.line(1,1,5,1),T.line(8,8,20,8)];await T.sub('E');await T.sub('W');await click(0,0);await click(10,10);T.eq(chosen(),[0]);assert.equal(CF.prompt(),'ERASE Select objects:');
+ // MOVE: a clicked base point, then Enter, uses that point as the displacement.
+ T.reset();doc.entities=[{type:'circle',layer:'0',center:{x:0,y:0},radius:2}];CF.select([0]);await T.sub('M');await click(12,-4);assert.equal(CF.prompt(),'MOVE Specify second point or <use first point as displacement>:');CF.enter();await T.tick();
+ assert.equal(doc.entities[0].center.x,12);assert.equal(doc.entities[0].center.y,-4);assert.equal(tool,'select');
+ T.reset();
+ `);
+ console.log('PASS: CIRCLE 3P/Ttr, window keyword and MOVE displacement driven by real canvas clicks');
+ }
 
  // ---- Compatibility with replaced cadPrompt ------------------------------------------------------------------------------
  await run(`

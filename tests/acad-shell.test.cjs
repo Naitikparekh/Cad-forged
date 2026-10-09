@@ -86,6 +86,11 @@ module.exports=async({run,assert})=>{
  // WSCURRENT registered by the shell when absent
  assert.ok(CF.resolve('WSCURRENT')&&CF.resolve('RIBBON')&&CF.resolve('RIBBONCLOSE'));
  CF.run('WSCURRENT',{args:'3D'});assert.equal(CF.workspace,'3d');CF.run('WSCURRENT',{args:'2D'});assert.equal(CF.workspace,'drafting');
+ // a workspace switch always lands on the Home tab, even when the target workspace remembered another tab
+ S.selectTab('Output');assert.equal(S.activeTab,'Output');CF.setWorkspace('3d');assert.equal(S.activeTab,'Home');
+ S.selectTab('Solid');assert.equal(S.activeTab,'Solid');CF.setWorkspace('drafting');assert.equal(S.activeTab,'Home');
+ S.selectTab('Output');CF.setWorkspace('3d');CF.setWorkspace('drafting');assert.equal(S.activeTab,'Home');assert.ok(S.tabButtons.find(b=>b.dataset.tab==='Home').classList.contains('active'));
+ CF.setWorkspace('3d');S.selectTab('Output');CF.setWorkspace('drafting');CF.setWorkspace('3d');assert.equal(S.activeTab,'Home');CF.setWorkspace('drafting');
  `);
  console.log('PASS: workspace switch rebuilds the ribbon tabs (Drafting 6 tabs, 3D Modeling 8), WSCURRENT/RIBBON/RIBBONCLOSE registered');
  // ---- title / modified marker -----------------------------------------------------------------------------
@@ -124,4 +129,52 @@ module.exports=async({run,assert})=>{
  S.openAppMenu();assert.ok(S.state.menus.length===1);S.closeMenus();assert.equal(S.state.menus.length,0);
  `);
  console.log('PASS: Quick Access Toolbar commands (New, Open, Save, Save As, Plot, Undo, Redo); application menu opens and closes');
-};
+ // ---- title-bar search hands the keyboard back to the command line ----------------------------------------
+ await run(`
+ const S=CF.shell,input=S.state.searchInput;let blurs=0;input.blur=()=>{blurs++};
+ for(const via of ['enter','click']){
+  input.value='line';input.oninput();assert.ok(S.state.menus.length===1,'search popup open');const pop=S.state.menus[0].el;
+  if(via==='enter')input.onkeydown({key:'Enter',stopPropagation(){},preventDefault(){}});else pop.children[0].onclick();
+  assert.equal(S.state.menus.length,0,via+': popup closed');assert.equal(input.value,'',via+': field cleared');assert.equal(blurs,via==='enter'?1:2,via+': field blurred');
+  CF.cancel?.();CF.commandLine?.cancel?.();}
+ setTool('select');
+ `);
+ console.log('PASS: running a command from the title-bar search clears and blurs the field so typing reaches the command line');
+ // ---- Model/Layout round trip keeps the 3D view; ribbon View / Visual Style combos follow the viewport -------
+ if(!await run("return CF.has('views')")){console.log('SKIP: shell view-state checks need the views module');return}
+ await run(`
+ const S=CF.shell,savedSolids=doc.solids;doc.solids=[makeExtrusion([{x:0,y:0},{x:10,y:0},{x:10,y:20},{x:0,y:20}],30,'T')];
+ try{
+  CF.setSpace('model');CF.setVisualStyle('2dwireframe');CF.setViewPreset('top');
+  CF.setVisualStyle('shaded');CF.setViewPreset('ne');assert.equal(mode3D,true);const cam={yaw:camera3.yaw,pitch:camera3.pitch,scale:camera3.scale};
+  CF.setSpace('layout');assert.equal(mode3D,false);assert.equal(CF.space,'layout');
+  CF.setSpace('model');assert.equal(CF.space,'model');assert.equal(mode3D,true,'3D view restored');
+  assert.equal(camera3.yaw,cam.yaw);assert.equal(camera3.pitch,cam.pitch);assert.equal(camera3.scale,cam.scale);assert.equal(CF.visualStyle(),'shaded');
+  // a plain 2D model never gains a 3D view from the round trip
+  CF.setViewPreset('top');assert.equal(mode3D,false);CF.setSpace('layout');CF.setSpace('model');assert.equal(mode3D,false);
+  // a new drawing forgets the remembered 3D view
+  CF.setViewPreset('se');CF.setSpace('layout');CF.emit('document',{name:'X'});CF.setSpace('model');assert.equal(mode3D,false);
+ }finally{CF.setSpace('model');CF.setViewPreset('top');CF.setVisualStyle('2dwireframe');doc.solids=savedSolids}
+ `);
+ console.log('PASS: returning from Layout to Model restores the 3D camera and visual style; 2D models and new drawings are untouched');
+ await run(`
+ const S=CF.shell,savedSolids=doc.solids;doc.solids=[makeExtrusion([{x:0,y:0},{x:10,y:0},{x:10,y:20},{x:0,y:20}],30,'T')];
+ try{
+  CF.setWorkspace('3d');S.selectTab('Home');
+  const combo=id=>S.buttons.filter(b=>b.split===id),show=(id)=>combo(id).map(b=>b.current());
+  CF.setVisualStyle('2dwireframe');CF.setViewPreset('top');
+  assert.ok(combo('vstyle').length>=1&&combo('preset').length>=1);
+  assert.ok(show('vstyle').every(i=>i.style==='2dwireframe')&&show('preset').every(i=>i.preset==='top'),'fresh state');
+  CF.setVisualStyle('shaded');CF.setViewPreset('se');
+  assert.ok(show('vstyle').every(i=>i.style==='shaded'),'style follows CF.setVisualStyle');assert.ok(show('preset').every(i=>i.preset==='se'),'view follows CF.setViewPreset');
+  for(const b of combo('vstyle'))assert.ok(b.main.innerHTML.includes(CF.icon('vs-shaded',16))||b.main.innerHTML.includes(CF.icon('vs-shaded',32)),'style icon');
+  for(const b of combo('preset'))assert.ok(b.main.innerHTML.includes('Shaded')===false&&(b.main.innerHTML.includes('SE Isometric')||b.arrow.innerHTML.includes('SE Isometric')),'view label');
+  // a ribbon click and a viewport change both end up reflected
+  S.exec(S.buttons.find(b=>b.split==='preset').items.find(i=>i.preset==='left'),S.buttons.find(b=>b.split==='preset'),4);assert.ok(show('preset').every(i=>i.preset==='left'));
+  CF.setViewPreset('nw');assert.ok(show('preset').every(i=>i.preset==='nw'),'viewport change overrides the last click');
+  // the combos survive a ribbon rebuild
+  CF.setWorkspace('drafting');CF.setWorkspace('3d');S.selectTab('Home');assert.ok(show('preset').every(i=>i.preset==='nw')&&show('vstyle').every(i=>i.style==='shaded'));
+  CF.setViewPreset('top');CF.setVisualStyle('2dwireframe');assert.ok(show('preset').every(i=>i.preset==='top')&&show('vstyle').every(i=>i.style==='2dwireframe'));
+ }finally{CF.setViewPreset('top');CF.setVisualStyle('2dwireframe');CF.setWorkspace('drafting');doc.solids=savedSolids}
+ `);
+ console.log('PASS: ribbon View and Visual Style combos track the real view and style, not the last clicked item');};

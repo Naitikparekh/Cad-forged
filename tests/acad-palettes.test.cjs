@@ -81,4 +81,35 @@ module.exports=async({run,assert})=>{
  for(const n of ['LAYER','LA','PROPERTIES','PROPERTIESCLOSE','DSETTINGS'])assert.ok(CF.resolve(n),n);
  `);
  console.log('PASS: osnap/polar settings, status bar toggles via CF.toggle, Model/Layout tabs, coordinates readout, Drafting Settings, palette commands');
+ // ---- Regression: new layers get the next unused palette colour instead of copying the current layer.
+ await run(`
+ const L=CF.palettes.layers;history=[];future=[];
+ doc={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[],blocks:{}};syncLayers();L.setCurrent('0');
+ assert.equal(L.add('Layer1'),true);assert.equal(L.add('Layer2'),true);
+ const c1=doc.layers.find(l=>l.name==='Layer1').color,c2=doc.layers.find(l=>l.name==='Layer2').color;
+ assert.notEqual(c1,'#63d9c0');assert.notEqual(c2,'#63d9c0');assert.notEqual(c1,c2);assert.equal(c1,'#ff0000');assert.equal(c2,'#ffff00');
+ // Also through the Layer Properties Manager New Layer button, with another layer selected/current.
+ L.setCurrent('Layer1');CF.palettes.layerManager.open();CF.palettes.layerManager.select('Layer2');CF.palettes.layerManager.newLayer();
+ const nl=doc.layers[doc.layers.length-1];assert.ok(!['#63d9c0','#ff0000','#ffff00'].includes(nl.color),'new layer colour must not copy an existing layer: '+nl.color);assert.equal(nl.color,'#00ff00');CF.palettes.layerManager.dialog().close();
+ // A freed colour is reused (next UNUSED, not a counter); an explicit colour is honoured; undo removes only the new layer.
+ L.setColor('Layer1','#123456');assert.equal(L.nextColor(),'#ff0000');assert.equal(L.add('Mine','#AABBCC'),true);assert.equal(doc.layers.find(l=>l.name==='Mine').color,'#aabbcc');
+ // Many layers: every colour stays unique, even after the fixed palette runs out.
+ for(let i=0;i<40;i++)assert.equal(L.add('Bulk'+i),true);
+ const cols=doc.layers.map(l=>l.color.toLowerCase());assert.equal(new Set(cols).size,cols.length);assert.ok(cols.every(c=>/^#[0-9a-f]{6}$/.test(c)));
+ `);
+ console.log('PASS: new layers receive the next unused palette colour (unique, undoable, explicit override)');
+ // ---- Regression: dialog CSS (Drafting Settings / Layer Manager compact, checkboxes beside labels; plot sheet preview).
+ await run(`
+ const css=CF.palettes.css(),rules=sel=>css.split('}').filter(r=>r.includes(sel)).join('}');
+ // Width rules must beat dialog.cf-dlg{width:auto}: they need at least the same element+two-class specificity.
+ assert.match(css,/dialog\\.cf-dlg\\.cf-ds\\{width:520px\\}/);assert.match(css,/dialog\\.cf-dlg\\.cf-lpm\\{width:780px\\}/);
+ assert.ok(!/(^|[}\\n])\\.cf-ds\\{width/.test(css)&&!/(^|[}\\n])\\.cf-lpm\\{width/.test(css),'bare class width rules lose to dialog.cf-dlg');
+ // Checkbox must reset the global dialogs.js "dialog input{width:100%}" rule.
+ assert.match(css,/dialog \\.cf-chk input\\[type=checkbox\\]\\{width:auto/);
+ CF.openDraftingSettings('snap');assert.ok(CF.palettes.draftingSettings.parts().modes.endpoint.input);document.getElementById('cf-drafting-settings')?.close?.();
+ // Plot preview: the SVG's own white rect is the paper; the svg box must not paint a white background over the grey surround.
+ const pv=rules('#plotDialog #sheetPreview svg');assert.ok(pv,'plot preview svg rule');assert.match(pv,/background:transparent!important/);assert.match(pv,/drop-shadow/);assert.match(pv,/width:auto/);assert.ok(!/background:#fff/.test(pv));
+ assert.match(rules('#sheetPreview{'),/background:#5a616d!important/);
+ `);
+ console.log('PASS: Drafting Settings / Layer Manager width + checkbox CSS, plot preview sheet-on-grey CSS');
 };

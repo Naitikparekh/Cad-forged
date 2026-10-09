@@ -5,8 +5,10 @@ CF.module('interact');
 const G=CF.geom,TAU=Math.PI*2,DEG=180/Math.PI,NO_DASH=[],DASH=[6,4],RUBBER=[4,3],DOTS=[2,3];
 const POINT_KINDS={point:1,angle:1,distance:1,factor:1},LEGACY_PICK=new Set(['move','copy','rotate','scale','mirror','offset']);
 const DEFAULT_MODES=new Set(['endpoint','midpoint','center','intersection','quadrant']);
-const SNAP_LABEL={endpoint:'Endpoint',midpoint:'Midpoint',center:'Center',quadrant:'Quadrant',intersection:'Intersection',perpendicular:'Perpendicular',nearest:'Nearest',insertion:'Insertion'};
-const SNAP_ABBR={endpoint:'endp',midpoint:'mid',center:'cen',quadrant:'qua',intersection:'int',perpendicular:'per',nearest:'nea'};
+const SNAP_LABEL={endpoint:'Endpoint',midpoint:'Midpoint',center:'Center',quadrant:'Quadrant',intersection:'Intersection',perpendicular:'Perpendicular',tangent:'Tangent',nearest:'Nearest',insertion:'Insertion'};
+const SNAP_ABBR={endpoint:'endp',midpoint:'mid',center:'cen',quadrant:'qua',intersection:'int',perpendicular:'per',tangent:'tan',nearest:'nea',insertion:'ins'};
+// Typed one-shot overrides: any prefix of at least 3 letters of these words (AutoCAD: END, MID, CEN, QUA, INT, PER, TAN, NEA, INS, NON).
+const SNAP_WORDS=['endpoint','midpoint','center','quadrant','intersection','perpendicular','tangent','nearest','insertion','none'];
 const SEP={sep:true},GRIP_CAP=400,GHOST_CAP=4000;
 // Interaction state. sx/sy = cursor in canvas pixels; raw = unsnapped world point; mark = active osnap; track = polar tracking.
 const st={over:false,sx:0,sy:0,raw:{x:0,y:0},mark:null,track:null,win:null,pan:null,panMode:false,grip:null,gripDrag:null,hover:-1,hoverSet:null,hoverGrip:null,grips:[],menu:null,menuIndex:-1,midClick:0,recent:[]};
@@ -57,7 +59,9 @@ function osnapCandidates(p,opt={}){
   if(dp<=ap){
    if(has('quadrant'))for(let k=0;k<4;k++){const x=c.x+(k===0?r:k===2?-r:0),y=c.y+(k===1?r:k===3?-r:0),d=Math.hypot(p.x-x,p.y-y);if(d<=ap)add('quadrant',x,y,d)}
    if(has('nearest')&&dc>1e-12)add('nearest',c.x+(p.x-c.x)*r/dc,c.y+(p.y-c.y)*r/dc,dp+ap);
-   if(has('perpendicular')&&base){const db=Math.hypot(base.x-c.x,base.y-c.y);if(db>1e-12)add('perpendicular',c.x+(base.x-c.x)*r/db,c.y+(base.y-c.y)*r/db,dp+ap*.6)}}}
+   if(has('perpendicular')&&base){const db=Math.hypot(base.x-c.x,base.y-c.y);if(db>1e-12)add('perpendicular',c.x+(base.x-c.x)*r/db,c.y+(base.y-c.y)*r/db,dp+ap*.6)}
+   if(has('tangent')&&base){const db=Math.hypot(base.x-c.x,base.y-c.y);if(db>r*(1+1e-9)){ // two tangent points seen from the base point; take the one nearer the cursor
+    const b=Math.atan2(base.y-c.y,base.x-c.x),f=Math.acos(r/db);let best=null;for(const s of[-1,1]){const x=c.x+r*Math.cos(b+s*f),y=c.y+r*Math.sin(b+s*f),d=Math.hypot(p.x-x,p.y-y);if(!best||d<best.d)best={x,y,d}}add('tangent',best.x,best.y,dp+ap*.6)}}}}
  if(has('intersection')){const near=(x,y)=>{const d=Math.hypot(p.x-x,p.y-y);if(d<=ap)add('intersection',x,y,d)};
   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){const s=segs[i],t=segs[j];if(s.e===t.e)continue;const x=G.segmentIntersection(s.a,s.b,t.a,t.b);if(x)near(x.x,x.y)}
   for(const c of circles){if(c.dp>ap)continue;for(const s of segs)for(const x of G.lineCircle(s.a,s.b,c.e.center,c.e.radius))near(x.x,x.y);for(const o of circles)if(o!==c&&o.dp<=ap)for(const x of G.circleCircle(c.e.center,c.e.radius,o.e.center,o.e.radius))near(x.x,x.y)}}
@@ -200,7 +204,7 @@ drawPreview=function(){if(mode3D)return baseDrawPreview();endEntityPhase();drawG
 function drawMarker(m){const x=Math.round(sxf(m.x))+.5,y=Math.round(syf(m.y))+.5,s=6;ctx.strokeStyle=CF.colors.osnap;ctx.lineWidth=2;ctx.setLineDash(NO_DASH);ctx.beginPath();
  switch(m.type){case 'endpoint':ctx.rect(x-s,y-s,2*s,2*s);break;case 'midpoint':ctx.moveTo(x,y-s-1);ctx.lineTo(x+s+1,y+s);ctx.lineTo(x-s-1,y+s);ctx.closePath();break;case 'center':ctx.arc(x,y,s+1,0,TAU);break;
   case 'quadrant':ctx.moveTo(x,y-s-1);ctx.lineTo(x+s+1,y);ctx.lineTo(x,y+s+1);ctx.lineTo(x-s-1,y);ctx.closePath();break;case 'intersection':ctx.moveTo(x-s,y-s);ctx.lineTo(x+s,y+s);ctx.moveTo(x+s,y-s);ctx.lineTo(x-s,y+s);break;
-  case 'perpendicular':ctx.moveTo(x-s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+s);break;case 'nearest':ctx.moveTo(x-s,y-s);ctx.lineTo(x+s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.closePath();break;
+  case 'perpendicular':ctx.moveTo(x-s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+s);break;case 'tangent':ctx.arc(x,y+2,s-1,0,TAU);ctx.moveTo(x-s-1,y-3);ctx.lineTo(x+s+1,y-3);break;case 'nearest':ctx.moveTo(x-s,y-s);ctx.lineTo(x+s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.closePath();break;
   default:ctx.moveTo(x-s,y-s);ctx.lineTo(x+1,y-s);ctx.lineTo(x+1,y-1);ctx.lineTo(x+s,y-1);ctx.lineTo(x+s,y+s);ctx.lineTo(x-s,y+s);ctx.closePath()}ctx.stroke();ctx.lineWidth=1}
 function canvasTip(text,x,y){ctx.font='11px "Segoe UI",Arial,sans-serif';const w=Math.ceil(ctx.measureText(text).width||text.length*6)+12,h=19;let X=Math.round(x),Y=Math.round(y);if(X+w>W-2)X=W-w-2;if(Y<2)Y=2;if(Y+h>H-2)Y=H-h-2;ctx.fillStyle=CF.colors.tooltip;ctx.fillRect(X,Y,w,h);ctx.strokeStyle='#5a6676';ctx.lineWidth=1;ctx.strokeRect(X+.5,Y+.5,w-1,h-1);ctx.fillStyle=CF.colors.tooltipText;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(text,X+6,Y+h/2+.5);ctx.textBaseline='alphabetic'}
 function drawWindowRect(){const w=st.win;if(!w)return;const a={x:sxf(w.a.x),y:syf(w.a.y)},b={x:sxf(w.cur.x),y:syf(w.cur.y)},crossing=w.cur.x<w.a.x,C=CF.colors,x=Math.round(Math.min(a.x,b.x))+.5,y=Math.round(Math.min(a.y,b.y))+.5,ww=Math.round(Math.abs(b.x-a.x)),hh=Math.round(Math.abs(b.y-a.y));
@@ -270,7 +274,8 @@ canvas.onpointerdown=function(e){if(!is2D())return prev.down?.call(this,e);close
  if(CF.picking||tool==='select'){selectClick(raw,e);return}
  if(pickMode()){mouse=raw;shiftSelection=!!e.shiftKey;runAccept(raw);shiftSelection=false;return}
  const p=snap(raw);mouse=p;CF.osnapOverride=null;runAccept(p);render()};
-canvas.onpointermove=function(e){if(!is2D()&&!st.pan)return prev.move?.call(this,e);st.sx=e.offsetX;st.sy=e.offsetY;st.over=true;
+canvas.onpointermove=function(e){if(!is2D()&&!st.pan)return prev.move?.call(this,e);return movePointer(e)};
+function movePointer(e){st.sx=e.offsetX;st.sy=e.offsetY;st.over=true;
  if(st.pan){const p=st.pan,dx=(e.clientX??e.offsetX)-p.cx,dy=(e.clientY??e.offsetY)-p.cy;if(!p.moved&&Math.hypot(dx,dy)>4)p.moved=true;if(p.moved){view.x=p.vx-dx/view.scale;view.y=p.vy+dy/view.scale}st.raw=world({x:e.offsetX,y:e.offsetY});render();return}
  const raw=world({x:e.offsetX,y:e.offsetY});st.raw=raw;
  if(st.win){st.win.cur=raw;if(st.win.down&&!st.win.drag&&Math.hypot(e.offsetX-st.win.sx,e.offsetY-st.win.sy)>4)st.win.drag=true;mouse=raw;st.mark=st.track=null;render();return}
@@ -278,7 +283,7 @@ canvas.onpointermove=function(e){if(!is2D()&&!st.pan)return prev.move?.call(this
  if(CF.input&&!POINT_KINDS[CF.input.kind]){mouse=raw;st.mark=st.track=null;clearHover()}
  else if(pickMode()){mouse=raw;st.mark=st.track=null;if(!st.panMode)updateHover(raw)}
  else{mouse=snap(raw);clearHover()}
- render()};
+ render()}
 canvas.onpointerup=function(e){if(!is2D()&&!st.pan&&!st.win)return prev.up?.call(this,e);try{canvas.releasePointerCapture(e.pointerId)}catch(err){}
  if(st.pan){const p=st.pan;st.pan=null;if(p.btn==='right'&&!p.moved){if(CF.picking&&!e.shiftKey)CF.enter();else CF.openContextMenu(e.clientX??e.offsetX,e.clientY??e.offsetY,e.shiftKey?'snap':undefined)}render();return}
  if(st.win&&st.win.down){st.win.down=false;if(st.win.drag)finishWindow(world({x:e.offsetX,y:e.offsetY}),!!e.shiftKey);return}
@@ -287,7 +292,9 @@ canvas.onpointerup=function(e){if(!is2D()&&!st.pan&&!st.win)return prev.up?.call
 canvas.onpointercancel=function(e){st.pan=null;if(st.win)st.win.down=false;st.gripDrag=null;return prev.cancel?.call(this,e)};
 canvas.oncontextmenu=function(e){if(!is2D())return prev.menu?.call(this,e);e.preventDefault?.();return false};
 canvas.onpointerleave=function(e){st.over=false;if(is2D()){clearHover();render()}return prev.leave?.call(this,e)};
-canvas.onpointerenter=function(){st.over=true};
+// The cursor is only "over" the canvas once its position is known: entering without coordinates (or a synthetic enter when
+// the Start page closes under a resting pointer) must not leave the crosshair parked at the stale 0,0 position.
+canvas.onpointerenter=function(e){if(is2D()&&Number.isFinite(e?.offsetX)&&Number.isFinite(e?.offsetY))movePointer(e)};
 canvas.ondblclick=function(e){if(!is2D()||e.button!==0||tool!=='select'||CF.picking||st.panMode)return prev.dbl?.call(this,e);
  if(CF.input?.ixGrip)cancelGrip();const i=hit(world({x:e.offsetX,y:e.offsetY})),ent=doc.entities[i];if(!ent){render();return}
  if(ent.type==='text'&&!ent.group){Promise.resolve(cadPrompt('Text',ent.text)).then(v=>{if(v!=null&&v!==''&&v!==ent.text&&doc.entities.includes(ent))mutate(()=>ent.text=v)})}else{CF.select([i],'replace');CF.toggle('properties',true)}render()};
@@ -302,8 +309,23 @@ function resetTransient(){const busy=!!(st.win||st.grip||st.panMode);st.win=null
 {const baseCancel=CF.cancel;CF.cancel=function(...a){closeMenu();resetTransient();return baseCancel.apply(this,a)}}
 CF.on('tool',()=>{st.win=null;cancelGrip();st.panMode=false;CF.osnapOverride=null;clearHover();syncCursorStyle()});
 const consume=e=>{e.preventDefault?.();e.stopPropagation?.();e.stopImmediatePropagation?.()};
+// ---- One-shot object snap overrides (right-click Snap Overrides menu and typed END/MID/CEN/QUA/INT/PER/TAN/NEA/INS/NON) ------
+// The override applies to the next point only: snap() honours it even with Osnap off, and every pick/typed point clears it.
+function setOverride(mode){CF.osnapOverride=mode;if(mode!=='none')print(`_${SNAP_ABBR[mode]} of`);if(st.over&&is2D())mouse=snap(st.raw);render()}
+function snapKeyword(text){const t=String(text??'').trim().replace(/^_/,'').toLowerCase();return t.length>=3?SNAP_WORDS.find(w=>w.startsWith(t))||null:null}
+// A point prompt is any pending point/angle/distance/factor input, or a drawing tool waiting for a point (not object picking).
+function pointPrompt(){if(!is2D()||st.win||st.panMode)return false;if(CF.input)return!!pointInput();if(CF.picking)return false;return tool==='select'?points.length>0:!pickMode()}
+// Returns true when `text` was consumed as an osnap keyword. A keyword the current prompt also offers as an option (e.g. ELLIPSE
+// [Center]) stays an option unless written with the leading underscore (_cen).
+function typedSnap(text){const raw=String(text??'').trim(),mode=snapKeyword(raw);if(!mode||!pointPrompt())return false;
+ const prompt=String(CF.prompt?.()||''),t=raw.replace(/^_/,'').toLowerCase();if(raw[0]!=='_'&&promptOptions(prompt).some(o=>o.label.toLowerCase().startsWith(t)))return false;
+ print(`${prompt} ${raw}`);setOverride(mode);return true}
+try{const cl=CF.commandLine;if(cl&&typeof cl.submit==='function'){const baseSubmit=cl.submit;cl.submit=function(text,...a){if(typedSnap(text))return Promise.resolve();return baseSubmit.call(this,text,...a)}}}catch(err){}
 try{document.addEventListener('keydown',e=>{
  if(st.menu){if(e.key==='Escape'){closeMenu();consume(e)}else if(e.key==='ArrowDown'||e.key==='ArrowUp'){menuMove(e.key==='ArrowDown'?1:-1);consume(e)}else if(e.key==='Enter'){menuActivate();consume(e)}return}
+ if((e.key==='Enter'||e.key==='NumpadEnter'||e.key===' ')&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&e.target&&e.target===$('command')){const c=e.target,v=String(c.value||'').trim();
+  if(v&&typedSnap(v)){c.value='';try{c.dispatchEvent(new Event('input'))}catch(err){}consume(e);return}
+  if(v&&CF.osnapOverride&&pointPrompt()&&parsePoint(v,basePoint()))CF.osnapOverride=null} // a typed point replaces the pending override
  const field=e.target?.matches?.('input,textarea,select')&&e.target.id!=='command',typing=field||!!$('command')?.value;
  if(st.panMode&&(e.key==='Escape'||(!typing&&(e.key==='Enter'||e.key===' ')))){exitPan();consume(e);return}
  if(e.key==='Escape'&&st.win){st.win=null;print('*Cancel*');render();consume(e);return}
@@ -314,8 +336,8 @@ CF.on('command',ev=>{const n=ev?.def?.name;if(!n)return;st.recent=[n,...st.recen
 const cmd=(name,fallback)=>()=>{if(CF.resolve(name))CF.run(name,{source:'menu'});else fallback?.()};
 function promptOptions(text){const m=String(text||'').match(/\[([^\]]+)\]/);if(!m)return[];return m[1].split('/').map(s=>s.trim()).filter(Boolean).map(label=>({label,key:(label.match(/[A-Z]+/)||[label])[0]}))}
 function submitOption(key){if(CF.commandLine?.submit){CF.commandLine.submit(key);return}if(CF.input){const inp=CF.input;inp.resolve(key);if(CF.input===inp)CF.input=null;render();return}const c=$('command');if(c){c.value=key;c.onkeydown?.({key:'Enter',target:c,preventDefault(){},stopPropagation(){}})}}
-function snapItems(){const set=mode=>()=>{CF.osnapOverride=mode;if(mode!=='none')print(`_${SNAP_ABBR[mode]} of`);render()};
- return[...['endpoint','midpoint','intersection'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,...['center','quadrant','perpendicular','nearest'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,{label:'None',run:set('none'),checked:CF.osnapOverride==='none'},SEP,{label:'Object Snap',checked:CF.get('osnap'),shortcut:'F3',run:()=>CF.toggle('osnap')}]}
+function snapItems(){const set=mode=>()=>setOverride(mode);
+ return[...['endpoint','midpoint','intersection'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,...['center','quadrant','perpendicular','tangent','nearest'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,{label:'None',run:set('none'),checked:CF.osnapOverride==='none'},SEP,{label:'Object Snap',checked:CF.get('osnap'),shortcut:'F3',run:()=>CF.toggle('osnap')}]}
 function menuModel(kind){
  if(kind==='snap')return snapItems();
  const zoomExt={label:'Zoom Extents',icon:'zoom-extents',run:()=>fit()},panItem={label:'Pan',icon:'pan',run:()=>CF.startPan()};
@@ -367,5 +389,5 @@ const style=document.createElement('style');style.id='cf-interact-style';style.t
 try{document.head.append(style)}catch(err){}
 
 // ---- Testable surface --------------------------------------------------------------------------
-CF.interact={osnapCandidates,gridStep,orthoProject,polarProject,windowSelect,pickAt,finishWindow,gripsFor,gripAt,applyGrip,startGrip,cancelGrip,parsePoint,menuModel,promptOptions,shortPrompt,exitPan,resetTransient,selectedIndices,state:()=>st};
+CF.interact={typedSnap,snapKeyword,pointPrompt,setOverride,osnapCandidates,gridStep,orthoProject,polarProject,windowSelect,pickAt,finishWindow,gripsFor,gripAt,applyGrip,startGrip,cancelGrip,parsePoint,menuModel,promptOptions,shortPrompt,exitPan,resetTransient,selectedIndices,state:()=>st};
 })();

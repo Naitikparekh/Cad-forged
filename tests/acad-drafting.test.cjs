@@ -8,7 +8,8 @@ module.exports=async({run,assert,setAnswers})=>{
   pts:(ps,exp,e=1e-6)=>{assert.equal(ps.length,exp.length,'point count');exp.forEach(([x,y],i)=>DT.pt(ps[i],x,y,e))},
   box:ps=>({minX:Math.min(...ps.map(p=>p.x)),maxX:Math.max(...ps.map(p=>p.x)),minY:Math.min(...ps.map(p=>p.y)),maxY:Math.max(...ps.map(p=>p.y))}),
   reset:(ents=[])=>{setTool('select');clearSelection();CF.input=null;CF.picking=null;mode3D=false;W=1000;H=700;view={x:0,y:0,scale:4};doc={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:ents};history=[];future=[];$('layer').value='0';syncLayers()},
-  idle:()=>CF.drafting.idle()};`);
+  idle:()=>CF.drafting.idle(),
+  flags:{pline:CF.drafting.settings.acadPline,arc:CF.drafting.settings.acadArc},setFlags:(pline,arc)=>{CF.drafting.settings.acadPline=pline;CF.drafting.settings.acadArc=arc},restoreFlags:()=>DT.setFlags(DT.flags.pline,DT.flags.arc)};`);
  const go=async(code,answers=[])=>{setAnswers(answers);await run(code)};
 
  // ---- registry ----
@@ -157,5 +158,142 @@ module.exports=async({run,assert,setAnswers})=>{
  await go(`const {P,L}=DT;DT.reset([L(0,0,10,0)]);CF.run('FILLET');await DT.idle();await accept(P(5,0));setTool('select');await DT.idle();assert.equal(CF.drafting.state(),null);assert.equal(selected,-1);
   CF.run('TRIM');await DT.idle();setTool('line');assert.equal(CF.drafting.state(),null);setTool('trim');await DT.idle();assert.equal(CF.drafting.state().tool,'trim');setTool('select');
   CF.run('POLYGON');await DT.idle();assert.equal(CF.drafting.state(),null,'Esc at the sides prompt cancels');assert.equal(tool,'select');`);
- console.log('PASS: drafting OFFSET (lines/circles/closed+open polylines, through), quick TRIM (lines/circles/polylines, erase, shift-extend), EXTEND, FILLET (r=0, tangent arc, polyline), CHAMFER (distance/angle), MIRROR, POLYGON, ELLIPSE, DIMLINEAR, DIST/ID/LIST, MATCHPROP, ARRAYRECT, PURGE, cancellation');
+ // ---- PLINE keeps the segments drawn so far when ended with Esc (or when another command starts) ----
+ await go(`const {P}=DT;DT.reset();DT.setFlags(false,false);setTool('polyline');await accept(P(0,0));await accept(P(10,0));await accept(P(10,10));
+  if(CF.has('commands'))document.onkeydown({key:'Escape',target:$('command'),preventDefault(){}});else CF.cancel();
+  assert.equal(doc.entities.length,1,'Esc keeps the polyline');const pl=doc.entities[0];assert.equal(pl.type,'polyline');assert.ok(!pl.closed);DT.pts(pl.points,[[0,0],[10,0],[10,10]]);assert.equal(tool,'select');assert.equal(points.length,0);
+  undo();assert.equal(doc.entities.length,0,'one undo step');
+  setTool('polyline');await accept(P(0,0));CF.cancel();assert.equal(doc.entities.length,0,'a lone start point leaves nothing');
+  setTool('polyline');await accept(P(0,0));await accept(P(5,5));CF.cancel();assert.equal(doc.entities.length,1);DT.pts(doc.entities[0].points,[[0,0],[5,5]]);
+  if(CF.resolve('CIRCLE')){setTool('polyline');await accept(P(1,1));await accept(P(2,1));await accept(P(2,2));CF.run('CIRCLE');assert.equal(doc.entities.length,2,'starting another command also keeps the polyline');assert.equal(doc.entities[1].points.length,3);CF.cancel()}DT.restoreFlags()`);
+ await go(`if(!CF.has('commands')||!CF.resolve('GRID'))return;const {P}=DT;DT.reset();DT.setFlags(false,false);setTool('polyline');await accept(P(0,0));await accept(P(4,0));CF.run('GRID');CF.run('GRID');assert.equal(tool,'polyline','a settings toggle does not end PLINE');assert.equal(points.length,2);finish();assert.equal(doc.entities.length,1);DT.restoreFlags()`);
+
+ // ---- PLINE (Arc/Length/Close/Undo) and ARC (3-point, Center) in AutoCAD prompt order; switched on via settings ----
+ await go(`const {P}=DT,D=CF.drafting,PI=Math.PI;
+  let a=D.tangentArc(P(0,0),P(0,1),P(10,10));assert.ok(a&&!a.straight);DT.pt(a.pts[0],0,0);DT.pt(a.pts.at(-1),10,10);for(const p of a.pts)assert.ok(DT.near(Math.hypot(p.x-10,p.y),10,1e-9),'quarter circle about (10,0)');DT.pt(a.tan,1,0,1e-9);DT.pt(a.center,10,0,1e-9);
+  a=D.tangentArc(P(0,0),P(1,0),P(10,10));DT.pt(a.center,0,10,1e-9);DT.pt(a.tan,0,1,1e-9);a=D.tangentArc(P(0,0),P(1,0),P(10,-10));DT.pt(a.center,0,-10,1e-9);DT.pt(a.tan,0,-1,1e-9);
+  a=D.tangentArc(P(0,0),P(1,0),P(5,0));assert.ok(a.straight);assert.equal(D.tangentArc(P(0,0),P(1,0),P(-5,0)),null,'directly behind the tangent');assert.equal(D.tangentArc(P(0,0),P(1,0),P(0,0)),null);
+  a=D.tangentArc(P(0,0),P(1,0),P(-1,0.2));assert.ok(a&&Math.abs(a.radius)>0,'nearly a full turn is allowed');
+  a=D.arcThrough(P(10,0),P(0,10),P(-10,0));DT.pt(a.center,0,0,1e-9);assert.ok(DT.near(a.sweep,PI,1e-9));DT.pt(a.pts[0],10,0);DT.pt(a.pts.at(-1),-10,0);assert.ok(a.pts.some(p=>DT.near(p.x,0,1e-9)&&DT.near(p.y,10,1e-9)),'passes through the second point');DT.pt(a.tan,0,-1,1e-9);
+  a=D.arcThrough(P(10,0),P(0,-10),P(-10,0));assert.ok(DT.near(a.sweep,-PI,1e-9));assert.ok(a.pts.every(p=>p.y<=1e-9),'clockwise through the bottom');
+  assert.equal(D.arcThrough(P(0,0),P(5,5),P(10,10)),null,'collinear');
+  a=D.arcCenterStart(P(0,0),P(10,0),P(0,5));assert.ok(DT.near(a.sweep,PI/2,1e-9));DT.pt(a.pts.at(-1),0,10,1e-9);a=D.arcCenterStart(P(0,0),P(10,0),P(0,-5));assert.ok(DT.near(a.sweep,1.5*PI,1e-9),'counterclockwise all the way round');
+  a=D.arcCenterStart(P(0,0),P(10,0),null,-PI/2);DT.pt(a.pts.at(-1),0,-10,1e-9);assert.equal(D.arcCenterStart(P(0,0),P(10,0),P(20,0)),null,'end on the start ray');assert.equal(D.arcCenterStart(P(0,0),P(0,0),P(5,5)),null)`);
+ await go(`const {P}=DT,D=CF.drafting;DT.reset();DT.setFlags(true,false);
+  D.start('polyline');await DT.idle();assert.equal(tool,'polyline');assert.equal(CF.prompt(),'PLINE Specify start point:');
+  await accept(P(0,0));assert.equal(CF.prompt(),'PLINE Specify next point or [Arc/Length/Undo]:');await accept(P(10,0));assert.equal(CF.prompt(),'PLINE Specify next point or [Arc/Length/Undo]:','Close is not offered after one segment');
+  await accept(P(10,10));assert.equal(CF.prompt(),'PLINE Specify next point or [Arc/Close/Length/Undo]:','Close appears after two segments');assert.equal(CF.previews.polyline(P(0,10))[0].points.length,4);
+  await D.input('U');assert.equal(CF.prompt(),'PLINE Specify next point or [Arc/Length/Undo]:');assert.equal(CF.previews.polyline(P(0,10))[0].points.length,3);await D.input('U');await D.input('U');assert.equal(D.state().prompt,'Specify next point or [Arc/Length/Undo]:','extra undo is harmless');
+  await accept(P(10,0));await accept(P(10,10));{const pr=D.input('close');assert.ok(pr);await pr}await DT.idle();assert.equal(doc.entities.length,1);assert.ok(doc.entities[0].closed);DT.pts(doc.entities[0].points,[[0,0],[10,0],[10,10]]);assert.equal(tool,'select');assert.equal(D.state(),null);undo();assert.equal(doc.entities.length,0);
+  // Esc and Enter keep the segments; a lone start point leaves nothing
+  D.start('polyline');await DT.idle();await accept(P(0,0));await accept(P(5,0));await accept(P(5,5));CF.cancel();assert.equal(doc.entities.length,1,'Esc keeps the polyline');assert.ok(!doc.entities[0].closed);DT.pts(doc.entities[0].points,[[0,0],[5,0],[5,5]]);assert.equal(D.state(),null);assert.equal(tool,'select');
+  D.start('polyline');await DT.idle();await accept(P(0,0));CF.cancel();assert.equal(doc.entities.length,1);D.start('polyline');await DT.idle();await accept(P(1,1));await accept(P(2,2));CF.enter();await DT.idle();assert.equal(doc.entities.length,2);D.start('polyline');await DT.idle();await accept(P(7,7));await accept(P(8,8));D.start('offset');assert.equal(doc.entities.length,3,'starting another command keeps it too');CF.cancel();
+  // Width is not supported: said so, command continues
+  DT.reset();D.start('polyline');await DT.idle();await accept(P(0,0));{const w=D.input('W');assert.ok(w);await w}assert.equal(D.state().prompt,'Specify next point or [Arc/Length/Undo]:');CF.cancel();assert.equal(doc.entities.length,0);DT.restoreFlags()`);
+ await go(`const {P}=DT,D=CF.drafting;DT.reset();DT.setFlags(true,false);
+  // Arc mode: Direction, tangent continuation, back to Line; Undo removes a whole arc segment
+  D.start('polyline');await DT.idle();await accept(P(0,0));await D.input('A');assert.equal(CF.prompt(),'PLINE Specify endpoint of arc or [Close/Direction/Line/Second pt/Undo]:');await D.input('D');assert.ok(CF.prompt().includes('tangent direction'));await D.input('90');assert.equal(D.state().prompt,'Specify endpoint of arc or [Close/Direction/Line/Second pt/Undo]:');
+  await accept(P(10,10));assert.equal(CF.previews.polyline(P(20,0)).length,1);await accept(P(20,0));await D.input('L');await accept(P(30,0));await D.input('U');await D.input('U');await D.input('A');await accept(P(20,0));CF.enter();await DT.idle();
+  const pl=doc.entities[0];assert.equal(pl.type,'polyline');DT.pt(pl.points[0],0,0);DT.pt(pl.points.at(-1),20,0);for(const p of pl.points)assert.ok(DT.near(Math.hypot(p.x-10,p.y),10,1e-9)&&p.y>=-1e-9,'the tangent continuation stays on the circle about (10,0): '+JSON.stringify(p));assert.ok(pl.points.some(p=>DT.near(p.x,10,1e-9)&&DT.near(p.y,10,1e-9)),'passes the first arc end point');
+  // Second pt: three-point arc segment, then Close with an arc
+  DT.reset();D.start('polyline');await DT.idle();await accept(P(10,0));await D.input('A');await D.input('S');assert.ok(CF.prompt().includes('Specify second point on arc'));await accept(P(0,10));assert.ok(CF.prompt().includes('Specify end point of arc'));await accept(P(-10,0));await DT.idle();
+  assert.ok(CF.prompt().includes('Specify endpoint of arc'));await D.input('C');await DT.idle();let e=doc.entities[0];assert.ok(e.closed,'closed with an arc');DT.pt(e.points[0],10,0);for(const p of e.points)assert.ok(DT.near(Math.hypot(p.x,p.y),10,1e-9));assert.ok(e.points.some(p=>DT.near(p.y,-10,1e-6)||DT.near(p.y,10,1e-9)));assert.ok(Math.abs(CF.drafting.area(e.points))>300,'area '+CF.drafting.area(e.points));
+  // Length repeats the previous direction
+  DT.reset();D.start('polyline');await DT.idle();await accept(P(0,0));await D.input('L');assert.equal(D.state().prompt,'Specify next point or [Arc/Length/Undo]:','Length needs a first segment');await accept(P(0,5));await D.input('L');await DT.idle();CF.enter();await DT.idle();DT.pts(doc.entities[0].points,[[0,0],[0,5],[0,12]]);
+  DT.restoreFlags()`,['7']);
+ await go(`const {P}=DT,D=CF.drafting,PI=Math.PI;DT.reset();DT.setFlags(false,true);D.start('arc');await DT.idle();assert.equal(tool,'arc');assert.equal(CF.prompt(),'ARC Specify start point of arc or [Center]:');
+  await accept(P(10,0));assert.equal(CF.prompt(),'ARC Specify second point of arc or [Center]:');await accept(P(0,10));assert.equal(CF.prompt(),'ARC Specify end point of arc:');assert.ok(CF.previews.arc(P(-10,0)).length===1);assert.equal(CF.previews.arc(P(-10,20)).length,0,'collinear: no preview');
+  await accept(P(-10,0));let a=doc.entities[0];assert.equal(a.type,'polyline');assert.ok(!a.closed);DT.pt(a.points[0],10,0);DT.pt(a.points.at(-1),-10,0);for(const p of a.points)assert.ok(DT.near(Math.hypot(p.x,p.y),10,1e-9));assert.ok(a.points.every(p=>p.y>=-1e-9),'goes through (0,10)');assert.equal(tool,'select');assert.equal(D.state(),null);undo();assert.equal(doc.entities.length,0);
+  // a collinear third point is rejected and asked again
+  D.start('arc');await DT.idle();await accept(P(0,0));await accept(P(5,5));await accept(P(10,10));assert.equal(CF.prompt(),'ARC Specify end point of arc:');assert.equal(doc.entities.length,0);await accept(P(10,0));assert.equal(doc.entities.length,1);
+  // [Center] first: center, start, end (counterclockwise) and the Angle option
+  DT.reset();D.start('arc');await DT.idle();await D.input('C');assert.equal(CF.prompt(),'ARC Specify center point of arc:');await accept(P(0,0));assert.equal(CF.prompt(),'ARC Specify start point of arc:');await accept(P(10,0));assert.equal(CF.prompt(),'ARC Specify end point of arc or [Angle]:');await accept(P(0,3));
+  a=doc.entities[0];DT.pt(a.points[0],10,0);DT.pt(a.points.at(-1),0,10,1e-9);for(const p of a.points)assert.ok(DT.near(Math.hypot(p.x,p.y),10,1e-9));assert.ok(a.points.length>=9);
+  D.start('arc');await DT.idle();await D.input('C');await accept(P(0,0));await accept(P(0,10));await D.input('A');await DT.idle();a=doc.entities[1];assert.ok(a.points.every(p=>p.x>=-1e-9),'-90 degrees is clockwise from (0,10) to (10,0)');DT.pt(a.points.at(-1),10,0,1e-9);
+  // Start, Center, End
+  D.start('arc');await DT.idle();await accept(P(10,0));await D.input('C');assert.equal(CF.prompt(),'ARC Specify center point of arc:');await accept(P(0,0));await accept(P(-4,0));a=doc.entities[2];assert.ok(DT.near(D.area([...a.points,P(0,0)])*2,Math.PI*100,4),'half disc');DT.pt(a.points.at(-1),-10,0,1e-9);
+  assert.equal(doc.entities.length,3);D.start('arc');await DT.idle();CF.cancel();assert.equal(D.state(),null);DT.restoreFlags()`,['-90']);
+ await go(`if(!CF.has('commands'))return;const D=CF.drafting;DT.reset();DT.setFlags(false,false);
+  CF.run('PL');await DT.idle();assert.equal(tool,'polyline');assert.equal(D.state(),null,'engine PLINE while the flag is off');assert.equal(CF.prompt(),'PLINE Specify start point:');assert.ok(!('polyline' in CF.previews),'no preview hook left behind');CF.cancel();CF.run('ARC');await DT.idle();assert.equal(tool,'arc');assert.equal(D.state(),null);assert.equal(CF.prompt(),'ARC Specify center point of arc:');CF.cancel();
+  DT.setFlags(true,true);CF.run('PL');await DT.idle();assert.equal(tool,'polyline');assert.equal(D.state().tool,'polyline');assert.equal(CF.prompt(),'PLINE Specify start point:');assert.ok('polyline' in CF.previews);CF.cancel();assert.ok(!('polyline' in CF.previews)&&!('polyline' in CF.prompts)&&!('polyline' in CF.pickTools),'hooks removed when the flow ends');CF.run('A');await DT.idle();assert.equal(D.state().tool,'arc');assert.equal(CF.prompt(),'ARC Specify start point of arc or [Center]:');CF.cancel();setTool('polyline');assert.equal(D.state().tool,'polyline','a ribbon/legacy setTool(polyline) gets the same flow');CF.cancel();DT.setFlags(false,true);setTool('polyline');assert.equal(D.state(),null);CF.cancel();DT.setFlags(true,true);assert.equal(CF.resolve('PL').name,'PLINE');assert.equal(CF.resolve('A').name,'ARC');assert.equal(CF.resolve('POLYLINE').name,'PLINE');DT.restoreFlags()`);
+
+ // ---- HATCH: boundary detection from an internal point ----
+ await go(`const {P,L}=DT,D=CF.drafting,rect=(x0,y0,x1,y1)=>({type:'polyline',layer:'0',closed:true,points:[P(x0,y0),P(x1,y0),P(x1,y1),P(x0,y1)]});
+  const area=l=>Math.abs(D.area(l)),total=r=>r.loops[0]&&r.loops.reduce((s,l,k)=>s+(k?-1:1)*area(l),0);
+  // closed polyline, and the same rectangle drawn as four loose lines
+  DT.reset([rect(0,0,100,60)]);let r=D.boundaryAt(P(50,30));assert.ok(!r.error);assert.equal(r.loops.length,1);assert.ok(DT.near(total(r),6000,1e-6));assert.ok(D.boundaryAt(P(150,30)).error,'outside everything');assert.equal(D.boundaryAt(P(150,30)).error,'Valid hatch boundary not found.');
+  DT.reset([L(0,0,100,0),L(100,0,100,60),L(100,60,0,60),L(0,60,0,0)]);r=D.boundaryAt(P(20,20));assert.ok(DT.near(total(r),6000,1e-6),'four lines form a boundary');
+  // a # of crossing lines: the smallest cell around the click, not the whole figure
+  DT.reset([L(-10,0,50,0),L(-10,20,50,20),L(10,-10,10,40),L(30,-10,30,40)]);r=D.boundaryAt(P(20,10));assert.ok(DT.near(total(r),400,1e-6),'centre cell of the #');r=D.boundaryAt(P(40,10));assert.equal(r.error,'Valid hatch boundary not found.','the open end cell is not enclosed');
+  // T junction splits a rectangle; a dangling stub is ignored
+  DT.reset([rect(0,0,100,60),L(50,0,50,60),L(100,30,130,30)]);r=D.boundaryAt(P(20,30));assert.ok(DT.near(total(r),3000,1e-6),'half of the divided rectangle');r=D.boundaryAt(P(80,30));assert.ok(DT.near(total(r),3000,1e-6));
+  // partly shared edges
+  DT.reset([rect(0,0,10,10),rect(10,5,20,15)]);assert.ok(DT.near(total(D.boundaryAt(P(5,5))),100,1e-6));assert.ok(DT.near(total(D.boundaryAt(P(15,10))),100,1e-6));
+  // islands: click between the outer and inner shapes, then inside the inner one
+  DT.reset([rect(0,0,100,100),rect(30,30,70,70),{type:'circle',layer:'0',center:P(15,85),radius:5}]);r=D.boundaryAt(P(10,10));assert.equal(r.loops.length,3);assert.ok(DT.near(total(r),10000-1600-Math.PI*25*(128/(2*Math.PI))*Math.sin(2*Math.PI/128),1e-6),'outer minus both islands');
+  r=D.boundaryAt(P(50,50));assert.equal(r.loops.length,1);assert.ok(DT.near(total(r),1600,1e-6));
+  // a circle crossing a rectangle: the lens is the smaller region
+  DT.reset([rect(0,0,20,20),{type:'circle',layer:'0',center:P(0,10),radius:6}]);r=D.boundaryAt(P(3,10));assert.ok(Math.abs(total(r)-Math.PI*18)<0.3,'half disc inside the rectangle: '+total(r));
+  // hidden layers and hatch lines are not boundaries
+  DT.reset([rect(0,0,10,10),{...rect(-5,-5,15,15),layer:'H'},{...L(0,0,10,10),hatch:true,group:'x'}]);doc.layers.push({name:'H',color:'#fff',visible:false});r=D.boundaryAt(P(5,5));assert.ok(DT.near(total(r),100,1e-6),'hidden outline and hatch line ignored');
+  // too many segments is reported, not frozen
+  DT.reset(Array.from({length:60},(_,k)=>({type:'circle',layer:'0',center:P(k*3,0),radius:1})));r=D.boundaryAt(P(0,0));assert.ok(r.loops||r.error)`);
+ await go(`const {P}=DT,D=CF.drafting;
+  const sq=[[P(0,0),P(10,0),P(10,10),P(0,10)]];let f=D.hatchFill(sq,2,45);assert.ok(!f.error);const len=f.lines.reduce((s,[a,b])=>s+Math.hypot(b.x-a.x,b.y-a.y),0);assert.ok(Math.abs(len*2-100)<4,'line length x spacing ~ area, got '+len*2);
+  for(const [a,b]of f.lines){assert.ok(DT.near(Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,45,1e-6)||DT.near(Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,-135,1e-6));for(const p of [a,b])assert.ok(p.x>=-1e-9&&p.x<=10+1e-9&&p.y>=-1e-9&&p.y<=10+1e-9)}
+  f=D.hatchFill(sq,2,0);assert.ok(f.lines.every(([a,b])=>DT.near(a.y,b.y)&&Number.isInteger(Math.round(a.y/2))),'horizontal rows on the global spacing grid');
+  const ring=[[P(0,0),P(20,0),P(20,20),P(0,20)],[P(5,5),P(15,5),P(15,15),P(5,15)]];f=D.hatchFill(ring,1,45);const l2=f.lines.reduce((s,[a,b])=>s+Math.hypot(b.x-a.x,b.y-a.y),0);assert.ok(Math.abs(l2-300)<8,'island is left empty, got '+l2);
+  assert.equal(D.hatchFill(sq,0,45).error,'Enter positive spacing.');assert.ok(D.hatchFill([[P(0,0),P(1e6,0),P(1e6,1e6)]],0.1,45).error.startsWith('Spacing too small'));`);
+
+ // ---- HATCH command flow: click inside, settings, undo, select-objects fallback, typed point ----
+ await go(`const {P,L}=DT,D=CF.drafting;DT.reset([{type:'polyline',layer:'0',closed:true,points:[P(0,0),P(100,0),P(100,60),P(0,60)]},{type:'polyline',layer:'0',closed:true,points:[P(200,0),P(260,0),P(260,40),P(200,40)]}]);
+  D.settings.hatchSpacing=5;D.settings.hatchAngle=45;CF.run('HATCH');await DT.idle();assert.equal(tool,'hatch');assert.ok(CF.picking&&CF.picking.command==='HATCH');assert.ok(CF.prompt().startsWith('HATCH Pick internal point'));assert.ok(CF.pickTools.hatch());
+  assert.equal(CF.previews.hatch(P(50,30)).length,1,'hover previews the region');assert.equal(CF.previews.hatch(P(150,30)).length,0);
+  await accept(P(150,30));await DT.idle();assert.equal(doc.entities.length,2,'a click outside any boundary creates nothing');assert.ok(CF.picking,'still waiting for a point');
+  await accept(P(50,30));await DT.idle();const n1=doc.entities.length;assert.ok(n1>2+8);const hs=doc.entities.slice(2);assert.ok(hs.every(e=>e.hatch&&e.type==='line'&&e.group===hs[0].group&&e.layer==='0'));assert.equal(D.settings.hatchSpacing,10);
+  for(const e of hs)for(const p of e.points)assert.ok(p.x>=-1e-9&&p.x<=100+1e-9&&p.y>=-1e-9&&p.y<=60+1e-9);
+  await accept(P(230,20));await DT.idle();assert.ok(doc.entities.length>n1,'second region needs no new question');assert.notEqual(doc.entities.at(-1).group,hs[0].group);
+  assert.equal(tool,'hatch');await CF.drafting.input('U');await DT.idle();assert.equal(doc.entities.length,n1,'U undoes the last hatch');
+  CF.enter();await DT.idle();assert.equal(tool,'select');assert.equal(D.state(),null);assert.equal(CF.picking,null);undo();assert.equal(doc.entities.length,2);`,['10']);
+ await go(`const {P}=DT,D=CF.drafting;DT.reset([{type:'polyline',layer:'0',closed:true,points:[P(0,0),P(100,0),P(100,60),P(0,60)]}]);CF.run('H');await DT.idle();
+  await CF.drafting.input('T');await DT.idle();
+  assert.equal(D.settings.hatchSpacing,8);assert.equal(D.settings.hatchAngle,90);await CF.drafting.input('50,30');await DT.idle();const hs=doc.entities.slice(1);assert.ok(hs.length>5);assert.ok(hs.every(e=>DT.near(e.points[0].x,e.points[1].x)),'90 degree hatch is vertical');
+  assert.equal(await CF.drafting.input('xyz'),false);CF.cancel();await DT.idle();assert.equal(D.state(),null);`,['8','90']);
+ // Select objects path: pick the boundary, Enter, spacing question; loose lines work too.
+ await go(`const {P,L}=DT,D=CF.drafting;DT.reset([L(0,0,50,0),L(50,0,50,30),L(50,30,0,30),L(0,30,0,0)]);D.settings.hatchAngle=45;CF.run('HATCH');await DT.idle();
+  await accept(P(25,0));await accept(P(50,15));assert.equal(CF.selection().length,2);await accept(P(25,30));await accept(P(0,15));CF.enter();await DT.idle();
+  assert.equal(tool,'select');assert.ok(doc.entities.length>4+3);assert.equal(selected,-1);assert.ok(doc.entities.slice(4).every(e=>e.hatch));
+  DT.reset([{type:'polyline',layer:'0',closed:true,points:[P(0,0),P(30,0),P(30,30),P(0,30)]}]);CF.select([0]);CF.run('HATCH');await DT.idle();CF.enter();await DT.idle();assert.ok(doc.entities.length>5,'a noun-verb selection hatches on Enter');
+  DT.reset([L(0,0,10,0)]);CF.select([0]);CF.run('HATCH');await DT.idle();CF.enter();await DT.idle();assert.equal(doc.entities.length,1);assert.ok(CF.picking,'an open line is no boundary: still prompting');CF.cancel();assert.equal(D.state(),null)`,['5','5']);
+ // The canvas hook: a click on empty space becomes the internal point, a click on a boundary object stays a selection, hatch lines never block it.
+ await go(`const {P}=DT,D=CF.drafting;DT.reset([{type:'polyline',layer:'0',closed:true,points:[P(0,0),P(100,0),P(100,60),P(0,60)]}]);D.settings.hatchSpacing=2;D.settings.hatchAngle=45;CF.run('HATCH');await DT.idle();
+  const ev=(x,y,o={})=>({button:0,target:canvas,offsetX:500+x*4,offsetY:350-y*4,consumed:0,preventDefault(){this.consumed++},stopPropagation(){this.consumed++},stopImmediatePropagation(){this.consumed++},...o});
+  let e=ev(0,30);assert.equal(D.onHatchClick(e),false,'on the boundary edge: left to the selection code');assert.equal(e.consumed,0);assert.equal(D.onHatchClick(ev(50,30,{shiftKey:true})),false);assert.equal(D.onHatchClick(ev(50,30,{button:2})),false);assert.equal(D.onHatchClick(ev(50,30,{target:{}})),false);
+  e=ev(50,30);assert.equal(D.onHatchClick(e),true);assert.ok(e.consumed>=3);await DT.idle();const n=doc.entities.length;assert.ok(n>20,'hatched');
+  e=ev(50.3,30.2);assert.equal(D.onHatchClick(e),true,'dense hatch lines under the pickbox do not turn the click into a selection');await DT.idle();assert.ok(doc.entities.length>n);assert.equal(CF.selection().length,0);
+  mode3D=true;assert.equal(D.onHatchClick(ev(50,30)),false);mode3D=false;CF.cancel();assert.equal(D.onHatchClick(ev(50,30)),false,'no command running')`,['2']);
+ // Without B1 (or when its picking does not apply) a click routed through accept() reaches the same code.
+ await go(`const {P}=DT,D=CF.drafting;DT.reset([{type:'circle',layer:'0',center:P(0,0),radius:20}]);CF.run('HATCH');await DT.idle();
+  D.settings.hatchSpacing=1;D.settings.hatchAngle=45;await accept(P(1,1));await DT.idle();const hs=doc.entities.slice(1);assert.ok(hs.length>=35);
+  let len=0;for(const e of hs)len+=Math.hypot(e.points[1].x-e.points[0].x,e.points[1].y-e.points[0].y);assert.ok(Math.abs(len-Math.PI*400)<20,'filled disc area '+len);CF.cancel()`,['']);
+
+ // ---- Esc during a selection window cancels the whole command ----
+ await go(`if(!CF.has('interact'))return;const {P,L}=DT,D=CF.drafting;DT.reset([{type:'polyline',layer:'0',closed:true,points:[P(0,0),P(100,0),P(100,60),P(0,60)]}]);const st=CF.interact.state();
+  const ev=()=>({key:'Escape',consumed:0,preventDefault(){this.consumed++},stopPropagation(){this.consumed++},stopImmediatePropagation(){this.consumed++}});
+  CF.run('HATCH');await DT.idle();st.win={a:P(1,1),cur:P(5,5),down:false};let e=ev();assert.equal(D.onEscape(e),true);assert.ok(e.consumed>=3);assert.equal(st.win,null);assert.equal(D.state(),null);assert.equal(tool,'select');assert.equal(CF.picking,null);
+  CF.run('TRIM');await DT.idle();st.win={a:P(1,1),cur:P(5,5),down:false};assert.equal(D.onEscape(ev()),true);assert.equal(D.state(),null);
+  setTool('select');st.win={a:P(1,1),cur:P(5,5),down:false};e=ev();assert.equal(D.onEscape(e),false,'idle window: left to the interaction module');assert.equal(e.consumed,0);st.win=null;assert.equal(D.onEscape(ev()),false);assert.equal(D.onEscape({key:'a'}),false)`);
+
+ // ---- MATCHPROP: colour, layer, text height, feedback ----
+ await go(`const {P,L}=DT,D=CF.drafting;DT.reset([{type:'circle',layer:'0',center:P(0,0),radius:5,color:'#ff3030'},{type:'circle',layer:'0',center:P(30,0),radius:5},{type:'circle',layer:'A',center:P(60,0),radius:5,color:'#00ff00'}]);doc.layers.push({name:'A',color:'#ff0000',visible:true});
+  CF.run('MA');await DT.idle();await accept(P(5,0));await accept(P(35,0));assert.equal(doc.entities[1].color,'#ff3030','colour is matched');assert.ok(/Matched Color, Layer to 1 object/.test(D.settings.lastReport[0]),D.settings.lastReport[0]);
+  assert.ok(CF.selection().includes(0)&&CF.selection().includes(1),'source and destination stay highlighted');
+  await accept(P(65,0));assert.equal(doc.entities[2].color,'#ff3030');assert.equal(doc.entities[2].layer,'0');assert.ok(/2 so far/.test(D.settings.lastReport[0]));CF.enter();await DT.idle();assert.equal(CF.selection().length,0);
+  // a ByLayer source clears an explicit colour
+  CF.run('MATCHPROP');await DT.idle();await accept(P(35,0));doc.entities[1].color=undefined;delete doc.entities[1].color;await accept(P(65,0));assert.ok(!('color' in doc.entities[2]),'ByLayer source resets colour');CF.enter();await DT.idle();undo();assert.equal(doc.entities[2].color,'#ff3030');`);
+ await go(`const {P}=DT,D=CF.drafting;DT.reset([{type:'circle',layer:'A',center:P(0,0),radius:5,color:'#ff3030'},{type:'circle',layer:'0',center:P(30,0),radius:5,color:'#00ff00'}]);doc.layers.push({name:'A',color:'#ff0000',visible:true});
+  CF.run('MA');await DT.idle();await accept(P(5,0));await CF.drafting.input('S');await DT.idle();assert.equal(D.settings.matchColor,false);assert.equal(D.settings.matchLayer,true);assert.equal(D.settings.matchText,false);
+  await accept(P(35,0));assert.equal(doc.entities[1].layer,'A');assert.equal(doc.entities[1].color,'#00ff00','colour untouched when only Layer is matched');assert.ok(/Matched Layer to 1 object/.test(D.settings.lastReport[0]));
+  Object.assign(D.settings,{matchColor:true,matchLayer:true,matchText:true});CF.cancel()`,['Layer']);
+ console.log('PASS: drafting OFFSET (lines/circles/closed+open polylines, through), quick TRIM (lines/circles/polylines, erase, shift-extend), EXTEND, FILLET (r=0, tangent arc, polyline), CHAMFER (distance/angle), MIRROR, POLYGON, ELLIPSE, DIMLINEAR, DIST/ID/LIST, MATCHPROP (colour/layer/text, feedback), ARRAYRECT, PURGE, cancellation, PLINE kept on Esc, HATCH internal-point boundaries/islands/flow, Esc during a selection window');
 };

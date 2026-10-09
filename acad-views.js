@@ -30,7 +30,8 @@ function goCamera(cam,animate=true){if(isLayout())CF.setSpace('model');const was
 function withTween(fn){const t=S.tween;if(!t||!mode3D)return fn();const k=Math.min(1,(performance.now()-t.t0)/t.dur);if(k>=1){S.tween=null;return fn()}const e=k<.5?2*k*k:1-(-2*k+2)**2/2,yaw=camera3.yaw,pitch=camera3.pitch;camera3.yaw=t.from.yaw+wrapA(t.to.yaw-t.from.yaw)*e;camera3.pitch=t.from.pitch+(t.to.pitch-t.from.pitch)*e;try{return fn()}finally{camera3.yaw=yaw;camera3.pitch=pitch}}
 CF.setViewPreset=function(name){const k=presetKey(name);if(!k){notify(`Unknown view "${name}".`);return false}S.tween=null;if(k==='top'){if(isLayout())CF.setSpace('model');if(mode3D)showModel();else render();emitView();return true}goCamera(PRESETS[k]);return true};
 function styleKey(name){const s=String(name||'').toLowerCase().replace(/with|[\s_-]/g,'');return STYLES[s]?s:({'2d':'2dwireframe','2dw':'2dwireframe',w:'wireframe','3dwireframe':'wireframe',s:'shaded',realistic:'shaded',shadesofgray:'shaded',shadesofgrey:'shaded',e:'shadededges',shadededge:'shadededges',conceptual:'shadededges'})[s]||null}
-CF.setVisualStyle=function(name){const k=styleKey(name);if(!k){notify(`Unknown visual style "${name}".`);return false}S.style=k;if(!isLayout()&&!mode3D&&k!=='2dwireframe')show3D();else render();notify(`Visual style: ${STYLES[k]}`);emitView();return true};
+// From the plan view a 3D style goes to a predictable SE Isometric (never the last remembered orbit camera).
+CF.setVisualStyle=function(name){const k=styleKey(name);if(!k){notify(`Unknown visual style "${name}".`);return false}S.style=k;if(!isLayout()&&!mode3D&&k!=='2dwireframe')goCamera(PRESETS.se,false);else render();notify(`Visual style: ${STYLES[k]}`);emitView();return true};
 CF.visualStyle=()=>S.style;
 try{camera3.yaw=PRESETS.se.yaw;camera3.pitch=PRESETS.se.pitch}catch(err){}
 
@@ -99,6 +100,14 @@ function visibleSegments(p,q,Z,eps,g=ctx){const w=Z.w,h=Z.h,dx=q.x-p.x,dy=q.y-p.
  for(let s=0;s<=n;s++){const t=t0+(t1-t0)*s/n,x=p.x+dx*t,y=p.y+dy*t,z=p.depth+(q.depth-p.depth)*t,ci=Math.round(x/DS),cj=Math.round(y/DS);let m=Infinity;for(let j=Math.max(0,cj-1);j<=Math.min(h-1,cj+1);j++)for(let i=Math.max(0,ci-1);i<=Math.min(w-1,ci+1);i++){const k=j*w+i,v=Z[k]+Z.G[k]*Math.hypot(x-i*DS,y-j*DS);if(v<m)m=v}
   if(z<=m+eps){const pt={x,y};if(!start)start=pt;last=pt}else if(start){if(last!==start){g.moveTo(start.x,start.y);g.lineTo(last.x,last.y)}start=null}}
  if(start&&last!==start){g.moveTo(start.x,start.y);g.lineTo(last.x,last.y)}}
+// Edge groups ({alpha, list:[p,q,p,q...]}) per mesh for the two wireframe styles.
+// 2D Wireframe: a flat 2D-style outline - feature edges and silhouettes, one weight, one opacity, no depth fade.
+// Wireframe: depth-cued - four depth bands fade toward the far side, and edges hidden behind the part are fainter still.
+function wireGroups(per,st){const keep=(m,e)=>e.feature||m.front[e.f1]!==m.front[e.f2];
+ if(st!=='wireframe')return per.map(m=>{const list=[];for(const e of m.info.edges)if(keep(m,e))list.push(m.P[e.a],m.P[e.b]);return list.length?[{alpha:1,list}]:[]});
+ let zmin=Infinity,zmax=-Infinity;for(const m of per)for(const p of m.P){if(p.depth<zmin)zmin=p.depth;if(p.depth>zmax)zmax=p.depth}const zr=zmax-zmin||1,ALPHA=[1,.78,.58,.4];
+ return per.map(m=>{const paths=Array.from({length:8},()=>[]);for(const e of m.info.edges){if(!keep(m,e))continue;const p=m.P[e.a],q=m.P[e.b],t=((p.depth+q.depth)/2-zmin)/zr,hidden=!(m.front[e.f1]===1||(e.f2>=0&&m.front[e.f2]===1));paths[Math.min(3,Math.max(0,Math.floor(t*4)))*2+(hidden?1:0)].push(p,q)}
+  return paths.map((list,k)=>({alpha:ALPHA[k>>1]*(k&1?.55:1),list})).filter(g=>g.list.length)})}
 render3D=function(){
  const B=basis(camera3.yaw,camera3.pitch),st=S.style,solids=doc.solids||[],shaded=st==='shaded'||st==='shadededges';
  ctx.save();ctx.setLineDash([]);ctx.globalAlpha=1;ctx.lineJoin='round';ctx.lineCap='round';
@@ -115,10 +124,30 @@ render3D=function(){
   for(let k=0;k<faces.length;k++){const F=faces[k],m=per[F.si],n=m.info.normals,i=F.f*3,I=.36+.64*Math.max(0,n[i]*L.x+n[i+1]*L.y+n[i+2]*L.z);let [r,gg,b]=m.rgb.map(v=>v*I);if(m.hl===1){r=r*.7+120*.3;gg=gg*.7+180*.3;b=b*.7+255*.3}else if(m.hl===2){r=r*.75+232*.25;gg=gg*.75+184*.25;b=b*.75+79*.25}const col=`rgb(${r|0},${gg|0},${b|0})`;ctx.beginPath();ctx.moveTo(F.a.x,F.a.y);ctx.lineTo(F.b.x,F.b.y);ctx.lineTo(F.c.x,F.c.y);ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=1.1;ctx.stroke()}
   // Edges are drawn after all faces and clipped by a coarse depth buffer, so hidden edges stay hidden.
   if(st==='shadededges'){const Z=depthBuffer(per),eps=2/camera3.scale+1e-4*Z.span;for(const m of per){ctx.beginPath();for(const e of m.info.edges){const A=e.f1>=0&&m.front[e.f1]===1,Bf=e.f2>=0&&m.front[e.f2]===1;if(e.feature?!(A||Bf):A===Bf)continue;visibleSegments(m.P[e.a],m.P[e.b],Z,eps)}ctx.strokeStyle=edgeColor(m)||'rgba(8,11,16,.95)';ctx.lineWidth=m.hl?1.6:1.1;ctx.stroke()}}
- }else for(const m of per){ // Wireframe / 2D Wireframe: every feature edge (hidden ones too) plus silhouettes.
-  ctx.beginPath();for(const e of m.info.edges){if(!e.feature&&m.front[e.f1]===m.front[e.f2])continue;const p=m.P[e.a],q=m.P[e.b];ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y)}ctx.strokeStyle=edgeColor(m)||m.s.color;ctx.lineWidth=m.hl?1.6:1;ctx.stroke()}
+ }else{const groups=wireGroups(per,st);per.forEach((m,mi)=>{ctx.strokeStyle=edgeColor(m)||m.s.color;ctx.lineWidth=m.hl?1.6:1;for(const gr of groups[mi]){ctx.globalAlpha=gr.alpha;ctx.beginPath();for(let i=0;i<gr.list.length;i+=2){ctx.moveTo(gr.list[i].x,gr.list[i].y);ctx.lineTo(gr.list[i+1].x,gr.list[i+1].y)}ctx.stroke()}ctx.globalAlpha=1})}
  ctx.restore();
  $('status').textContent=`3D | ${solids.length} mesh${solids.length===1?'':'es'} | ${tris} triangles | ${STYLES[st]}`;$('entityKind').textContent='3D mesh workspace'};
+// ---- Plan view (2D model space): solids seen from above, drawn beneath the 2D entities -------------
+// Up-facing faces are painted far-to-near in a dimmed shade (so the 2D drawing stays readable on top); feature edges are
+// hidden-line clipped with the same coarse depth buffer as the 3D view. The projected geometry is cached between renders.
+const plan={sig:'',faces:[],edges:[]},solidIds=new WeakMap();let solidSeq=0;
+const solidId=s=>{let i=solidIds.get(s);if(!i)solidIds.set(s,i=++solidSeq);return i};
+function planSig(){const solids=doc.solids||[];let sum=0;const ids=[];for(const s of solids){for(const p of s.vertices)sum+=p.x+p.y*1.7+p.z*2.3;ids.push(solidId(s)+':'+s.vertices.length+'/'+s.faces.length+s.color)}return[W,H,view.x,view.y,view.scale,sum,ids.join(),pickIndex('a'),pickIndex('b'),CF.colors?.canvas].join('|')}
+function planBuild(){const solids=doc.solids||[],bg=hexRgb(CF.colors?.canvas||'#212830'),ia=pickIndex('a'),ib=pickIndex('b'),per=[],faces=[],mix=(c,k)=>`rgb(${c.map((v,i)=>v*k+bg[i]*(1-k)|0).join(',')})`;
+ const L=v3(-.3,.5,.75),ll=Math.hypot(L.x,L.y,L.z);
+ solids.forEach((s,si)=>{const info=meshInfo(s),P=s.vertices.map(p=>{const q=screen(p);return{x:q.x,y:q.y,depth:-p.z}}),nf=s.faces.length,front=new Uint8Array(nf);
+  for(let f=0;f<nf;f++){const t=s.faces[f],a=P[t[0]],b=P[t[1]],c=P[t[2]];if(!a||!b||!c||!info.ok[f])continue;if((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x)<0){front[f]=1;if(Math.max(a.x,b.x,c.x)<0||Math.min(a.x,b.x,c.x)>W||Math.max(a.y,b.y,c.y)<0||Math.min(a.y,b.y,c.y)>H)continue;const n=info.normals,i=f*3,I=.4+.6*Math.max(0,(n[i]*L.x+n[i+1]*L.y+n[i+2]*L.z)/ll);faces.push({si,f,a,b,c,depth:a.depth+b.depth+c.depth,I})}}
+  per.push({s,info,P,front,rgb:hexRgb(s.color),hl:si===ia?1:si===ib?2:0})});
+ faces.sort((p,q)=>q.depth-p.depth);plan.faces=faces.map(F=>{const m=per[F.si];return{x:[F.a.x,F.b.x,F.c.x],y:[F.a.y,F.b.y,F.c.y],col:mix(m.rgb,.5*F.I)}});
+ plan.edges=[];if(!faces.length)return;const Z=depthBuffer(per),eps=2/view.scale+1e-4*Z.span;
+ for(const m of per){const segs=[];let mx=0,my=0;const rec={moveTo(x,y){mx=x;my=y},lineTo(x,y){segs.push(mx,my,x,y)}};
+  for(const e of m.info.edges){const A=e.f1>=0&&m.front[e.f1]===1,Bf=e.f2>=0&&m.front[e.f2]===1;if(e.feature?!(A||Bf):A===Bf)continue;visibleSegments(m.P[e.a],m.P[e.b],Z,eps,rec)}
+  if(segs.length)plan.edges.push({segs,col:m.hl===1?CF.colors?.selection||'#4a90d9':m.hl===2?'#e8b84f':mix(m.rgb,.8),w:m.hl?1.6:1})}}
+function drawPlanSolids(){if(!doc.solids?.length)return;const sig=planSig();if(sig!==plan.sig){plan.sig='';planBuild();plan.sig=sig}
+ ctx.save();ctx.setLineDash([]);ctx.globalAlpha=1;ctx.lineJoin='round';ctx.lineWidth=1.1;
+ for(const F of plan.faces){ctx.beginPath();ctx.moveTo(F.x[0],F.y[0]);ctx.lineTo(F.x[1],F.y[1]);ctx.lineTo(F.x[2],F.y[2]);ctx.closePath();ctx.fillStyle=ctx.strokeStyle=F.col;ctx.fill();ctx.stroke()}
+ for(const E of plan.edges){ctx.beginPath();for(let i=0;i<E.segs.length;i+=4){ctx.moveTo(E.segs[i],E.segs[i+1]);ctx.lineTo(E.segs[i+2],E.segs[i+3])}ctx.strokeStyle=E.col;ctx.lineWidth=E.w;ctx.stroke()}
+ ctx.restore()}
 // Zoom extents in 3D covers meshes and the 2D drawing (at z = 0).
 fit3D=function(){let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;const add=(x,y,z)=>{if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;if(z<z0)z0=z;if(z>z1)z1=z};
  for(const s of doc.solids||[])for(const p of s.vertices)add(p.x,p.y,p.z);
@@ -154,10 +183,15 @@ function renderLayout(){
 
 // ---- UCS icon (lower-left of the drawing area) --------------------------------------------
 function arrow(x0,y0,x1,y1,color,label){const l=Math.hypot(x1-x0,y1-y0);ctx.strokeStyle=ctx.fillStyle=color;if(l<3){ctx.beginPath();ctx.arc(x0,y0,2.5,0,TAU);ctx.fill();return}const ux=(x1-x0)/l,uy=(y1-y0)/l;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1-ux*7,y1-uy*7);ctx.stroke();ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1-ux*9-uy*3.5,y1-uy*9+ux*3.5);ctx.lineTo(x1-ux*9+uy*3.5,y1-uy*9-ux*3.5);ctx.closePath();ctx.fill();if(label){ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x1+ux*9,y1+uy*9)}}
+// 3D tripod placement: the origin slides so every axis and its label stays on the canvas (Y points down in Bottom view,
+// X points left in Back view...). dx/dy are screen offsets of the axis tips from the origin (gx, gy).
+function ucs3D(ox=30,oy=H-30,L=40){const B=basis(camera3.yaw,camera3.pitch),axes=[[v3(1,0,0),'#e0605a','X'],[v3(0,1,0),'#5cc87a','Y'],[v3(0,0,1),'#4fa3e8','Z']].map(([a,c,n])=>({dx:dot(B.R,a)*L,dy:-dot(B.U,a)*L,depth:-dot(B.V,a),c,n}));
+ let x0=-4,x1=4,y0=-4,y1=4;for(const a of axes){const l=Math.hypot(a.dx,a.dy);if(l<3)continue;const ex=a.dx+a.dx/l*16,ey=a.dy+a.dy/l*16;x0=Math.min(x0,ex);x1=Math.max(x1,ex);y0=Math.min(y0,ey);y1=Math.max(y1,ey)}
+ return{gx:Math.min(Math.max(ox,8-x0),W-8-x1),gy:Math.max(Math.min(oy,H-8-y1),8-y0),axes,box:{x0,x1,y0,y1}}}
 function drawUCS(kind){ctx.save();ctx.setLineDash([]);ctx.globalAlpha=1;ctx.lineWidth=1.6;ctx.lineCap='butt';const ox=30,oy=H-30,L=40;
  if(kind==='layout'){ctx.strokeStyle='#e3e8ee';ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox+L,oy);ctx.lineTo(ox,oy-L);ctx.closePath();ctx.stroke();ctx.fillStyle='#e3e8ee';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('X',ox+L+9,oy);ctx.fillText('Y',ox,oy-L-9)}
  else if(kind==='2d'){arrow(ox,oy,ox+L,oy,'#e0605a','X');arrow(ox,oy,ox,oy-L,'#5cc87a','Y');ctx.strokeStyle='#dfe5ec';ctx.lineWidth=1.2;ctx.strokeRect(ox-.5,oy-6.5,7,7)}
- else{const B=basis(camera3.yaw,camera3.pitch),axes=[[v3(1,0,0),'#e0605a','X'],[v3(0,1,0),'#5cc87a','Y'],[v3(0,0,1),'#4fa3e8','Z']].map(([a,c,n])=>({x:ox+dot(B.R,a)*L,y:oy-dot(B.U,a)*L,depth:-dot(B.V,a),c,n}));axes.sort((p,q)=>q.depth-p.depth);for(const a of axes)arrow(ox,oy,a.x,a.y,a.c,a.n);ctx.fillStyle='#dfe5ec';ctx.fillRect(ox-2,oy-2,4,4)}
+ else{const {gx,gy,axes}=ucs3D(ox,oy,L);axes.sort((p,q)=>q.depth-p.depth);for(const a of axes)arrow(gx,gy,gx+a.dx,gy+a.dy,a.c,a.n);ctx.fillStyle='#dfe5ec';ctx.fillRect(gx-2,gy-2,4,4)}
  ctx.restore()}
 
 // ---- DOM chrome: viewport controls, ViewCube, navigation bar --------------------------------
@@ -266,7 +300,7 @@ function drawCube(){const c=ui.cubeCtx;if(!c||ui.cube.style.display==='none')ret
 
 // ---- Render wrapper: layout space, tweened camera, UCS icon, chrome refresh ------------------
 // In paper space the model-space drawing passes are skipped (the sheet is painted over the whole canvas instead).
-{const g=drawGrid,p=drawPreview,c=drawCursor,d=drawEntity;drawGrid=function(...a){if(!S.suppress)return g.apply(this,a)};drawPreview=function(...a){if(!S.suppress)return p.apply(this,a)};drawCursor=function(...a){if(!S.suppress)return c.apply(this,a)};drawEntity=function(...a){if(!S.suppress)return d.apply(this,a)}}
+{const g=drawGrid,p=drawPreview,c=drawCursor,d=drawEntity;drawGrid=function(...a){if(S.suppress)return;const r=g.apply(this,a);if(!mode3D&&CF.space!=='layout')try{drawPlanSolids()}catch(err){}return r};drawPreview=function(...a){if(!S.suppress)return p.apply(this,a)};drawCursor=function(...a){if(!S.suppress)return c.apply(this,a)};drawEntity=function(...a){if(!S.suppress)return d.apply(this,a)}}
 function syncMode(){const m=isLayout()?'layout':mode3D?'3d':'2d';if(m===S.mode)return;const was=S.mode;S.mode=m;if(was)S.panMode=false;try{canvas.style.cursor=m==='layout'?'crosshair':m==='3d'?'default':''}catch(err){}syncNav()}
 const vwPrevRender=render;
 render=function(){if(S.hold)return;syncMode();if(isLayout()){S.suppress=true;try{vwPrevRender()}finally{S.suppress=false}renderLayout();if(CF.get('ucsIcon'))drawUCS('layout');updateChrome();return}
@@ -277,7 +311,11 @@ render=function(){if(S.hold)return;syncMode();if(isLayout()){S.suppress=true;try
 // Selecting the Select tool (Esc / CF.cancel) keeps the 3D view; drawing tools still return to 2D model space.
 {const prev=setTool;setTool=function(t){if(mode3D&&t==='select'){S.hold=true;mode3D=false;try{prev(t)}finally{mode3D=true;S.hold=false}render();return}return prev(t)}}
 // Zoom extents while in paper space also fits the sheet.
-{const prev=fit;fit=function(...a){const r=prev.apply(this,a);if(isLayout()){fitLayout();render()}return r}}
+// In the plan view the solids are part of the extents (the engine's 2D fit only knows the drawing entities).
+function fitPlan(){const p=doc.entities.flatMap(e=>e.type==='circle'?[{x:e.center.x-e.radius,y:e.center.y-e.radius},{x:e.center.x+e.radius,y:e.center.y+e.radius}]:e.type==='text'?[e.points[0],{x:e.points[0].x+e.text.length*e.height*.6,y:e.points[0].y+e.height}]:vertices(e));for(const s of doc.solids)for(const v of s.vertices)p.push(v);
+ let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;for(const q of p){if(q.x<a)a=q.x;if(q.x>b)b=q.x;if(q.y<c)c=q.y;if(q.y>d)d=q.y}if(!Number.isFinite(a))return;
+ view={x:(a+b)/2,y:(c+d)/2,scale:Math.max(.01,Math.min(1000,Math.min(W/Math.max(20,b-a),H/Math.max(20,d-c))*.8))};render()}
+{const prev=fit;fit=function(...a){const r=prev.apply(this,a);if(isLayout()){fitLayout();render()}else if(!mode3D&&doc.solids?.length)fitPlan();return r}}
 {const prev=CF.startPan;CF.startPan=function(...a){if(mode3D||isLayout())return enterPan();return prev.apply(CF,a)}}
 {const prev=CF.cancel;CF.cancel=function(...a){exitPan();closeMenu();if(mode3D)clearPick();return prev.apply(CF,a)}}
 CF.on('space',s=>{if(s==='layout'&&!S.layout.fitted)fitLayout();closeMenu()});
@@ -312,7 +350,7 @@ if(!CF.resolve('3DORBIT'))CF.register({name:'3DORBIT',aliases:['3DO','ORBIT'],la
 if(!CF.resolve('PLAN'))CF.register({name:'PLAN',label:'Plan View',desc:'Displays the plan view of the XY plane',category:'View',icon:'model',run:()=>CF.setViewPreset('top')});
 
 // ---- Public API (tests and other modules) ---------------------------------------------------
-CF.views={presets:PRESETS,styles:STYLES,style:()=>S.style,viewName,styleLabel,presetOf,presetFromDirection,cameraFromDirection,basis,goCamera,cubeHit,cubeClick,depthBuffer,visibleSegments,featureEdges:m=>meshEdges(m).edges.filter(e=>e.feature),meshEdges,pickMesh,setMesh,picked:()=>({a:pickIndex('a'),b:pickIndex('b')}),pan3D,zoom3DAt,zoom,pan,orbit,home:goHome,enterPan,exitPan,
+CF.views={presets:PRESETS,styles:STYLES,style:()=>S.style,viewName,styleLabel,presetOf,presetFromDirection,cameraFromDirection,basis,goCamera,cubeHit,cubeClick,depthBuffer,visibleSegments,featureEdges:m=>meshEdges(m).edges.filter(e=>e.feature),meshEdges,pickMesh,setMesh,picked:()=>({a:pickIndex('a'),b:pickIndex('b')}),pan3D,zoom3DAt,zoom,pan,orbit,ucs3D,wireGroups,drawPlanSolids,planInfo:()=>plan,fitPlan,home:goHome,enterPan,exitPan,
  layout:()=>({sheet:sheet(),modelToPaper,paperToScreen,screenToPaper,state:S.layout}),fitLayout,zoomLayoutAt,label:()=>[ui.vpMin?.textContent,ui.vpView?.textContent,ui.vpStyle?.textContent],state:S};
 try{buildChrome()}catch(err){console.error('CadForge views: chrome unavailable',err)}
 try{render()}catch(err){console.error(err)}

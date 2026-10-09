@@ -1,43 +1,92 @@
-CadForge verification — 2026-10-06
+CadForge verification - 2026-10-09
 
-PASS: bundled application initialization
-PASS: block creation/insertion and grouped transformations
-PASS: hatch creation with undo/redo
-PASS: explode, line extend and equal-distance chamfer
-PASS: saved-view restoration
-PASS: DXF BLOCK/INSERT round trip
-PASS: ARC and bulge tessellation endpoints
-PASS: invalid project and binary DXF rejection
-PASS: convex/concave extrusion
-PASS: closed edge incidence and signed volume for basic extrusions
-PASS: union/subtract/intersect signed volumes for overlapping boxes
-PASS: identical subtraction and disjoint boolean cases
-PASS: drilled L-bracket volume 103295.1773 drawing units cubed
+Bundle under test: CadForge.html (CadForge-Repaired.html is an identical copy), 18 modules, produced by build.ps1.
+Run:  node Verify.cjs                 (default bundle, CadForge.html)
+      node Verify.cjs <bundle.html>   (any other bundle, e.g. a partial one from build.ps1 -Include ... -Out ...)
 
-Browser verification: rectangle command input and extents; ribbon tabs;
-in-app dialogs; extrusion; mesh movement and union; sample project import.
+Automated checks (Node, fake-DOM harness; engine checks + tests/*.test.cjs): 56 PASS, 0 FAIL, 0 SKIP
 
-Not verified against AutoCAD or production DWG files. Mesh tests do not
-establish CAD-grade accuracy or manifold topology for every boolean result.
+PASS: bundled initialization; block create/insert; grouped transforms; hatch undo/redo; explode; extend; chamfer; layout restoration; convex/concave extrusion; watertight mesh edges; signed volume; project validation; 3D rendering; DXF output
+PASS: native DXF BLOCK/INSERT round trip, ARC endpoints, bulge tessellation, binary DXF rejection
+PASS: mesh union, subtraction, intersection, coplanar boxes, identical subtraction and disjoint results with signed-volume checks
+PASS: closed-line profile discovery, additive extrusion volume, source retention, open-outline errors, raw off-grid selection, Escape from command input, vector PDF header/media box/xref
+PASS: actual browser-generated additive part (volume 5000), saved feature history and executable worker-source syntax/union
+PASS: command registry names and aliases
+PASS: point text parsing (absolute, relative, polar, direct distance)
+PASS: PLINE with absolute, polar and relative input, Close, Undo and Enter
+PASS: RECTANG corners, relative corner, Dimensions option
+PASS: LINE chaining with Undo, Close, Enter, repeat, Ctrl+Z and clickable options
+PASS: direct distance entry for LINE, ortho and CIRCLE radius
+PASS: CIRCLE radius, Diameter option, default radius, point on circumference
+PASS: ARC and DIMALIGNED/DIMLINEAR prompts
+PASS: TEXT start point, height default, text, space handling, cancel
+PASS: cadPrompt routed to the command line with AutoCAD wording, defaults, kinds and cancel
+PASS: object selection phase, MOVE, noun-verb, ERASE and typed selection options
+PASS: COPY multiple with Undo, Exit and Enter
+PASS: ROTATE and SCALE through the command line (default, click, Copy, Reference)
+PASS: EXPLODE, HATCH boundary, MEASUREGEOM, JOIN, BLOCK, INSERT, SELECTALL
+PASS: Escape (cancel, second Esc, 3D, Verify scenario), empty-Enter repeat, ArrowUp recall, Space, unknown command
+PASS: AutoComplete matching function and popup navigation
+PASS: ZOOM Extents/All/Window/Previous/In/Out/scale factors and view stack
+PASS: COPYCLIP, CUTCLIP and PASTECLIP
+PASS: keyboard map (function keys, Ctrl combos, Delete, typing, dialog guard)
+PASS: settings, view, export and workspace commands
+PASS: MOVE/COPY treat the base point as a displacement on Enter, [Displacement] option
+PASS: CIRCLE 3P, 2P and Ttr (prompt options, flows, geometry, cancel)
+PASS: select-objects keywords W, C, BOX, WP, CP and F with N found echo
+PASS: switching to the Layout tab cancels the running command
+PASS: UNDO/REDO echo is consistent for Ctrl+Z/Y, ribbon/QAT commands and typed commands
+PASS: BLOCK asks for the base point and releases the selection; INSERT Scale/Rotate and wording
+PASS: CIRCLE 3P/Ttr, window keyword and MOVE displacement driven by real canvas clicks
+PASS: engine flows still work with a replaced cadPrompt
+PASS: workspace contract registry, aliases, toggles, exclusive ortho/polar, selection helpers, geometry helpers, spaces and modified state
+PASS: drafting OFFSET (lines/circles/closed+open polylines, through), quick TRIM (lines/circles/polylines, erase, shift-extend), EXTEND, FILLET (r=0, tangent arc, polyline), CHAMFER (distance/angle), MIRROR, POLYGON, ELLIPSE, DIMLINEAR, DIST/ID/LIST, MATCHPROP (colour/layer/text, feedback), ARRAYRECT, PURGE, cancellation, PLINE kept on Esc, HATCH internal-point boundaries/islands/flow, Esc during a selection window
+PASS: acad-interact osnap endpoint/midpoint/intersection/center/quadrant/perpendicular/nearest, grid snap, ortho, polar, window/crossing/group rules, implicit windows, PICKADD/shift-remove, grip stretch/move/radius and hot-grip input, click-resolved inputs, typed one-shot osnap overrides and tangent snap, pointer-enter position, shortcut menu, PAN, middle-button pan/extents, raw select
+PASS: properties palette line/circle/polyline/text/block geometry edits with undo, validation, multi-selection filter, 3D mesh stats
+PASS: layer rename (entities, blocks, current) with undo, rename/delete rules, new layer, colour/visibility, Layer Properties Manager, layer dropdown
+PASS: osnap/polar settings, status bar toggles via CF.toggle, Model/Layout tabs, coordinates readout, Drafting Settings, palette commands
+PASS: new layers receive the next unused palette colour (unique, undoable, explicit override)
+PASS: Drafting Settings / Layer Manager width + checkbox CSS, plot preview sheet-on-grey CSS
+PASS: icon library covers every spec key and command, falls back for unknown names, exports iconNames
+PASS: ribbon model for both workspaces (tabs, panels, split buttons, icons, known commands)
+PASS: ribbon builds per tab, every button runs CF.run with its command name (source ribbon), options as args, active-tool and toggle highlighting, double-click minimise
+PASS: workspace switch rebuilds the ribbon tabs (Drafting 6 tabs, 3D Modeling 8), WSCURRENT/RIBBON/RIBBONCLOSE registered
+PASS: document title and file-tab label follow file name and modified marker
+PASS: Start page toggles with file tabs and body class; commands leave it
+PASS: command search ranks name/alias/description matches and runs the chosen command
+PASS: Quick Access Toolbar commands (New, Open, Save, Save As, Plot, Undo, Redo); application menu opens and closes
+PASS: running a command from the title-bar search clears and blurs the field so typing reaches the command line
+PASS: returning from Layout to Model restores the 3D camera and visual style; 2D models and new drawings are untouched
+PASS: ribbon View and Visual Style combos track the real view and style, not the last clicked item
+PASS: acad-views presets/orientation, Select keeps 3D, ViewCube zones, visual styles, feature edges (box/cylinder/T-junction), Mesh A/B picking, 3D pan/zoom/orbit, layout sheet transform, paper pan/zoom, chrome toggles, 2D delegation, plan-view solids (visible/hidden-surface/extents), style-from-Top camera, UCS icon on canvas, wireframe vs 2D wireframe
+PASS: SVG export covers drawing extents with margin, independent of pan/zoom/canvas/3D, hidden layers excluded
+PASS: DXF layer colours export as nearest ACI (negative = off), import maps ACI to hex, standard ACI table anchors, block instances keep colours
+PASS: extrude dialog outline labels are unique, position-indexed and describe size/position; highlight geometry follows the choice
 
-Run: node Verify.cjs
+Browser verification (built-in browser pane, served from http://localhost:8791/, 1366x768, clean localStorage):
+  Console error-free on load and after the full session.
+  Real clicks and key presses: LINE (two clicks + Enter), RECTANG, CIRCLE 3P, MOVE with typed displacement, OFFSET,
+  quick TRIM, FILLET R 5 (tangent points exact), Ctrl+Z / Ctrl+Y, closed rectangle -> EXTRUDE depth 20 (visible in Top
+  and SE Isometric via the ViewCube), all four visual styles, Layer Properties (new layers get distinct colours),
+  Drafting Settings (520 px wide, no overflow), Layout tab + PLOT preview, DXF and SVG export dialogs, Clean Screen.
+  An independent review of the full app produced 27 reproduced findings (0 blockers). Six were fixed first, each with a
+  regression test (typed object-snap keywords, stray crosshair, title-search focus, Layout round trip, ribbon view combos,
+  labelled Extrude outlines). The other 21, plus 2 small leftovers (ribbon tab after a workspace switch, UNDO/REDO echo),
+  were re-tested one by one against the fixed build: 23 of 23 verified fixed, none still open.
 
-Repair-build regression checks:
-PASS: raw off-grid object selection (snapping no longer changes hit locations)
-PASS: Escape from focused command input
-PASS: automatic closed line-loop discovery
-PASS: adding an extruded outline updates one existing part
-PASS: saved browser-generated part volume changes 4000 → 5000
-PASS: retained source outline and extrusion history
-PASS: generated worker script parses and executes boolean union
-PASS: PDF header, page dimensions and cross-reference offset
+Not verified:
+  Actual file downloads (the export and plot dialogs were opened but Download was not clicked); loading via file://;
+  browsers other than the built-in one; wheel zoom and middle-button pan with real input (unit-tested only);
+  a click-through of every 3D Modeling workspace ribbon button; full interoperability with AutoCAD or any DWG/DXF
+  produced by other software. Mesh tests do not establish CAD-grade accuracy or manifold topology for every boolean result.
 
-Browser proof: imported a 20×20×10 part; drew four LINE edges for an adjacent
-10×10 outline; Extrude selected that outline and Add material by default;
-10-unit extrusion yielded one mesh with 34 triangles. Undo restored the
-12-triangle base; redo restored the addition. Reload and Update extrusion
-rebuilt the same part. In-app sheet preview generated a vector PDF.
-
-The Codex embedded preview did not expose file download events in testing.
-Explicit Download file links are available, and exported contents remain
-visible. Chrome or Edge is recommended for saving files from the application.
+Known cosmetic/behavioural notes (not blockers):
+  - OFFSET logs only its distance in the command history, not each pick; a mistyped bare displacement such as 2010 gives
+    "Point or option keyword required." instead of a displacement hint.
+  - Layer Properties Manager shows some colours as raw RGB triples, others as names.
+  - After EXTRUDE the SE Isometric view fits all drawing extents, so a small part can look small.
+  - ViewCube compass-ring clicks from the Top view can land on a "Custom View" instead of a named view (unconfirmed).
+  - Solids are not drawn on the Layout (paper) sheet; the sheet shows the 2D drawing.
+  - PLINE width options are not supported (polylines carry no width). DXF colours are written as the nearest AutoCAD Color
+    Index, so custom RGB layer colours change slightly after a DXF round trip; per-entity colours are not preserved.
+  - The export dialog stays open until Close is clicked (it exists so downloads work in embedded browsers).

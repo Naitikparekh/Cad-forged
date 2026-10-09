@@ -42,11 +42,17 @@ $('undo').onclick=()=>undo();$('redo').onclick=()=>undo(true);$('fit').onclick=f
 $('layer').onchange=()=>{syncLayers();render()};$('color').onchange=()=>mutate(()=>layer().color=$('color').value);$('visible').onchange=()=>mutate(()=>layer().visible=$('visible').checked);$('addLayer').onclick=async()=>{const name=await cadPrompt('Layer name');if(name&&!doc.layers.some(l=>l.name===name)){mutate(()=>doc.layers.push({name,color:'#63d9c0',visible:true}));syncLayers();$('layer').value=name;syncLayers()}};
 function download(name,text,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([text],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('save').onclick=()=>download('drawing.cadforge.json',JSON.stringify(doc,null,2),'application/json');$('new').onclick=async()=>{if((doc.entities.length||doc.solids?.length)&&!await cadConfirm('Clear drawing? Save first if needed.'))return;mutate(()=>doc={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[]});selected=-1;points=[];syncLayers();fit()};
-function exportDXF(){const out=[],pair=(k,v)=>out.push(String(k),String(v));pair(0,'SECTION');pair(2,'HEADER');pair(9,'$ACADVER');pair(1,'AC1009');pair(0,'ENDSEC');pair(0,'SECTION');pair(2,'TABLES');pair(0,'TABLE');pair(2,'LAYER');pair(70,doc.layers.length);for(const l of doc.layers){pair(0,'LAYER');pair(2,l.name);pair(70,0);pair(62,l.visible?7:-7);pair(6,'CONTINUOUS')}pair(0,'ENDTAB');pair(0,'ENDSEC');pair(0,'SECTION');pair(2,'ENTITIES');for(const e of doc.entities){pair(0,e.type==='circle'?'CIRCLE':e.type==='text'?'TEXT':e.type==='line'?'LINE':'POLYLINE');pair(8,e.layer);if(e.type==='circle'){pair(10,e.center.x);pair(20,e.center.y);pair(30,0);pair(40,e.radius)}else if(e.type==='text'){pair(10,e.points[0].x);pair(20,e.points[0].y);pair(30,0);pair(40,e.height);pair(1,e.text)}else if(e.type==='line'){pair(10,e.points[0].x);pair(20,e.points[0].y);pair(30,0);pair(11,e.points[1].x);pair(21,e.points[1].y);pair(31,0)}else{pair(66,1);pair(70,e.closed?1:0);pair(10,0);pair(20,0);pair(30,0);for(const p of e.points){pair(0,'VERTEX');pair(8,e.layer);pair(10,p.x);pair(20,p.y);pair(30,0)}pair(0,'SEQEND');pair(8,e.layer)}}pair(0,'ENDSEC');pair(0,'EOF');return out.join('\r\n')+'\r\n'}
-function importDXF(text){const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/),records=[];let r=null;for(let i=0;i+1<lines.length;i+=2){const k=Number(lines[i].trim()),v=lines[i+1].trim();if(k===0){r={type:v,pairs:[]};records.push(r)}else if(r)r.pairs.push([k,v])}const result={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[]};let poly=null,section='',skipped=0;const val=(r,k,def=0)=>r.pairs.find(p=>p[0]===k)?.[1]??def,num=(r,k,def=0)=>Number(val(r,k,def)),pt=(r,k=10)=>({x:num(r,k),y:num(r,k+10)});for(const r of records){if(r.type==='SECTION'){section=val(r,2,'');continue}if(r.type==='ENDSEC'){section='';poly=null;continue}if(section==='TABLES'&&r.type==='LAYER'){const name=val(r,2,'0');const l={name,color:'#63d9c0',visible:num(r,62,7)>0};const i=result.layers.findIndex(x=>x.name===name);if(i>=0)result.layers[i]=l;else result.layers.push(l);continue}if(section!=='ENTITIES')continue;const name=String(val(r,8,'0'));if(!result.layers.some(l=>l.name===name))result.layers.push({name,color:'#63d9c0',visible:true});let e;if(r.type==='LINE')e={type:'line',points:[pt(r),pt(r,11)]};else if(r.type==='CIRCLE')e={type:'circle',center:pt(r),radius:num(r,40)};else if(r.type==='TEXT')e={type:'text',points:[pt(r)],text:String(val(r,1,'')),height:num(r,40,5)};else if(r.type==='POLYLINE'){e={type:'polyline',points:[],closed:!!(num(r,70)&1)};poly=e}else if(r.type==='VERTEX'&&poly){poly.points.push(pt(r));continue}else if(r.type==='SEQEND'){poly=null;continue}else if(r.type==='LWPOLYLINE'){const ps=[];for(const [k,v]of r.pairs){if(k===10)ps.push({x:Number(v),y:0});if(k===20&&ps.length)ps.at(-1).y=Number(v)}e={type:'polyline',points:ps,closed:!!(num(r,70)&1)};if(r.pairs.some(([k,v])=>k===42&&Number(v)!==0))skipped++}else{skipped++;continue}e.layer=name;result.entities.push(e)}result.entities=result.entities.filter(e=>e.type!=='polyline'||e.points.length>1);validate(result);return{doc:result,skipped}}
+// AutoCAD Color Index: 1-9 and 250-255 are fixed; 10-249 are 24 hues (15 deg apart) x 10 shades (full/half saturation at V 100/65/50/30/15%).
+const ACI_FIXED={1:[255,0,0],2:[255,255,0],3:[0,255,0],4:[0,255,255],5:[0,0,255],6:[255,0,255],7:[255,255,255],8:[128,128,128],9:[192,192,192],250:[51,51,51],251:[91,91,91],252:[132,132,132],253:[173,173,173],254:[214,214,214],255:[255,255,255]};
+const ACI_TABLE=(()=>{const t=[null],value=[1,.65,.5,.3,.15];for(let i=1;i<=255;i++){if(ACI_FIXED[i]){t.push(ACI_FIXED[i]);continue}const n=i-10,h=Math.floor(n/10)*15/60,k=n%10,v=value[k>>1]*255,s=k&1?.5:1,m=v*(1-s),f=h%1,x=h<1?f:h<2?1-f:h<3?f:h<4?1-f:h<5?f:1-f,mid=m+(v-m)*x,sector=Math.floor(h),rgb=[[v,mid,m],[mid,v,m],[m,v,mid],[m,mid,v],[mid,m,v],[v,m,mid]][sector%6];t.push(rgb.map(c=>Math.floor(c+1e-6)))}return t})();
+function aciToHex(i){const c=ACI_TABLE[Math.round(Number(i))];return c?'#'+c.map(x=>x.toString(16).padStart(2,'0')).join(''):null}
+function hexToAci(hex){const m=/^#?([0-9a-f]{6})$/i.exec(String(hex).trim())||/^#?([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(String(hex).trim());if(!m)return 7;const h=m.length===2?m[1]:m[1]+m[1]+m[2]+m[2]+m[3]+m[3],r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);let best=7,bd=Infinity;for(let i=1;i<=255;i++){const c=ACI_TABLE[i],rm=(c[0]+r)/2,dr=c[0]-r,dg=c[1]-g,db=c[2]-b,d=(2+rm/256)*dr*dr+4*dg*dg+(2+(255-rm)/256)*db*db;if(d<bd){bd=d;best=i}}return best}
+function exportDXF(){const out=[],pair=(k,v)=>out.push(String(k),String(v));pair(0,'SECTION');pair(2,'HEADER');pair(9,'$ACADVER');pair(1,'AC1009');pair(0,'ENDSEC');pair(0,'SECTION');pair(2,'TABLES');pair(0,'TABLE');pair(2,'LAYER');pair(70,doc.layers.length);for(const l of doc.layers){pair(0,'LAYER');pair(2,l.name);pair(70,0);pair(62,(l.visible===false?-1:1)*hexToAci(l.color));pair(6,'CONTINUOUS')}pair(0,'ENDTAB');pair(0,'ENDSEC');pair(0,'SECTION');pair(2,'ENTITIES');for(const e of doc.entities){pair(0,e.type==='circle'?'CIRCLE':e.type==='text'?'TEXT':e.type==='line'?'LINE':'POLYLINE');pair(8,e.layer);if(e.type==='circle'){pair(10,e.center.x);pair(20,e.center.y);pair(30,0);pair(40,e.radius)}else if(e.type==='text'){pair(10,e.points[0].x);pair(20,e.points[0].y);pair(30,0);pair(40,e.height);pair(1,e.text)}else if(e.type==='line'){pair(10,e.points[0].x);pair(20,e.points[0].y);pair(30,0);pair(11,e.points[1].x);pair(21,e.points[1].y);pair(31,0)}else{pair(66,1);pair(70,e.closed?1:0);pair(10,0);pair(20,0);pair(30,0);for(const p of e.points){pair(0,'VERTEX');pair(8,e.layer);pair(10,p.x);pair(20,p.y);pair(30,0)}pair(0,'SEQEND');pair(8,e.layer)}}pair(0,'ENDSEC');pair(0,'EOF');return out.join('\r\n')+'\r\n'}
+function importDXF(text){const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/),records=[];let r=null;for(let i=0;i+1<lines.length;i+=2){const k=Number(lines[i].trim()),v=lines[i+1].trim();if(k===0){r={type:v,pairs:[]};records.push(r)}else if(r)r.pairs.push([k,v])}const result={layers:[{name:'0',color:'#63d9c0',visible:true}],entities:[]};let poly=null,section='',skipped=0;const val=(r,k,def=0)=>r.pairs.find(p=>p[0]===k)?.[1]??def,num=(r,k,def=0)=>Number(val(r,k,def)),pt=(r,k=10)=>({x:num(r,k),y:num(r,k+10)});for(const r of records){if(r.type==='SECTION'){section=val(r,2,'');continue}if(r.type==='ENDSEC'){section='';poly=null;continue}if(section==='TABLES'&&r.type==='LAYER'){const name=val(r,2,'0');const aci=num(r,62,7),l={name,color:aciToHex(Math.abs(aci))||'#63d9c0',visible:aci>=0};const i=result.layers.findIndex(x=>x.name===name);if(i>=0)result.layers[i]=l;else result.layers.push(l);continue}if(section!=='ENTITIES')continue;const name=String(val(r,8,'0'));if(!result.layers.some(l=>l.name===name))result.layers.push({name,color:'#63d9c0',visible:true});let e;if(r.type==='LINE')e={type:'line',points:[pt(r),pt(r,11)]};else if(r.type==='CIRCLE')e={type:'circle',center:pt(r),radius:num(r,40)};else if(r.type==='TEXT')e={type:'text',points:[pt(r)],text:String(val(r,1,'')),height:num(r,40,5)};else if(r.type==='POLYLINE'){e={type:'polyline',points:[],closed:!!(num(r,70)&1)};poly=e}else if(r.type==='VERTEX'&&poly){poly.points.push(pt(r));continue}else if(r.type==='SEQEND'){poly=null;continue}else if(r.type==='LWPOLYLINE'){const ps=[];for(const [k,v]of r.pairs){if(k===10)ps.push({x:Number(v),y:0});if(k===20&&ps.length)ps.at(-1).y=Number(v)}e={type:'polyline',points:ps,closed:!!(num(r,70)&1)};if(r.pairs.some(([k,v])=>k===42&&Number(v)!==0))skipped++}else{skipped++;continue}e.layer=name;result.entities.push(e)}result.entities=result.entities.filter(e=>e.type!=='polyline'||e.points.length>1);validate(result);return{doc:result,skipped}}
 function validate(d){if(!d||!Array.isArray(d.layers)||!d.layers.length||!Array.isArray(d.entities))throw Error('Invalid project');const finite=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);for(const l of d.layers)if(typeof l.name!=='string'||!/^#[0-9a-f]{6}$/i.test(l.color)||typeof l.visible!=='boolean')throw Error('Invalid layer');for(const e of d.entities){if(!d.layers.some(l=>l.name===e.layer))throw Error('Missing layer');if(e.type==='circle'){if(!finite(e.center)||!Number.isFinite(e.radius)||e.radius<=0)throw Error('Invalid circle')}else if(!['line','polyline','text'].includes(e.type)||!Array.isArray(e.points)||!e.points.every(finite)||e.points.length<(e.type==='text'?1:2))throw Error('Invalid entity');if(e.type==='text'&&(typeof e.text!=='string'||!Number.isFinite(e.height)||e.height<=0))throw Error('Invalid text')}}
 $('dxf').onclick=()=>download('drawing.dxf',exportDXF(),'application/dxf');$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const text=await f.text(),r=f.name.toLowerCase().endsWith('.dxf')?importDXF(text):{doc:JSON.parse(text),skipped:0};validate(r.doc);mutate(()=>doc=r.doc);selected=-1;points=[];syncLayers();fit();notify(r.skipped?`Imported with ${r.skipped} unsupported records or curved polylines; inspect geometry.`:'Drawing imported.')}catch(err){notify('Import failed: '+err.message)}e.target.value=''};
-$('svg').onclick=()=>{const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));const elements=doc.entities.filter(e=>doc.layers.find(l=>l.name===e.layer)?.visible).map(e=>{const color=doc.layers.find(l=>l.name===e.layer).color;if(e.type==='circle')return `<circle cx="${e.center.x}" cy="${-e.center.y}" r="${e.radius}" stroke="${color}" fill="none"/>`;if(e.type==='text')return `<text x="${e.points[0].x}" y="${-e.points[0].y}" font-size="${e.height}" fill="${color}">${esc(e.text)}</text>`;return `<${e.closed?'polygon':'polyline'} points="${e.points.map(p=>p.x+','+-p.y).join(' ')}" stroke="${color}" fill="none"/>`});download('drawing.svg',`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${view.x-W/2/view.scale} ${-view.y-H/2/view.scale} ${W/view.scale} ${H/view.scale}" stroke-width="${1/view.scale}">${elements.join('')}</svg>`,'image/svg+xml')};
+function drawingSVG(){const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])),n=v=>String(Math.round(v*1e6)/1e6),vis=doc.entities.filter(e=>doc.layers.find(l=>l.name===e.layer)?.visible);let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;const add=(x,y)=>{if(isFinite(x)&&isFinite(y)){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}};for(const e of vis){if(e.type==='circle'){add(e.center.x-e.radius,e.center.y-e.radius);add(e.center.x+e.radius,e.center.y+e.radius)}else if(e.type==='text'){add(e.points[0].x,e.points[0].y);add(e.points[0].x+String(e.text).length*e.height*.6,e.points[0].y+e.height)}else for(const p of vertices(e))add(p.x,p.y)}if(x0>x1){x0=y0=0;x1=y1=100}const span=Math.max(x1-x0,y1-y0,1e-6),margin=span*.05,w=x1-x0+2*margin,h=y1-y0+2*margin,sw=span/800,shapes=vis.map(e=>{const color=doc.layers.find(l=>l.name===e.layer).color;if(e.type==='circle')return `<circle cx="${n(e.center.x)}" cy="${n(-e.center.y)}" r="${n(e.radius)}" stroke="${color}" fill="none"/>`;if(e.type==='text')return `<text x="${n(e.points[0].x)}" y="${n(-e.points[0].y)}" font-size="${n(e.height)}" font-family="Arial" stroke="none" fill="${color}">${esc(e.text)}</text>`;return `<${e.closed?'polygon':'polyline'} points="${e.points.map(p=>n(p.x)+','+n(-p.y)).join(' ')}" stroke="${color}" fill="none"/>`});return `<svg xmlns="http://www.w3.org/2000/svg" width="${n(Math.min(800,800*w/h))}" height="${n(Math.min(800,800*h/w))}" viewBox="${n(x0-margin)} ${n(-y1-margin)} ${n(w)} ${n(h)}" stroke-width="${Number(sw.toPrecision(3))}">${shapes.join('')}</svg>`}
+$('svg').onclick=()=>download('drawing.svg',drawingSVG(),'image/svg+xml');
 $('command').onkeydown=e=>{if(e.key!=='Enter')return;const s=e.target.value.trim().toLowerCase();e.target.value='';const m=s.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);if(m)accept({x:Number(m[1]),y:Number(m[2])});else if(s==='fit'||s==='zoom')fit();else if(s==='undo')undo();else if(s==='redo')undo(true);else if(s==='rectangle'||s==='rect')setTool('rectangle');else if(names[s])setTool(s);else if(s==='erase')setTool('delete');else if(!s)finish();else notify('Unknown command: '+s)};
 document.onkeydown=e=>{if(e.target.matches('input,select'))return;if(e.key==='Escape'){points=[];selected=-1;setTool('select')}else if(e.key==='Enter')finish();else if(e.key==='Delete'&&selected>=0){mutate(()=>doc.entities.splice(selected,1));selected=-1;render()}else if(e.ctrlKey&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();undo(e.key.toLowerCase()==='y')}};
 new ResizeObserver(()=>{const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height;canvas.width=W*d;canvas.height=H*d;ctx.setTransform(d,0,0,d,0,0);render()}).observe(canvas);
@@ -901,7 +907,13 @@ let computingMesh=false,extrusionGeneration=0;
 applyBoolean=async function(op){if(computingMesh)return;const ia=Number($('meshA').value),ib=Number($('meshB').value),a=doc.solids?.[ia],b=doc.solids?.[ib];if(!a||!b||ia===ib){await showMessage('Choose operands','Choose two different meshes in Mesh A and Mesh B.');return}computingMesh=true;notify(`Computing ${op}…`);try{const result=await computeBoolean(a,b,op);if(doc.solids?.[ia]!==a||doc.solids?.[ib]!==b)throw Error('The drawing changed during computation; operation cancelled.');mutate(()=>{doc.solids=doc.solids.filter((s,i)=>i!==ia&&i!==ib);if(result.faces.length)doc.solids.push(result)});show3D();notify(result.faces.length?`${op} completed: ${result.faces.length} triangles.`:'Result is empty. Undo restores operands.')}catch(err){await showMessage('Boolean failed',err.message)}finally{computingMesh=false}};
 const extrusionDialog=document.createElement('dialog');extrusionDialog.id='extrusionDialog';extrusionDialog.innerHTML='<form id="extrusionForm"><h2>Extrude a closed profile</h2><label for="extrusionProfile">Source outline</label><select id="extrusionProfile"></select><label for="extrusionDepth">Extrusion depth</label><input id="extrusionDepth" type="number" value="20" step="any" required><label for="extrusionStart">Start elevation Z</label><input id="extrusionStart" type="number" value="0" step="any" required><label for="extrusionOperation">Result</label><select id="extrusionOperation"><option value="new">Create a separate part</option><option value="union">Add material to an existing part</option><option value="subtract">Cut material from an existing part</option></select><label for="extrusionTarget">Existing part</label><select id="extrusionTarget"></select><p id="extrusionHelp">Depth extends from Start Z. Sketch lines must form a closed outline. Source changes take effect with Update extrusion.</p><p id="extrusionError" role="alert"></p><div class="actions"><button type="button" id="extrusionCancel">Cancel</button><button id="extrusionApply" type="submit">Extrude</button></div></form>';document.body.append(extrusionDialog);
 const extrusionCSS=document.createElement('style');extrusionCSS.textContent='#extrusionDialog{width:480px}#extrusionDialog select{width:100%;margin:6px 0}#extrusionHelp{color:#aabbd0;line-height:1.5}#extrusionError{color:#ffaf91}';document.head.append(extrusionCSS);
-extrude=async function(){extrusionGeneration++;if(mode3D)showModel();const ids=chosen();if(ids.length>=3&&ids.every(i=>doc.entities[i].type==='line')){try{const ps=profileFromLines(ids.map(i=>doc.entities[i]));mutate(()=>doc.entities.push({type:'polyline',points:ps,closed:true,layer:doc.entities[ids[0]].layer}));clearSelection();selected=doc.entities.length-1;selectionSet.add(selected)}catch(err){await showMessage('Cannot extrude lines',err.message+' Use Join profile after closing the outline.');return}}const available=closedProfiles();if(!available.length){await showMessage('No closed profile','Open lines cannot define a face. Close the outline, select its edges, and choose Join profile. Then choose Extrude.');return}ensureEntityIDs();$('extrusionProfile').replaceChildren(...available.map(({e,i})=>new Option(`${i+1}: ${e.type==='circle'?'Circle':'Closed outline'} · ${e.layer}`,e.uuid)));const chosenSource=available.find(({i})=>i===selected)||available.at(-1);$('extrusionProfile').value=chosenSource.e.uuid;const meshes=doc.solids||[];$('extrusionTarget').replaceChildren(...meshes.map((m,i)=>new Option(`${i+1}: ${m.name}`,String(i))));const currentMesh=Number($('meshA').value);$('extrusionTarget').value=String(currentMesh>=0&&currentMesh<meshes.length?currentMesh:0);$('extrusionOperation').value=meshes.length?'union':'new';$('extrusionDepth').value='20';$('extrusionStart').value='0';$('extrusionError').textContent='';extrusionDialog.showModal();$('extrusionDepth').focus();$('extrusionDepth').select()};
+// Each outline is listed by its 1-based position in the list, its size and its lower-left corner, and the chosen outline is highlighted on the canvas.
+const extrusionOutlines=new Map();
+function profileLabel(e,position,total){const pts=boundaryOf(e),xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),x0=Math.min(...xs),y0=Math.min(...ys),n=v=>String(+v.toFixed(2)),size=e.type==='circle'?`Ø${n(e.radius*2)}`:`${n(Math.max(...xs)-x0)} × ${n(Math.max(...ys)-y0)}`;return `${position} of ${total}: ${e.type==='circle'?'Circle':'Closed outline'} ${size} at (${n(x0)}, ${n(y0)}) · layer ${e.layer}`}
+function drawExtrusionHighlight(){if(!extrusionDialog.open||mode3D)return;const pts=extrusionOutlines.get($('extrusionProfile').value);if(!pts||pts.length<2)return;ctx.save();ctx.beginPath();pts.forEach((p,i)=>{const s=screen(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y)});ctx.closePath();ctx.fillStyle='rgba(255,203,102,0.22)';ctx.fill();ctx.strokeStyle='#ffcb66';ctx.lineWidth=3;ctx.stroke();ctx.restore()}
+const extrusionPrevRender=render;render=function(...a){const r=extrusionPrevRender.apply(this,a);try{drawExtrusionHighlight()}catch(err){console.error(err)}return r};
+extrude=async function(){extrusionGeneration++;if(mode3D)showModel();const ids=chosen();if(ids.length>=3&&ids.every(i=>doc.entities[i].type==='line')){try{const ps=profileFromLines(ids.map(i=>doc.entities[i]));mutate(()=>doc.entities.push({type:'polyline',points:ps,closed:true,layer:doc.entities[ids[0]].layer}));clearSelection();selected=doc.entities.length-1;selectionSet.add(selected)}catch(err){await showMessage('Cannot extrude lines',err.message+' Use Join profile after closing the outline.');return}}const available=closedProfiles();if(!available.length){await showMessage('No closed profile','Open lines cannot define a face. Close the outline, select its edges, and choose Join profile. Then choose Extrude.');return}ensureEntityIDs();extrusionOutlines.clear();for(const {e} of available)extrusionOutlines.set(e.uuid,boundaryOf(e));$('extrusionProfile').replaceChildren(...available.map(({e},n)=>new Option(profileLabel(e,n+1,available.length),e.uuid)));const chosenSource=available.find(({i})=>i===selected)||available.at(-1);$('extrusionProfile').value=chosenSource.e.uuid;const meshes=doc.solids||[];$('extrusionTarget').replaceChildren(...meshes.map((m,i)=>new Option(`${i+1}: ${m.name}`,String(i))));const currentMesh=Number($('meshA').value);$('extrusionTarget').value=String(currentMesh>=0&&currentMesh<meshes.length?currentMesh:0);$('extrusionOperation').value=meshes.length?'union':'new';$('extrusionDepth').value='20';$('extrusionStart').value='0';$('extrusionError').textContent='';extrusionDialog.showModal();render();$('extrusionDepth').focus();$('extrusionDepth').select()};
+$('extrusionProfile').onchange=()=>render();{const nativeClose=extrusionDialog.close.bind(extrusionDialog);extrusionDialog.close=function(...a){const r=nativeClose(...a);extrusionOutlines.clear();render();return r}}
 $('extrusionCancel').onclick=()=>{extrusionGeneration++;extrusionDialog.close()};extrusionDialog.oncancel=e=>{e.preventDefault();document.getElementById('extrusionCancel').click()};
 $('extrusionForm').onsubmit=async e=>{e.preventDefault();if(computingMesh)return;const height=Number($('extrusionDepth').value),startZ=Number($('extrusionStart').value),operation=$('extrusionOperation').value,profile=$('extrusionProfile').value,index=Number($('extrusionTarget').value),target=doc.solids?.[index];if(!Number.isFinite(height)||height===0||!Number.isFinite(startZ)){$('extrusionError').textContent='Enter a nonzero depth and a finite start elevation.';return}if(operation!=='new'&&!target){$('extrusionError').textContent='Choose an existing part or create a separate part.';return}computingMesh=true;$('extrusionApply').disabled=true;$('extrusionError').textContent='Computing extrusion…';try{const generation=extrusionGeneration,feature={profile,height,startZ,operation};let result=featureMesh(feature);if(operation!=='new'){result=await computeBoolean(target,result,operation);if(!result.faces.length)throw Error('This operation leaves an empty part. Change the depth, elevation or source profile.')}if(generation!==extrusionGeneration){notify('Extrusion cancelled.');return}result.name=operation==='new'?'Extrusion':target.name;result.extrusionProgram=operation==='new'?{base:null,features:[feature]}:target.extrusionProgram?{base:structuredClone(target.extrusionProgram.base),features:[...structuredClone(target.extrusionProgram.features),feature]}:{base:{name:target.name,color:target.color,vertices:structuredClone(target.vertices),faces:structuredClone(target.faces)},features:[feature]};mutate(()=>{doc.solids??=[];if(operation==='new')doc.solids.push(result);else doc.solids[index]=result});extrusionDialog.close();show3D();notify(operation==='new'?'New extruded part created.':operation==='union'?'Existing part updated with added material.':'Material cut from existing part.')}catch(err){$('extrusionError').textContent=err.message}finally{computingMesh=false;$('extrusionApply').disabled=false}};
 async function updateExtrusion(){const index=Number($('meshA').value),target=doc.solids?.[index],program=target?.extrusionProgram;if(!program){await showMessage('No linked extrusion','This part has no editable extrusion history. Select its new outline and choose Extrude → Add material, or create a new linked extrusion.');return}if(computingMesh)return;computingMesh=true;notify('Rebuilding extrusion from source profiles…');try{let result=program.base?structuredClone(program.base):null;for(const feature of program.features){const mesh=featureMesh(feature);result=feature.operation==='new'||!result?mesh:await computeBoolean(result,mesh,feature.operation)}if(doc.solids?.[index]!==target)throw Error('Part changed while rebuilding.');if(!result.faces.length)throw Error('Updated extrusion is empty.');result.name=target.name;result.extrusionProgram=structuredClone(program);mutate(()=>doc.solids[index]=result);show3D();notify('Part rebuilt from the current source outlines.')}catch(err){await showMessage('Update failed',err.message)}finally{computingMesh=false}}
@@ -1038,7 +1050,9 @@ $('snap').checked=false;$('ortho').checked=false;
  $('viewport').append(overlay);}
 // ---- Theme tokens and frame layout ------------------------------------------------------
 const cfStyle=document.createElement('style');cfStyle.id='cf-core-style';cfStyle.textContent=`
-:root{--cf-font:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;--cf-mono:Consolas,'Cascadia Mono','Courier New',monospace;--cf-frame:#1b1f26;--cf-titlebar:#1b1f26;--cf-tabbar:#232932;--cf-ribbon:#343c48;--cf-ribbon-title:#2b323c;--cf-panel:#2b323c;--cf-panel-header:#343c48;--cf-input:#1f252d;--cf-border:#4a5260;--cf-border-soft:#3a424e;--cf-text:#e3e8ee;--cf-text-dim:#a9b3bf;--cf-text-faint:#7d8896;--cf-hover:#45515f;--cf-hover-border:#5d7088;--cf-active:#2f5d8a;--cf-active-border:#4a90d9;--cf-accent:#4a90d9;--cf-accent-2:#e8b84f;--cf-canvas:#212830;--cf-danger:#e05a5a;--cf-ok:#5cc87a;--cf-shadow:0 8px 30px rgba(0,0,0,.45)}
+:root{--cf-font:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;--cf-mono:Consolas,'Cascadia Mono','Courier New',monospace;--cf-frame:#1b1f26;--cf-titlebar:#1b1f26;--cf-tabbar:#232932;--cf-ribbon:#343c48;--cf-ribbon-title:#2b323c;--cf-panel:#2b323c;--cf-panel-header:#343c48;--cf-input:#1f252d;--cf-border:#4a5260;--cf-border-soft:#3a424e;--cf-text:#e3e8ee;--cf-text-dim:#a9b3bf;--cf-text-faint:#7d8896;--cf-hover:#45515f;--cf-hover-border:#5d7088;--cf-active:#2f5d8a;--cf-active-border:#4a90d9;--cf-accent:#4a90d9;--cf-accent-2:#e8b84f;--cf-canvas:#212830;--cf-danger:#e05a5a;--cf-ok:#5cc87a;--cf-shadow:0 8px 30px rgba(0,0,0,.45);--cf-scroll-thumb:#4a5260;--cf-scroll-thumb-hover:#5d7088;--cf-scroll-track:#1f252d;color-scheme:dark;scrollbar-color:var(--cf-scroll-thumb) var(--cf-scroll-track)}
+dialog,.cf-pal-body,.cf-lpm-grid,#cf-start{color-scheme:dark;scrollbar-color:var(--cf-scroll-thumb) var(--cf-scroll-track)}
+@supports not (scrollbar-color:auto){*::-webkit-scrollbar{width:10px;height:10px;background:var(--cf-scroll-track)}*::-webkit-scrollbar-track{background:var(--cf-scroll-track)}*::-webkit-scrollbar-thumb{background:var(--cf-scroll-thumb);border:2px solid var(--cf-scroll-track);border-radius:5px}*::-webkit-scrollbar-thumb:hover{background:var(--cf-scroll-thumb-hover)}*::-webkit-scrollbar-corner{background:var(--cf-scroll-track)}}
 html,body{background:var(--cf-frame);color:var(--cf-text);font:12px/1.35 var(--cf-font)}
 body{height:100vh;margin:0;display:flex;flex-direction:column;overflow:hidden}
 header,.tabs,#ribbon,.drawingtab,main>aside:not(#cf-palette),#properties,#historylog,footer,.statusbar,#hint,.viewbadge{display:none!important}
@@ -1246,7 +1260,7 @@ CF.module('icons');
 (()=>{
 CF.module('commands');
 const G=CF.geom,ORIGIN={x:0,y:0},DEG=Math.PI/180;
-const S={active:null,hold:0,lock:0,lastPoint:null,quiet:0,mutations:0,typed:false,chain:{pts:[]},copy:{base:null,count:0,sel:[]},textHeight:5,lastRadius:0,rectL:10,rectW:10,clip:null,prevSel:[],
+const S={active:null,hold:0,lock:0,lastPoint:null,quiet:0,mutations:0,typed:false,chain:{pts:[]},copy:{base:null,count:0,sel:[]},circ:null,ins:{scale:1,rot:0},selShape:null,textHeight:5,lastRadius:0,rectL:10,rectW:10,clip:null,prevSel:[],
  views:[],lastView:null,viewAt:0,zoom:{p1:null},hist:[],recall:-1,ac:[],acIndex:-1,expanded:false,shown:null};
 const lines=CF.history=[];
 const fnum=n=>String(Number((+n).toFixed(4))),fpt=p=>`${fnum(p.x)},${fnum(p.y)}`,rnd=v=>{const r=Math.round(v*1e9)/1e9;return Object.is(r,-0)?0:r};
@@ -1262,20 +1276,21 @@ const curLabel=()=>tool!=='select'?labelFor(tool):S.active;
 const ENGINE_PROMPTS={
  line:()=>!points.length?'Specify first point:':S.chain.pts.length>=3?'Specify next point or [Close/Undo]:':'Specify next point or [Undo]:',
  polyline:()=>!points.length?'Specify start point:':'Specify next point or [Close/Undo]:',
- circle:()=>!points.length?'Specify center point for circle:':`Specify radius of circle or [Diameter]${S.lastRadius>0?` <${fnum(S.lastRadius)}>`:''}:`,
+ circle:()=>S.circ?.prompt||(!points.length?'Specify center point for circle or [3P/2P/Ttr (tan tan radius)]:':`Specify radius of circle or [Diameter]${S.lastRadius>0?` <${fnum(S.lastRadius)}>`:''}:`),
  arc:()=>['Specify center point of arc:','Specify start point of arc:','Specify end point of arc:'][Math.min(points.length,2)],
  rectangle:()=>!points.length?'Specify first corner point:':'Specify other corner point or [Dimensions]:',
  text:()=>'Specify start point of text:',
- move:()=>!chosen().length?'Select objects:':!points.length?'Specify base point:':'Specify second point:',
- copy:()=>!chosen().length?'Select objects:':!points.length?'Specify base point:':'Specify second point or [Exit/Undo] <Exit>:',
+ move:()=>!chosen().length?'Select objects:':!points.length?'Specify base point or [Displacement] <Displacement>:':'Specify second point or <use first point as displacement>:',
+ copy:()=>!chosen().length?'Select objects:':!points.length?'Specify base point or [Displacement] <Displacement>:':S.copy.count>0?'Specify second point or [Exit/Undo] <Exit>:':'Specify second point or <use first point as displacement>:',
  rotate:()=>!chosen().length?'Select objects:':'Specify base point:',scale:()=>!chosen().length?'Select objects:':'Specify base point:',
  mirror:()=>!chosen().length?'Select objects:':!points.length?'Specify first point of mirror line:':'Specify second point of mirror line:',
  offset:()=>selected<0?'Select object to offset:':'Specify point on side to offset:',trim:()=>'Select object to trim:',extend:()=>'Select object to extend:',delete:()=>'Select objects:',
  dimension:()=>['Specify first extension line origin:','Specify second extension line origin:','Specify dimension line location:'][Math.min(points.length,2)],
- window:()=>!points.length?'Specify first corner:':'Specify opposite corner:',insert:()=>'Specify insertion point:',paste:()=>'Specify insertion point:',
+ window:()=>!points.length?'Specify first corner:':'Specify opposite corner:',insert:()=>'Specify insertion point or [Scale/Rotate]:',paste:()=>'Specify insertion point:',
  zoom:()=>'Specify window corner, enter a scale factor (nX), or [All/Extents/Previous/Window/In/Out] <Extents>:'};
 // ---- Parsing helpers -----------------------------------------------------------------------------------------------
-const optKey=w=>{const c=String(w).match(/[A-Z]/g);return c?c.join(''):String(w)};
+// Shortcut key of an option word: its capital letters ("Ttr (tan tan radius)" -> T); words like 3P / 2P are typed whole.
+const optKey=w=>{const s=String(w).replace(/\s*\(.*$/,''),first=s.split(/\s+/)[0];if(/^\d+[A-Z]+$/.test(first))return first;const c=s.match(/[A-Z]/g);return c?c.join(''):s};
 const optionsOf=p=>{const m=String(p).match(/\[([^\]]+)\]/);return m?m[1].split('/').map(s=>s.trim()).filter(Boolean):[]};
 function matchOpt(text,list){const t=String(text??'').trim().toUpperCase();if(!t)return null;return list.find(w=>optKey(w).toUpperCase()===t)||list.find(w=>w.toUpperCase().startsWith(t))||null}
 const NUM='[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?';
@@ -1438,9 +1453,11 @@ function cmdPrompt(message,initial='',opts){return askLine(mapPrompt(String(mess
 cadPrompt=cmdPrompt;
 cadConfirm=function(message){const result=modalPrompt(message);$('dialogValue').hidden=true;$('dialogOk').focus();return result.then(v=>v!==null)};
 // ---- Command lifecycle ----------------------------------------------------------------------------------------------
+function abortCirc(){const c=S.circ;S.circ=null;if(c?.wait){const w=c.wait;c.wait=null;w(null)}}
 function abortPending(){
  if(CF.input){const i=CF.input;CF.input=null;try{i.resolve(null,true)}catch(err){}}
- if(CF.picking){const p=CF.picking;CF.picking=null;try{p.cancel?.()}catch(err){}}}
+ if(CF.picking){const p=CF.picking;CF.picking=null;try{p.cancel?.()}catch(err){}}
+ abortCirc();S.selShape=null}
 function endCmd(clearSel){
  S.active=null;CF.picking=null;
  if(clearSel){S.prevSel=chosen();selectionSet.clear();selected=-1;CF.emit('selection',[])}
@@ -1505,30 +1522,184 @@ async function rectDims(){
  const Wd=await askNum(`${labelFor('rectangle')} Specify width for rectangles <${fnum(S.rectW)}>:`,S.rectW,{base:a,positive:true});if(Wd===null){endCmd();return}
  S.rectL=L;S.rectW=Wd;const sx=mouse.x<a.x?-1:1,sy=mouse.y<a.y?-1:1,b={x:a.x+sx*L,y:a.y+sy*Wd};
  add({type:'polyline',points:[{...a},{x:b.x,y:a.y},b,{x:a.x,y:b.y}],closed:true});endCmd()}
+// ---- MOVE / COPY displacement -----------------------------------------------------------------------------------------
+// As in AutoCAD, a point given as the base point is a displacement from the origin when Enter is pressed at the second-point prompt.
+async function applyDisplacement(d){
+ const t=tool;if(t!=='move'&&t!=='copy')return;
+ const lp=S.lastPoint;S.typed=true;
+ try{points=[];await accept({x:0,y:0});await accept({x:d.x,y:d.y})}finally{S.typed=false;S.lastPoint=lp}
+ if(tool===t)endCmd(true)}
+async function displacementCmd(){
+ const t=tool;
+ for(;;){
+  const raw=await askLine({message:`${labelFor(t)} Specify displacement <0,0,0>:`,def:'0,0,0',kind:'point'});
+  if(raw===null||tool!==t)return;
+  const p=RE.num.test(raw.trim())?null:parsePointText(raw,ORIGIN,null);
+  if(p)return applyDisplacement(p);
+  notify('Point or option keyword required.')}}
+// ---- CIRCLE 3P / 2P / Ttr ----------------------------------------------------------------------------------------------
+function circle3P(a,b,c){
+ const bx=b.x-a.x,by=b.y-a.y,cx=c.x-a.x,cy=c.y-a.y,d=2*(bx*cy-by*cx),sc=Math.max(Math.hypot(bx,by),Math.hypot(cx,cy));
+ if(!(sc>0)||Math.abs(d)<1e-9*sc*sc)return null;
+ const b2=bx*bx+by*by,c2=cx*cx+cy*cy,ux=(cy*b2-by*c2)/d,uy=(bx*c2-cx*b2)/d;
+ return{center:{x:rnd(a.x+ux),y:rnd(a.y+uy)},radius:Math.hypot(ux,uy)}}
+function circle2P(a,b){const r=G.dist(a,b)/2;return r>1e-9?{center:G.mid(a,b),radius:r}:null}
+// The line segment (nearest the pick) or circle that a tangent circle must touch.
+function ttrPart(e,p){
+ if(!e)return null;if(e.type==='circle')return{c:e.center,r:e.radius};if(e.type!=='line'&&e.type!=='polyline')return null;
+ let best=null;for(const [a,b] of G.segments(e)){const q=G.closestOnSegment(p,a,b);if(!best||q.d<best.d)best={a,b,d:q.d}}
+ return best&&G.dist(best.a,best.b)>1e-9?best:null}
+// Tangent-tangent-radius: the centre lies on an offset line (+-r) or on a circle of radius R+r / |R-r| about each object; the candidate nearest both picks wins.
+function circleTTR(e1,p1,e2,p2,r){
+ const t1=ttrPart(e1,p1),t2=ttrPart(e2,p2);if(!t1||!t2||!(r>0))return null;
+ const locus=t=>{
+  if(t.c){const out=[{c:t.c,r:t.r+r}];if(Math.abs(t.r-r)>1e-9)out.push({c:t.c,r:Math.abs(t.r-r)});return out}
+  const L=G.dist(t.a,t.b),nx=-(t.b.y-t.a.y)/L*r,ny=(t.b.x-t.a.x)/L*r;
+  return[1,-1].map(s=>({a:{x:t.a.x+s*nx,y:t.a.y+s*ny},b:{x:t.b.x+s*nx,y:t.b.y+s*ny}}))};
+ const cross=(u,v)=>{
+  if(u.a&&v.a){const q=G.segmentIntersection(u.a,u.b,v.a,v.b,true);return q?[q]:[]}
+  if(u.a)return G.lineCircle(u.a,u.b,v.c,v.r,true);
+  if(v.a)return G.lineCircle(v.a,v.b,u.c,u.r,true);
+  return G.circleCircle(u.c,u.r,v.c,v.r)};
+ const touch=(t,q)=>{ // point where the circle centred at q (radius r) touches the object
+  if(t.c){const d=G.dist(t.c,q);if(d<1e-12)return t.c;const ux=(q.x-t.c.x)/d,uy=(q.y-t.c.y)/d,a={x:t.c.x+t.r*ux,y:t.c.y+t.r*uy},b={x:t.c.x-t.r*ux,y:t.c.y-t.r*uy};return Math.abs(G.dist(q,a)-r)<=Math.abs(G.dist(q,b)-r)?a:b}
+  const dx=t.b.x-t.a.x,dy=t.b.y-t.a.y,k=((q.x-t.a.x)*dx+(q.y-t.a.y)*dy)/(dx*dx+dy*dy);return{x:t.a.x+k*dx,y:t.a.y+k*dy}};
+ let best=null;
+ for(const u of locus(t1))for(const v of locus(t2))for(const q of cross(u,v)){const s=G.dist(touch(t1,q),p1)+G.dist(touch(t2,q),p2);if(!best||s<best.s)best={s,center:{x:rnd(q.x),y:rnd(q.y)}}}
+ return best?{center:best.center,radius:r}:null}
+const circAsk=(c,prompt,raw)=>new Promise(res=>{c.prompt=prompt;c.raw=!!raw;c.wait=res;syncPrompt();render()});
+async function circleFlow(kind){
+ const c=S.circ={kind,pts:[],prompt:'',wait:null,raw:false};
+ try{
+  let res=null;
+  if(kind==='3p'){
+   for(const m of ['Specify first point on circle:','Specify second point on circle:','Specify third point on circle:']){const p=await circAsk(c,m);if(!p)return;c.pts.push(p)}
+   res=circle3P(...c.pts)}
+  else if(kind==='2p'){
+   for(const m of ['Specify first end point of circle\'s diameter:','Specify second end point of circle\'s diameter:']){const p=await circAsk(c,m);if(!p)return;c.pts.push(p)}
+   res=circle2P(...c.pts)}
+  else{
+   const picks=[];
+   for(const m of ['first','second'])for(;;){
+    const p=await circAsk(c,`Specify point on object for ${m} tangent of circle:`,true);if(!p)return;
+    const i=hit(p),e=i>=0?doc.entities[i]:null;if(e&&CF.visible(e)&&ttrPart(e,p)){picks.push({e,p});c.pts.push(p);break}
+    notify('Select a line, polyline or circle.')}
+   c.raw=false;
+   const r=await askNum(`${labelFor('circle')} Specify radius of circle${S.lastRadius>0?` <${fnum(S.lastRadius)}>`:''}:`,S.lastRadius>0?S.lastRadius:null,{kind:'distance',positive:true});
+   if(r===null)return;
+   res=circleTTR(picks[0].e,picks[0].p,picks[1].e,picks[1].p,r)}
+  if(!res){notify('Circle does not exist.');endCmd();return}
+  add({type:'circle',center:res.center,radius:res.radius});S.lastRadius=res.radius;endCmd()}
+ finally{if(S.circ===c)S.circ=null}}
+CF.previews.circle=m=>{
+ const c=S.circ;if(!c||!c.pts.length)return[];const a=c.pts[0];
+ if(c.kind==='2p'){const r=circle2P(a,m);return r?[{type:'circle',center:r.center,radius:r.radius}]:[]}
+ if(c.kind==='3p'){if(c.pts.length===1)return[{type:'line',points:[a,m]}];const r=circle3P(a,c.pts[1],m);return r?[{type:'circle',center:r.center,radius:r.radius}]:[]}
+ return[]};
+CF.pickTools.circle=()=>!!(S.circ&&S.circ.wait&&S.circ.raw);
+// ---- INSERT scale / rotation and BLOCK base point ------------------------------------------------------------------
+async function insertScale(){const v=await askNum(`${labelFor('insert')} Specify scale factor <${fnum(S.ins.scale)}>:`,S.ins.scale,{kind:'distance',positive:true});if(v!==null&&tool==='insert')S.ins.scale=v}
+async function insertRotate(){const v=await askNum(`${labelFor('insert')} Specify rotation angle <${fnum(S.ins.rot)}>:`,S.ins.rot,{kind:'angle'});if(v!==null&&tool==='insert')S.ins.rot=v}
+// Insertion with a non-default scale / rotation (the engine insert handles scale 1 / rotation 0).
+function insertScaled(p){
+ const name=typeof insertName!=='undefined'?insertName:'',def=doc.blocks?.[name];if(!def){notify('Block not found.');return}
+ const items=structuredClone(def.items),id=gid(),s=S.ins.scale,t=S.ins.rot*DEG,co=Math.cos(t),si=Math.sin(t);
+ for(const e of items){transformEntity(e,q=>({x:p.x+(q.x*co-q.y*si)*s,y:p.y+(q.x*si+q.y*co)*s}));if(e.type==='circle')e.radius*=s;if(e.type==='text')e.height*=s;e.group=id;e.blockName=name;if(e.layer==='0')e.layer=layer().name}
+ mutate(()=>doc.entities.push(...items));print(`Inserted ${name}.`)}
+// BLOCK: name, then the insertion base point (default 0,0,0), then the selection is released.
+async function blockCmd(ids){
+ if(cadPrompt!==cmdPrompt)return createBlock();
+ const name=await cadPrompt('Block name');if(!name?.trim())return;
+ if(doc.blocks?.[name]){notify('A block with that name already exists.');return}
+ let base=null;
+ while(!base){
+  const raw=await askLine({message:'BLOCK Specify insertion base point <0,0,0>:',def:'0,0,0',kind:'point'});if(raw===null)return;
+  base=RE.num.test(raw.trim())?null:parsePointText(raw,ORIGIN,null);if(!base)notify('Point or option keyword required.')}
+ const items=ids.map(i=>{const e=structuredClone(doc.entities[i]);delete e.group;delete e.uuid;transformEntity(e,q=>({x:q.x-base.x,y:q.y-base.y}));return e});
+ mutate(()=>{doc.blocks??={};doc.blocks[name]={items};const id=gid();ids.forEach(i=>{doc.entities[i].group=id;doc.entities[i].blockName=name})});
+ print(`Block "${name}" defined.`)}
 function clickInput(p){
  const inp=CF.input;if(!inp)return;
  if(inp.kind==='point')return inp.resolve(fpt(p));if(!inp.base)return;
  if(inp.kind==='angle'){let a=Math.atan2(p.y-inp.base.y,p.x-inp.base.x)/DEG;if(a<0)a+=360;return inp.resolve(fnum(a))}
  if(inp.kind==='distance'||inp.kind==='factor')return inp.resolve(fnum(distance(inp.base,p)))}
-function pickAt(p){const i=hit(p);if(i>=0){CF.select([i],typeof shiftSelection!=='undefined'&&shiftSelection?'remove':'add');print(`1 found, ${chosen().length} total`)}return Promise.resolve()}
+// "N found" echo for the select-objects phase (AutoCAD wording).
+function reportSel(found,before,remove){const after=chosen().length;print(remove?`${found} found, ${Math.max(0,before-after)} removed, ${after} total`:`${found} found${after!==found?`, ${after} total`:''}`)}
+function pickAt(p){const i=hit(p);if(i>=0){const rm=typeof shiftSelection!=='undefined'&&shiftSelection,before=chosen().length;CF.select([i],rm?'remove':'add');reportSel(1,before,rm)}return Promise.resolve()}
+// Window / Crossing / WPolygon / CPolygon / Fence geometry. poly is a closed polygon, or an open path for fences.
+function inPoly(p,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)c=!c}return c}
+const polyEdges=(poly,open)=>{const out=[];for(let i=0;i<poly.length-(open?1:0);i++)out.push([poly[i],poly[(i+1)%poly.length]]);return out};
+function cutCount(segs,edges,proper){for(const [a,b] of segs)for(const [c,d] of edges){const q=G.segmentIntersection(a,b,c,d);if(q&&(!proper||(q.t>1e-9&&q.t<1-1e-9&&q.u>1e-9&&q.u<1-1e-9)))return true}return false}
+function shapeHit(e,mode,poly){
+ const edges=polyEdges(poly,mode==='fence'),onIn=q=>inPoly(q,poly)||edges.some(([a,b])=>G.closestOnSegment(q,a,b).d<1e-9);
+ if(e.type==='circle'){
+  const c=e.center,r=e.radius;if(mode==='fence')return edges.some(([a,b])=>G.lineCircle(a,b,c,r).length>0);
+  const ins=inPoly(c,poly),near=Math.min(...edges.map(([a,b])=>G.closestOnSegment(c,a,b).d));
+  if(mode==='window')return ins&&near>=r-1e-9;
+  return(ins?0:near)<=r+1e-9&&Math.max(...poly.map(q=>G.dist(c,q)))>=r-1e-9}
+ let pts,segs;
+ if(e.type==='text'){const b=G.bbox(e);pts=[{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}];segs=polyEdges(pts)}else{pts=e.points||[];segs=G.segments(e)}
+ if(!pts.length)return false;
+ if(mode==='fence')return cutCount(segs,edges);
+ if(mode==='window')return pts.every(onIn)&&!cutCount(segs,edges,true);
+ return pts.some(onIn)||cutCount(segs,edges)||(e.type==='text'&&poly.some(q=>inPoly(q,pts)))}
+function selectByShape(mode,poly){
+ const out=[];doc.entities.forEach((e,i)=>{if(CF.visible(e)&&shapeHit(e,mode,poly))out.push(i)});
+ if(mode==='window'&&out.some(i=>doc.entities[i].group)){const inside=new Set(out),bad=new Set();doc.entities.forEach((e,i)=>{if(e.group&&CF.visible(e)&&!inside.has(i))bad.add(e.group)});return out.filter(i=>!bad.has(doc.entities[i].group))}
+ return out}
+const rectPoly=(a,b)=>[{x:a.x,y:a.y},{x:b.x,y:a.y},{x:b.x,y:b.y},{x:a.x,y:b.y}];
+const SEL_KW={w:'window',window:'window',c:'crossing',crossing:'crossing',wp:'wpolygon',wpolygon:'wpolygon',cp:'cpolygon',cpolygon:'cpolygon',f:'fence',fence:'fence',box:'box'};
+async function selPoint(message,base){
+ for(;;){const raw=await askLine({message,kind:'point'});if(raw===null||raw.trim()==='')return null;
+  const p=parsePointText(raw,base||null,mouse);if(p)return p;notify('Point or option keyword required.')}}
+// Typed selection keywords at "Select objects:" (corner points come from the command line or from canvas clicks).
+async function selKeyword(kw,pk){
+ const lab=pk.command||'',pre=lab?lab+' ':'';let ids=[];
+ if(kw==='window'||kw==='crossing'||kw==='box'){
+  const a=await selPoint(`${pre}Specify first corner:`);if(!a||CF.picking!==pk)return;
+  S.selShape={mode:'rect',a};
+  const b=await selPoint(`${pre}Specify opposite corner:`,a);S.selShape=null;if(!b||CF.picking!==pk)return;
+  if(Math.abs(a.x-b.x)<1e-12||Math.abs(a.y-b.y)<1e-12){notify('Invalid window; the corners must differ in both directions.');return}
+  ids=selectByShape(kw==='window'||(kw==='box'&&b.x>a.x)?'window':'crossing',rectPoly(a,b))}
+ else{
+  const poly=kw==='wpolygon'||kw==='cpolygon',first=await selPoint(`${pre}${poly?'First polygon point':'First fence point'}:`);if(!first||CF.picking!==pk)return;
+  const pts=[first];S.selShape={mode:'path',pts,closed:poly};
+  for(;;){
+   const raw=await askLine({message:`${pre}Specify endpoint of line or [Undo]:`,kind:'point'});if(raw===null||CF.picking!==pk){S.selShape=null;return}
+   if(raw.trim()==='')break;
+   if(matchOpt(raw,['Undo'])==='Undo'){if(pts.length>1)pts.pop();continue}
+   const p=parsePointText(raw,pts.at(-1),mouse);if(p)pts.push(p);else notify('Point or option keyword required.')}
+  S.selShape=null;
+  if(pts.length<(poly?3:2)){notify(poly?'A polygon needs at least three points.':'A fence needs at least two points.');return}
+  ids=selectByShape(kw==='fence'?'fence':kw==='wpolygon'?'window':'crossing',pts)}
+ const before=chosen().length;if(ids.length)CF.select(ids,'add');else render();reportSel(ids.length,before,false)}
+CF.previews.select=m=>{
+ const s=S.selShape;if(!s)return[];
+ if(s.mode==='rect')return[{type:'polyline',closed:true,points:rectPoly(s.a,m)}];
+ return[{type:'polyline',closed:!!s.closed&&s.pts.length>1,points:[...s.pts,m]}]};
 accept=function(p,...rest){
  if(CF.input){clickInput(p);return Promise.resolve()}
  if(CF.picking)return pickAt(p);
  const t=tool;
  if(t!=='select'){if(!CF.isPick())S.lastPoint={x:p.x,y:p.y};if(!S.typed&&ECHO_TOOLS.has(t))print(`${CF.prompt()} ${fpt(p)}`)}
+ if(t==='circle'&&S.circ?.wait){const w=S.circ.wait;S.circ.wait=null;w({x:p.x,y:p.y});return Promise.resolve()}
+ if(t==='insert'&&(S.ins.scale!==1||S.ins.rot!==0))return track(()=>insertScaled(p));
  if(t==='line')return acceptLine(p,rest);
  if(t==='copy')return acceptCopy(p,rest);
  if(t==='text')return acceptText(p);
  if(t==='circle')return acceptCircle(p,rest);
  if(t==='paste'){pasteAt(p);return Promise.resolve()}
  return track(()=>prevAccept(p,...rest))};
-{const prevSetTool=setTool;setTool=function(t,...rest){S.chain={pts:[]};S.copy={base:null,count:0,sel:[]};S.zoom.p1=null;S.quiet++;try{prevSetTool(t,...rest)}finally{S.quiet--}syncPrompt()}}
+{const prevSetTool=setTool;setTool=function(t,...rest){abortCirc();S.chain={pts:[]};S.copy={base:null,count:0,sel:[]};S.zoom.p1=null;S.quiet++;try{prevSetTool(t,...rest)}finally{S.quiet--}syncPrompt()}}
 {const prevNotify=notify,NOISE=/^(Select an entity|Specify [^:]*\.$|Ready|Workflow repair|Drag to orbit)|entities selected\. Shift-click/i;let autosaveShown=false;
- notify=function(s){prevNotify(s);if(S.quiet||NOISE.test(String(s)))return;if(/^Autosave unavailable/.test(String(s))){if(autosaveShown)return;autosaveShown=true}print(s)}}
+ // Engine wording that does not match the command-line flow it now sits in.
+ const REWORD=[[/^Block (.+) defined\. Click Insert block to place another instance\.$/,'Block "$1" defined.'],[/^Inserted (.+?)\. Escape ends insertion\.$/,'Inserted $1.']];
+ const reword=s=>{for(const [re,to] of REWORD)if(re.test(s))return s.replace(re,to);return s};
+ notify=function(s){prevNotify(s);if(S.quiet||NOISE.test(String(s)))return;if(/^Autosave unavailable/.test(String(s))){if(autosaveShown)return;autosaveShown=true}print(reword(String(s)))}}
 {const prevCheckpoint=checkpoint;checkpoint=function(){S.mutations++;return prevCheckpoint()}}
 {const prevRender=render;render=function(){prevRender();noteView();syncPrompt()}}
 {const prevPreview=drawPreview;drawPreview=function(...a){
- prevPreview(...a);if(CF.has('interact')||mode3D||(tool!=='zoom'&&tool!=='paste'))return;
+ prevPreview(...a);if(CF.has('interact')||mode3D||(tool!=='zoom'&&tool!=='paste'&&tool!=='circle'&&!(tool==='select'&&S.selShape)))return;
  let ents=[];try{ents=CF.previews[tool]?.(mouse)||[]}catch(err){}for(const e of ents)drawEntity(e,CF.colors.preview,true)}}
 // ---- Input dispatch ------------------------------------------------------------------------------------------------
 function answerInput(raw){const inp=CF.input,text=inp.kind==='text'?raw:raw.trim();inp.resolve(text.trim()===''?'':text)}
@@ -1536,17 +1707,22 @@ function answerPicking(text){
  const pk=CF.picking,echo=pk.message;let m;
  if(text===''){CF.enter();return}
  const visible=i=>CF.visible(doc.entities[i]);
- if(/^all$/i.test(text)){const ids=doc.entities.map((e,i)=>i).filter(visible);CF.select(ids,'add');print(`${echo} ${text}`);print(`${ids.length} found`);return}
- if(/^l(ast)?$/i.test(text)){let i=doc.entities.length-1;while(i>=0&&!visible(i))i--;print(`${echo} ${text}`);if(i>=0){CF.select([i],'add');print('1 found')}return}
- if(/^p(revious)?$/i.test(text)){const ids=S.prevSel.filter(i=>i<doc.entities.length);print(`${echo} ${text}`);CF.select(ids,'add');print(`${ids.length} found`);return}
+ if(/^all$/i.test(text)){const ids=doc.entities.map((e,i)=>i).filter(visible),before=chosen().length;CF.select(ids,'add');print(`${echo} ${text}`);reportSel(ids.length,before);return}
+ if(/^l(ast)?$/i.test(text)){let i=doc.entities.length-1;while(i>=0&&!visible(i))i--;print(`${echo} ${text}`);if(i>=0){const before=chosen().length;CF.select([i],'add');reportSel(1,before)}return}
+ if(/^p(revious)?$/i.test(text)){const ids=S.prevSel.filter(i=>i<doc.entities.length),before=chosen().length;print(`${echo} ${text}`);CF.select(ids,'add');reportSel(ids.length,before);return}
+ const kw=SEL_KW[text.toLowerCase()];
+ if(kw){print(`${echo} ${text}`);return selKeyword(kw,pk)}
  const p=parsePointText(text,null,null);
  if(p&&!(m=text.match(RE.num))){print(`${echo} ${text}`);pickAt(p);return}
- print(`${echo} ${text}`);notify('Invalid selection. Expects a point or All/Last/Previous.')}
+ print(`${echo} ${text}`);notify('Invalid selection. Expects a point or Window/Crossing/WPolygon/CPolygon/Fence/BOX/ALL/Last/Previous.')}
 function toolOption(text){
  const t=tool,pickOpt=list=>matchOpt(text,list);
  if(t==='line'&&points.length){const o=pickOpt(S.chain.pts.length>=3?['Close','Undo']:['Undo']);if(o==='Undo')return lineUndo;if(o==='Close')return lineClose}
  if(t==='polyline'&&points.length){const o=pickOpt(['Close','Undo']);if(o==='Undo')return plineUndo;if(o==='Close')return plineClose}
  if(t==='circle'&&points.length===1&&pickOpt(['Diameter']))return circleDiameter;
+ if(t==='circle'&&!points.length&&!S.circ&&/[a-z]/i.test(text)){const o=pickOpt(['3P','2P','Ttr']);if(o)return()=>circleFlow(o.toLowerCase())}
+ if((t==='move'||t==='copy')&&!points.length&&chosen().length&&pickOpt(['Displacement']))return displacementCmd;
+ if(t==='insert'&&!points.length){const o=pickOpt(['Scale','Rotate']);if(o)return o==='Scale'?insertScale:insertRotate}
  if(t==='copy'&&points.length){const o=pickOpt(['Exit','Undo']);if(o==='Undo')return copyUndo;if(o==='Exit')return()=>endCmd(true)}
  if(t==='rectangle'&&points.length===1&&pickOpt(['Dimensions']))return rectDims;
  return null}
@@ -1579,7 +1755,7 @@ function submit(text){
  if(t)remember(t);S.recall=-1;
  try{
   let r;
-  if(CF.input)answerInput(raw);else if(CF.picking)answerPicking(t);
+  if(CF.input)answerInput(raw);else if(CF.picking)r=answerPicking(t);
   else if(t&&tool!=='select'&&CF.drafting&&CF.drafting.state&&CF.drafting.state()&&CF.drafting.state().prompt!=null&&CF.drafting.input){const echo=CF.prompt();r=CF.drafting.input(t);if(r)print(`${echo} ${t}`);else r=answerTool(t)} // option keyword for a drafting command (clickable options, macros)
   else if(tool!=='select'||points.length)r=answerTool(t);else answerIdle(t);
   if(r&&typeof r.then==='function')r.catch(err=>notify(`Command failed: ${err?.message||err}`))}
@@ -1597,6 +1773,10 @@ CF.enter=function(){
  if(CF.picking){const pk=CF.picking;print(pk.message);pk.done();syncPrompt();render();return}
  if(tool==='select'&&!points.length){repeatLast();return}
  print(CF.prompt());const t=tool;
+ if((t==='move'||t==='copy')&&chosen().length){ // Enter at the base prompt picks <Displacement>; at the second prompt the first point is the displacement
+  const fail=err=>notify(`${labelFor(t)} failed: ${err?.message||err}`);
+  if(!points.length){displacementCmd().catch(fail);return}
+  if(points.length===1&&!(t==='copy'&&S.copy.count>0)){const d={...points[0]};points=[];applyDisplacement(d).catch(fail);return}}
  if(t==='polyline')finish();
  else if(t==='circle'&&points.length===1&&S.lastRadius>0)add({type:'circle',center:{...points[0]},radius:S.lastRadius});
  endCmd(t==='copy'&&S.copy.count>0)};
@@ -1710,13 +1890,13 @@ reg('TRIM',['TR'],'Trim','Trims objects to meet the edges of other objects.','Mo
 reg('EXTEND',['EX'],'Extend','Extends objects to meet the edges of other objects.','Modify',()=>begin('EXTEND','extend'));
 reg('CHAMFER',['CHA'],'Chamfer','Bevels the corner between two lines.','Modify',()=>modify('CHAMFER',null,()=>chamfer(),{keep:true}));
 // Blocks
-reg('BLOCK',['B'],'Create Block','Creates a block definition from the selected objects.','Block',()=>modify('BLOCK',null,()=>createBlock()));
-reg('INSERT',['I'],'Insert','Inserts a block into the drawing.','Block',()=>{abortPending();return hold('INSERT',()=>startInsert())});
+reg('BLOCK',['B'],'Create Block','Creates a block definition from the selected objects.','Block',()=>modify('BLOCK',null,blockCmd));
+reg('INSERT',['I'],'Insert','Inserts a block into the drawing.','Block',()=>{abortPending();S.ins={scale:1,rot:0};return hold('INSERT',()=>startInsert())});
 // Utilities
 reg('MEASUREGEOM',['MEA','MEASURE'],'Measure','Reports the length and area of an object.','Utilities',()=>modify('MEASUREGEOM',null,()=>measure(),{keep:true}));
 reg('SELECTALL',['AI_SELALL'],'Select All','Selects all visible objects.','Utilities',()=>{abortPending();selectAll()});
-reg('UNDO',['U'],'Undo','Reverses the last action.','Utilities',()=>undoKey(false,true));
-reg('REDO',[],'Redo','Reverses the effect of the last UNDO.','Utilities',()=>undoKey(true,true));
+reg('UNDO',['U'],'Undo','Reverses the last action.','Utilities',()=>undoKey(false));
+reg('REDO',[],'Redo','Reverses the effect of the last UNDO.','Utilities',()=>undoKey(true));
 reg('COPYCLIP',[],'Copy to Clipboard','Copies the selected objects to the clipboard.','Utilities',()=>modify('COPYCLIP',null,()=>copyClip(false),{keep:true}));
 reg('CUTCLIP',[],'Cut','Copies the selected objects to the clipboard and erases them.','Utilities',()=>modify('CUTCLIP',null,()=>copyClip(true)));
 reg('PASTECLIP',[],'Paste','Pastes the clipboard objects at an insertion point.','Utilities',startPaste);
@@ -1759,7 +1939,7 @@ reg('PAGESETUP',[],'Page Setup','Sets paper size, orientation and scale.','Files
 reg('EXPORT',['EXP'],'Export','Exports the drawing to DXF, SVG, OBJ, STL or PDF.','Files',arg=>askChoice('EXPORT','EXPORT Enter file format [Dxf/Svg/Obj/Stl/Pdf]:',['Dxf','Svg','Obj','Stl','Pdf'],'',o=>({Dxf:()=>$('dxf').click(),Svg:()=>$('svg').click(),Obj:()=>exportOBJ(),Stl:()=>exportSTL(),Pdf:()=>plotSheet()})[o](),arg));
 reg('DXFOUT',[],'Export DXF','Exports the drawing as an ASCII DXF file.','Files',()=>$('dxf').click(),{icon:'export'});
 reg('DXFIN',[],'Import DXF','Opens a DXF or project file.','Files',()=>CF.openFile(),{icon:'import'});
-reg('SVGOUT',[],'Export SVG','Exports the current view as SVG.','Files',()=>$('svg').click(),{icon:'export'});
+reg('SVGOUT',[],'Export SVG','Exports the drawing extents as SVG.','Files',()=>$('svg').click(),{icon:'export'});
 reg('STLOUT',[],'Export STL','Exports the meshes as an STL file.','Files',()=>exportSTL(),{icon:'export'});
 reg('OBJEXPORT',[],'Export OBJ','Exports the meshes as a Wavefront OBJ file.','Files',()=>exportOBJ(),{icon:'export'});
 // 3D mesh modeling
@@ -1774,11 +1954,16 @@ reg('MESHCOPY',[],'Copy Mesh','Duplicates Mesh A.','3D',()=>duplicateMesh(),{ico
 reg('MESHCLEAR',[],'Clear Meshes','Removes all meshes.','3D',()=>clearMeshes(),{icon:'mesh-clear'});
 reg('MESHFIT',[],'Fit Meshes','Fits the 3D view to the meshes.','3D',()=>{if(mode3D){fit3D();render()}else show3D()},{icon:'mesh-fit'});
 // ---- Keyboard --------------------------------------------------------------------------------------------------------
-function undoKey(redo,quiet){
+// UNDO / REDO echo the same way from every route: commands (typed, ribbon, QAT) print "Command: UNDO" through the command event;
+// Ctrl+Z / Ctrl+Y (viaKey) print it here. Inside LINE / PLINE the key undoes the last segment, like typing U.
+function undoKey(redo,viaKey){
  if(!redo&&CF.input)return;
- if(!redo&&tool==='line'&&S.chain.pts.length>1){lineUndo();return}
- if(!redo&&tool==='polyline'&&points.length){plineUndo();return}
- undo(redo);if(!quiet)print(redo?'REDO':'UNDO')}
+ const inCmd=viaKey&&!redo;
+ if(!redo&&tool==='line'&&S.chain.pts.length>1){if(inCmd)print(`${CF.prompt()} U`);lineUndo();return}
+ if(!redo&&tool==='polyline'&&points.length){if(inCmd)print(`${CF.prompt()} U`);plineUndo();return}
+ if(viaKey)print(`Command: ${redo?'REDO':'UNDO'}`,'cf-cmd-in');
+ if(!(redo?future:history).length){print(redo?'Nothing to redo.':'Nothing to undo.');return}
+ undo(redo)}
 function dialogOpen(){
  try{
   if(typeof inputDialog!=='undefined'&&inputDialog.open)return true;if(typeof plotDialog!=='undefined'&&plotDialog.open)return true;
@@ -1813,7 +1998,7 @@ document.onkeydown=function(e){
    const map={n:'NEW',o:'OPEN',s:shift?'SAVEAS':'QSAVE',p:'PLOT'};e.preventDefault?.();CF.run(map[k],{source:'key'});return}
   if(k==='1'||k==='9'||k==='0'){e.preventDefault?.();CF.toggle(k==='1'?'properties':k==='9'?'commandLine':'clean');return} // interface toggles work from palette fields too
   if(inField)return;
-  if(k==='z'||k==='y'){e.preventDefault?.();undoKey(k==='y'||shift);return}
+  if(k==='z'||k==='y'){e.preventDefault?.();undoKey(k==='y'||shift,true);return}
   if(k==='a'&&!inCmd){e.preventDefault?.();CF.run('SELECTALL',{source:'key'});return}
   if((k==='c'||k==='x'||k==='v')&&(!inCmd||input.value==='')){e.preventDefault?.();CF.run(k==='c'?'COPYCLIP':k==='x'?'CUTCLIP':'PASTECLIP',{source:'key'});return}
   if(k==='1'){e.preventDefault?.();CF.toggle('properties');return}
@@ -1832,15 +2017,19 @@ document.onkeydown=function(e){
 // ---- Wiring --------------------------------------------------------------------------------------------------------
 CF.on('command',({def,source})=>{S.active=def.name;if(source!=='command'&&source!=='repeat')print(`Command: ${def.name}`,'cf-cmd-in')});
 CF.on('tool',()=>syncPrompt());
+// A running command cannot continue in paper space: switching to a Layout tab cancels it (otherwise typed commands become its points).
+CF.on('space',s=>{if(s==='layout'&&(CF.input||CF.picking||tool!=='select'||points.length))CF.cancel()});
 CF.on('document',()=>{S.lastPoint=null;S.views=[];S.lastView=null});
-CF.commandLine={submit,print,ask:askLine,cadPrompt:cmdPrompt,autocomplete:acMatches,parsePoint:parsePointText,expand,focus(){try{input.focus()}catch(err){}},setPrompt(text){S.shown=String(text)+'|0';renderPrompt(String(text))},
+CF.commandLine={submit,print,ask:askLine,cadPrompt:cmdPrompt,autocomplete:acMatches,parsePoint:parsePointText,circle3P,circle2P,circleTTR,selectByShape,
+ optKey,expand,focus(){try{input.focus()}catch(err){}},setPrompt(text){S.shown=String(text)+'|0';renderPrompt(String(text))},
  state:()=>({active:S.active,chain:S.chain.pts.length,copy:S.copy.count,views:S.views.length,clip:S.clip?S.clip.items.length:0,history:S.hist.slice(),expanded:S.expanded,ac:S.ac.length,acIndex:S.acIndex})};
 buildUI();
 print('CadForge command line. Type a command (LINE, CIRCLE, MOVE, ZOOM) and press Enter, or press F1 for the command list.');
 syncPrompt();
 })();
 </script><script data-module="acad-drafting">'use strict';
-// B2 drafting commands with AutoCAD prompts: OFFSET TRIM EXTEND FILLET CHAMFER MIRROR POLYGON ELLIPSE DIMLINEAR DIST ID LIST MATCHPROP ARRAYRECT PURGE.
+// B2 drafting commands with AutoCAD prompts: OFFSET TRIM EXTEND FILLET CHAMFER MIRROR POLYGON ELLIPSE DIMLINEAR DIST ID LIST MATCHPROP ARRAYRECT PURGE HATCH (internal point),
+// plus PLINE/ARC in AutoCAD prompt order (S.acadPline/S.acadArc, on by default), PLINE keeps its segments on Esc, and Esc during a selection window cancels the command.
 // Each command runs as an async "flow" on its own engine tool. Clicks reach the flow through accept(), typed option keywords
 // and numbers through the command input / CF.run, Enter through CF.enter()/finish(), and any setTool() aborts it.
 CF.drafting=(()=>{
@@ -1853,7 +2042,7 @@ const area=ps=>{let s=0;for(let i=0;i<ps.length;i++){const a=ps[i],b=ps[(i+1)%ps
 const inside=(p,ps)=>{let c=false;for(let i=0,j=ps.length-1;i<ps.length;j=i++){const a=ps[i],b=ps[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)c=!c}return c};
 const overlap=(a,b,m=1e-7)=>a.minX<=b.maxX+m&&b.minX<=a.maxX+m&&a.minY<=b.maxY+m&&b.minY<=a.maxY+m;
 const segBox=(a,b)=>({minX:Math.min(a.x,b.x),minY:Math.min(a.y,b.y),maxX:Math.max(a.x,b.x),maxY:Math.max(a.y,b.y)});
-const S={offsetDist:null,filletRad:0,chamferA:0,chamferB:0,chamferLen:0,chamferAng:0,chamferMethod:'distance',sides:4,polyMode:'I',matchLayer:true,matchText:true,rows:3,cols:4,lastReport:[]};
+const S={offsetDist:null,filletRad:0,chamferA:0,chamferB:0,chamferLen:0,chamferAng:0,chamferMethod:'distance',sides:4,polyMode:'I',matchLayer:true,matchText:true,matchColor:true,acadPline:true,acadArc:true,hatchSpacing:5,hatchAngle:45,rows:3,cols:4,lastReport:[]};
 
 // ---- Pure geometry ----------------------------------------------------------------------------------
 // Arc polyline from angle a0 sweeping sw (signed), at least `per` segments per 90 degrees.
@@ -1952,6 +2141,75 @@ function listReport(e){const head=(t)=>`${t}  Layer: "${e.layer}"  Space: Model 
 function purgeAnalysis(d=doc,current=$('layer').value){const used=new Set(d.entities.map(e=>e.blockName).filter(Boolean)),blocks=Object.keys(d.blocks||{}).filter(n=>!used.has(n)),items=Object.values(d.blocks||{}).flatMap(b=>b.items||[]),usedLayers=new Set([...d.entities,...items].map(e=>e.layer));
  return{blocks,layers:d.layers.map(l=>l.name).filter(n=>n!=='0'&&n!==current&&!usedLayers.has(n))}}
 function arrayCopies(ents,rows,cols,dy,dx){const out=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){if(!r&&!c)continue;const groups={};for(const e of ents){const k=structuredClone(e);delete k.uuid;if(k.group)k.group=groups[k.group]??=gid();transformEntity(k,q=>P(q.x+c*dx,q.y+r*dy));out.push(k)}}return out}
+// ---- Arc geometry for PLINE (Arc option) and ARC (3-point, Center) -----------------------------------------------------
+const rot=(u,a)=>P(u.x*Math.cos(a)-u.y*Math.sin(a),u.x*Math.sin(a)+u.y*Math.cos(a)),crossV=(a,b)=>a.x*b.y-a.y*b.x;
+// Arc from S that leaves along unit direction t and ends at E: {pts, tan (direction at E), center, radius}; a straight segment when E lies ahead on the tangent; null when impossible.
+function tangentArc(S,t,E){const v=sub(E,S),L=Math.hypot(v.x,v.y);if(L<1e-9)return null;const phi=Math.atan2(crossV(t,v),dot(t,v));if(Math.abs(phi)>Math.PI-1e-6)return null;
+ if(Math.abs(Math.sin(phi))<1e-9)return{pts:[{...S},{...E}],tan:t,straight:true};
+ const R=L/(2*Math.abs(Math.sin(phi))),C=plus(S,mul(P(-t.y,t.x),Math.sign(phi)*R)),pts=arcPoints(C,R,Math.atan2(S.y-C.y,S.x-C.x),2*phi);pts[0]={...S};pts[pts.length-1]={...E};return{pts,tan:rot(t,2*phi),center:C,radius:R}}
+// Circular arc through A, B and Cc (in that order); null when they are collinear.
+function arcThrough(A,B,Cc){const cr=crossV(sub(B,A),sub(Cc,A)),s=Math.max(G.dist(A,B),G.dist(B,Cc),G.dist(A,Cc));if(Math.abs(cr)<1e-9*s*s)return null;
+ const a2=A.x*A.x+A.y*A.y,b2=B.x*B.x+B.y*B.y,c2=Cc.x*Cc.x+Cc.y*Cc.y,d=2*(A.x*(B.y-Cc.y)+B.x*(Cc.y-A.y)+Cc.x*(A.y-B.y)),C=P((a2*(B.y-Cc.y)+b2*(Cc.y-A.y)+c2*(A.y-B.y))/d,(a2*(Cc.x-B.x)+b2*(A.x-Cc.x)+c2*(B.x-A.x))/d),R=G.dist(C,A),ccw=cr>0,a0=Math.atan2(A.y-C.y,A.x-C.x);
+ let sw=Math.atan2(Cc.y-C.y,Cc.x-C.x)-a0;if(ccw){while(sw<=0)sw+=TAU}else while(sw>=0)sw-=TAU;const pts=arcPoints(C,R,a0,sw);pts[0]={...A};pts[pts.length-1]={...Cc};
+ return{pts,tan:rot(unit(sub(Cc,C)),ccw?Math.PI/2:-Math.PI/2),center:C,radius:R,sweep:sw}}
+// Counter-clockwise arc around C from S; it ends on the ray C->E (or after `sweep` radians when given, negative = clockwise).
+function arcCenterStart(C,S,E,sweep=null){const R=G.dist(C,S);if(R<1e-9)return null;const a0=Math.atan2(S.y-C.y,S.x-C.x);let sw=sweep;if(sw==null){if(G.dist(C,E)<1e-9)return null;sw=normAng(Math.atan2(E.y-C.y,E.x-C.x)-a0);if(sw<1e-9)return null}
+ if(!(Math.abs(sw)>1e-9)||Math.abs(sw)>TAU+1e-9)return null;const pts=arcPoints(C,R,a0,sw);pts[0]={...S};return{pts,center:C,radius:R,sweep:sw}}
+
+// ---- HATCH boundary detection -----------------------------------------------------------------------------------
+// The visible lines, polylines and circles form a planar arrangement: every segment is split where it crosses or touches
+// another, dangling pieces are pruned and the remaining half-edges are traced into faces (CCW = a region, CW = the outside
+// of a connected shape). A picked point selects the smallest region containing it; shapes inside it become islands.
+const CIRCLE_SEGS=128,MAX_BOUNDARY_SEGS=9000;
+function boundarySegments(ents){const segs=[];for(const e of ents){if(e.type==='circle'){if(!(e.radius>0))continue;const c=e.center;let prev=P(c.x+e.radius,c.y);for(let i=1;i<=CIRCLE_SEGS;i++){const q=i===CIRCLE_SEGS?P(c.x+e.radius,c.y):P(c.x+e.radius*Math.cos(TAU*i/CIRCLE_SEGS),c.y+e.radius*Math.sin(TAU*i/CIRCLE_SEGS));segs.push([prev,q]);prev=q}}
+ else if(e.type==='line'||e.type==='polyline')for(const [a,b]of G.segments(e))if(G.dist(a,b)>1e-12)segs.push([a,b])}return segs}
+function buildArrangement(segs){const n=segs.length;let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const [a,b]of segs)for(const p of [a,b]){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y)}
+ const size=Math.max(1,x1-x0,y1-y0),eps=1e-8*size,areaEps=1e-10*size*size,cuts=segs.map(()=>[]);
+ const bb=segs.map(([a,b])=>[Math.min(a.x,b.x)-eps,Math.max(a.x,b.x)+eps,Math.min(a.y,b.y)-eps,Math.max(a.y,b.y)+eps]),order=segs.map((_,i)=>i).sort((i,j)=>bb[i][0]-bb[j][0]);
+ const cut=(i,t,p)=>cuts[i].push({t:Math.max(0,Math.min(1,t)),p});
+ // Split points where two segments cross, touch (T junctions) or overlap collinearly.
+ const touch=(i,j)=>{const [a,b]=segs[i],[c,d]=segs[j],rx=b.x-a.x,ry=b.y-a.y,sx=d.x-c.x,sy=d.y-c.y,la=Math.hypot(rx,ry),lb=Math.hypot(sx,sy),den=rx*sy-ry*sx;
+  if(Math.abs(den)<=1e-9*la*lb){for(const p of [c,d]){const q=G.closestOnSegment(p,a,b);if(q.d<=eps)cut(i,q.t,p)}for(const p of [a,b]){const q=G.closestOnSegment(p,c,d);if(q.d<=eps)cut(j,q.t,p)}return}
+  const qx=c.x-a.x,qy=c.y-a.y,t=(qx*sy-qy*sx)/den,u=(qx*ry-qy*rx)/den,ta=eps/la,ub=eps/lb;if(t<-ta||t>1+ta||u<-ub||u>1+ub)return;
+  const p=t<=ta?a:t>=1-ta?b:u<=ub?c:u>=1-ub?d:P(a.x+t*rx,a.y+t*ry);cut(i,t,p);cut(j,u,p)};
+ for(let oi=0;oi<n;oi++){const i=order[oi];for(let oj=oi+1;oj<n;oj++){const j=order[oj];if(bb[j][0]>bb[i][1])break;if(bb[j][2]>bb[i][3]||bb[j][3]<bb[i][2])continue;touch(i,j)}}
+ // Nodes merge within eps; edges are undirected and unique.
+ const cell=eps*4,map=new Map(),nodes=[],adj=[],seen=new Set();
+ const node=p=>{const ix=Math.round(p.x/cell),iy=Math.round(p.y/cell);for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){const l=map.get((ix+dx)+','+(iy+dy));if(l)for(const id of l)if(Math.abs(nodes[id].x-p.x)<=eps*2&&Math.abs(nodes[id].y-p.y)<=eps*2)return id}
+  const id=nodes.length,k=ix+','+iy;nodes.push({x:p.x,y:p.y});if(map.has(k))map.get(k).push(id);else map.set(k,[id]);return id};
+ const link=(u,v)=>{if(u===v)return;const k=u<v?u+'_'+v:v+'_'+u;if(seen.has(k))return;seen.add(k);(adj[u]??=[]).push(v);(adj[v]??=[]).push(u)};
+ segs.forEach(([a,b],i)=>{const pts=[{t:0,p:a},...cuts[i].sort((x,y)=>x.t-y.t),{t:1,p:b}];let prev=node(pts[0].p);for(let k=1;k<pts.length;k++){const id=node(pts[k].p);link(prev,id);prev=id}});
+ const N=nodes.length;for(let i=0;i<N;i++)adj[i]??=[];
+ // Prune dangling pieces (they bound no region), then order each node's neighbours counter-clockwise.
+ const deg=adj.map(l=>l.length),dead=new Uint8Array(N),stack=[];for(let i=0;i<N;i++)if(deg[i]<2)stack.push(i);
+ while(stack.length){const u=stack.pop();if(dead[u])continue;dead[u]=1;for(const v of adj[u])if(!dead[v]&&--deg[v]<2)stack.push(v)}
+ const nb=[],start=new Int32Array(N+1);let H=0;for(let u=0;u<N;u++){start[u]=H;if(dead[u]){nb[u]=[];continue}
+  const l=adj[u].filter(v=>!dead[v]).map(v=>({v,a:Math.atan2(nodes[v].y-nodes[u].y,nodes[v].x-nodes[u].x)})).sort((p,q)=>p.a-q.a).map(o=>o.v);nb[u]=l;H+=l.length}start[N]=H;
+ const src=new Int32Array(H),tgt=new Int32Array(H),rev=new Int32Array(H),pos=new Map();
+ for(let u=0;u<N;u++)nb[u].forEach((v,k)=>{const h=start[u]+k;src[h]=u;tgt[h]=v;pos.set(u*N+v,h)});for(let h=0;h<H;h++)rev[h]=pos.get(tgt[h]*N+src[h]);
+ const next=h=>{const v=tgt[h],i=rev[h]-start[v],d=nb[v].length;return start[v]+(i-1+d)%d}; // keep the face on the left: first edge clockwise from the way back
+ const comp=new Int32Array(N).fill(-1);let cc=0;for(let s=0;s<N;s++){if(dead[s]||comp[s]>=0)continue;const q=[s];comp[s]=cc;while(q.length){const u=q.pop();for(const v of nb[u])if(comp[v]<0){comp[v]=cc;q.push(v)}}cc++}
+ const vis=new Uint8Array(H),cycles=[];
+ for(let h0=0;h0<H;h0++){if(vis[h0])continue;const ps=[];let h=h0,guard=0;do{vis[h]=1;ps.push(nodes[src[h]]);h=next(h)}while(h!==h0&&++guard<=H);if(h!==h0)continue;
+  let a=0,bx0=Infinity,by0=Infinity,bx1=-Infinity,by1=-Infinity;for(let i=0;i<ps.length;i++){const p=ps[i],q=ps[(i+1)%ps.length];a+=p.x*q.y-q.x*p.y;bx0=Math.min(bx0,p.x);bx1=Math.max(bx1,p.x);by0=Math.min(by0,p.y);by1=Math.max(by1,p.y)}
+  cycles.push({pts:ps,area:a/2,comp:comp[src[h0]],box:[bx0,by0,bx1,by1]})}
+ return{cycles,eps,areaEps,nodes:N}}
+const inBox=(p,b)=>p.x>=b[0]&&p.x<=b[2]&&p.y>=b[1]&&p.y<=b[3];
+// Smallest region containing p: {loops:[outer, ...islands], area} or null.
+function faceAt(arr,p){let best=null;for(const c of arr.cycles)if(c.area>arr.areaEps&&inBox(p,c.box)&&(!best||c.area<best.area)&&inside(p,c.pts))best=c;if(!best)return null;const loops=[best.pts];
+ for(const h of arr.cycles){if(h.area>=-arr.areaEps||h.comp===best.comp)continue;const v=h.pts[0];if(!inBox(v,best.box)||!inside(v,best.pts))continue;
+  let nested=false;for(const k of arr.cycles)if(k.area>arr.areaEps&&k.area<best.area&&k.comp!==h.comp&&inBox(v,k.box)&&inside(v,k.pts)){nested=true;break}if(!nested)loops.push(h.pts)}
+ return{loops,area:best.area}}
+// Outer outline of every connected shape (used when the boundary objects are selected explicitly).
+const outerLoops=arr=>arr.cycles.filter(c=>c.area<-arr.areaEps).map(c=>c.pts);
+// Parallel hatch lines through the even-odd region bounded by `loops`; rows sit on a global grid so neighbouring hatches line up.
+function hatchFill(loops,spacing,angle=45,maxLines=20000){if(!(spacing>0))return{error:'Enter positive spacing.'};const a=angle*Math.PI/180,d=P(Math.cos(a),Math.sin(a)),n=P(-d.y,d.x);
+ const T=loops.map(l=>l.map(p=>({u:p.x*d.x+p.y*d.y,v:p.x*n.x+p.y*n.y})));let lo=Infinity,hi=-Infinity;for(const l of T)for(const p of l){lo=Math.min(lo,p.v);hi=Math.max(hi,p.v)}
+ if(!(hi>lo))return{error:'No hatch lines at this spacing.'};if((hi-lo)/spacing>3000)return{error:'Spacing too small; maximum 3000 hatch rows.'};
+ const lines=[],k0=Math.ceil(lo/spacing-1e-9);for(let k=k0;k*spacing<hi;k++){const v=k*spacing,us=[];
+  for(const l of T)for(let i=0;i<l.length;i++){const p=l[i],q=l[(i+1)%l.length];if((p.v<=v&&q.v>v)||(q.v<=v&&p.v>v))us.push(p.u+(v-p.v)*(q.u-p.u)/(q.v-p.v))}
+  us.sort((x,y)=>x-y);for(let i=0;i+1<us.length;i+=2){if(us[i+1]-us[i]<1e-9)continue;lines.push([us[i],us[i+1]].map(u=>P(u*d.x+v*n.x,u*d.y+v*n.y)));if(lines.length>maxLines)return{error:'Spacing too small; the hatch would have too many lines.'}}}
+ return lines.length?{lines}:{error:'No hatch lines at this spacing.'}}
 
 // ---- Command flow runtime -------------------------------------------------------------------------------
 const TOOLS={};let flow=null,serial=0,starting=false;const idleQ=[];
@@ -1964,12 +2222,14 @@ function optionsOf(prompt){const m=String(prompt).match(/\[([^\]]+)\]/);return m
 // Option keyword match: the capitalised shortcut letters or any abbreviation of the whole word.
 function matchOption(text,opts){const t=String(text??'').trim().toUpperCase();if(!t)return null;const list=typeof opts==='string'?optionsOf(opts):opts.map(o=>typeof o==='string'?{word:o,key:(o.match(/[A-Z]/g)||[o[0]]).join('').toUpperCase()}:o);const o=list.find(o=>o.key===t)||list.find(o=>t.length>1&&o.word.toUpperCase().startsWith(t));return o?o.word:null}
 function hl(f,ids){if(ids.length){CF.select(ids,'replace');f.hl=true}else if(f.hl){f.hl=false;selectionSet.clear();selected=-1;CF.emit('selection',[]);render()}}
-function end(f){f.dead=true;if(f.hl)hl(f,[]);if(flow===f){flow=null;if(TOOLS[tool])setTool('select')}idleFlush()}
-function abort(){const f=flow;if(!f)return;flow=null;f.dead=true;if(f.input&&CF.input===f.input){try{CF.input.resolve?.(null)}catch(err){}if(CF.input===f.input)CF.input=null}if(f.picking){const pk=f.picking;f.picking=null;if(CF.picking===pk.obj)CF.picking=null;pk.resolve(null)}const w=f.waiter;if(w)w.resolve({cancel:true});if(f.hl)hl(f,[]);idleFlush()}
-function start(name){const spec=TOOLS[name];abort();const f={name,cmd:spec.cmd,id:++serial,waiter:null,picking:null,count:0,dead:false,hl:false,ghost:null};flow=f;starting=true;try{setTool(name)}finally{starting=false}
+function end(f){f.dead=true;if(f.hl)hl(f,[]);if(flow===f){flow=null;if(TOOLS[tool])setTool('select')}if(TOOLS[f.name]?.gate&&!flow)hook(f.name,false);idleFlush()}
+function abort(){const f=flow;if(!f)return;flow=null;try{f.onCancel?.()}catch(err){}f.dead=true;if(TOOLS[f.name]?.gate)hook(f.name,false);if(f.input&&CF.input===f.input){try{CF.input.resolve?.(null)}catch(err){}if(CF.input===f.input)CF.input=null}if(f.picking){const pk=f.picking;f.picking=null;if(CF.picking===pk.obj)CF.picking=null;pk.resolve(null)}const w=f.waiter;if(w)w.resolve({cancel:true});if(f.hl)hl(f,[]);idleFlush()}
+// A command started from outside (ribbon, alias) ends whatever question another module left pending.
+function dropForeign(){const pk=CF.picking;if(pk){CF.picking=null;try{pk.cancel?.()}catch(err){}}const inp=CF.input;if(inp){CF.input=null;try{inp.resolve?.(null,true)}catch(err){}}}
+function start(name){const spec=TOOLS[name];abort();dropForeign();if(spec.gate)hook(name,true);const f={name,cmd:spec.cmd,id:++serial,waiter:null,picking:null,count:0,dead:false,hl:false,ghost:null};flow=f;starting=true;try{setTool(name)}finally{starting=false}
  return(async()=>{try{await spec.run(f)}catch(err){console.error(err);notify(`${spec.cmd} failed: ${err?.message||err}`)}finally{end(f)}})()}
 // Wait for a click / option / number / Enter. phase: {prompt, pick, base, number, preview(mouse)}.
-function wait(f,phase){if(f.dead||flow!==f)return Promise.resolve({cancel:true});phase.options=optionsOf(phase.prompt);points=phase.base?[{...phase.base}]:[];
+function wait(f,phase){if(f.dead||flow!==f)return Promise.resolve({cancel:true});phase.options=optionsOf(phase.prompt);points=phase.all?phase.all.map(p=>({...p})):phase.base?[{...phase.base}]:[]; // phase.all: the engine's points array mirrors every vertex (PLINE)
  return new Promise(res=>{const w={phase,resolve:v=>{if(f.waiter===w)f.waiter=null;res(v)}};f.waiter=w;if(!hasB1())notify(`${f.cmd} ${phase.prompt}`);render();idleFlush()})}
 function respond(r){const w=flow?.waiter;if(!w)return false;const p=new Promise(res=>idleQ.push(res));w.resolve(r);return p}
 // Command-line question through cadPrompt (B1 routes it to the command line). Empty input returns the default.
@@ -2061,12 +2321,84 @@ async function runDimLinear(f){let a,b,circ=null;const r=await wait(f,{prompt:'S
 async function runDist(f){const a=await wait(f,{prompt:'Specify first point:'});if(!a.point)return;const b=await wait(f,{prompt:'Specify second point:',base:a.point,preview:m=>[{type:'line',points:[a.point,m]}]});if(!b.point)return;end(f);report(distReport(a.point,b.point))}
 async function runId(f){const a=await wait(f,{prompt:'Specify point:'});if(!a.point)return;end(f);report(idReport(a.point))}
 async function runList(f){const ids=await selectObjects(f,'LIST');if(!ids?.length)return;const lines=ids.sort((x,y)=>x-y).flatMap(i=>listReport(doc.entities[i]));end(f);clearSelection();render();report(lines)}
+// Properties MATCHPROP can copy. Colour is per object (undefined = ByLayer), layer and text height as before.
+const matchLabels=()=>[S.matchColor&&'Color',S.matchLayer&&'Layer',S.matchText&&'Text'].filter(Boolean);
+function matchInto(src,e){const done=[];if(S.matchColor){if(src.color)e.color=src.color;else delete e.color;done.push('Color')}if(S.matchLayer){e.layer=src.layer;done.push('Layer')}if(S.matchText&&src.type==='text'&&e.type==='text'){e.height=src.height;done.push('Text height')}return done}
 async function runMatch(f){let src;for(;;){const r=await wait(f,{prompt:'Select source object:',pick:true});if(!r.point)return;const h=pickAt(r.point);if(h){src=h.e;hl(f,[h.i]);break}}
- const active=()=>notify(`Current active settings: ${[S.matchLayer&&'Layer',S.matchText&&'Text'].filter(Boolean).join(' ')||'None'}`);active();
+ const active=()=>notify(`Current active settings: ${matchLabels().join(' ')||'None'}`);active();let matched=0;const shown=new Set([src]);
  for(;;){const r=await wait(f,{prompt:'Select destination object(s) or [Settings]:',pick:true});if(r.cancel||r.enter)return;
-  if(r.option==='Settings'){const o=await askOption(f,'Enter properties to match [Layer/Text/Both] <Both>:','Both');if(o==null)return;S.matchLayer=o!=='Text';S.matchText=o!=='Layer';active();continue}
-  if(!r.point)continue;const h=pickAt(r.point);if(!h||h.e===src)continue;if(!doc.entities.includes(src)){notify('The source object no longer exists.');return}const targets=h.e.group?doc.entities.filter(e=>e.group===h.e.group):[h.e];
-  mutate(()=>{for(const e of targets){if(S.matchLayer)e.layer=src.layer;if(S.matchText&&src.type==='text'&&e.type==='text')e.height=src.height}});f.count++}}
+  if(r.option==='Settings'){const o=await askOption(f,'Enter properties to match [Color/Layer/Text/All] <All>:','All');if(o==null)return;S.matchColor=o==='All'||o==='Color';S.matchLayer=o==='All'||o==='Layer';S.matchText=o==='All'||o==='Text';active();continue}
+  if(!r.point)continue;const h=pickAt(r.point);if(!h)continue;if(h.e===src){notify('The destination is the source object.');continue}if(!doc.entities.includes(src)){notify('The source object no longer exists.');return}
+  const targets=h.e.group?doc.entities.filter(e=>e.group===h.e.group):[h.e];let done=[];
+  mutate(()=>{for(const e of targets)done=matchInto(src,e)});f.count++;matched+=targets.length;for(const e of targets)shown.add(e);
+  hl(f,[...shown].map(e=>doc.entities.indexOf(e)).filter(i=>i>=0)); // matched objects stay highlighted as feedback
+  report([done.length?`Matched ${done.join(', ')} to ${targets.length} object${targets.length===1?'':'s'}${matched>targets.length?` (${matched} so far)`:''}.`:'No properties are enabled for matching; type S for Settings.'])}}
+// ---- HATCH: pick an internal point (or select boundary objects and press Enter) ------------------------------------
+const HATCH_PICK='HATCH Pick internal point or select objects:';
+const HATCH_OPTS=[{word:'Select objects',key:'S'},{word:'seTtings',key:'T'},{word:'Undo',key:'U'}];
+let hatchCache=null;
+const hatchCandidates=()=>doc.entities.filter(e=>(e.type==='line'||e.type==='polyline'||e.type==='circle')&&!e.hatch&&CF.visible(e));
+// Cheap content signature so the arrangement is rebuilt only when the geometry changed.
+function geometrySig(ents){let h=ents.length|0;const mix=v=>{h=(Math.imul(h,31)+Math.round(v*1e4))|0};for(const e of ents){if(e.type==='circle'){mix(e.center.x);mix(e.center.y);mix(e.radius)}else{for(const p of e.points){mix(p.x);mix(p.y)}mix(e.closed?1:0)}}return h}
+function arrangementOf(ents){const sig=geometrySig(ents);if(hatchCache&&hatchCache.sig===sig&&hatchCache.n===ents.length)return hatchCache.arr;const segs=boundarySegments(ents),arr=!segs.length?null:segs.length>MAX_BOUNDARY_SEGS?{tooMany:true}:buildArrangement(segs);hatchCache={sig,n:ents.length,arr};return arr}
+// Object under the pickbox for HATCH: boundary candidates only (hatch lines and text never count).
+function hitBoundary(p){let idx=-1,best=9/view.scale;doc.entities.forEach((e,i)=>{if(e.hatch||e.type==='text'||!CF.visible(e))return;let d=Infinity;if(e.type==='circle')d=Math.abs(G.dist(p,e.center)-e.radius);else for(const [a,b]of G.segments(e))d=Math.min(d,G.closestOnSegment(p,a,b).d);if(d<best){best=d;idx=i}});return idx}
+const NO_BOUNDARY='Valid hatch boundary not found.';
+function boundaryAt(p){const arr=arrangementOf(hatchCandidates());if(!arr)return{error:NO_BOUNDARY};if(arr.tooMany)return{error:'Too many objects to detect a boundary automatically; select the boundary objects instead.'};const r=faceAt(arr,p);return r?{loops:r.loops}:{error:NO_BOUNDARY}}
+function selectionBoundary(ids){const ents=ids.map(i=>doc.entities[i]).filter(e=>e&&(e.type==='line'||e.type==='polyline'||e.type==='circle')&&!e.hatch),segs=boundarySegments(ents);if(!segs.length)return{error:NO_BOUNDARY};if(segs.length>MAX_BOUNDARY_SEGS)return{error:'Too many segments in the selected boundary.'};const loops=outerLoops(buildArrangement(segs));return loops.length?{loops}:{error:NO_BOUNDARY}}
+function makeHatch(f,loops){const r=hatchFill(loops,S.hatchSpacing,S.hatchAngle);if(r.error){notify(r.error);return false}const id=gid(),lay=layer().name,ents=r.lines.map(points=>({type:'line',layer:lay,group:id,hatch:true,points}));mutate(()=>doc.entities.push(...ents));f.count++;notify(`Hatch created: ${ents.length} editable lines.`);return true}
+// Combined phase: clicking an object selects it (Enter hatches the selection), clicking empty space inside an area hatches that area.
+function hatchPhase(f){if(f.dead)return Promise.resolve({cancel:true});return new Promise(res=>{const obj={command:'HATCH',message:HATCH_PICK,draft:true,hatchPick:true,
+ done(){if(f.picking?.obj!==obj)return;release();const ids=chosen();res(ids.length?{ids}:{enter:true})},cancel(){if(f.picking?.obj!==obj)return;release();res({cancel:true})},
+ pickPoint(p){if(f.picking?.obj!==obj)return;release();res({point:{x:p.x,y:p.y}})},option(word){if(f.picking?.obj!==obj)return;release();res({option:word})},
+ preview(m){const arr=arrangementOf(hatchCandidates());if(!arr||arr.tooMany||arr.cycles.length>4000)return[];const r=faceAt(arr,m);return r?r.loops.map(l=>({type:'polyline',closed:true,dashed:true,points:l})):[]}};
+ const release=()=>{f.picking=null;if(CF.picking===obj)CF.picking=null};
+ f.picking={obj,resolve:res};CF.picking=obj;points=[];if(!hasB1())notify(obj.message);render();idleFlush()})}
+async function runHatch(f){notify(`Current hatch settings: lines, spacing = ${deg(S.hatchSpacing)}, angle = ${deg(S.hatchAngle)}.  Press Enter to finish, T for settings, U to undo.`);let asked=false;
+ const spacing=async()=>{const v=await askNum(f,`Specify hatch spacing <${deg(S.hatchSpacing)}>:`,deg(S.hatchSpacing),{kind:'distance',positive:true});if(v==null)return false;S.hatchSpacing=v;return true};
+ for(;;){const r=await hatchPhase(f);if(!r||r.cancel)return;
+  if(r.option==='seTtings'){if(!await spacing())return;const g=await askNum(f,`Specify hatch angle <${deg(S.hatchAngle)}>:`,deg(S.hatchAngle),{kind:'angle',min:0,max:360});if(g==null)return;S.hatchAngle=g;asked=true;continue}
+  if(r.option==='Undo'){undoOne(f);continue}if(r.option==='Select objects'){notify('Click the boundary objects, then press Enter.');continue}
+  if(r.point){const b=boundaryAt(r.point);if(b.error){notify(b.error);continue}if(!asked){if(!await spacing())return;asked=true}makeHatch(f,b.loops);continue}
+  if(r.ids){const b=selectionBoundary(r.ids);if(b.error){notify(b.error);clearSelection();render();continue}if(!asked){if(!await spacing())return}
+   makeHatch(f,b.loops);clearSelection();render();return}
+  return}}
+// ---- PLINE with Arc/Length/Undo/Close and ARC with 3-point / Center, AutoCAD prompt order ---------------------------------
+// On by default; set S.acadPline / S.acadArc to false to fall back to the engine's PLINE and ARC tools and B1's older prompts.
+const plineHidden=['Width','Halfwidth']; // not supported: the polyline entity carries no width
+async function runPline(f){const r0=await wait(f,{prompt:'Specify start point:'});if(!r0.point)return;const pts=[{...r0.point}],stack=[];let arc=false,tan=null,closed=false,done=false;
+ const commit=()=>{if(done)return;done=true;if(pts.length>=2)addEntities([{type:'polyline',closed:closed&&pts.length>2,points:pts.map(p=>({...p}))}])};f.onCancel=commit; // Esc keeps the segments drawn so far
+ const dir0=()=>tan||P(1,0),opts=()=>arc?'[Close/Direction/Line/Second pt/Undo]':stack.length>=2?'[Arc/Close/Length/Undo]':'[Arc/Length/Undo]';
+ const push=(more,newTan)=>{stack.push({n:pts.length,tan});pts.push(...more.map(p=>({...p})));tan=newTan};
+ const trial=m=>{const last=pts.at(-1);if(arc){const a=tangentArc(last,dir0(),m);return a?[...pts,...a.pts.slice(1)]:[...pts]}return[...pts,m]};
+ for(;;){const last=pts.at(-1),r=await wait(f,{prompt:`Specify ${arc?'endpoint of arc':'next point'} or ${opts()}:`,base:last,all:pts,hidden:plineHidden,preview:m=>{const q=trial(m);return q.length>1?[{type:'polyline',points:q}]:[]}});
+  if(r.cancel||r.enter)break;
+  if(r.option==='Width'||r.option==='Halfwidth'){notify('Polyline width is not supported; segments are drawn with zero width.');continue}
+  if(r.option==='Undo'){const s=stack.pop();if(!s){notify('All segments have been undone.');continue}pts.length=s.n;tan=s.tan;continue}
+  if(r.option==='Arc'){arc=true;continue}if(r.option==='Line'){arc=false;continue}
+  if(r.option==='Close'){if(arc){const a=tangentArc(last,dir0(),pts[0]);if(!a){notify('The polyline cannot be closed with an arc from here.');continue}pts.push(...a.pts.slice(1,-1))}closed=true;break} // in arc mode Close adds the closing arc
+  if(r.option==='Length'){const d=tan||(pts.length>1?unit(sub(last,pts.at(-2))):null);if(!d){notify('Draw a first segment before using Length.');continue}const len=await askNum(f,'Specify length of line segment:',10,{kind:'distance',base:last,positive:true});if(len==null)break;push([plus(last,mul(d,len))],d);continue}
+  if(r.option==='Direction'){const d=await wait(f,{prompt:'Specify the tangent direction for the start point of the arc:',base:last,number:true,preview:m=>[{type:'line',points:[last,m]}]});if(d.cancel||d.enter)break;
+   if(d.point&&G.dist(d.point,last)>1e-9)tan=unit(sub(d.point,last));else if(d.number!=null)tan=P(Math.cos(d.number*Math.PI/180),Math.sin(d.number*Math.PI/180));continue}
+  if(r.option==='Second pt'){const b=await wait(f,{prompt:'Specify second point on arc:',base:last,preview:m=>[{type:'line',points:[last,m]}]});if(!b.point)break;
+   const c=await wait(f,{prompt:'Specify end point of arc:',base:b.point,preview:m=>{const a=arcThrough(last,b.point,m);return a?[{type:'polyline',points:[...pts,...a.pts.slice(1)]}]:[]}});if(!c.point)break;
+   const a=arcThrough(last,b.point,c.point);if(!a){notify('The three points are collinear; an arc cannot be created.');continue}push(a.pts.slice(1),a.tan);continue}
+  if(!r.point)continue;if(G.dist(r.point,last)<1e-9){notify('Zero-length segment ignored.');continue}
+  if(arc){const a=tangentArc(last,dir0(),r.point);if(!a){notify('An arc cannot end at that point (it would turn back on itself); use Second pt.');continue}push(a.pts.slice(1),a.tan)}else push([r.point],unit(sub(r.point,last)))}
+ commit()}
+// ARC: start point (3-point) or [Center] first; the end prompt accepts [Angle] when the centre is known.
+async function runArc(f){const draw=a=>{addEntities([{type:'polyline',closed:false,points:a.pts}])};
+ const ray=a=>m=>[{type:'line',points:[a,m]}];
+ const centerEnd=async(C,S)=>{for(;;){const e=await wait(f,{prompt:'Specify end point of arc or [Angle]:',base:C,preview:m=>{const a=arcCenterStart(C,S,m);return a?[{type:'polyline',points:a.pts}]:[]}});if(e.cancel||e.enter)return;
+   if(e.option==='Angle'){const g=await askNum(f,'Specify included angle <90>:',90,{min:-360,max:360});if(g==null)return;const a=arcCenterStart(C,S,null,g*Math.PI/180);if(!a){notify('The included angle must be nonzero.');continue}draw(a);return}
+   if(!e.point)continue;const a=arcCenterStart(C,S,e.point);if(!a){notify('The end point must differ from the center and from the start direction.');continue}draw(a);return}};
+ const first=await wait(f,{prompt:'Specify start point of arc or [Center]:'});
+ if(first.option==='Center'){const c=await wait(f,{prompt:'Specify center point of arc:'});if(!c.point)return;const s=await wait(f,{prompt:'Specify start point of arc:',base:c.point,preview:ray(c.point)});if(!s.point)return;
+  if(G.dist(c.point,s.point)<1e-9){notify('The start point must differ from the center.');return}return centerEnd(c.point,s.point)}
+ if(!first.point)return;const A=first.point,b=await wait(f,{prompt:'Specify second point of arc or [Center]:',base:A,preview:ray(A)});
+ if(b.option==='Center'){const c=await wait(f,{prompt:'Specify center point of arc:',base:A,preview:ray(A)});if(!c.point)return;if(G.dist(c.point,A)<1e-9){notify('The start point must differ from the center.');return}return centerEnd(c.point,A)}
+ if(!b.point)return;const B=b.point;
+ for(;;){const e=await wait(f,{prompt:'Specify end point of arc:',base:B,preview:m=>{const a=arcThrough(A,B,m);return a?[{type:'polyline',points:a.pts}]:[]}});if(!e.point)return;const a=arcThrough(A,B,e.point);if(!a){notify('The three points are collinear; an arc cannot be created.');continue}draw(a);return}}
 async function runArray(f){const ids=await selectObjects(f,'ARRAYRECT');if(!ids?.length)return;const ents=ids.map(i=>doc.entities[i]),bs=ents.map(G.bbox),w=Math.max(...bs.map(b=>b.maxX))-Math.min(...bs.map(b=>b.minX)),h=Math.max(...bs.map(b=>b.maxY))-Math.min(...bs.map(b=>b.minY));
  notify('Type = Rectangular  Associative = No');const rows=await askNum(f,`Enter the number of rows (---) <${S.rows}>:`,S.rows,{int:true,min:1,max:1000});if(rows==null)return;const cols=await askNum(f,`Enter the number of columns (|||) <${S.cols}>:`,S.cols,{int:true,min:1,max:1000});if(cols==null)return;
  if(rows*cols<2){notify('An array needs more than one item.');return}if((rows*cols-1)*ents.length>200000){notify('The array would create too many objects.');return}S.rows=rows;S.cols=cols;
@@ -2081,29 +2413,47 @@ async function runPurge(){const f={dead:false},a=purgeAnalysis();if(!a.blocks.le
  report([...blocks.map(n=>`Deleting block "${n}".`),...layers.map(n=>`Deleting layer "${n}".`),`${blocks.length} block${blocks.length===1?'':'s'} deleted.`,`${layers.length} layer${layers.length===1?'':'s'} deleted.`])}
 
 // ---- Engine / workspace integration ------------------------------------------------------------------------
-function defineTool(name,cmd,run){TOOLS[name]={cmd,run};names[name]??=cmd[0]+cmd.slice(1).toLowerCase();const mine=()=>flow&&flow.name===name;
- CF.prompts[name]=()=>mine()&&flow.waiter?`${cmd} ${flow.waiter.phase.prompt}`:cmd;
- CF.previews[name]=m=>{if(!mine())return[];const w=flow.waiter;try{return(w?w.phase.preview?.(m):flow.ghost)||[]}catch(err){return[]}};
- CF.pickTools[name]=()=>!!(mine()&&(flow.picking||flow.waiter?.phase.pick))}
+// A gated tool (PLINE/ARC) shares its name with an engine tool: its prompt/preview hooks exist only while its own flow runs.
+const HOOKS={};
+function hook(name,on){const h=HOOKS[name];if(!h)return;if(on){CF.prompts[name]=h.prompt;CF.previews[name]=h.preview;CF.pickTools[name]=h.pick}else{delete CF.prompts[name];delete CF.previews[name];delete CF.pickTools[name]}}
+function defineTool(name,cmd,run,gate){TOOLS[name]={cmd,run,gate};names[name]??=cmd[0]+cmd.slice(1).toLowerCase();const mine=()=>flow&&flow.name===name;
+ HOOKS[name]={prompt:()=>mine()&&flow.waiter?`${cmd} ${flow.waiter.phase.prompt}`:gate?'':cmd,
+  preview:m=>{if(!mine())return[];const w=flow.waiter;try{return(w?w.phase.preview?.(m):flow.picking?.obj.preview?.(m)||flow.ghost)||[]}catch(err){return[]}},
+  pick:()=>!!(mine()&&(flow.picking||flow.waiter?.phase.pick))};if(!gate)hook(name,true)}
 // Typed text for the waiting command: an option keyword, or a number where the prompt accepts one.
-function parseInput(text){const w=flow?.waiter;if(!w||CF.input)return null;const t=String(text??'').trim();if(!t)return null;const o=matchOption(t,w.phase.options);if(o)return{option:o};if(w.phase.number&&/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t))return{number:Number(t)};return null}
-function input(text){const r=parseInput(text);return r?respond(r):false}
-{const prevSetTool=setTool;setTool=function(t,...rest){if(!starting){if(flow)abort();if(TOOLS[t]){start(t);return}}return prevSetTool(t,...rest)}}
+function parseInput(text){const w=flow?.waiter;if(!w||CF.input)return null;const t=String(text??'').trim();if(!t)return null;const o=matchOption(t,w.phase.hidden?[...w.phase.options,...w.phase.hidden]:w.phase.options);if(o)return{option:o};if(w.phase.number&&/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t))return{number:Number(t)};return null}
+// Typed answers for the HATCH pick phase (CF.picking is B1's selection prompt, so it cannot route them): option keywords or a point.
+function pickInput(text){const pk=flow?.picking?.obj;if(!pk?.hatchPick||CF.input)return false;const t=String(text??'').trim();if(!t)return false;const o=matchOption(t,HATCH_OPTS);if(o){pk.option(o);return true}
+ let p=null;try{p=CF.commandLine?.parsePoint?.(t,null,null)}catch(err){}if(!p){const m=t.match(/^(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)$/);if(m)p={x:+m[1],y:+m[2]}}if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){pk.pickPoint(p);return true}return false}
+function input(text){const r=parseInput(text);return r?respond(r):pickInput(text)}
+{const prevSetTool=setTool;setTool=function(t,...rest){if(!starting){if(flow)abort();if(TOOLS[t]&&(!TOOLS[t].gate||TOOLS[t].gate())){start(t);return}}return prevSetTool(t,...rest)}}
 {const prevAccept=accept;accept=async function(p,...rest){const f=flow;if(!f||!TOOLS[tool]||f.name!==tool)return prevAccept(p,...rest);
- if(f.picking){const i=hit(p);if(i>=0)CF.select([i],typeof shiftSelection!=='undefined'&&shiftSelection?'remove':'add');return}
+ if(f.picking){const i=f.picking.obj.hatchPick?hitBoundary(p):hit(p);if(i>=0)CF.select([i],typeof shiftSelection!=='undefined'&&shiftSelection?'remove':'add');else f.picking.obj.pickPoint?.(p);return}
  if(!f.waiter)return;return respond({point:{x:p.x,y:p.y},shift:typeof shiftSelection!=='undefined'&&!!shiftSelection})}}
 {const prevFinish=finish;finish=function(...a){const f=flow;if(f&&TOOLS[tool]){if(f.picking)f.picking.obj.done();else if(f.waiter)respond({enter:true});return}return prevFinish(...a)}}
 {const prevEnter=CF.enter;CF.enter=function(...a){if(flow&&TOOLS[tool]&&flow.waiter&&!CF.input&&!CF.picking){respond({enter:true});return}return prevEnter.apply(CF,a)}}
 // Typed option keywords reach the command even when the command line hands them to CF.run.
-{const prevRun=CF.run;CF.run=function(text,options={}){if(flow?.waiter&&!['ribbon','menu','appmenu','qat','toolbar','search'].includes(options?.source)){const r=parseInput(text);if(r){respond(r);return true}}return prevRun.call(CF,text,options)}}
-try{const el=$('command'),prevKey=el.onkeydown;el.onkeydown=function(e){const v=String(e?.target?.value??'').trim();if((e.key==='Enter'||e.key===' '&&v)&&flow?.waiter&&!CF.input){const r=parseInput(v);if(r){e.preventDefault?.();e.stopImmediatePropagation?.();const line=`${CF.prompt()} ${v}`;e.target.value='';try{CF.commandLine?.print?.(line)}catch(err){}respond(r);return}}return prevKey?.call(this,e)}}catch(err){}
+// Esc (or starting another command) ends PLINE but keeps the segments drawn so far, like AutoCAD; a lone start point is dropped.
+function keepPline(){if(tool!=='polyline'||points.length<2||CF.input||CF.picking||flow)return false;finish();return true}
+{const prevRun=CF.run;CF.run=function(text,options={}){if(flow?.waiter&&!['ribbon','menu','appmenu','qat','toolbar','search'].includes(options?.source)){const r=parseInput(text);if(r){respond(r);return true}}
+ if(tool==='polyline'&&points.length>1){let def=null;try{def=CF.resolve(text)}catch(err){}if(!def||def.category!=='Settings')keepPline()}return prevRun.call(CF,text,options)}}
+{const prevCancel=CF.cancel;CF.cancel=function(...a){keepPline();return prevCancel.apply(CF,a)}}
+// Esc during a selection-window rubber band cancels the whole running command (the interaction module only drops the window).
+function onEscape(e){if(!e||e.key!=='Escape')return false;const st=CF.interact?.state?.();if(!st||!st.win||st.menu)return false;if(!(CF.picking||CF.input||flow||tool!=='select'||points.length))return false;
+ e.preventDefault?.();e.stopPropagation?.();e.stopImmediatePropagation?.();CF.cancel();return true}
+// While HATCH asks for an internal point, a click on empty space picks that point instead of starting a selection window.
+function onHatchClick(e){const pk=flow?.picking?.obj;if(!pk?.pickPoint||!e||e.button!==0||e.shiftKey||e.target!==canvas||mode3D||CF.space!=='model')return false;const st=CF.interact?.state?.();if(st&&(st.win||st.panMode||st.menu))return false;
+ const raw=world({x:e.offsetX,y:e.offsetY});if(hitBoundary(raw)>=0)return false;e.preventDefault?.();e.stopPropagation?.();e.stopImmediatePropagation?.();mouse=raw;pk.pickPoint(raw);return true}
+try{document.addEventListener('keydown',onEscape,true);document.addEventListener('pointerdown',onHatchClick,true)}catch(err){}
+try{const el=$('command'),prevKey=el.onkeydown;el.onkeydown=function(e){const v=String(e?.target?.value??'').trim();if((e.key==='Enter'||e.key===' '&&v)&&flow&&!CF.input&&v){const line=`${CF.prompt()} ${v}`,r=flow.waiter?parseInput(v):null;
+ if(r||(flow.picking&&pickInput(v))){e.preventDefault?.();e.stopImmediatePropagation?.();e.target.value='';try{CF.commandLine?.print?.(line)}catch(err){}if(r)respond(r);return}}return prevKey?.call(this,e)}}catch(err){}
 // Without the interaction module the rubber-band previews are drawn here (dashed, preview colour).
 {const prevPreview=drawPreview;drawPreview=function(...a){prevPreview(...a);if(CF.has('interact')||!flow||mode3D)return;let ents=[];try{ents=CF.previews[tool]?.(mouse)||[]}catch(err){}for(const e of ents)drawEntity(e,CF.colors.preview,true)}}
 
 defineTool('offset','OFFSET',runOffset);defineTool('trim','TRIM',f=>runTrimExtend(f,false));defineTool('extend','EXTEND',f=>runTrimExtend(f,true));
 defineTool('fillet','FILLET',f=>runCorner(f,'fillet'));defineTool('chamfer','CHAMFER',f=>runCorner(f,'chamfer'));defineTool('mirror','MIRROR',runMirror);
 defineTool('polygon','POLYGON',runPolygon);defineTool('ellipse','ELLIPSE',runEllipse);defineTool('dimlinear','DIMLINEAR',runDimLinear);defineTool('dist','DIST',runDist);
-defineTool('id','ID',runId);defineTool('list','LIST',runList);defineTool('matchprop','MATCHPROP',runMatch);defineTool('arrayrect','ARRAYRECT',runArray);
+defineTool('id','ID',runId);defineTool('list','LIST',runList);defineTool('matchprop','MATCHPROP',runMatch);defineTool('arrayrect','ARRAYRECT',runArray);defineTool('hatch','HATCH',runHatch);defineTool('polyline','PLINE',runPline,()=>S.acadPline);defineTool('arc','ARC',runArc,()=>S.acadArc);
 for(const [name,aliases,label,desc,category,tool_]of [
  ['OFFSET',['O'],'Offset','Creates concentric circles, parallel lines and parallel polylines','Modify','offset'],
  ['TRIM',['TR'],'Trim','Trims objects to meet the edges of other objects (quick mode)','Modify','trim'],
@@ -2111,6 +2461,7 @@ for(const [name,aliases,label,desc,category,tool_]of [
  ['FILLET',['F'],'Fillet','Rounds and fillets the corner between two lines or polyline segments','Modify','fillet'],
  ['CHAMFER',['CHA'],'Chamfer','Bevels the corner between two lines or polyline segments','Modify','chamfer'],
  ['MIRROR',['MI'],'Mirror','Creates a mirrored copy of selected objects','Modify','mirror'],
+ ['HATCH',['H','BHATCH'],'Hatch','Fills a closed area (pick an internal point or select boundary objects) with hatch lines','Draw','hatch'],
  ['POLYGON',['POL'],'Polygon','Creates an equilateral closed polyline','Draw','polygon'],
  ['ELLIPSE',['EL'],'Ellipse','Creates an ellipse (closed polyline)','Draw','ellipse'],
  ['DIMLINEAR',['DLI','DIM'],'Linear','Creates a horizontal or vertical linear dimension','Annotate','dimlinear'],
@@ -2123,7 +2474,8 @@ for(const [name,aliases,label,desc,category,tool_]of [
 CF.register({name:'PURGE',aliases:['PU'],label:'Purge',desc:'Removes unused block definitions and empty layers',category:'Manage',icon:'purge',run:()=>{if(flow)setTool('select');return runPurge()}});
 CF.module('drafting');
 return{settings:S,idle,input,start,state:()=>flow&&{tool:flow.name,prompt:flow.waiter?.phase.prompt??null,picking:!!flow.picking},
- offsetPath,offsetEntity,trimEntity,extendEntity,filletLines,chamferLines,vertexCorner,cornerPolyline,polygonPoints,polygonEdge,ellipsePoints,dimLinear,dimOrient,mirrorEntity,distReport,idReport,listReport,purgeAnalysis,arrayCopies,matchOption,optionsOf,area,subPath,pathCuts}})();
+ offsetPath,offsetEntity,trimEntity,extendEntity,filletLines,chamferLines,vertexCorner,cornerPolyline,polygonPoints,polygonEdge,ellipsePoints,dimLinear,dimOrient,mirrorEntity,distReport,idReport,listReport,purgeAnalysis,arrayCopies,matchOption,optionsOf,area,subPath,pathCuts,
+ tangentArc,arcThrough,arcCenterStart,boundarySegments,buildArrangement,faceAt,outerLoops,hatchFill,boundaryAt,selectionBoundary,onEscape,onHatchClick,keepPline}})();
 </script><script data-module="acad-interact">'use strict';
 // 2D model-space interaction: grid, crosshair, object snap/ortho/polar, selection windows, grips, previews, shortcut menu, dynamic input.
 (()=>{
@@ -2131,8 +2483,10 @@ CF.module('interact');
 const G=CF.geom,TAU=Math.PI*2,DEG=180/Math.PI,NO_DASH=[],DASH=[6,4],RUBBER=[4,3],DOTS=[2,3];
 const POINT_KINDS={point:1,angle:1,distance:1,factor:1},LEGACY_PICK=new Set(['move','copy','rotate','scale','mirror','offset']);
 const DEFAULT_MODES=new Set(['endpoint','midpoint','center','intersection','quadrant']);
-const SNAP_LABEL={endpoint:'Endpoint',midpoint:'Midpoint',center:'Center',quadrant:'Quadrant',intersection:'Intersection',perpendicular:'Perpendicular',nearest:'Nearest',insertion:'Insertion'};
-const SNAP_ABBR={endpoint:'endp',midpoint:'mid',center:'cen',quadrant:'qua',intersection:'int',perpendicular:'per',nearest:'nea'};
+const SNAP_LABEL={endpoint:'Endpoint',midpoint:'Midpoint',center:'Center',quadrant:'Quadrant',intersection:'Intersection',perpendicular:'Perpendicular',tangent:'Tangent',nearest:'Nearest',insertion:'Insertion'};
+const SNAP_ABBR={endpoint:'endp',midpoint:'mid',center:'cen',quadrant:'qua',intersection:'int',perpendicular:'per',tangent:'tan',nearest:'nea',insertion:'ins'};
+// Typed one-shot overrides: any prefix of at least 3 letters of these words (AutoCAD: END, MID, CEN, QUA, INT, PER, TAN, NEA, INS, NON).
+const SNAP_WORDS=['endpoint','midpoint','center','quadrant','intersection','perpendicular','tangent','nearest','insertion','none'];
 const SEP={sep:true},GRIP_CAP=400,GHOST_CAP=4000;
 // Interaction state. sx/sy = cursor in canvas pixels; raw = unsnapped world point; mark = active osnap; track = polar tracking.
 const st={over:false,sx:0,sy:0,raw:{x:0,y:0},mark:null,track:null,win:null,pan:null,panMode:false,grip:null,gripDrag:null,hover:-1,hoverSet:null,hoverGrip:null,grips:[],menu:null,menuIndex:-1,midClick:0,recent:[]};
@@ -2183,7 +2537,9 @@ function osnapCandidates(p,opt={}){
   if(dp<=ap){
    if(has('quadrant'))for(let k=0;k<4;k++){const x=c.x+(k===0?r:k===2?-r:0),y=c.y+(k===1?r:k===3?-r:0),d=Math.hypot(p.x-x,p.y-y);if(d<=ap)add('quadrant',x,y,d)}
    if(has('nearest')&&dc>1e-12)add('nearest',c.x+(p.x-c.x)*r/dc,c.y+(p.y-c.y)*r/dc,dp+ap);
-   if(has('perpendicular')&&base){const db=Math.hypot(base.x-c.x,base.y-c.y);if(db>1e-12)add('perpendicular',c.x+(base.x-c.x)*r/db,c.y+(base.y-c.y)*r/db,dp+ap*.6)}}}
+   if(has('perpendicular')&&base){const db=Math.hypot(base.x-c.x,base.y-c.y);if(db>1e-12)add('perpendicular',c.x+(base.x-c.x)*r/db,c.y+(base.y-c.y)*r/db,dp+ap*.6)}
+   if(has('tangent')&&base){const db=Math.hypot(base.x-c.x,base.y-c.y);if(db>r*(1+1e-9)){ // two tangent points seen from the base point; take the one nearer the cursor
+    const b=Math.atan2(base.y-c.y,base.x-c.x),f=Math.acos(r/db);let best=null;for(const s of[-1,1]){const x=c.x+r*Math.cos(b+s*f),y=c.y+r*Math.sin(b+s*f),d=Math.hypot(p.x-x,p.y-y);if(!best||d<best.d)best={x,y,d}}add('tangent',best.x,best.y,dp+ap*.6)}}}}
  if(has('intersection')){const near=(x,y)=>{const d=Math.hypot(p.x-x,p.y-y);if(d<=ap)add('intersection',x,y,d)};
   for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++){const s=segs[i],t=segs[j];if(s.e===t.e)continue;const x=G.segmentIntersection(s.a,s.b,t.a,t.b);if(x)near(x.x,x.y)}
   for(const c of circles){if(c.dp>ap)continue;for(const s of segs)for(const x of G.lineCircle(s.a,s.b,c.e.center,c.e.radius))near(x.x,x.y);for(const o of circles)if(o!==c&&o.dp<=ap)for(const x of G.circleCircle(c.e.center,c.e.radius,o.e.center,o.e.radius))near(x.x,x.y)}}
@@ -2326,7 +2682,7 @@ drawPreview=function(){if(mode3D)return baseDrawPreview();endEntityPhase();drawG
 function drawMarker(m){const x=Math.round(sxf(m.x))+.5,y=Math.round(syf(m.y))+.5,s=6;ctx.strokeStyle=CF.colors.osnap;ctx.lineWidth=2;ctx.setLineDash(NO_DASH);ctx.beginPath();
  switch(m.type){case 'endpoint':ctx.rect(x-s,y-s,2*s,2*s);break;case 'midpoint':ctx.moveTo(x,y-s-1);ctx.lineTo(x+s+1,y+s);ctx.lineTo(x-s-1,y+s);ctx.closePath();break;case 'center':ctx.arc(x,y,s+1,0,TAU);break;
   case 'quadrant':ctx.moveTo(x,y-s-1);ctx.lineTo(x+s+1,y);ctx.lineTo(x,y+s+1);ctx.lineTo(x-s-1,y);ctx.closePath();break;case 'intersection':ctx.moveTo(x-s,y-s);ctx.lineTo(x+s,y+s);ctx.moveTo(x+s,y-s);ctx.lineTo(x-s,y+s);break;
-  case 'perpendicular':ctx.moveTo(x-s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+s);break;case 'nearest':ctx.moveTo(x-s,y-s);ctx.lineTo(x+s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.closePath();break;
+  case 'perpendicular':ctx.moveTo(x-s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+s);break;case 'tangent':ctx.arc(x,y+2,s-1,0,TAU);ctx.moveTo(x-s-1,y-3);ctx.lineTo(x+s+1,y-3);break;case 'nearest':ctx.moveTo(x-s,y-s);ctx.lineTo(x+s,y-s);ctx.lineTo(x-s,y+s);ctx.lineTo(x+s,y+s);ctx.closePath();break;
   default:ctx.moveTo(x-s,y-s);ctx.lineTo(x+1,y-s);ctx.lineTo(x+1,y-1);ctx.lineTo(x+s,y-1);ctx.lineTo(x+s,y+s);ctx.lineTo(x-s,y+s);ctx.closePath()}ctx.stroke();ctx.lineWidth=1}
 function canvasTip(text,x,y){ctx.font='11px "Segoe UI",Arial,sans-serif';const w=Math.ceil(ctx.measureText(text).width||text.length*6)+12,h=19;let X=Math.round(x),Y=Math.round(y);if(X+w>W-2)X=W-w-2;if(Y<2)Y=2;if(Y+h>H-2)Y=H-h-2;ctx.fillStyle=CF.colors.tooltip;ctx.fillRect(X,Y,w,h);ctx.strokeStyle='#5a6676';ctx.lineWidth=1;ctx.strokeRect(X+.5,Y+.5,w-1,h-1);ctx.fillStyle=CF.colors.tooltipText;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(text,X+6,Y+h/2+.5);ctx.textBaseline='alphabetic'}
 function drawWindowRect(){const w=st.win;if(!w)return;const a={x:sxf(w.a.x),y:syf(w.a.y)},b={x:sxf(w.cur.x),y:syf(w.cur.y)},crossing=w.cur.x<w.a.x,C=CF.colors,x=Math.round(Math.min(a.x,b.x))+.5,y=Math.round(Math.min(a.y,b.y))+.5,ww=Math.round(Math.abs(b.x-a.x)),hh=Math.round(Math.abs(b.y-a.y));
@@ -2396,7 +2752,8 @@ canvas.onpointerdown=function(e){if(!is2D())return prev.down?.call(this,e);close
  if(CF.picking||tool==='select'){selectClick(raw,e);return}
  if(pickMode()){mouse=raw;shiftSelection=!!e.shiftKey;runAccept(raw);shiftSelection=false;return}
  const p=snap(raw);mouse=p;CF.osnapOverride=null;runAccept(p);render()};
-canvas.onpointermove=function(e){if(!is2D()&&!st.pan)return prev.move?.call(this,e);st.sx=e.offsetX;st.sy=e.offsetY;st.over=true;
+canvas.onpointermove=function(e){if(!is2D()&&!st.pan)return prev.move?.call(this,e);return movePointer(e)};
+function movePointer(e){st.sx=e.offsetX;st.sy=e.offsetY;st.over=true;
  if(st.pan){const p=st.pan,dx=(e.clientX??e.offsetX)-p.cx,dy=(e.clientY??e.offsetY)-p.cy;if(!p.moved&&Math.hypot(dx,dy)>4)p.moved=true;if(p.moved){view.x=p.vx-dx/view.scale;view.y=p.vy+dy/view.scale}st.raw=world({x:e.offsetX,y:e.offsetY});render();return}
  const raw=world({x:e.offsetX,y:e.offsetY});st.raw=raw;
  if(st.win){st.win.cur=raw;if(st.win.down&&!st.win.drag&&Math.hypot(e.offsetX-st.win.sx,e.offsetY-st.win.sy)>4)st.win.drag=true;mouse=raw;st.mark=st.track=null;render();return}
@@ -2404,7 +2761,7 @@ canvas.onpointermove=function(e){if(!is2D()&&!st.pan)return prev.move?.call(this
  if(CF.input&&!POINT_KINDS[CF.input.kind]){mouse=raw;st.mark=st.track=null;clearHover()}
  else if(pickMode()){mouse=raw;st.mark=st.track=null;if(!st.panMode)updateHover(raw)}
  else{mouse=snap(raw);clearHover()}
- render()};
+ render()}
 canvas.onpointerup=function(e){if(!is2D()&&!st.pan&&!st.win)return prev.up?.call(this,e);try{canvas.releasePointerCapture(e.pointerId)}catch(err){}
  if(st.pan){const p=st.pan;st.pan=null;if(p.btn==='right'&&!p.moved){if(CF.picking&&!e.shiftKey)CF.enter();else CF.openContextMenu(e.clientX??e.offsetX,e.clientY??e.offsetY,e.shiftKey?'snap':undefined)}render();return}
  if(st.win&&st.win.down){st.win.down=false;if(st.win.drag)finishWindow(world({x:e.offsetX,y:e.offsetY}),!!e.shiftKey);return}
@@ -2413,7 +2770,9 @@ canvas.onpointerup=function(e){if(!is2D()&&!st.pan&&!st.win)return prev.up?.call
 canvas.onpointercancel=function(e){st.pan=null;if(st.win)st.win.down=false;st.gripDrag=null;return prev.cancel?.call(this,e)};
 canvas.oncontextmenu=function(e){if(!is2D())return prev.menu?.call(this,e);e.preventDefault?.();return false};
 canvas.onpointerleave=function(e){st.over=false;if(is2D()){clearHover();render()}return prev.leave?.call(this,e)};
-canvas.onpointerenter=function(){st.over=true};
+// The cursor is only "over" the canvas once its position is known: entering without coordinates (or a synthetic enter when
+// the Start page closes under a resting pointer) must not leave the crosshair parked at the stale 0,0 position.
+canvas.onpointerenter=function(e){if(is2D()&&Number.isFinite(e?.offsetX)&&Number.isFinite(e?.offsetY))movePointer(e)};
 canvas.ondblclick=function(e){if(!is2D()||e.button!==0||tool!=='select'||CF.picking||st.panMode)return prev.dbl?.call(this,e);
  if(CF.input?.ixGrip)cancelGrip();const i=hit(world({x:e.offsetX,y:e.offsetY})),ent=doc.entities[i];if(!ent){render();return}
  if(ent.type==='text'&&!ent.group){Promise.resolve(cadPrompt('Text',ent.text)).then(v=>{if(v!=null&&v!==''&&v!==ent.text&&doc.entities.includes(ent))mutate(()=>ent.text=v)})}else{CF.select([i],'replace');CF.toggle('properties',true)}render()};
@@ -2428,8 +2787,23 @@ function resetTransient(){const busy=!!(st.win||st.grip||st.panMode);st.win=null
 {const baseCancel=CF.cancel;CF.cancel=function(...a){closeMenu();resetTransient();return baseCancel.apply(this,a)}}
 CF.on('tool',()=>{st.win=null;cancelGrip();st.panMode=false;CF.osnapOverride=null;clearHover();syncCursorStyle()});
 const consume=e=>{e.preventDefault?.();e.stopPropagation?.();e.stopImmediatePropagation?.()};
+// ---- One-shot object snap overrides (right-click Snap Overrides menu and typed END/MID/CEN/QUA/INT/PER/TAN/NEA/INS/NON) ------
+// The override applies to the next point only: snap() honours it even with Osnap off, and every pick/typed point clears it.
+function setOverride(mode){CF.osnapOverride=mode;if(mode!=='none')print(`_${SNAP_ABBR[mode]} of`);if(st.over&&is2D())mouse=snap(st.raw);render()}
+function snapKeyword(text){const t=String(text??'').trim().replace(/^_/,'').toLowerCase();return t.length>=3?SNAP_WORDS.find(w=>w.startsWith(t))||null:null}
+// A point prompt is any pending point/angle/distance/factor input, or a drawing tool waiting for a point (not object picking).
+function pointPrompt(){if(!is2D()||st.win||st.panMode)return false;if(CF.input)return!!pointInput();if(CF.picking)return false;return tool==='select'?points.length>0:!pickMode()}
+// Returns true when `text` was consumed as an osnap keyword. A keyword the current prompt also offers as an option (e.g. ELLIPSE
+// [Center]) stays an option unless written with the leading underscore (_cen).
+function typedSnap(text){const raw=String(text??'').trim(),mode=snapKeyword(raw);if(!mode||!pointPrompt())return false;
+ const prompt=String(CF.prompt?.()||''),t=raw.replace(/^_/,'').toLowerCase();if(raw[0]!=='_'&&promptOptions(prompt).some(o=>o.label.toLowerCase().startsWith(t)))return false;
+ print(`${prompt} ${raw}`);setOverride(mode);return true}
+try{const cl=CF.commandLine;if(cl&&typeof cl.submit==='function'){const baseSubmit=cl.submit;cl.submit=function(text,...a){if(typedSnap(text))return Promise.resolve();return baseSubmit.call(this,text,...a)}}}catch(err){}
 try{document.addEventListener('keydown',e=>{
  if(st.menu){if(e.key==='Escape'){closeMenu();consume(e)}else if(e.key==='ArrowDown'||e.key==='ArrowUp'){menuMove(e.key==='ArrowDown'?1:-1);consume(e)}else if(e.key==='Enter'){menuActivate();consume(e)}return}
+ if((e.key==='Enter'||e.key==='NumpadEnter'||e.key===' ')&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&e.target&&e.target===$('command')){const c=e.target,v=String(c.value||'').trim();
+  if(v&&typedSnap(v)){c.value='';try{c.dispatchEvent(new Event('input'))}catch(err){}consume(e);return}
+  if(v&&CF.osnapOverride&&pointPrompt()&&parsePoint(v,basePoint()))CF.osnapOverride=null} // a typed point replaces the pending override
  const field=e.target?.matches?.('input,textarea,select')&&e.target.id!=='command',typing=field||!!$('command')?.value;
  if(st.panMode&&(e.key==='Escape'||(!typing&&(e.key==='Enter'||e.key===' ')))){exitPan();consume(e);return}
  if(e.key==='Escape'&&st.win){st.win=null;print('*Cancel*');render();consume(e);return}
@@ -2440,8 +2814,8 @@ CF.on('command',ev=>{const n=ev?.def?.name;if(!n)return;st.recent=[n,...st.recen
 const cmd=(name,fallback)=>()=>{if(CF.resolve(name))CF.run(name,{source:'menu'});else fallback?.()};
 function promptOptions(text){const m=String(text||'').match(/\[([^\]]+)\]/);if(!m)return[];return m[1].split('/').map(s=>s.trim()).filter(Boolean).map(label=>({label,key:(label.match(/[A-Z]+/)||[label])[0]}))}
 function submitOption(key){if(CF.commandLine?.submit){CF.commandLine.submit(key);return}if(CF.input){const inp=CF.input;inp.resolve(key);if(CF.input===inp)CF.input=null;render();return}const c=$('command');if(c){c.value=key;c.onkeydown?.({key:'Enter',target:c,preventDefault(){},stopPropagation(){}})}}
-function snapItems(){const set=mode=>()=>{CF.osnapOverride=mode;if(mode!=='none')print(`_${SNAP_ABBR[mode]} of`);render()};
- return[...['endpoint','midpoint','intersection'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,...['center','quadrant','perpendicular','nearest'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,{label:'None',run:set('none'),checked:CF.osnapOverride==='none'},SEP,{label:'Object Snap',checked:CF.get('osnap'),shortcut:'F3',run:()=>CF.toggle('osnap')}]}
+function snapItems(){const set=mode=>()=>setOverride(mode);
+ return[...['endpoint','midpoint','intersection'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,...['center','quadrant','perpendicular','tangent','nearest'].map(m=>({label:SNAP_LABEL[m],run:set(m),checked:CF.osnapOverride===m})),SEP,{label:'None',run:set('none'),checked:CF.osnapOverride==='none'},SEP,{label:'Object Snap',checked:CF.get('osnap'),shortcut:'F3',run:()=>CF.toggle('osnap')}]}
 function menuModel(kind){
  if(kind==='snap')return snapItems();
  const zoomExt={label:'Zoom Extents',icon:'zoom-extents',run:()=>fit()},panItem={label:'Pan',icon:'pan',run:()=>CF.startPan()};
@@ -2493,7 +2867,7 @@ const style=document.createElement('style');style.id='cf-interact-style';style.t
 try{document.head.append(style)}catch(err){}
 
 // ---- Testable surface --------------------------------------------------------------------------
-CF.interact={osnapCandidates,gridStep,orthoProject,polarProject,windowSelect,pickAt,finishWindow,gripsFor,gripAt,applyGrip,startGrip,cancelGrip,parsePoint,menuModel,promptOptions,shortPrompt,exitPan,resetTransient,selectedIndices,state:()=>st};
+CF.interact={typedSnap,snapKeyword,pointPrompt,setOverride,osnapCandidates,gridStep,orthoProject,polarProject,windowSelect,pickAt,finishWindow,gripsFor,gripAt,applyGrip,startGrip,cancelGrip,parsePoint,menuModel,promptOptions,shortPrompt,exitPan,resetTransient,selectedIndices,state:()=>st};
 })();
 </script><script data-module="acad-views">'use strict';
 // C2 views: viewport controls, ViewCube, navigation bar, UCS icon, 3D visual styles and picking, layout (paper) space.
@@ -2527,7 +2901,8 @@ function goCamera(cam,animate=true){if(isLayout())CF.setSpace('model');const was
 function withTween(fn){const t=S.tween;if(!t||!mode3D)return fn();const k=Math.min(1,(performance.now()-t.t0)/t.dur);if(k>=1){S.tween=null;return fn()}const e=k<.5?2*k*k:1-(-2*k+2)**2/2,yaw=camera3.yaw,pitch=camera3.pitch;camera3.yaw=t.from.yaw+wrapA(t.to.yaw-t.from.yaw)*e;camera3.pitch=t.from.pitch+(t.to.pitch-t.from.pitch)*e;try{return fn()}finally{camera3.yaw=yaw;camera3.pitch=pitch}}
 CF.setViewPreset=function(name){const k=presetKey(name);if(!k){notify(`Unknown view "${name}".`);return false}S.tween=null;if(k==='top'){if(isLayout())CF.setSpace('model');if(mode3D)showModel();else render();emitView();return true}goCamera(PRESETS[k]);return true};
 function styleKey(name){const s=String(name||'').toLowerCase().replace(/with|[\s_-]/g,'');return STYLES[s]?s:({'2d':'2dwireframe','2dw':'2dwireframe',w:'wireframe','3dwireframe':'wireframe',s:'shaded',realistic:'shaded',shadesofgray:'shaded',shadesofgrey:'shaded',e:'shadededges',shadededge:'shadededges',conceptual:'shadededges'})[s]||null}
-CF.setVisualStyle=function(name){const k=styleKey(name);if(!k){notify(`Unknown visual style "${name}".`);return false}S.style=k;if(!isLayout()&&!mode3D&&k!=='2dwireframe')show3D();else render();notify(`Visual style: ${STYLES[k]}`);emitView();return true};
+// From the plan view a 3D style goes to a predictable SE Isometric (never the last remembered orbit camera).
+CF.setVisualStyle=function(name){const k=styleKey(name);if(!k){notify(`Unknown visual style "${name}".`);return false}S.style=k;if(!isLayout()&&!mode3D&&k!=='2dwireframe')goCamera(PRESETS.se,false);else render();notify(`Visual style: ${STYLES[k]}`);emitView();return true};
 CF.visualStyle=()=>S.style;
 try{camera3.yaw=PRESETS.se.yaw;camera3.pitch=PRESETS.se.pitch}catch(err){}
 
@@ -2596,6 +2971,14 @@ function visibleSegments(p,q,Z,eps,g=ctx){const w=Z.w,h=Z.h,dx=q.x-p.x,dy=q.y-p.
  for(let s=0;s<=n;s++){const t=t0+(t1-t0)*s/n,x=p.x+dx*t,y=p.y+dy*t,z=p.depth+(q.depth-p.depth)*t,ci=Math.round(x/DS),cj=Math.round(y/DS);let m=Infinity;for(let j=Math.max(0,cj-1);j<=Math.min(h-1,cj+1);j++)for(let i=Math.max(0,ci-1);i<=Math.min(w-1,ci+1);i++){const k=j*w+i,v=Z[k]+Z.G[k]*Math.hypot(x-i*DS,y-j*DS);if(v<m)m=v}
   if(z<=m+eps){const pt={x,y};if(!start)start=pt;last=pt}else if(start){if(last!==start){g.moveTo(start.x,start.y);g.lineTo(last.x,last.y)}start=null}}
  if(start&&last!==start){g.moveTo(start.x,start.y);g.lineTo(last.x,last.y)}}
+// Edge groups ({alpha, list:[p,q,p,q...]}) per mesh for the two wireframe styles.
+// 2D Wireframe: a flat 2D-style outline - feature edges and silhouettes, one weight, one opacity, no depth fade.
+// Wireframe: depth-cued - four depth bands fade toward the far side, and edges hidden behind the part are fainter still.
+function wireGroups(per,st){const keep=(m,e)=>e.feature||m.front[e.f1]!==m.front[e.f2];
+ if(st!=='wireframe')return per.map(m=>{const list=[];for(const e of m.info.edges)if(keep(m,e))list.push(m.P[e.a],m.P[e.b]);return list.length?[{alpha:1,list}]:[]});
+ let zmin=Infinity,zmax=-Infinity;for(const m of per)for(const p of m.P){if(p.depth<zmin)zmin=p.depth;if(p.depth>zmax)zmax=p.depth}const zr=zmax-zmin||1,ALPHA=[1,.78,.58,.4];
+ return per.map(m=>{const paths=Array.from({length:8},()=>[]);for(const e of m.info.edges){if(!keep(m,e))continue;const p=m.P[e.a],q=m.P[e.b],t=((p.depth+q.depth)/2-zmin)/zr,hidden=!(m.front[e.f1]===1||(e.f2>=0&&m.front[e.f2]===1));paths[Math.min(3,Math.max(0,Math.floor(t*4)))*2+(hidden?1:0)].push(p,q)}
+  return paths.map((list,k)=>({alpha:ALPHA[k>>1]*(k&1?.55:1),list})).filter(g=>g.list.length)})}
 render3D=function(){
  const B=basis(camera3.yaw,camera3.pitch),st=S.style,solids=doc.solids||[],shaded=st==='shaded'||st==='shadededges';
  ctx.save();ctx.setLineDash([]);ctx.globalAlpha=1;ctx.lineJoin='round';ctx.lineCap='round';
@@ -2612,10 +2995,30 @@ render3D=function(){
   for(let k=0;k<faces.length;k++){const F=faces[k],m=per[F.si],n=m.info.normals,i=F.f*3,I=.36+.64*Math.max(0,n[i]*L.x+n[i+1]*L.y+n[i+2]*L.z);let [r,gg,b]=m.rgb.map(v=>v*I);if(m.hl===1){r=r*.7+120*.3;gg=gg*.7+180*.3;b=b*.7+255*.3}else if(m.hl===2){r=r*.75+232*.25;gg=gg*.75+184*.25;b=b*.75+79*.25}const col=`rgb(${r|0},${gg|0},${b|0})`;ctx.beginPath();ctx.moveTo(F.a.x,F.a.y);ctx.lineTo(F.b.x,F.b.y);ctx.lineTo(F.c.x,F.c.y);ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=1.1;ctx.stroke()}
   // Edges are drawn after all faces and clipped by a coarse depth buffer, so hidden edges stay hidden.
   if(st==='shadededges'){const Z=depthBuffer(per),eps=2/camera3.scale+1e-4*Z.span;for(const m of per){ctx.beginPath();for(const e of m.info.edges){const A=e.f1>=0&&m.front[e.f1]===1,Bf=e.f2>=0&&m.front[e.f2]===1;if(e.feature?!(A||Bf):A===Bf)continue;visibleSegments(m.P[e.a],m.P[e.b],Z,eps)}ctx.strokeStyle=edgeColor(m)||'rgba(8,11,16,.95)';ctx.lineWidth=m.hl?1.6:1.1;ctx.stroke()}}
- }else for(const m of per){ // Wireframe / 2D Wireframe: every feature edge (hidden ones too) plus silhouettes.
-  ctx.beginPath();for(const e of m.info.edges){if(!e.feature&&m.front[e.f1]===m.front[e.f2])continue;const p=m.P[e.a],q=m.P[e.b];ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y)}ctx.strokeStyle=edgeColor(m)||m.s.color;ctx.lineWidth=m.hl?1.6:1;ctx.stroke()}
+ }else{const groups=wireGroups(per,st);per.forEach((m,mi)=>{ctx.strokeStyle=edgeColor(m)||m.s.color;ctx.lineWidth=m.hl?1.6:1;for(const gr of groups[mi]){ctx.globalAlpha=gr.alpha;ctx.beginPath();for(let i=0;i<gr.list.length;i+=2){ctx.moveTo(gr.list[i].x,gr.list[i].y);ctx.lineTo(gr.list[i+1].x,gr.list[i+1].y)}ctx.stroke()}ctx.globalAlpha=1})}
  ctx.restore();
  $('status').textContent=`3D | ${solids.length} mesh${solids.length===1?'':'es'} | ${tris} triangles | ${STYLES[st]}`;$('entityKind').textContent='3D mesh workspace'};
+// ---- Plan view (2D model space): solids seen from above, drawn beneath the 2D entities -------------
+// Up-facing faces are painted far-to-near in a dimmed shade (so the 2D drawing stays readable on top); feature edges are
+// hidden-line clipped with the same coarse depth buffer as the 3D view. The projected geometry is cached between renders.
+const plan={sig:'',faces:[],edges:[]},solidIds=new WeakMap();let solidSeq=0;
+const solidId=s=>{let i=solidIds.get(s);if(!i)solidIds.set(s,i=++solidSeq);return i};
+function planSig(){const solids=doc.solids||[];let sum=0;const ids=[];for(const s of solids){for(const p of s.vertices)sum+=p.x+p.y*1.7+p.z*2.3;ids.push(solidId(s)+':'+s.vertices.length+'/'+s.faces.length+s.color)}return[W,H,view.x,view.y,view.scale,sum,ids.join(),pickIndex('a'),pickIndex('b'),CF.colors?.canvas].join('|')}
+function planBuild(){const solids=doc.solids||[],bg=hexRgb(CF.colors?.canvas||'#212830'),ia=pickIndex('a'),ib=pickIndex('b'),per=[],faces=[],mix=(c,k)=>`rgb(${c.map((v,i)=>v*k+bg[i]*(1-k)|0).join(',')})`;
+ const L=v3(-.3,.5,.75),ll=Math.hypot(L.x,L.y,L.z);
+ solids.forEach((s,si)=>{const info=meshInfo(s),P=s.vertices.map(p=>{const q=screen(p);return{x:q.x,y:q.y,depth:-p.z}}),nf=s.faces.length,front=new Uint8Array(nf);
+  for(let f=0;f<nf;f++){const t=s.faces[f],a=P[t[0]],b=P[t[1]],c=P[t[2]];if(!a||!b||!c||!info.ok[f])continue;if((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x)<0){front[f]=1;if(Math.max(a.x,b.x,c.x)<0||Math.min(a.x,b.x,c.x)>W||Math.max(a.y,b.y,c.y)<0||Math.min(a.y,b.y,c.y)>H)continue;const n=info.normals,i=f*3,I=.4+.6*Math.max(0,(n[i]*L.x+n[i+1]*L.y+n[i+2]*L.z)/ll);faces.push({si,f,a,b,c,depth:a.depth+b.depth+c.depth,I})}}
+  per.push({s,info,P,front,rgb:hexRgb(s.color),hl:si===ia?1:si===ib?2:0})});
+ faces.sort((p,q)=>q.depth-p.depth);plan.faces=faces.map(F=>{const m=per[F.si];return{x:[F.a.x,F.b.x,F.c.x],y:[F.a.y,F.b.y,F.c.y],col:mix(m.rgb,.5*F.I)}});
+ plan.edges=[];if(!faces.length)return;const Z=depthBuffer(per),eps=2/view.scale+1e-4*Z.span;
+ for(const m of per){const segs=[];let mx=0,my=0;const rec={moveTo(x,y){mx=x;my=y},lineTo(x,y){segs.push(mx,my,x,y)}};
+  for(const e of m.info.edges){const A=e.f1>=0&&m.front[e.f1]===1,Bf=e.f2>=0&&m.front[e.f2]===1;if(e.feature?!(A||Bf):A===Bf)continue;visibleSegments(m.P[e.a],m.P[e.b],Z,eps,rec)}
+  if(segs.length)plan.edges.push({segs,col:m.hl===1?CF.colors?.selection||'#4a90d9':m.hl===2?'#e8b84f':mix(m.rgb,.8),w:m.hl?1.6:1})}}
+function drawPlanSolids(){if(!doc.solids?.length)return;const sig=planSig();if(sig!==plan.sig){plan.sig='';planBuild();plan.sig=sig}
+ ctx.save();ctx.setLineDash([]);ctx.globalAlpha=1;ctx.lineJoin='round';ctx.lineWidth=1.1;
+ for(const F of plan.faces){ctx.beginPath();ctx.moveTo(F.x[0],F.y[0]);ctx.lineTo(F.x[1],F.y[1]);ctx.lineTo(F.x[2],F.y[2]);ctx.closePath();ctx.fillStyle=ctx.strokeStyle=F.col;ctx.fill();ctx.stroke()}
+ for(const E of plan.edges){ctx.beginPath();for(let i=0;i<E.segs.length;i+=4){ctx.moveTo(E.segs[i],E.segs[i+1]);ctx.lineTo(E.segs[i+2],E.segs[i+3])}ctx.strokeStyle=E.col;ctx.lineWidth=E.w;ctx.stroke()}
+ ctx.restore()}
 // Zoom extents in 3D covers meshes and the 2D drawing (at z = 0).
 fit3D=function(){let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;const add=(x,y,z)=>{if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;if(z<z0)z0=z;if(z>z1)z1=z};
  for(const s of doc.solids||[])for(const p of s.vertices)add(p.x,p.y,p.z);
@@ -2651,10 +3054,15 @@ function renderLayout(){
 
 // ---- UCS icon (lower-left of the drawing area) --------------------------------------------
 function arrow(x0,y0,x1,y1,color,label){const l=Math.hypot(x1-x0,y1-y0);ctx.strokeStyle=ctx.fillStyle=color;if(l<3){ctx.beginPath();ctx.arc(x0,y0,2.5,0,TAU);ctx.fill();return}const ux=(x1-x0)/l,uy=(y1-y0)/l;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1-ux*7,y1-uy*7);ctx.stroke();ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1-ux*9-uy*3.5,y1-uy*9+ux*3.5);ctx.lineTo(x1-ux*9+uy*3.5,y1-uy*9-ux*3.5);ctx.closePath();ctx.fill();if(label){ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x1+ux*9,y1+uy*9)}}
+// 3D tripod placement: the origin slides so every axis and its label stays on the canvas (Y points down in Bottom view,
+// X points left in Back view...). dx/dy are screen offsets of the axis tips from the origin (gx, gy).
+function ucs3D(ox=30,oy=H-30,L=40){const B=basis(camera3.yaw,camera3.pitch),axes=[[v3(1,0,0),'#e0605a','X'],[v3(0,1,0),'#5cc87a','Y'],[v3(0,0,1),'#4fa3e8','Z']].map(([a,c,n])=>({dx:dot(B.R,a)*L,dy:-dot(B.U,a)*L,depth:-dot(B.V,a),c,n}));
+ let x0=-4,x1=4,y0=-4,y1=4;for(const a of axes){const l=Math.hypot(a.dx,a.dy);if(l<3)continue;const ex=a.dx+a.dx/l*16,ey=a.dy+a.dy/l*16;x0=Math.min(x0,ex);x1=Math.max(x1,ex);y0=Math.min(y0,ey);y1=Math.max(y1,ey)}
+ return{gx:Math.min(Math.max(ox,8-x0),W-8-x1),gy:Math.max(Math.min(oy,H-8-y1),8-y0),axes,box:{x0,x1,y0,y1}}}
 function drawUCS(kind){ctx.save();ctx.setLineDash([]);ctx.globalAlpha=1;ctx.lineWidth=1.6;ctx.lineCap='butt';const ox=30,oy=H-30,L=40;
  if(kind==='layout'){ctx.strokeStyle='#e3e8ee';ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox+L,oy);ctx.lineTo(ox,oy-L);ctx.closePath();ctx.stroke();ctx.fillStyle='#e3e8ee';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('X',ox+L+9,oy);ctx.fillText('Y',ox,oy-L-9)}
  else if(kind==='2d'){arrow(ox,oy,ox+L,oy,'#e0605a','X');arrow(ox,oy,ox,oy-L,'#5cc87a','Y');ctx.strokeStyle='#dfe5ec';ctx.lineWidth=1.2;ctx.strokeRect(ox-.5,oy-6.5,7,7)}
- else{const B=basis(camera3.yaw,camera3.pitch),axes=[[v3(1,0,0),'#e0605a','X'],[v3(0,1,0),'#5cc87a','Y'],[v3(0,0,1),'#4fa3e8','Z']].map(([a,c,n])=>({x:ox+dot(B.R,a)*L,y:oy-dot(B.U,a)*L,depth:-dot(B.V,a),c,n}));axes.sort((p,q)=>q.depth-p.depth);for(const a of axes)arrow(ox,oy,a.x,a.y,a.c,a.n);ctx.fillStyle='#dfe5ec';ctx.fillRect(ox-2,oy-2,4,4)}
+ else{const {gx,gy,axes}=ucs3D(ox,oy,L);axes.sort((p,q)=>q.depth-p.depth);for(const a of axes)arrow(gx,gy,gx+a.dx,gy+a.dy,a.c,a.n);ctx.fillStyle='#dfe5ec';ctx.fillRect(gx-2,gy-2,4,4)}
  ctx.restore()}
 
 // ---- DOM chrome: viewport controls, ViewCube, navigation bar --------------------------------
@@ -2763,7 +3171,7 @@ function drawCube(){const c=ui.cubeCtx;if(!c||ui.cube.style.display==='none')ret
 
 // ---- Render wrapper: layout space, tweened camera, UCS icon, chrome refresh ------------------
 // In paper space the model-space drawing passes are skipped (the sheet is painted over the whole canvas instead).
-{const g=drawGrid,p=drawPreview,c=drawCursor,d=drawEntity;drawGrid=function(...a){if(!S.suppress)return g.apply(this,a)};drawPreview=function(...a){if(!S.suppress)return p.apply(this,a)};drawCursor=function(...a){if(!S.suppress)return c.apply(this,a)};drawEntity=function(...a){if(!S.suppress)return d.apply(this,a)}}
+{const g=drawGrid,p=drawPreview,c=drawCursor,d=drawEntity;drawGrid=function(...a){if(S.suppress)return;const r=g.apply(this,a);if(!mode3D&&CF.space!=='layout')try{drawPlanSolids()}catch(err){}return r};drawPreview=function(...a){if(!S.suppress)return p.apply(this,a)};drawCursor=function(...a){if(!S.suppress)return c.apply(this,a)};drawEntity=function(...a){if(!S.suppress)return d.apply(this,a)}}
 function syncMode(){const m=isLayout()?'layout':mode3D?'3d':'2d';if(m===S.mode)return;const was=S.mode;S.mode=m;if(was)S.panMode=false;try{canvas.style.cursor=m==='layout'?'crosshair':m==='3d'?'default':''}catch(err){}syncNav()}
 const vwPrevRender=render;
 render=function(){if(S.hold)return;syncMode();if(isLayout()){S.suppress=true;try{vwPrevRender()}finally{S.suppress=false}renderLayout();if(CF.get('ucsIcon'))drawUCS('layout');updateChrome();return}
@@ -2774,7 +3182,11 @@ render=function(){if(S.hold)return;syncMode();if(isLayout()){S.suppress=true;try
 // Selecting the Select tool (Esc / CF.cancel) keeps the 3D view; drawing tools still return to 2D model space.
 {const prev=setTool;setTool=function(t){if(mode3D&&t==='select'){S.hold=true;mode3D=false;try{prev(t)}finally{mode3D=true;S.hold=false}render();return}return prev(t)}}
 // Zoom extents while in paper space also fits the sheet.
-{const prev=fit;fit=function(...a){const r=prev.apply(this,a);if(isLayout()){fitLayout();render()}return r}}
+// In the plan view the solids are part of the extents (the engine's 2D fit only knows the drawing entities).
+function fitPlan(){const p=doc.entities.flatMap(e=>e.type==='circle'?[{x:e.center.x-e.radius,y:e.center.y-e.radius},{x:e.center.x+e.radius,y:e.center.y+e.radius}]:e.type==='text'?[e.points[0],{x:e.points[0].x+e.text.length*e.height*.6,y:e.points[0].y+e.height}]:vertices(e));for(const s of doc.solids)for(const v of s.vertices)p.push(v);
+ let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;for(const q of p){if(q.x<a)a=q.x;if(q.x>b)b=q.x;if(q.y<c)c=q.y;if(q.y>d)d=q.y}if(!Number.isFinite(a))return;
+ view={x:(a+b)/2,y:(c+d)/2,scale:Math.max(.01,Math.min(1000,Math.min(W/Math.max(20,b-a),H/Math.max(20,d-c))*.8))};render()}
+{const prev=fit;fit=function(...a){const r=prev.apply(this,a);if(isLayout()){fitLayout();render()}else if(!mode3D&&doc.solids?.length)fitPlan();return r}}
 {const prev=CF.startPan;CF.startPan=function(...a){if(mode3D||isLayout())return enterPan();return prev.apply(CF,a)}}
 {const prev=CF.cancel;CF.cancel=function(...a){exitPan();closeMenu();if(mode3D)clearPick();return prev.apply(CF,a)}}
 CF.on('space',s=>{if(s==='layout'&&!S.layout.fitted)fitLayout();closeMenu()});
@@ -2809,7 +3221,7 @@ if(!CF.resolve('3DORBIT'))CF.register({name:'3DORBIT',aliases:['3DO','ORBIT'],la
 if(!CF.resolve('PLAN'))CF.register({name:'PLAN',label:'Plan View',desc:'Displays the plan view of the XY plane',category:'View',icon:'model',run:()=>CF.setViewPreset('top')});
 
 // ---- Public API (tests and other modules) ---------------------------------------------------
-CF.views={presets:PRESETS,styles:STYLES,style:()=>S.style,viewName,styleLabel,presetOf,presetFromDirection,cameraFromDirection,basis,goCamera,cubeHit,cubeClick,depthBuffer,visibleSegments,featureEdges:m=>meshEdges(m).edges.filter(e=>e.feature),meshEdges,pickMesh,setMesh,picked:()=>({a:pickIndex('a'),b:pickIndex('b')}),pan3D,zoom3DAt,zoom,pan,orbit,home:goHome,enterPan,exitPan,
+CF.views={presets:PRESETS,styles:STYLES,style:()=>S.style,viewName,styleLabel,presetOf,presetFromDirection,cameraFromDirection,basis,goCamera,cubeHit,cubeClick,depthBuffer,visibleSegments,featureEdges:m=>meshEdges(m).edges.filter(e=>e.feature),meshEdges,pickMesh,setMesh,picked:()=>({a:pickIndex('a'),b:pickIndex('b')}),pan3D,zoom3DAt,zoom,pan,orbit,ucs3D,wireGroups,drawPlanSolids,planInfo:()=>plan,fitPlan,home:goHome,enterPan,exitPan,
  layout:()=>({sheet:sheet(),modelToPaper,paperToScreen,screenToPaper,state:S.layout}),fitLayout,zoomLayoutAt,label:()=>[ui.vpMin?.textContent,ui.vpView?.textContent,ui.vpStyle?.textContent],state:S};
 try{buildChrome()}catch(err){console.error('CadForge views: chrome unavailable',err)}
 try{render()}catch(err){console.error(err)}
@@ -2854,7 +3266,13 @@ function palNextLayerName(){for(let i=1;;i++){const n='Layer'+i;if(!doc.layers.s
 function palCheckName(name,except){name=String(name??'').trim();if(!name)return 'Layer name cannot be empty.';if(/[<>\/\\":;?*|=,`]/.test(name))return 'Layer names cannot contain < > / \\ " : ; ? * | = , or `.';if(name.length>255)return 'Layer name is too long.';if(doc.layers.some(l=>l!==except&&l.name.toLowerCase()===name.toLowerCase()))return `A layer named "${name}" already exists.`;return true}
 function palSelectCurrent(name){syncLayers();$('layer').value=name;syncLayers()}
 function palSetCurrent(name){if(!palLayer(name))return palFail(`Layer "${name}" was not found.`);if($('layer').value!==name){palSelectCurrent(name);CF.emit('layer',name)}render();return true}
-function palAddLayer(name=palNextLayerName(),from){name=String(name).trim();const ok=palCheckName(name);if(ok!==true)return palFail(ok);const src=palLayer(from)||palLayer($('layer').value);mutate(()=>doc.layers.push({name,color:src?.color||'#ffffff',visible:true}));palSelectCurrent($('layer').value);return true}
+// New layers take the next index colour (AutoCAD-like palette) not already used by another layer; an explicit #rrggbb overrides.
+const palNewColors=['#ff0000','#ffff00','#00ff00','#00ffff','#0000ff','#ff00ff','#ff7f00','#00ff7f','#7f00ff','#ff007f','#7fff00','#007fff','#bf7f3f','#ff9f9f','#9fff9f','#9f9fff','#ffffff','#c0c0c0','#808080'];
+function palNextLayerColor(){const used=new Set(doc.layers.map(l=>String(l.color).toLowerCase()));for(const c of palNewColors)if(!used.has(c))return c;
+ // Palette exhausted: walk the hue wheel by the golden angle until an unused colour appears.
+ const hex=h=>{const f=n=>{const k=(n+h/30)%12;return Math.round(255*(.5-.5*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0')};return '#'+f(0)+f(8)+f(4)};
+ for(let i=1;i<720;i++){const c=hex((i*137.508)%360);if(!used.has(c))return c}return '#ffffff'}
+function palAddLayer(name=palNextLayerName(),color){name=String(name).trim();const ok=palCheckName(name);if(ok!==true)return palFail(ok);const col=/^#[0-9a-f]{6}$/i.test(String(color||''))?String(color).toLowerCase():palNextLayerColor();mutate(()=>doc.layers.push({name,color:col,visible:true}));palSelectCurrent($('layer').value);return true}
 function palRenameLayer(from,to){const l=palLayer(from);if(!l)return palFail(`Layer "${from}" was not found.`);to=String(to??'').trim();if(to===from)return true;if(from==='0')return palFail('Layer 0 cannot be renamed.');const ok=palCheckName(to,l);if(ok!==true)return palFail(ok);const wasCurrent=$('layer').value===from;
  mutate(()=>{palLayer(from).name=to;for(const e of doc.entities)if(e.layer===from)e.layer=to;for(const b of Object.values(doc.blocks||{}))for(const e of b.items||[])if(e.layer===from)e.layer=to});
  palRenameLog.push({from,to});palSelectCurrent(wasCurrent?to:$('layer').value);render();return true}
@@ -3039,7 +3457,7 @@ function palDialogFrame(id,title,cls){const d=palEl('dialog','cf-dlg '+(cls||'')
 function palToolBtn(icon,label,tip,fn){const b=palBtn('cf-tool',null,tip,fn);if(palIcons()){const s=palEl('span','cf-tool-ico');s.innerHTML=palIcon(icon,16);b.append(s)}b.append(palEl('span','',label));return b}
 function palBuildLpm(){const d=palLpm=palDialogFrame('cf-layer-manager','Layer Properties Manager','cf-lpm');
  const bar=palEl('div','cf-lpm-bar');const cur=palEl('div','cf-lpm-cur'),search=palEl('input','cf-lpm-search');search.placeholder='Search for layer';search.setAttribute('autocomplete','off');search.oninput=()=>palLpmRender(true);
- bar.append(palToolBtn('plus','New Layer','New Layer (Alt+N) — creates a layer with the properties of the selected layer',palLpmNew),palToolBtn('erase','Delete Layer','Delete Layer (Alt+D)',palLpmDelete),palToolBtn('check','Set Current','Set Current (Alt+C)',palLpmCurrent),palEl('span','cf-lpm-gap'),cur,search);
+ bar.append(palToolBtn('plus','New Layer','New Layer (Alt+N) — creates a layer with the next unused color',palLpmNew),palToolBtn('erase','Delete Layer','Delete Layer (Alt+D)',palLpmDelete),palToolBtn('check','Set Current','Set Current (Alt+C)',palLpmCurrent),palEl('span','cf-lpm-gap'),cur,search);
  const grid=palEl('div','cf-lpm-grid'),table=palEl('table','cf-lpm-table'),thead=palEl('thead'),hr=palEl('tr'),tbody=palEl('tbody');
  for(const [key,label,cls]of [['status','Status','c-status'],['name','Name','c-name'],['on','On','c-on'],['color','Color','c-color'],['linetype','Linetype','c-lt'],['objects','Objects','c-obj']]){const th=palEl('th',cls,label);if(key==='name'){th.classList.add('sortable');th.title='Sort by name';th.onclick=()=>{palLpmSortDesc=!palLpmSortDesc;palLpmRender(true)}}hr.append(th)}
  thead.append(hr);table.append(thead,tbody);grid.append(table);
@@ -3062,7 +3480,7 @@ function palLpmRender(force){if(!palLpm)return;if(palLpmEdit&&!force)return;palL
  palLpmParts.cur.textContent='Current layer: '+cur;palLpmParts.count.textContent=`All: ${names.length} layer${names.length===1?'':'s'} displayed of ${doc.layers.length} total layer${doc.layers.length===1?'':'s'}`;palLpmSig=palLpmSignature()}
 const palLpmSignature=()=>palRev+'|'+palDocN+'|'+$('layer').value+'|'+JSON.stringify(doc.layers)+'|'+doc.entities.length;
 function palLpmUpdate(){if(palLpm?.open&&!palLpmEdit&&palLpmSignature()!==palLpmSig)palLpmRender()}
-function palLpmNew(){const name=palNextLayerName(),r=palAddLayer(name,palLpmSel);if(r!==true){palLpmMsg(r);return}palLpmSel=name;palLpmMsg('');palLpmRender(true);palLpmStartRename(name)}
+function palLpmNew(){const name=palNextLayerName(),r=palAddLayer(name);if(r!==true){palLpmMsg(r);return}palLpmSel=name;palLpmMsg('');palLpmRender(true);palLpmStartRename(name)}
 function palLpmDelete(){if(!palLpmSel)return;const name=palLpmSel,r=palDeleteLayer(name);palLpmMsg(r===true?`Layer "${name}" deleted.`:r);if(r===true)palLpmSel=$('layer').value;palLpmRender(true)}
 function palLpmCurrent(){if(!palLpmSel)return;const r=palSetCurrent(palLpmSel);palLpmMsg(r===true?'':r);palLpmRender(true)}
 function palLpmStartRename(name){if(!name||!palLayer(name))return;if(name==='0'){palLpmMsg('Layer 0 cannot be renamed.');return}const tr=palLpmRows.get(name);if(!tr)return;palLpmSelect(name);const inp=palEl('input','cf-lpm-edit');inp.value=name;inp.setAttribute('autocomplete','off');palLpmEdit={name,inp};tr.palName.replaceChildren(inp);
@@ -3204,10 +3622,12 @@ ${palDlg} p{margin:8px 12px;color:var(--cf-text-dim);line-height:1.45}
 dialog:has(#dialogLabel){width:420px}dialog:has(#dialogLabel) .actions{flex-direction:row}#dialogOk{order:-1}
 #extrusionDialog{width:460px}#extrusionError{color:#ff9a7a!important;min-height:1em}
 #plotDialog{width:min(980px,95vw)}#plotDialog .sheetControls{display:flex;gap:16px;padding:6px 12px 0}#plotDialog .sheetControls label{display:flex;align-items:center;gap:6px;margin:0}#plotDialog .sheetControls select{width:auto!important;margin:0!important;display:inline-block}
-#sheetPreview{margin:10px 12px!important;border:1px solid #12161c;background:#5a616d!important;padding:12px;max-height:58vh;overflow:auto}#sheetPreview svg{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);max-height:52vh}
+#sheetPreview{margin:10px 12px!important;border:1px solid #12161c;background:#5a616d!important;padding:16px;max-height:58vh;overflow:auto;display:flex;justify-content:center;align-items:flex-start}
+/* The engine SVG's own white rect is the paper: size the SVG box to the sheet (no letterboxing) and outline/shadow only the sheet. */
+#plotDialog #sheetPreview svg{flex:none;display:block;background:transparent!important;width:auto;height:auto;max-width:100%;max-height:calc(52vh - 8px);box-shadow:none;filter:drop-shadow(0 0 .7px #000) drop-shadow(0 3px 9px rgba(0,0,0,.55))}
 #exportDialog{width:700px}.exportDownload{display:inline-block;margin:4px 12px;padding:5px 16px;border:1px solid;border-radius:2px;text-decoration:none}
 .cf-tool{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px}.cf-tool-ico{display:inline-flex}
-.cf-lpm{width:780px}.cf-lpm-bar{display:flex;align-items:center;gap:4px;margin-bottom:8px}.cf-lpm-gap{flex:1}.cf-lpm-cur{color:var(--cf-text-dim);margin-right:10px;white-space:nowrap}.cf-lpm-search{width:170px;height:24px}
+dialog.cf-dlg.cf-lpm{width:780px}.cf-lpm-bar{display:flex;align-items:center;gap:4px;margin-bottom:8px}.cf-lpm-gap{flex:1}.cf-lpm-cur{color:var(--cf-text-dim);margin-right:10px;white-space:nowrap}.cf-lpm-search{width:170px;height:24px}
 .cf-lpm-grid{height:300px;overflow:auto;border:1px solid #12161c;background:#1f252d}
 .cf-lpm-table{border-collapse:collapse;width:100%;table-layout:fixed}
 .cf-lpm-table th{position:sticky;top:0;background:#343c48;color:var(--cf-text-dim);font-weight:600;text-align:left;padding:0 8px;height:24px;border-right:1px solid #262c35;border-bottom:1px solid #12161c;white-space:nowrap;z-index:1}
@@ -3217,9 +3637,9 @@ dialog:has(#dialogLabel){width:420px}dialog:has(#dialogLabel) .actions{flex-dire
 .c-status{width:56px;text-align:center!important;color:var(--cf-ok);font-weight:700}.c-name{width:auto}.c-on{width:44px;text-align:center}.c-color{width:140px;cursor:pointer}.c-color span{margin-left:6px}.c-lt{width:110px;color:var(--cf-text-dim)}.c-obj{width:76px;text-align:right!important;color:var(--cf-text-dim)}
 .cf-lpm-edit{display:block;margin:0;width:100%;height:20px;padding:0 4px;border:1px solid var(--cf-accent);background:var(--cf-input)}
 .cf-lpm-msg{min-height:18px;padding-top:6px;color:#ffb088}
-.cf-ds{width:520px}.cf-ds-tabs{display:flex;gap:2px;border-bottom:1px solid var(--cf-border)}.cf-ds-tab{border:1px solid transparent;border-bottom:0;border-radius:2px 2px 0 0;background:transparent;color:var(--cf-text-dim);padding:5px 12px}.cf-ds-tab.active{background:#343c48;border-color:var(--cf-border);color:#fff}
+dialog.cf-dlg.cf-ds{width:520px}.cf-ds-tabs{display:flex;gap:2px;border-bottom:1px solid var(--cf-border)}.cf-ds-tab{border:1px solid transparent;border-bottom:0;border-radius:2px 2px 0 0;background:transparent;color:var(--cf-text-dim);padding:5px 12px}.cf-ds-tab.active{background:#343c48;border-color:var(--cf-border);color:#fff}
 .cf-ds-pages{min-height:220px;padding:12px 4px 4px}.cf-ds-page{display:none}.cf-ds-page.active{display:block}
-.cf-chk{display:flex;align-items:center;gap:7px;margin:4px 0;cursor:pointer}.cf-chk input{margin:0}.cf-osmark{display:inline-block;width:14px;text-align:center;color:${CF.colors.osnap||'#3ddc84'}}
+.cf-chk{display:flex;align-items:center;gap:7px;margin:4px 0;cursor:pointer}dialog .cf-chk input[type=checkbox]{width:auto;flex:none;margin:0}.cf-osmark{display:inline-block;width:14px;text-align:center;color:${CF.colors.osnap||'#3ddc84'}}
 .cf-group-title{margin:12px 0 6px;color:var(--cf-text-dim);border-bottom:1px solid #3a424e;padding-bottom:3px}
 .cf-field{display:flex;align-items:center;gap:8px}.cf-field select{width:90px}
 .cf-ds-osgrid{display:flex;gap:16px}.cf-ds-modes{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;flex:1}.cf-ds-side{display:flex;flex-direction:column;gap:6px}.cf-ds-side button{min-width:84px;height:24px}
@@ -3248,9 +3668,10 @@ palReg({name:'LAYMCUR',label:'Make Object\'s Layer Current',desc:'Sets the curre
 palReg({name:'LAYON',label:'Turn All Layers On',desc:'Turns on all layers in the drawing',icon:'layer-on',category:'Layers',run:()=>{if(doc.layers.every(l=>l.visible)){notify('All layers are already on.');return}mutate(()=>doc.layers.forEach(l=>l.visible=true));syncLayers();notify('All layers have been turned on.')}});
 CF.palettes={model:palModel,edit:palEdit,refresh:()=>palUpdate(true),objects:()=>palObjects(chosen()),
  filter:{get:()=>palFilter,set:v=>{palFilter=v;palUpdate(true)}},vertex:{get:()=>palVertex,set:v=>{palVertex=v;palUpdate(true)},step:palStepVertex},
- layers:{current:()=>$('layer').value,setCurrent:palSetCurrent,nextName:palNextLayerName,add:palAddLayer,rename:palRenameLayer,remove:palDeleteLayer,setColor:palSetLayerColor,setVisible:palSetLayerVisible,objects:palLayerObjects,checkName:palCheckName,colorName:palColorName},
+ layers:{current:()=>$('layer').value,setCurrent:palSetCurrent,nextName:palNextLayerName,nextColor:palNextLayerColor,add:palAddLayer,rename:palRenameLayer,remove:palDeleteLayer,setColor:palSetLayerColor,setVisible:palSetLayerVisible,objects:palLayerObjects,checkName:palCheckName,colorName:palColorName},
  setOsnapMode:palSetOsnapMode,setPolarIncrement:palSetPolarIncrement,osnapModes:palOsnapAll,polarSteps:palPolarSteps,
  status:palSB,syncStatus:()=>palSyncStatus(true),menus:{polar:palPolarMenu,osnap:palOsnapMenu,workspace:palWorkspaceMenu,customize:palCustomizeMenu,close:palCloseMenus},
+ css:()=>palStyle.textContent,
  layerManager:{open:palOpenLayerManager,render:()=>palLpmRender(true),dialog:()=>palLpm,select:palLpmSelect,newLayer:palLpmNew,deleteLayer:palLpmDelete,setCurrent:palLpmCurrent,visibleNames:palLpmVisibleNames},
  draftingSettings:{open:palOpenDraftingSettings,apply:()=>palDsApply(),parts:()=>palDsParts},dropdowns:palDropdowns};
 palUpdate(true);
@@ -3419,13 +3840,19 @@ const lbl=l=>esc(l).replace('\n','<br>');
 function makeButton(it,size=it.size){const b=btn(`cf-rb cf-rb-${size}`,null,plain(it.label));
  b.innerHTML=size==='large'?ico(it.icon,32)+`<span class="cf-lbl">${lbl(it.label)}</span>`:size==='icon'?ico(it.icon,16):ico(it.icon,16)+`<span class="cf-lbl">${esc(plain(it.label))}</span>`;
  b.onclick=()=>shellExec(it);tip(b,()=>shellTipData(it));sh.buttons.push({el:b,item:it});return b}
-function makeSplit(sp){const wrap=ce('div',`cf-split cf-split-${sp.size}`),main=btn('cf-rb cf-split-main'),arrow=btn('cf-rb cf-split-arrow'),items=sp.items;
- const entry={el:wrap,item:sp,split:sp.id,id:sp.id,items,main,arrow,current:()=>items[sh.split[sp.id]??0]||items[0]};
- entry.render=()=>{const it=entry.current(),label=sp.label||it.label;main.setAttribute('aria-label',plain(it.label));
+// The View ('preset') and Visual Style ('vstyle') combos mirror the live viewport instead of the last ribbon click, so they agree
+// with the [View][Style] label however the view was changed (ViewCube, viewport menu, commands, Layout round trips).
+// Returns the index of the matching item, or -1 when the state matches none of them (custom orbit, paper space).
+function shellViewState(){const v=sh.view||{};return{style:mode3D?(CF.visualStyle?.()||v.style):'2dwireframe',view:CF.space==='layout'&&!mode3D?'Paper':!mode3D?'Top':v.view}}
+const SPLIT_LIVE={vstyle:items=>{const s=shellViewState().style;return items.findIndex(i=>i.style===s)},preset:items=>{const w=shellViewState().view;return items.findIndex(i=>plain(i.label)===w)}};
+function shellSyncSplits(){for(const b of sh.buttons)if(b.split&&b.live&&b.current()!==b.shown)b.render()}
+function makeSplit(sp){const wrap=ce('div',`cf-split cf-split-${sp.size}`),main=btn('cf-rb cf-split-main'),arrow=btn('cf-rb cf-split-arrow'),items=sp.items,follow=SPLIT_LIVE[sp.id];
+ const entry={el:wrap,item:sp,split:sp.id,id:sp.id,items,main,arrow,live:!!follow,shown:null,current:()=>{const i=follow?follow(items):-1;return items[i>=0?i:sh.split[sp.id]??0]||items[0]}};
+ entry.render=()=>{const it=entry.current(),label=sp.label||it.label;entry.shown=it;main.setAttribute('aria-label',plain(it.label));
   if(sp.size==='large'){main.innerHTML=ico(it.icon,32);arrow.innerHTML=`<span class="cf-lbl">${lbl(label)}${label.includes('\n')?' ':'<br>'}${ico('chevron-down',10,'cf-chev')}</span>`}
   else{main.innerHTML=ico(it.icon,16)+`<span class="cf-lbl">${esc(plain(label))}</span>`;arrow.innerHTML=ico('chevron-down',10,'cf-chev')}};
  main.onclick=()=>shellExec(entry.current());
- opener(arrow,()=>openMenu(items.map((it,i)=>({label:plain(it.label),icon:it.icon,big:sp.size==='large',checked:i===(sh.split[sp.id]??0),run:()=>shellExec(it,entry,i)})),wrap,{owner:arrow}));
+ opener(arrow,()=>openMenu(items.map((it,i)=>({label:plain(it.label),icon:it.icon,big:sp.size==='large',checked:it===entry.current(),run:()=>shellExec(it,entry,i)})),wrap,{owner:arrow}));
  tip(main,()=>shellTipData(entry.current()));entry.render();wrap.append(main,arrow);sh.buttons.push(entry);return wrap}
 function makeItem(it){
  if(it.kind==='button')return makeButton(it);
@@ -3471,6 +3898,7 @@ function fitRibbon(){const host=CF.hosts.ribbon;if(!host||!(host.clientWidth>0)|
   const w=p.el.offsetWidth;p.el.classList.add(c);if(c==='cf-collapsed'&&p.el.offsetWidth>=w){p.el.classList.remove(c);continue} // never collapse into something wider
   if(!over())return}}
 function shellRefresh(force){for(const b of sh.buttons){const on=b.split?b.items.some(shellItemActive):shellItemActive(b.item);b.el.classList.toggle('active',!!on)}
+ shellSyncSplits();
  if(sh.minBtn)sh.minBtn.innerHTML=ico(CF.get('ribbonMin')?'chevron-down':'chevron-up',14);
  if(sh.wsLbl)sh.wsLbl.textContent=WS_LABEL[CF.workspace]||CF.workspace}
 
@@ -3486,10 +3914,10 @@ function shellSearch(q,limit=12){const Q=String(q??'').trim().toUpperCase().repl
   if(s<99)out.push({s:s+.5,name:it.cmd&&!it.opt?it.cmd:plain(it.label),label:plain(it.label),desc:it.desc||info[1]||'',icon:it.icon,aliases,run:()=>shellExec(it)})}
  return out.sort((a,b)=>a.s-b.s||a.name.localeCompare(b.name)).slice(0,limit)}
 function renderResults(list,box,state){box.replaceChildren();if(!list.length){box.append(ce('div','cf-sr-none','No matching commands'));return}
- list.forEach((r,i)=>{const b=btn('cf-sr'+(i===state.sel?' sel':''));b.innerHTML=ico(r.icon,20)+`<b>${esc(r.name)}</b><i>${esc(r.aliases.slice(0,2).join(', '))}</i><span>${esc(r.desc||r.label)}</span>`;b.onclick=()=>{closeMenus();r.run()};box.append(b)})}
+ list.forEach((r,i)=>{const b=btn('cf-sr'+(i===state.sel?' sel':''));b.innerHTML=ico(r.icon,20)+`<b>${esc(r.name)}</b><i>${esc(r.aliases.slice(0,2).join(', '))}</i><span>${esc(r.desc||r.label)}</span>`;b.onclick=()=>{closeMenus();state.done?.();r.run()};box.append(b)})}
 function searchKeys(e,input,state,box,onEsc){e.stopPropagation();const list=state.list||[];
  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!list.length)return;state.sel=(state.sel+(e.key==='ArrowDown'?1:-1)+list.length)%list.length;renderResults(list,box,state)}
- else if(e.key==='Enter'){e.preventDefault();const r=list[state.sel]||list[0];if(r){closeMenus();input.value='';r.run()}}
+ else if(e.key==='Enter'){e.preventDefault();const r=list[state.sel]||list[0];if(r){closeMenus();state.done?.();input.value='';r.run()}}
  else if(e.key==='Escape'){e.preventDefault();onEsc()}}
 
 // ---- Title bar: application button/menu, QAT, workspace, title, search -------------------------------------------
@@ -3500,7 +3928,7 @@ const APP=()=>[
  {label:'Save As',icon:'saveas',cmd:'SAVEAS',head:'Save a copy of the drawing',sub:[{label:'Drawing',icon:'saveas',cmd:'SAVEAS',desc:'Saves the drawing as a CadForge project under a new name.'},{label:'DXF',icon:'file-dxf',cmd:'DXFOUT',desc:'Saves the drawing in DXF R12 format.'}]},
  {label:'Import',icon:'import',cmd:'DXFIN',head:'Import a file',sub:[{label:'DXF',icon:'file-dxf',cmd:'DXFIN',desc:'Imports lines, arcs, circles, polylines, text and blocks from a DXF file.'}]},
  {label:'Export',icon:'export',head:'Export a copy of the drawing in another file format',sub:[{label:'DXF',icon:'file-dxf',cmd:'DXFOUT',desc:'Drawing Exchange Format for other CAD applications.'},
-  {label:'SVG',icon:'file-svg',cmd:'SVGOUT',desc:'Scalable vector graphics of the current view.'},{label:'OBJ',icon:'file-obj',cmd:'OBJEXPORT',desc:'Wavefront OBJ triangle meshes.'},
+  {label:'SVG',icon:'file-svg',cmd:'SVGOUT',desc:'Scalable vector graphics of the drawing extents.'},{label:'OBJ',icon:'file-obj',cmd:'OBJEXPORT',desc:'Wavefront OBJ triangle meshes.'},
   {label:'STL',icon:'file-stl',cmd:'STLOUT',desc:'Stereolithography meshes for 3D printing.'},{label:'PDF',icon:'file-pdf',cmd:'EXPORT',opt:'Pdf',fallback:()=>plotSheet(),desc:'Vector PDF sheet through the Plot dialog.'}]},
  {label:'Print',icon:'plot',cmd:'PLOT',head:'Plot the drawing',sub:[{label:'Plot',icon:'plot',cmd:'PLOT',desc:'Plots the drawing to a PDF or SVG sheet.'},{label:'Page Setup',icon:'pagesetup',cmd:'PAGESETUP',desc:'Controls paper size, orientation and scale.'}]},
  {label:'Drawing Utilities',icon:'purge',head:'Tools to maintain the drawing',sub:[{label:'Purge',icon:'purge',cmd:'PURGE',desc:'Removes unused block definitions and empty layers.'},{label:'Command List',icon:'help',cmd:'HELP',desc:'Lists every available command in the command history.'}].filter(s=>CF.resolve(s.cmd))},
@@ -3540,7 +3968,8 @@ function buildTitlebar(){const tb=CF.hosts.titlebar;tb.replaceChildren();
  qat.append(ce('div','cf-tsep'),ws,cust);
  const title=ce('div','cf-title');sh.titleEl=title;
  const right=ce('div','cf-tright'),sw=ce('div','cf-search'),input=ce('input');input.placeholder='Type a keyword or phrase';input.setAttribute('aria-label','Search commands');sw.innerHTML=ico('search',14);sw.append(input);sh.searchInput=input;
- const state={sel:0,list:[]},pop=ce('div','cf-menu cf-search-pop');
+ // The title-bar field outlives the command it starts: clear and blur it so typing reaches the command line, as after the app-menu search.
+ const state={sel:0,list:[],done:()=>{input.value='';try{input.blur()}catch{}}},pop=ce('div','cf-menu cf-search-pop');
  const show=()=>{state.list=shellSearch(input.value,10);state.sel=0;if(!input.value.trim()){closeMenus();return}renderResults(state.list,pop,state);if(!sh.menus.some(m=>m.el===pop)){closeMenus();sh.menus.push({el:pop,owner:sw,stay:true})}place(pop,sw,'right')};
  input.oninput=show;input.onfocus=()=>{if(input.value.trim())show()};input.onkeydown=e=>searchKeys(e,input,state,pop,()=>{closeMenus();input.value='';input.blur()});
  const help=btn('cf-qbtn cf-help',ico('help',16),'Help');help.onclick=()=>shellExec({cmd:'HELP',fallback:()=>shellNotify('Type a command name or alias at the command line; F1 lists commands when the command line is available.')});tip(help,()=>shellTipData({cmd:'HELP',label:'Help'}));
@@ -3727,11 +4156,21 @@ CF.shell={state:sh,ribbonModel:shellRibbonModel,commandNames:shellCommandNames,i
 // ---- Build and wire ---------------------------------------------------------------------------------------------
 try{
  document.body.append(tipEl);buildTitlebar();buildRibbon();buildFileTabs();buildStart();
- CF.on('workspace',ws=>{buildRibbon();if(sh.start)refreshStart();try{localStorage.setItem('cadforge.workspace',ws)}catch{}});
+ CF.on('workspace',ws=>{sh.tab[ws]='Home';buildRibbon();if(sh.start)refreshStart();try{localStorage.setItem('cadforge.workspace',ws)}catch{}});
  CF.on('tool',()=>shellRefresh());
  CF.on('state',({name,value})=>{if(name==='ribbonMin'&&!value)closeMenus();shellRefresh();if(name==='ribbonMin'||name==='clean'||name==='fileTabs')setTimeout(fitRibbon,0)});
  CF.on('command',({def})=>{shellRecent(def?.name);if(sh.start&&!['OPEN','DXFIN'].includes(def?.name))showStart(false);shellRefresh()});
- CF.on('modified',updateTitle);CF.on('document',()=>{updateTitle();if(sh.start)showStart(false)});
+ CF.on('modified',updateTitle);CF.on('document',()=>{sh.saved3D=null;updateTitle();if(sh.start)showStart(false)});
+ // The View / Visual Style combos follow the viewport label (the views module emits 'view' whenever either changes).
+ CF.on('view',v=>{sh.view=v;shellSyncSplits()});
+ // Entering the layout leaves 3D (the engine runs showModel and forgets the orbit view); coming back to Model restores the
+ // 3D view exactly as it was left (camera, zoom, centre; the visual style lives in the views module and is untouched).
+ const shellPrevSetSpace=CF.setSpace;
+ CF.setSpace=function(space,...rest){
+  if(space==='layout'&&CF.space!=='layout'&&mode3D)sh.saved3D={yaw:camera3.yaw,pitch:camera3.pitch,scale:camera3.scale,center:{...meshCenter}};
+  const r=shellPrevSetSpace.call(this,space,...rest),s=space==='model'?sh.saved3D:null;
+  if(space==='model'){sh.saved3D=null;if(s&&CF.space==='model'&&!mode3D){show3D();camera3.yaw=s.yaw;camera3.pitch=s.pitch;camera3.scale=s.scale;meshCenter=s.center;render()}}
+  return r};
  // Engine code changes tool/picking/modified state without events: re-check a cheap signature after each render.
  const shellPrevRender=render;render=function(...a){const r=shellPrevRender(...a);const sig=`${tool}|${CF.picking?.command||''}|${CF.modified}|${CF.fileName}`;if(sig!==sh.sig){sh.sig=sig;shellRefresh();updateTitle()}return r};
  document.addEventListener('pointerdown',e=>{sh.suppress=null;if(!sh.menus.length)return;const t=e.target;if(sh.menus.some(m=>m.el.contains(t)||(m.stay&&m.owner?.contains(t))))return;const own=sh.menus.find(m=>m.owner?.contains(t));closeMenus();if(own)sh.suppress=own.owner},true);

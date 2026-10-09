@@ -38,7 +38,13 @@ function palNextLayerName(){for(let i=1;;i++){const n='Layer'+i;if(!doc.layers.s
 function palCheckName(name,except){name=String(name??'').trim();if(!name)return 'Layer name cannot be empty.';if(/[<>\/\\":;?*|=,`]/.test(name))return 'Layer names cannot contain < > / \\ " : ; ? * | = , or `.';if(name.length>255)return 'Layer name is too long.';if(doc.layers.some(l=>l!==except&&l.name.toLowerCase()===name.toLowerCase()))return `A layer named "${name}" already exists.`;return true}
 function palSelectCurrent(name){syncLayers();$('layer').value=name;syncLayers()}
 function palSetCurrent(name){if(!palLayer(name))return palFail(`Layer "${name}" was not found.`);if($('layer').value!==name){palSelectCurrent(name);CF.emit('layer',name)}render();return true}
-function palAddLayer(name=palNextLayerName(),from){name=String(name).trim();const ok=palCheckName(name);if(ok!==true)return palFail(ok);const src=palLayer(from)||palLayer($('layer').value);mutate(()=>doc.layers.push({name,color:src?.color||'#ffffff',visible:true}));palSelectCurrent($('layer').value);return true}
+// New layers take the next index colour (AutoCAD-like palette) not already used by another layer; an explicit #rrggbb overrides.
+const palNewColors=['#ff0000','#ffff00','#00ff00','#00ffff','#0000ff','#ff00ff','#ff7f00','#00ff7f','#7f00ff','#ff007f','#7fff00','#007fff','#bf7f3f','#ff9f9f','#9fff9f','#9f9fff','#ffffff','#c0c0c0','#808080'];
+function palNextLayerColor(){const used=new Set(doc.layers.map(l=>String(l.color).toLowerCase()));for(const c of palNewColors)if(!used.has(c))return c;
+ // Palette exhausted: walk the hue wheel by the golden angle until an unused colour appears.
+ const hex=h=>{const f=n=>{const k=(n+h/30)%12;return Math.round(255*(.5-.5*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0')};return '#'+f(0)+f(8)+f(4)};
+ for(let i=1;i<720;i++){const c=hex((i*137.508)%360);if(!used.has(c))return c}return '#ffffff'}
+function palAddLayer(name=palNextLayerName(),color){name=String(name).trim();const ok=palCheckName(name);if(ok!==true)return palFail(ok);const col=/^#[0-9a-f]{6}$/i.test(String(color||''))?String(color).toLowerCase():palNextLayerColor();mutate(()=>doc.layers.push({name,color:col,visible:true}));palSelectCurrent($('layer').value);return true}
 function palRenameLayer(from,to){const l=palLayer(from);if(!l)return palFail(`Layer "${from}" was not found.`);to=String(to??'').trim();if(to===from)return true;if(from==='0')return palFail('Layer 0 cannot be renamed.');const ok=palCheckName(to,l);if(ok!==true)return palFail(ok);const wasCurrent=$('layer').value===from;
  mutate(()=>{palLayer(from).name=to;for(const e of doc.entities)if(e.layer===from)e.layer=to;for(const b of Object.values(doc.blocks||{}))for(const e of b.items||[])if(e.layer===from)e.layer=to});
  palRenameLog.push({from,to});palSelectCurrent(wasCurrent?to:$('layer').value);render();return true}
@@ -223,7 +229,7 @@ function palDialogFrame(id,title,cls){const d=palEl('dialog','cf-dlg '+(cls||'')
 function palToolBtn(icon,label,tip,fn){const b=palBtn('cf-tool',null,tip,fn);if(palIcons()){const s=palEl('span','cf-tool-ico');s.innerHTML=palIcon(icon,16);b.append(s)}b.append(palEl('span','',label));return b}
 function palBuildLpm(){const d=palLpm=palDialogFrame('cf-layer-manager','Layer Properties Manager','cf-lpm');
  const bar=palEl('div','cf-lpm-bar');const cur=palEl('div','cf-lpm-cur'),search=palEl('input','cf-lpm-search');search.placeholder='Search for layer';search.setAttribute('autocomplete','off');search.oninput=()=>palLpmRender(true);
- bar.append(palToolBtn('plus','New Layer','New Layer (Alt+N) — creates a layer with the properties of the selected layer',palLpmNew),palToolBtn('erase','Delete Layer','Delete Layer (Alt+D)',palLpmDelete),palToolBtn('check','Set Current','Set Current (Alt+C)',palLpmCurrent),palEl('span','cf-lpm-gap'),cur,search);
+ bar.append(palToolBtn('plus','New Layer','New Layer (Alt+N) — creates a layer with the next unused color',palLpmNew),palToolBtn('erase','Delete Layer','Delete Layer (Alt+D)',palLpmDelete),palToolBtn('check','Set Current','Set Current (Alt+C)',palLpmCurrent),palEl('span','cf-lpm-gap'),cur,search);
  const grid=palEl('div','cf-lpm-grid'),table=palEl('table','cf-lpm-table'),thead=palEl('thead'),hr=palEl('tr'),tbody=palEl('tbody');
  for(const [key,label,cls]of [['status','Status','c-status'],['name','Name','c-name'],['on','On','c-on'],['color','Color','c-color'],['linetype','Linetype','c-lt'],['objects','Objects','c-obj']]){const th=palEl('th',cls,label);if(key==='name'){th.classList.add('sortable');th.title='Sort by name';th.onclick=()=>{palLpmSortDesc=!palLpmSortDesc;palLpmRender(true)}}hr.append(th)}
  thead.append(hr);table.append(thead,tbody);grid.append(table);
@@ -246,7 +252,7 @@ function palLpmRender(force){if(!palLpm)return;if(palLpmEdit&&!force)return;palL
  palLpmParts.cur.textContent='Current layer: '+cur;palLpmParts.count.textContent=`All: ${names.length} layer${names.length===1?'':'s'} displayed of ${doc.layers.length} total layer${doc.layers.length===1?'':'s'}`;palLpmSig=palLpmSignature()}
 const palLpmSignature=()=>palRev+'|'+palDocN+'|'+$('layer').value+'|'+JSON.stringify(doc.layers)+'|'+doc.entities.length;
 function palLpmUpdate(){if(palLpm?.open&&!palLpmEdit&&palLpmSignature()!==palLpmSig)palLpmRender()}
-function palLpmNew(){const name=palNextLayerName(),r=palAddLayer(name,palLpmSel);if(r!==true){palLpmMsg(r);return}palLpmSel=name;palLpmMsg('');palLpmRender(true);palLpmStartRename(name)}
+function palLpmNew(){const name=palNextLayerName(),r=palAddLayer(name);if(r!==true){palLpmMsg(r);return}palLpmSel=name;palLpmMsg('');palLpmRender(true);palLpmStartRename(name)}
 function palLpmDelete(){if(!palLpmSel)return;const name=palLpmSel,r=palDeleteLayer(name);palLpmMsg(r===true?`Layer "${name}" deleted.`:r);if(r===true)palLpmSel=$('layer').value;palLpmRender(true)}
 function palLpmCurrent(){if(!palLpmSel)return;const r=palSetCurrent(palLpmSel);palLpmMsg(r===true?'':r);palLpmRender(true)}
 function palLpmStartRename(name){if(!name||!palLayer(name))return;if(name==='0'){palLpmMsg('Layer 0 cannot be renamed.');return}const tr=palLpmRows.get(name);if(!tr)return;palLpmSelect(name);const inp=palEl('input','cf-lpm-edit');inp.value=name;inp.setAttribute('autocomplete','off');palLpmEdit={name,inp};tr.palName.replaceChildren(inp);
@@ -388,10 +394,12 @@ ${palDlg} p{margin:8px 12px;color:var(--cf-text-dim);line-height:1.45}
 dialog:has(#dialogLabel){width:420px}dialog:has(#dialogLabel) .actions{flex-direction:row}#dialogOk{order:-1}
 #extrusionDialog{width:460px}#extrusionError{color:#ff9a7a!important;min-height:1em}
 #plotDialog{width:min(980px,95vw)}#plotDialog .sheetControls{display:flex;gap:16px;padding:6px 12px 0}#plotDialog .sheetControls label{display:flex;align-items:center;gap:6px;margin:0}#plotDialog .sheetControls select{width:auto!important;margin:0!important;display:inline-block}
-#sheetPreview{margin:10px 12px!important;border:1px solid #12161c;background:#5a616d!important;padding:12px;max-height:58vh;overflow:auto}#sheetPreview svg{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);max-height:52vh}
+#sheetPreview{margin:10px 12px!important;border:1px solid #12161c;background:#5a616d!important;padding:16px;max-height:58vh;overflow:auto;display:flex;justify-content:center;align-items:flex-start}
+/* The engine SVG's own white rect is the paper: size the SVG box to the sheet (no letterboxing) and outline/shadow only the sheet. */
+#plotDialog #sheetPreview svg{flex:none;display:block;background:transparent!important;width:auto;height:auto;max-width:100%;max-height:calc(52vh - 8px);box-shadow:none;filter:drop-shadow(0 0 .7px #000) drop-shadow(0 3px 9px rgba(0,0,0,.55))}
 #exportDialog{width:700px}.exportDownload{display:inline-block;margin:4px 12px;padding:5px 16px;border:1px solid;border-radius:2px;text-decoration:none}
 .cf-tool{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px}.cf-tool-ico{display:inline-flex}
-.cf-lpm{width:780px}.cf-lpm-bar{display:flex;align-items:center;gap:4px;margin-bottom:8px}.cf-lpm-gap{flex:1}.cf-lpm-cur{color:var(--cf-text-dim);margin-right:10px;white-space:nowrap}.cf-lpm-search{width:170px;height:24px}
+dialog.cf-dlg.cf-lpm{width:780px}.cf-lpm-bar{display:flex;align-items:center;gap:4px;margin-bottom:8px}.cf-lpm-gap{flex:1}.cf-lpm-cur{color:var(--cf-text-dim);margin-right:10px;white-space:nowrap}.cf-lpm-search{width:170px;height:24px}
 .cf-lpm-grid{height:300px;overflow:auto;border:1px solid #12161c;background:#1f252d}
 .cf-lpm-table{border-collapse:collapse;width:100%;table-layout:fixed}
 .cf-lpm-table th{position:sticky;top:0;background:#343c48;color:var(--cf-text-dim);font-weight:600;text-align:left;padding:0 8px;height:24px;border-right:1px solid #262c35;border-bottom:1px solid #12161c;white-space:nowrap;z-index:1}
@@ -401,9 +409,9 @@ dialog:has(#dialogLabel){width:420px}dialog:has(#dialogLabel) .actions{flex-dire
 .c-status{width:56px;text-align:center!important;color:var(--cf-ok);font-weight:700}.c-name{width:auto}.c-on{width:44px;text-align:center}.c-color{width:140px;cursor:pointer}.c-color span{margin-left:6px}.c-lt{width:110px;color:var(--cf-text-dim)}.c-obj{width:76px;text-align:right!important;color:var(--cf-text-dim)}
 .cf-lpm-edit{display:block;margin:0;width:100%;height:20px;padding:0 4px;border:1px solid var(--cf-accent);background:var(--cf-input)}
 .cf-lpm-msg{min-height:18px;padding-top:6px;color:#ffb088}
-.cf-ds{width:520px}.cf-ds-tabs{display:flex;gap:2px;border-bottom:1px solid var(--cf-border)}.cf-ds-tab{border:1px solid transparent;border-bottom:0;border-radius:2px 2px 0 0;background:transparent;color:var(--cf-text-dim);padding:5px 12px}.cf-ds-tab.active{background:#343c48;border-color:var(--cf-border);color:#fff}
+dialog.cf-dlg.cf-ds{width:520px}.cf-ds-tabs{display:flex;gap:2px;border-bottom:1px solid var(--cf-border)}.cf-ds-tab{border:1px solid transparent;border-bottom:0;border-radius:2px 2px 0 0;background:transparent;color:var(--cf-text-dim);padding:5px 12px}.cf-ds-tab.active{background:#343c48;border-color:var(--cf-border);color:#fff}
 .cf-ds-pages{min-height:220px;padding:12px 4px 4px}.cf-ds-page{display:none}.cf-ds-page.active{display:block}
-.cf-chk{display:flex;align-items:center;gap:7px;margin:4px 0;cursor:pointer}.cf-chk input{margin:0}.cf-osmark{display:inline-block;width:14px;text-align:center;color:${CF.colors.osnap||'#3ddc84'}}
+.cf-chk{display:flex;align-items:center;gap:7px;margin:4px 0;cursor:pointer}dialog .cf-chk input[type=checkbox]{width:auto;flex:none;margin:0}.cf-osmark{display:inline-block;width:14px;text-align:center;color:${CF.colors.osnap||'#3ddc84'}}
 .cf-group-title{margin:12px 0 6px;color:var(--cf-text-dim);border-bottom:1px solid #3a424e;padding-bottom:3px}
 .cf-field{display:flex;align-items:center;gap:8px}.cf-field select{width:90px}
 .cf-ds-osgrid{display:flex;gap:16px}.cf-ds-modes{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;flex:1}.cf-ds-side{display:flex;flex-direction:column;gap:6px}.cf-ds-side button{min-width:84px;height:24px}
@@ -432,9 +440,10 @@ palReg({name:'LAYMCUR',label:'Make Object\'s Layer Current',desc:'Sets the curre
 palReg({name:'LAYON',label:'Turn All Layers On',desc:'Turns on all layers in the drawing',icon:'layer-on',category:'Layers',run:()=>{if(doc.layers.every(l=>l.visible)){notify('All layers are already on.');return}mutate(()=>doc.layers.forEach(l=>l.visible=true));syncLayers();notify('All layers have been turned on.')}});
 CF.palettes={model:palModel,edit:palEdit,refresh:()=>palUpdate(true),objects:()=>palObjects(chosen()),
  filter:{get:()=>palFilter,set:v=>{palFilter=v;palUpdate(true)}},vertex:{get:()=>palVertex,set:v=>{palVertex=v;palUpdate(true)},step:palStepVertex},
- layers:{current:()=>$('layer').value,setCurrent:palSetCurrent,nextName:palNextLayerName,add:palAddLayer,rename:palRenameLayer,remove:palDeleteLayer,setColor:palSetLayerColor,setVisible:palSetLayerVisible,objects:palLayerObjects,checkName:palCheckName,colorName:palColorName},
+ layers:{current:()=>$('layer').value,setCurrent:palSetCurrent,nextName:palNextLayerName,nextColor:palNextLayerColor,add:palAddLayer,rename:palRenameLayer,remove:palDeleteLayer,setColor:palSetLayerColor,setVisible:palSetLayerVisible,objects:palLayerObjects,checkName:palCheckName,colorName:palColorName},
  setOsnapMode:palSetOsnapMode,setPolarIncrement:palSetPolarIncrement,osnapModes:palOsnapAll,polarSteps:palPolarSteps,
  status:palSB,syncStatus:()=>palSyncStatus(true),menus:{polar:palPolarMenu,osnap:palOsnapMenu,workspace:palWorkspaceMenu,customize:palCustomizeMenu,close:palCloseMenus},
+ css:()=>palStyle.textContent,
  layerManager:{open:palOpenLayerManager,render:()=>palLpmRender(true),dialog:()=>palLpm,select:palLpmSelect,newLayer:palLpmNew,deleteLayer:palLpmDelete,setCurrent:palLpmCurrent,visibleNames:palLpmVisibleNames},
  draftingSettings:{open:palOpenDraftingSettings,apply:()=>palDsApply(),parts:()=>palDsParts},dropdowns:palDropdowns};
 palUpdate(true);

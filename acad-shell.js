@@ -163,13 +163,19 @@ const lbl=l=>esc(l).replace('\n','<br>');
 function makeButton(it,size=it.size){const b=btn(`cf-rb cf-rb-${size}`,null,plain(it.label));
  b.innerHTML=size==='large'?ico(it.icon,32)+`<span class="cf-lbl">${lbl(it.label)}</span>`:size==='icon'?ico(it.icon,16):ico(it.icon,16)+`<span class="cf-lbl">${esc(plain(it.label))}</span>`;
  b.onclick=()=>shellExec(it);tip(b,()=>shellTipData(it));sh.buttons.push({el:b,item:it});return b}
-function makeSplit(sp){const wrap=ce('div',`cf-split cf-split-${sp.size}`),main=btn('cf-rb cf-split-main'),arrow=btn('cf-rb cf-split-arrow'),items=sp.items;
- const entry={el:wrap,item:sp,split:sp.id,id:sp.id,items,main,arrow,current:()=>items[sh.split[sp.id]??0]||items[0]};
- entry.render=()=>{const it=entry.current(),label=sp.label||it.label;main.setAttribute('aria-label',plain(it.label));
+// The View ('preset') and Visual Style ('vstyle') combos mirror the live viewport instead of the last ribbon click, so they agree
+// with the [View][Style] label however the view was changed (ViewCube, viewport menu, commands, Layout round trips).
+// Returns the index of the matching item, or -1 when the state matches none of them (custom orbit, paper space).
+function shellViewState(){const v=sh.view||{};return{style:mode3D?(CF.visualStyle?.()||v.style):'2dwireframe',view:CF.space==='layout'&&!mode3D?'Paper':!mode3D?'Top':v.view}}
+const SPLIT_LIVE={vstyle:items=>{const s=shellViewState().style;return items.findIndex(i=>i.style===s)},preset:items=>{const w=shellViewState().view;return items.findIndex(i=>plain(i.label)===w)}};
+function shellSyncSplits(){for(const b of sh.buttons)if(b.split&&b.live&&b.current()!==b.shown)b.render()}
+function makeSplit(sp){const wrap=ce('div',`cf-split cf-split-${sp.size}`),main=btn('cf-rb cf-split-main'),arrow=btn('cf-rb cf-split-arrow'),items=sp.items,follow=SPLIT_LIVE[sp.id];
+ const entry={el:wrap,item:sp,split:sp.id,id:sp.id,items,main,arrow,live:!!follow,shown:null,current:()=>{const i=follow?follow(items):-1;return items[i>=0?i:sh.split[sp.id]??0]||items[0]}};
+ entry.render=()=>{const it=entry.current(),label=sp.label||it.label;entry.shown=it;main.setAttribute('aria-label',plain(it.label));
   if(sp.size==='large'){main.innerHTML=ico(it.icon,32);arrow.innerHTML=`<span class="cf-lbl">${lbl(label)}${label.includes('\n')?' ':'<br>'}${ico('chevron-down',10,'cf-chev')}</span>`}
   else{main.innerHTML=ico(it.icon,16)+`<span class="cf-lbl">${esc(plain(label))}</span>`;arrow.innerHTML=ico('chevron-down',10,'cf-chev')}};
  main.onclick=()=>shellExec(entry.current());
- opener(arrow,()=>openMenu(items.map((it,i)=>({label:plain(it.label),icon:it.icon,big:sp.size==='large',checked:i===(sh.split[sp.id]??0),run:()=>shellExec(it,entry,i)})),wrap,{owner:arrow}));
+ opener(arrow,()=>openMenu(items.map((it,i)=>({label:plain(it.label),icon:it.icon,big:sp.size==='large',checked:it===entry.current(),run:()=>shellExec(it,entry,i)})),wrap,{owner:arrow}));
  tip(main,()=>shellTipData(entry.current()));entry.render();wrap.append(main,arrow);sh.buttons.push(entry);return wrap}
 function makeItem(it){
  if(it.kind==='button')return makeButton(it);
@@ -215,6 +221,7 @@ function fitRibbon(){const host=CF.hosts.ribbon;if(!host||!(host.clientWidth>0)|
   const w=p.el.offsetWidth;p.el.classList.add(c);if(c==='cf-collapsed'&&p.el.offsetWidth>=w){p.el.classList.remove(c);continue} // never collapse into something wider
   if(!over())return}}
 function shellRefresh(force){for(const b of sh.buttons){const on=b.split?b.items.some(shellItemActive):shellItemActive(b.item);b.el.classList.toggle('active',!!on)}
+ shellSyncSplits();
  if(sh.minBtn)sh.minBtn.innerHTML=ico(CF.get('ribbonMin')?'chevron-down':'chevron-up',14);
  if(sh.wsLbl)sh.wsLbl.textContent=WS_LABEL[CF.workspace]||CF.workspace}
 
@@ -230,10 +237,10 @@ function shellSearch(q,limit=12){const Q=String(q??'').trim().toUpperCase().repl
   if(s<99)out.push({s:s+.5,name:it.cmd&&!it.opt?it.cmd:plain(it.label),label:plain(it.label),desc:it.desc||info[1]||'',icon:it.icon,aliases,run:()=>shellExec(it)})}
  return out.sort((a,b)=>a.s-b.s||a.name.localeCompare(b.name)).slice(0,limit)}
 function renderResults(list,box,state){box.replaceChildren();if(!list.length){box.append(ce('div','cf-sr-none','No matching commands'));return}
- list.forEach((r,i)=>{const b=btn('cf-sr'+(i===state.sel?' sel':''));b.innerHTML=ico(r.icon,20)+`<b>${esc(r.name)}</b><i>${esc(r.aliases.slice(0,2).join(', '))}</i><span>${esc(r.desc||r.label)}</span>`;b.onclick=()=>{closeMenus();r.run()};box.append(b)})}
+ list.forEach((r,i)=>{const b=btn('cf-sr'+(i===state.sel?' sel':''));b.innerHTML=ico(r.icon,20)+`<b>${esc(r.name)}</b><i>${esc(r.aliases.slice(0,2).join(', '))}</i><span>${esc(r.desc||r.label)}</span>`;b.onclick=()=>{closeMenus();state.done?.();r.run()};box.append(b)})}
 function searchKeys(e,input,state,box,onEsc){e.stopPropagation();const list=state.list||[];
  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!list.length)return;state.sel=(state.sel+(e.key==='ArrowDown'?1:-1)+list.length)%list.length;renderResults(list,box,state)}
- else if(e.key==='Enter'){e.preventDefault();const r=list[state.sel]||list[0];if(r){closeMenus();input.value='';r.run()}}
+ else if(e.key==='Enter'){e.preventDefault();const r=list[state.sel]||list[0];if(r){closeMenus();state.done?.();input.value='';r.run()}}
  else if(e.key==='Escape'){e.preventDefault();onEsc()}}
 
 // ---- Title bar: application button/menu, QAT, workspace, title, search -------------------------------------------
@@ -244,7 +251,7 @@ const APP=()=>[
  {label:'Save As',icon:'saveas',cmd:'SAVEAS',head:'Save a copy of the drawing',sub:[{label:'Drawing',icon:'saveas',cmd:'SAVEAS',desc:'Saves the drawing as a CadForge project under a new name.'},{label:'DXF',icon:'file-dxf',cmd:'DXFOUT',desc:'Saves the drawing in DXF R12 format.'}]},
  {label:'Import',icon:'import',cmd:'DXFIN',head:'Import a file',sub:[{label:'DXF',icon:'file-dxf',cmd:'DXFIN',desc:'Imports lines, arcs, circles, polylines, text and blocks from a DXF file.'}]},
  {label:'Export',icon:'export',head:'Export a copy of the drawing in another file format',sub:[{label:'DXF',icon:'file-dxf',cmd:'DXFOUT',desc:'Drawing Exchange Format for other CAD applications.'},
-  {label:'SVG',icon:'file-svg',cmd:'SVGOUT',desc:'Scalable vector graphics of the current view.'},{label:'OBJ',icon:'file-obj',cmd:'OBJEXPORT',desc:'Wavefront OBJ triangle meshes.'},
+  {label:'SVG',icon:'file-svg',cmd:'SVGOUT',desc:'Scalable vector graphics of the drawing extents.'},{label:'OBJ',icon:'file-obj',cmd:'OBJEXPORT',desc:'Wavefront OBJ triangle meshes.'},
   {label:'STL',icon:'file-stl',cmd:'STLOUT',desc:'Stereolithography meshes for 3D printing.'},{label:'PDF',icon:'file-pdf',cmd:'EXPORT',opt:'Pdf',fallback:()=>plotSheet(),desc:'Vector PDF sheet through the Plot dialog.'}]},
  {label:'Print',icon:'plot',cmd:'PLOT',head:'Plot the drawing',sub:[{label:'Plot',icon:'plot',cmd:'PLOT',desc:'Plots the drawing to a PDF or SVG sheet.'},{label:'Page Setup',icon:'pagesetup',cmd:'PAGESETUP',desc:'Controls paper size, orientation and scale.'}]},
  {label:'Drawing Utilities',icon:'purge',head:'Tools to maintain the drawing',sub:[{label:'Purge',icon:'purge',cmd:'PURGE',desc:'Removes unused block definitions and empty layers.'},{label:'Command List',icon:'help',cmd:'HELP',desc:'Lists every available command in the command history.'}].filter(s=>CF.resolve(s.cmd))},
@@ -284,7 +291,8 @@ function buildTitlebar(){const tb=CF.hosts.titlebar;tb.replaceChildren();
  qat.append(ce('div','cf-tsep'),ws,cust);
  const title=ce('div','cf-title');sh.titleEl=title;
  const right=ce('div','cf-tright'),sw=ce('div','cf-search'),input=ce('input');input.placeholder='Type a keyword or phrase';input.setAttribute('aria-label','Search commands');sw.innerHTML=ico('search',14);sw.append(input);sh.searchInput=input;
- const state={sel:0,list:[]},pop=ce('div','cf-menu cf-search-pop');
+ // The title-bar field outlives the command it starts: clear and blur it so typing reaches the command line, as after the app-menu search.
+ const state={sel:0,list:[],done:()=>{input.value='';try{input.blur()}catch{}}},pop=ce('div','cf-menu cf-search-pop');
  const show=()=>{state.list=shellSearch(input.value,10);state.sel=0;if(!input.value.trim()){closeMenus();return}renderResults(state.list,pop,state);if(!sh.menus.some(m=>m.el===pop)){closeMenus();sh.menus.push({el:pop,owner:sw,stay:true})}place(pop,sw,'right')};
  input.oninput=show;input.onfocus=()=>{if(input.value.trim())show()};input.onkeydown=e=>searchKeys(e,input,state,pop,()=>{closeMenus();input.value='';input.blur()});
  const help=btn('cf-qbtn cf-help',ico('help',16),'Help');help.onclick=()=>shellExec({cmd:'HELP',fallback:()=>shellNotify('Type a command name or alias at the command line; F1 lists commands when the command line is available.')});tip(help,()=>shellTipData({cmd:'HELP',label:'Help'}));
@@ -471,11 +479,21 @@ CF.shell={state:sh,ribbonModel:shellRibbonModel,commandNames:shellCommandNames,i
 // ---- Build and wire ---------------------------------------------------------------------------------------------
 try{
  document.body.append(tipEl);buildTitlebar();buildRibbon();buildFileTabs();buildStart();
- CF.on('workspace',ws=>{buildRibbon();if(sh.start)refreshStart();try{localStorage.setItem('cadforge.workspace',ws)}catch{}});
+ CF.on('workspace',ws=>{sh.tab[ws]='Home';buildRibbon();if(sh.start)refreshStart();try{localStorage.setItem('cadforge.workspace',ws)}catch{}});
  CF.on('tool',()=>shellRefresh());
  CF.on('state',({name,value})=>{if(name==='ribbonMin'&&!value)closeMenus();shellRefresh();if(name==='ribbonMin'||name==='clean'||name==='fileTabs')setTimeout(fitRibbon,0)});
  CF.on('command',({def})=>{shellRecent(def?.name);if(sh.start&&!['OPEN','DXFIN'].includes(def?.name))showStart(false);shellRefresh()});
- CF.on('modified',updateTitle);CF.on('document',()=>{updateTitle();if(sh.start)showStart(false)});
+ CF.on('modified',updateTitle);CF.on('document',()=>{sh.saved3D=null;updateTitle();if(sh.start)showStart(false)});
+ // The View / Visual Style combos follow the viewport label (the views module emits 'view' whenever either changes).
+ CF.on('view',v=>{sh.view=v;shellSyncSplits()});
+ // Entering the layout leaves 3D (the engine runs showModel and forgets the orbit view); coming back to Model restores the
+ // 3D view exactly as it was left (camera, zoom, centre; the visual style lives in the views module and is untouched).
+ const shellPrevSetSpace=CF.setSpace;
+ CF.setSpace=function(space,...rest){
+  if(space==='layout'&&CF.space!=='layout'&&mode3D)sh.saved3D={yaw:camera3.yaw,pitch:camera3.pitch,scale:camera3.scale,center:{...meshCenter}};
+  const r=shellPrevSetSpace.call(this,space,...rest),s=space==='model'?sh.saved3D:null;
+  if(space==='model'){sh.saved3D=null;if(s&&CF.space==='model'&&!mode3D){show3D();camera3.yaw=s.yaw;camera3.pitch=s.pitch;camera3.scale=s.scale;meshCenter=s.center;render()}}
+  return r};
  // Engine code changes tool/picking/modified state without events: re-check a cheap signature after each render.
  const shellPrevRender=render;render=function(...a){const r=shellPrevRender(...a);const sig=`${tool}|${CF.picking?.command||''}|${CF.modified}|${CF.fileName}`;if(sig!==sh.sig){sh.sig=sig;shellRefresh();updateTitle()}return r};
  document.addEventListener('pointerdown',e=>{sh.suppress=null;if(!sh.menus.length)return;const t=e.target;if(sh.menus.some(m=>m.el.contains(t)||(m.stay&&m.owner?.contains(t))))return;const own=sh.menus.find(m=>m.owner?.contains(t));closeMenus();if(own)sh.suppress=own.owner},true);
