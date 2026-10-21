@@ -559,7 +559,9 @@ async fn dim(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- LEADER
 
 async fn mleader(c: Ctx, _a: Args) -> CmdResult<()> {
-    let h = c.app(|a| a.mem.text_height);
+    // a style defined with MLEADERSTYLE sets the text height; otherwise the last text height is used
+    let styled = c.doc(|d| d.settings.mleader_styles.get(&d.settings.cur_mleader_style).map(|st| st.text_height));
+    let h = styled.unwrap_or_else(|| c.app(|a| a.mem.text_height));
     let Some(a) = c.point(ps("Specify leader arrowhead location")).await?.pt() else { return Ok(()) };
     let Some(r) = c.point(ps("Specify leader landing location").base(a).preview(move |_, p| vec![pv(Entity::leader(vec![a, p], "", h))])).await?.pt() else { return Ok(()) };
     let jh = if r.x >= a.x { HJust::Left } else { HJust::Right };
