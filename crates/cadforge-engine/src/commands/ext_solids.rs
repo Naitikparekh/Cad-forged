@@ -187,11 +187,11 @@ async fn axis_object(c: &Ctx) -> CmdResult<Option<(V3, V3)>> {
     }
 }
 
-/// Axis for REVOLVE and ROTATE3D: two points, an object, or one of the principal directions.
-/// Returns a point on the axis and its direction.
-async fn pick_axis(c: &Ctx, msg: &str, end_msg: &str, opts: &[&str]) -> CmdResult<Option<(V3, V3)>> {
+/// Axis for REVOLVE and ROTATE3D: two points, an object, or one of the principal directions (`object_default`: Enter
+/// selects an object). Returns a point on the axis and its direction.
+async fn pick_axis(c: &Ctx, msg: &str, end_msg: &str, opts: &[&str], object_default: bool) -> CmdResult<Option<(V3, V3)>> {
     let mut spec = ps(msg).options(opts);
-    if opts[0] == "Object" {
+    if object_default {
         spec = spec.default_str("Object");
     }
     let r = c.point(spec).await?;
@@ -214,7 +214,8 @@ async fn pick_axis(c: &Ctx, msg: &str, end_msg: &str, opts: &[&str]) -> CmdResul
         Some(_) => axis_by_points(c, None, end_msg).await,
         None => match r.pt() {
             Some(a) => axis_by_points(c, Some(a), end_msg).await,
-            None => axis_object(c).await,
+            None if object_default => axis_object(c).await,
+            None => Ok(None),
         },
     }
 }
@@ -288,7 +289,7 @@ async fn revolve(c: Ctx, _a: Args) -> CmdResult<()> {
         return Ok(());
     }
     let loops = outline_loops(&c, &sel.ents)?;
-    let Some((o, dir)) = pick_axis(&c, "Specify axis start point or define axis by", "Specify axis endpoint", &["Object", "X", "Y", "Z"]).await? else { return Ok(()) };
+    let Some((o, dir)) = pick_axis(&c, "Specify axis start point or define axis by", "Specify axis endpoint", &["Object", "X", "Y", "Z"], true).await? else { return Ok(()) };
     let (mut start, mut sign) = (0.0, 1.0);
     let sweep = loop {
         let r = c.angle(ps("Specify angle of revolution").options(&["STart angle", "Reverse"]).default_num(TAU)).await?;
@@ -466,7 +467,7 @@ async fn pyramid(c: Ctx, _a: Args) -> CmdResult<()> {
         break;
     }
     let (ctr, r1, rot) = base;
-    let (mut r2, mut top_given) = (0.0, false);
+    let mut r2 = 0.0;
     let h = loop {
         let k = c.distance(ps("Specify height").options(&["2Point", "Top radius"]).base(ctr).default_num(mem.height).nonzero()).await?;
         match k.kw() {
@@ -474,7 +475,6 @@ async fn pyramid(c: Ctx, _a: Args) -> CmdResult<()> {
                 if let Some(t) = c.distance(ps("Specify top radius").base(ctr).default_num(0.0).min(0.0)).await?.value() {
                     // a top radius is measured the same way as the base radius (circumscribed: to the face centres)
                     r2 = if inscribed { t } else { t / (PI / sides as f64).cos() };
-                    top_given = t > 0.0;
                 }
             }
             Some("2Point") => match c.distance(ps("Specify first point")).await?.value() {
@@ -488,7 +488,6 @@ async fn pyramid(c: Ctx, _a: Args) -> CmdResult<()> {
         }
     };
     c.app(|a| a.mem.solid.height = h);
-    let r2 = if top_given { r2 } else { 0.0 };
     let (z0, hh) = if h < 0.0 { (h, h.abs()) } else { (0.0, h) };
     let name = if r2 > 0.0 { "Frustum" } else { "Pyramid" };
     add_solid(&c, sweep::pyramid(ctr.x, ctr.y, z0, r1, r2, hh, sides, rot, name)?);
@@ -751,7 +750,7 @@ async fn rotate3d_gizmo(c: Ctx, _a: Args) -> CmdResult<()> {
 
 async fn rotate3d(c: Ctx, _a: Args) -> CmdResult<()> {
     let Some(sel) = pick_objects(&c, "Select objects").await? else { return Ok(()) };
-    let Some((o, dir)) = pick_axis(&c, "Specify first point on axis or define axis by", "Specify second point on axis", &["Object", "View", "Xaxis", "Yaxis", "Zaxis", "2points"]).await? else { return Ok(()) };
+    let Some((o, dir)) = pick_axis(&c, "Specify first point on axis or define axis by", "Specify second point on axis", &["Object", "View", "Xaxis", "Yaxis", "Zaxis", "2points"], false).await? else { return Ok(()) };
     let angle = loop {
         let r = c.angle(ps("Specify rotation angle").options(&["Reference"]).default_num(0.0)).await?;
         if r.kw() == Some("Reference") {
@@ -966,7 +965,8 @@ async fn ask_distances(c: &Ctx, d1: &mut f64, d2: &mut f64) -> CmdResult<()> {
 }
 
 /// Pick sharp edges on solids and round them. Edges are picked with a point prompt: the sharp edge nearest the click
-/// (drawn in front when several overlap) is chosen through the current view.
+/// (drawn in front when several overlap) is chosen through the current view, together with the smoothly continuing
+/// edges that form one curve with it (a circular rim is one edge).
 async fn round_edges_cmd(c: Ctx, chamfer: bool) -> CmdResult<()> {
     let (mut radius, mut d1, mut d2) = (1.0, 1.0, 1.0);
     let mut next = "Edge";
@@ -974,15 +974,11 @@ async fn round_edges_cmd(c: Ctx, chamfer: bool) -> CmdResult<()> {
     // solid, chain, whether the second face is the one facing the viewer
     let mut picked: Vec<(u64, Chain, bool)> = vec![];
     c.log(&if chamfer { format!("Distance1 = {}, Distance2 = {}", f(&c, d1), f(&c, d2)) } else { format!("Radius = {}", f(&c, radius)) });
-    loop {
-        let opts: &[&str] = if chamfer { &["Loop", "Distance"] } else { &["Chain", "Loop", "Radius"] };
+    'pick: loop {
+        let opts: &[&str] = if chamfer { &["Loop", "Distance"] } else { &["Loop", "Radius"] };
         let r = c.point(ps(if chamfer { "Select an edge on a solid or" } else { "Select an edge or" }).options(opts).allow_enter().no_snap()).await?;
         match r {
             PointR::Kw(k) => match k.as_str() {
-                "Chain" => {
-                    next = "Chain";
-                    c.log("The next edge picked selects every sharp edge connected to it.");
-                }
                 "Loop" => {
                     next = "Loop";
                     c.log("The next edge picked selects the outline of the face in front of it.");
@@ -998,12 +994,11 @@ async fn round_edges_cmd(c: Ctx, chamfer: bool) -> CmdResult<()> {
                 };
                 let (topo, es) = &cache[&id];
                 let seeds: Vec<usize> = if next == "Loop" { edges::face_loop(topo, es, edges::front_face(topo, es, hit, &view)) } else { vec![hit] };
-                let turn = if next == "Chain" { 1.75 } else { 0.45 };
                 next = "Edge";
                 let toward = edges::toward_viewer(&view);
                 let mut added = 0;
                 for seed in seeds {
-                    let chain = edges::chain_through(topo, es, seed, turn);
+                    let chain = edges::chain_through(topo, es, seed, 0.45);
                     let same_chain = |o: &Chain| chain.pts.len() == o.pts.len() && chain.pts.iter().all(|p| o.pts.iter().any(|q| q.sub(*p).len() < 1e-9));
                     if picked.iter().any(|(sid, o, _)| *sid == id && same_chain(o)) {
                         continue;
@@ -1018,11 +1013,13 @@ async fn round_edges_cmd(c: Ctx, chamfer: bool) -> CmdResult<()> {
                 if picked.is_empty() {
                     return Ok(());
                 }
-                let k = c.keyword(ps(if chamfer { "Press Enter to accept the chamfer or" } else { "Press Enter to accept the fillet or" }).options(if chamfer { &["Distance"] } else { &["Radius"] })).await?;
-                match k.kw() {
-                    Some("Radius") => ask_radius(&c, &mut radius).await?,
-                    Some("Distance") => ask_distances(&c, &mut d1, &mut d2).await?,
-                    _ => break,
+                loop {
+                    let k = c.keyword(ps(if chamfer { "Press Enter to accept the chamfer or" } else { "Press Enter to accept the fillet or" }).options(if chamfer { &["Distance"] } else { &["Radius"] })).await?;
+                    match k.kw() {
+                        Some("Radius") => ask_radius(&c, &mut radius).await?,
+                        Some("Distance") => ask_distances(&c, &mut d1, &mut d2).await?,
+                        _ => break 'pick,
+                    }
                 }
             }
         }

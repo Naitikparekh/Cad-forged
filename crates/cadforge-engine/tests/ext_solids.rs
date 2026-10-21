@@ -549,7 +549,7 @@ fn fillet_a_box_edge() {
     let s = with_box(20., 20., 20.);
     s.set_sel(&[]);
     s.cmd("FILLETEDGE");
-    assert!(s.prompt().starts_with("Select an edge or [Chain/Loop/Radius]"), "{}", s.prompt());
+    assert!(s.prompt().starts_with("Select an edge or [Loop/Radius]"), "{}", s.prompt());
     s.ty("R").ty("3").click(10., 0.);
     assert!(s.history_has("1 edge selected"));
     s.enter();
@@ -563,18 +563,13 @@ fn fillet_a_box_edge() {
 }
 
 #[test]
-fn fillet_radius_change_chain_loop_and_misses() {
+fn fillet_radius_change_loop_and_misses() {
     let s = with_box(20., 20., 20.);
     s.set_sel(&[]);
     s.cmd("FILLETEDGE").click(10., 10.);
     assert!(s.history_has("No sharp edge"));
     s.click(10., 0.).enter().ty("R").ty("2").enter();
     near(8000. - vol(&s.solids()[0]), (1. - PI / 4.) * 4. * 20., 0.02);
-    // chain: every connected sharp edge, so all four edges of the top outline
-    let t = with_box(20., 20., 20.);
-    t.set_sel(&[]);
-    t.cmd("FILLETEDGE").ty("C").click(10., 0.);
-    assert!(t.history_has("4 edges selected"), "{}", t.log_text());
     // loop: the outline of the face nearest the viewer
     let u = with_box(20., 20., 20.);
     u.set_sel(&[]);
@@ -620,16 +615,16 @@ fn fillet_the_rim_of_a_cylinder_and_a_picked_edge_in_an_oblique_view() {
     let t = with_box(20., 20., 20.);
     t.set_sel(&[]);
     t.with_view(|v| {
-        v.pitch = 0.0;
-        v.yaw = 0.0;
+        v.pitch = 0.8;
+        v.yaw = 0.3;
         v.scale = 50.;
     });
-    // front view: x to the right, z up. The top front edge is at height 20.
+    // the top front edge floats at height 20; clicking where it is drawn finds it, not the base edge below it
     let top_front = t.with_view(|v| v.project(V3::new(10., 0., 20.)));
     let wp = t.with_view(|v| v.to_world(top_front.x, top_front.y));
-    t.cmd("FILLETEDGE").click(wp.x, wp.y);
-    t.enter().enter();
-    assert!(vol(&t.solids()[0]) < 8000. - 10.);
+    t.cmd("FILLETEDGE").click(wp.x, wp.y).enter().enter();
+    near(8000. - vol(&t.solids()[0]), (1. - PI / 4.) * 20., 0.03);
+    near(bounds(&t.solids()[0]).max.z, 20., 1e-6);
 }
 
 #[test]
