@@ -737,6 +737,88 @@ impl<'a> Renderer<'a> {
     }
 
     /// Everything in the model/paper space of the drawing, culled to the view.
+    /// Paper space: the sheet, the layout's own objects and its viewports showing model space.
+    pub fn draw_layout(&mut self, name: &str, hl: &Highlight, active_vp: Option<u64>) {
+        let doc = self.doc;
+        let Some(layout) = doc.layout(name) else { return };
+        let (pw, ph) = (layout.paper.w, layout.paper.h);
+        let sheet: Vec<[f64; 2]> = [pt(0.0, 0.0), pt(pw, 0.0), pt(pw, ph), pt(0.0, ph)].iter().map(|p| self.dev(*p)).collect();
+        let shadow: Vec<[f64; 2]> = sheet.iter().map(|q| [q[0] + 4.0, q[1] + 4.0]).collect();
+        self.ops.push(Op::Fill { paths: vec![Poly { pts: shadow, closed: true }], color: [0, 0, 0], alpha: 0.35, evenodd: false });
+        self.ops.push(Op::Fill { paths: vec![Poly { pts: sheet.clone(), closed: true }], color: [255, 255, 255], alpha: 1.0, evenodd: false });
+        self.ops.push(Op::Stroke { paths: vec![Poly { pts: sheet, closed: true }], color: [90, 96, 104], alpha: 1.0, width: 1.0, dash: vec![], round: false });
+        // layout objects are drawn on white: use the light colour mapping, keep the highlight colours
+        let saved = self.theme;
+        self.theme = Theme { dark: false, contrast: true, canvas: [255, 255, 255], ..saved };
+        for e in &layout.entities {
+            if !doc.is_visible(e) {
+                continue;
+            }
+            let selected = hl.selected.contains(&e.id);
+            match &e.kind {
+                Kind::Viewport(v) => self.draw_viewport(e, v, selected, active_vp == Some(e.id)),
+                _ => self.draw_entity(e, DrawOpts { selected, hover: hl.hover == Some(e.id), ..DrawOpts::default() }),
+            }
+        }
+        self.theme = saved;
+    }
+
+    /// A layout as plotted: layout objects and viewport contents on white paper, no sheet edge and no viewport borders.
+    pub fn draw_layout_plot(&mut self, name: &str) {
+        let doc = self.doc;
+        let Some(layout) = doc.layout(name) else { return };
+        for e in &layout.entities {
+            if !doc.is_visible(e) || !doc.layer_of(e).plot {
+                continue;
+            }
+            match &e.kind {
+                Kind::Viewport(v) => self.draw_viewport_content(v),
+                _ => self.draw_entity(e, DrawOpts::default()),
+            }
+        }
+    }
+
+    fn draw_viewport(&mut self, e: &Entity, v: &ViewportData, selected: bool, active: bool) {
+        let outline: Vec<[f64; 2]> = v.outline().iter().map(|p| self.dev(*p)).collect();
+        self.draw_viewport_content(v);
+        // viewport border: shown on screen, thicker while active or selected
+        if !v.off || selected {
+            let st = Style { raw_color: Color::Aci(7), color: if active || selected { self.theme.select } else { [120, 128, 140] }, ltype: "Continuous".into(), lw: LW_DEFAULT, lts: 1.0, alpha: 1.0 };
+            self.stroke(vec![Poly { pts: outline, closed: true }], &st, false, false, if active { 2.5 } else { 1.0 });
+        }
+        let _ = e;
+    }
+
+    fn draw_viewport_content(&mut self, v: &ViewportData) {
+        let doc = self.doc;
+        let outline: Vec<[f64; 2]> = v.outline().iter().map(|p| self.dev(*p)).collect();
+        if !v.off && outline.len() >= 3 {
+            let (vc, s) = v.model_view(doc);
+            let from_model = mat::mul(&mat::translate(v.c.x, v.c.y), &mat::mul(&mat::scale(s, s, Pt::ZERO), &mat::translate(-vc.x, -vc.y)));
+            let mut sub = Renderer::new(doc, self.view, self.w, self.h, self.theme, self.prefs);
+            sub.world = mat::mul(&self.world, &from_model);
+            sub.mono = self.mono;
+            sub.lw_mode = self.lw_mode;
+            sub.tol = self.tol;
+            sub.ltscale = self.ltscale;
+            let inv = mat::invert(&sub.world);
+            let vis = Bounds::of_points(&outline.iter().map(|q| mat::apply(&inv, pt(q[0], q[1]))).collect::<Vec<_>>()).grow(1.0);
+            let plotting = matches!(self.lw_mode, LwMode::Plot(_));
+            for me in &doc.model.entities {
+                if !doc.is_visible(me) || (plotting && !doc.layer_of(me).plot) {
+                    continue;
+                }
+                if let Some(b) = bounds_of(me, doc) {
+                    if b.max_x < vis.min_x || b.min_x > vis.max_x || b.max_y < vis.min_y || b.min_y > vis.max_y {
+                        continue;
+                    }
+                }
+                sub.draw_entity(me, DrawOpts::default());
+            }
+            self.ops.extend(clip_ops_to_convex(sub.ops, &outline));
+        }
+    }
+
     pub fn draw_entities(&mut self, hl: &Highlight) {
         let doc = self.doc;
         let plan = self.view.is_plan();
@@ -762,6 +844,10 @@ impl<'a> Renderer<'a> {
 /// the backend (`theme.canvas`).
 pub fn render_scene(doc: &Drawing, view: &View, w: f64, h: f64, theme: Theme, prefs: Prefs, hl: &Highlight, solids: Option<&dyn Fn(&mut Renderer)>) -> Vec<Op> {
     let mut rc = Renderer::new(doc, view, w, h, theme, prefs);
+    if !doc.is_model() {
+        rc.draw_layout(&doc.space, hl, None);
+        return rc.ops;
+    }
     rc.draw_grid();
     if let Some(f) = solids {
         f(&mut rc);
@@ -805,4 +891,142 @@ fn clip_band(p: &Poly, dir: [f64; 2], o: [f64; 2], lo: f64, hi: f64) -> Option<P
     } else {
         None
     }
+}
+
+/// One frame of a layout (paper space) seen through `view`, with an optionally active viewport.
+pub fn render_layout(doc: &Drawing, name: &str, view: &View, w: f64, h: f64, theme: Theme, prefs: Prefs, hl: &Highlight, active_vp: Option<u64>) -> Vec<Op> {
+    let mut rc = Renderer::new(doc, view, w, h, theme, prefs);
+    rc.draw_layout(name, hl, active_vp);
+    rc.ops
+}
+
+fn convex_oriented(poly: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let area: f64 = (0..poly.len()).map(|i| poly[i][0] * poly[(i + 1) % poly.len()][1] - poly[(i + 1) % poly.len()][0] * poly[i][1]).sum();
+    if area < 0.0 {
+        poly.iter().rev().copied().collect()
+    } else {
+        poly.to_vec()
+    }
+}
+
+/// Clip a segment to a convex polygon given counter-clockwise (Cyrus–Beck).
+fn clip_segment(poly: &[[f64; 2]], a: [f64; 2], b: [f64; 2]) -> Option<([f64; 2], [f64; 2])> {
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    let d = [b[0] - a[0], b[1] - a[1]];
+    for i in 0..poly.len() {
+        let (p, q) = (poly[i], poly[(i + 1) % poly.len()]);
+        let n = [-(q[1] - p[1]), q[0] - p[0]]; // inward normal for a CCW polygon in a y-up frame
+        let num = n[0] * (a[0] - p[0]) + n[1] * (a[1] - p[1]);
+        let den = n[0] * d[0] + n[1] * d[1];
+        if den.abs() < 1e-12 {
+            if num < 0.0 {
+                return None;
+            }
+        } else {
+            let t = -num / den;
+            if den > 0.0 {
+                t0 = t0.max(t);
+            } else {
+                t1 = t1.min(t);
+            }
+            if t0 > t1 {
+                return None;
+            }
+        }
+    }
+    Some(([a[0] + d[0] * t0, a[1] + d[1] * t0], [a[0] + d[0] * t1, a[1] + d[1] * t1]))
+}
+
+fn inside_convex(poly: &[[f64; 2]], p: [f64; 2]) -> bool {
+    (0..poly.len()).all(|i| {
+        let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+        (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= -1e-9
+    })
+}
+
+fn clip_polygon_convex(subject: &[[f64; 2]], clip: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let mut out = subject.to_vec();
+    for i in 0..clip.len() {
+        if out.len() < 3 {
+            return vec![];
+        }
+        let (a, b) = (clip[i], clip[(i + 1) % clip.len()]);
+        let side = |p: [f64; 2]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+        let mut next: Vec<[f64; 2]> = vec![];
+        for j in 0..out.len() {
+            let (p, q) = (out[j], out[(j + 1) % out.len()]);
+            let (sp, sq) = (side(p), side(q));
+            if sp >= 0.0 {
+                next.push(p);
+            }
+            if (sp >= 0.0) != (sq >= 0.0) {
+                let t = sp / (sp - sq);
+                next.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+            }
+        }
+        out = next;
+    }
+    out
+}
+
+/// Keep only the parts of `ops` inside a convex polygon (device space). Text is kept when its origin is inside.
+pub fn clip_ops_to_convex(ops: Vec<Op>, polygon: &[[f64; 2]]) -> Vec<Op> {
+    // device space is y-down, so a visually counter-clockwise polygon has negative area there: normalise to the
+    // orientation the half-plane tests above expect (positive shoelace area in the same coordinates)
+    let poly = convex_oriented(polygon);
+    let mut out = vec![];
+    for op in ops {
+        match op {
+            Op::Stroke { paths, color, alpha, width, dash, round } => {
+                let mut clipped: Vec<Poly> = vec![];
+                for p in &paths {
+                    let n = p.pts.len();
+                    let segs = if p.closed { n } else { n.saturating_sub(1) };
+                    let mut cur: Vec<[f64; 2]> = vec![];
+                    for i in 0..segs {
+                        let (a, b) = (p.pts[i], p.pts[(i + 1) % n]);
+                        match clip_segment(&poly, a, b) {
+                            Some((ca, cb)) => {
+                                if cur.last().map_or(true, |l| (l[0] - ca[0]).abs() > 1e-9 || (l[1] - ca[1]).abs() > 1e-9) {
+                                    if cur.len() >= 2 {
+                                        clipped.push(Poly { pts: std::mem::take(&mut cur), closed: false });
+                                    }
+                                    cur.clear();
+                                    cur.push(ca);
+                                }
+                                cur.push(cb);
+                            }
+                            None => {
+                                if cur.len() >= 2 {
+                                    clipped.push(Poly { pts: std::mem::take(&mut cur), closed: false });
+                                }
+                                cur.clear();
+                            }
+                        }
+                    }
+                    if cur.len() >= 2 {
+                        clipped.push(Poly { pts: cur, closed: false });
+                    }
+                }
+                if !clipped.is_empty() {
+                    out.push(Op::Stroke { paths: clipped, color, alpha, width, dash, round });
+                }
+            }
+            Op::Fill { paths, color, alpha, evenodd } => {
+                let clipped: Vec<Poly> = paths.iter().filter_map(|p| {
+                    let pts = clip_polygon_convex(&p.pts, &poly);
+                    (pts.len() >= 3).then_some(Poly { pts, closed: true })
+                }).collect();
+                if !clipped.is_empty() {
+                    out.push(Op::Fill { paths: clipped, color, alpha, evenodd });
+                }
+            }
+            t @ Op::Text { .. } => {
+                if t.text_origin().map_or(false, |o| inside_convex(&poly, o)) {
+                    out.push(t);
+                }
+            }
+        }
+    }
+    out
 }

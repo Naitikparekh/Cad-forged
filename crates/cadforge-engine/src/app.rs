@@ -203,6 +203,7 @@ impl App {
             d.cen = 0.09;
             d.dec = 4;
         }
+        doc.ensure_default_layouts();
         self.add_drawing(doc)
     }
 

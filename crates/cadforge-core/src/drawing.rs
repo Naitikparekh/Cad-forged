@@ -65,6 +65,33 @@ pub struct Layout {
     pub paper: Paper,
     #[serde(default)]
     pub entities: Vec<Entity>,
+    /// A default layout that has not been shown yet: it gets its viewport (and entity id) on first activation.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fresh: bool,
+}
+
+impl Paper {
+    /// Named ISO/ANSI sheets in millimetres (landscape).
+    pub fn named(name: &str, landscape: bool) -> Paper {
+        let (a, b) = match name {
+            "A0" => (1189.0, 841.0),
+            "A1" => (841.0, 594.0),
+            "A2" => (594.0, 420.0),
+            "A3" => (420.0, 297.0),
+            "Letter" => (279.4, 215.9),
+            "Legal" => (355.6, 215.9),
+            "Tabloid" => (431.8, 279.4),
+            "ANSI C" => (558.8, 431.8),
+            "ANSI D" => (863.6, 558.8),
+            _ => (297.0, 210.0),
+        };
+        let name = if matches!(name, "A0" | "A1" | "A2" | "A3" | "Letter" | "Legal" | "Tabloid" | "ANSI C" | "ANSI D") { name } else { "A4" };
+        if landscape {
+            Paper { w: a, h: b, name: name.into(), landscape }
+        } else {
+            Paper { w: b, h: a, name: name.into(), landscape }
+        }
+    }
 }
 
 /// A named view: centre and scale (VIEW command), plus the 3D orientation when saved from a 3D view.
@@ -320,7 +347,148 @@ impl Drawing {
     }
 
     pub fn layout(&self, name: &str) -> Option<&Layout> {
-        self.layouts.iter().find(|l| l.name == name)
+        self.layouts.iter().find(|l| l.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Layout names in tab order.
+    pub fn layout_names(&self) -> Vec<String> {
+        self.layouts.iter().map(|l| l.name.clone()).collect()
+    }
+
+    fn check_layout_name(&self, name: &str) -> Result<(), String> {
+        let n = name.trim();
+        if n.is_empty() {
+            return Err("A layout needs a name.".into());
+        }
+        if n.eq_ignore_ascii_case(MODEL) {
+            return Err("\"Model\" is reserved for model space.".into());
+        }
+        if self.layout(n).is_some() {
+            return Err(format!("A layout named \"{n}\" already exists."));
+        }
+        Ok(())
+    }
+
+    /// A viewport covering the sheet inside a 10 mm margin.
+    pub fn default_viewport(paper: &Paper) -> Entity {
+        Entity::new(Kind::Viewport(crate::entities::ViewportData::new(crate::geom::pt(paper.w / 2.0, paper.h / 2.0), paper.w - 20.0, paper.h - 20.0)))
+    }
+
+    /// Add an empty layout (A4 landscape, or the paper of the last layout) with one viewport.
+    pub fn add_layout(&mut self, name: &str) -> Result<(), String> {
+        let name = name.trim().to_string();
+        self.check_layout_name(&name)?;
+        let paper = self.layouts.last().map(|l| l.paper.clone()).unwrap_or_else(|| Paper::named("A4", true));
+        self.change(|d| {
+            let mut vp = Drawing::default_viewport(&paper);
+            vp.id = d.next_id;
+            d.next_id += 1;
+            d.layouts.push(Layout { name, paper, entities: vec![vp], fresh: false });
+        });
+        Ok(())
+    }
+
+    pub fn rename_layout(&mut self, old: &str, new: &str) -> Result<(), String> {
+        let new = new.trim().to_string();
+        if self.layout(old).is_none() {
+            return Err(format!("There is no layout named \"{old}\"."));
+        }
+        if !old.eq_ignore_ascii_case(&new) {
+            self.check_layout_name(&new)?;
+        }
+        let was_active = self.space.eq_ignore_ascii_case(old);
+        self.change(|d| {
+            if let Some(l) = d.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(old)) {
+                l.name = new.clone();
+            }
+        });
+        if was_active {
+            self.space = new;
+        }
+        Ok(())
+    }
+
+    pub fn delete_layout(&mut self, name: &str) -> Result<(), String> {
+        let Some(i) = self.layouts.iter().position(|l| l.name.eq_ignore_ascii_case(name)) else {
+            return Err(format!("There is no layout named \"{name}\"."));
+        };
+        let was_active = self.space == self.layouts[i].name;
+        self.change(|d| {
+            d.layouts.remove(i);
+        });
+        if was_active {
+            self.space = MODEL.into();
+        }
+        Ok(())
+    }
+
+    /// Copy a layout (entities get new ids).
+    pub fn copy_layout(&mut self, from: &str, to: &str) -> Result<(), String> {
+        let src = self.layout(from).cloned().ok_or_else(|| format!("There is no layout named \"{from}\"."))?;
+        let to = to.trim().to_string();
+        self.check_layout_name(&to)?;
+        self.change(|d| {
+            let mut ents = src.entities.clone();
+            for e in ents.iter_mut() {
+                e.id = d.next_id;
+                d.next_id += 1;
+            }
+            d.layouts.push(Layout { name: to, paper: src.paper.clone(), entities: ents, fresh: false });
+        });
+        Ok(())
+    }
+
+    /// Give a new drawing the usual Layout1 / Layout2 tabs (no-op when it already has layouts).
+    pub fn ensure_default_layouts(&mut self) {
+        if !self.layouts.is_empty() {
+            return;
+        }
+        let paper = Paper::named("A4", true);
+        for n in ["Layout1", "Layout2"] {
+            self.layouts.push(Layout { name: n.into(), paper: paper.clone(), entities: vec![], fresh: true });
+        }
+    }
+
+    /// Give a never-shown default layout its viewport.
+    pub fn realize_layout(&mut self, name: &str) {
+        let Some(i) = self.layouts.iter().position(|l| l.name.eq_ignore_ascii_case(name) && l.fresh) else { return };
+        let vp = Drawing::default_viewport(&self.layouts[i].paper);
+        let lname = self.layouts[i].name.clone();
+        self.layouts[i].fresh = false;
+        self.add_to(vp, &lname);
+        self.touch();
+    }
+
+    /// Activate model space or a layout (no undo step: it is a display state).
+    pub fn set_space(&mut self, name: &str) -> Result<(), String> {
+        if name.eq_ignore_ascii_case(MODEL) {
+            self.space = MODEL.into();
+            return Ok(());
+        }
+        match self.layout(name) {
+            Some(l) => {
+                self.space = l.name.clone();
+                Ok(())
+            }
+            None => Err(format!("There is no layout named \"{name}\".")),
+        }
+    }
+
+    /// Set what a viewport shows (no undo step: it follows zoom and pan inside the viewport).
+    pub fn set_viewport_view(&mut self, layout: &str, vp: u64, vc: Pt, scale: f64) {
+        if let Some(l) = self.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(layout)) {
+            for e in l.entities.iter_mut().filter(|e| e.id == vp) {
+                if let Kind::Viewport(v) = &mut e.kind {
+                    v.vc = vc;
+                    v.scale = Some(scale);
+                }
+            }
+        }
+        self.touch();
+    }
+
+    pub fn paper_of(&self, space: &str) -> Option<&Paper> {
+        self.layout(space).map(|l| &l.paper)
     }
 
     /// Every entity in model space, all layouts and all block definitions.

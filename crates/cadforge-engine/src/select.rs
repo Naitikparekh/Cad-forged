@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 /// May the entity be selected (visible, unlocked layer)?
 pub fn selectable(doc: &Drawing, e: &Entity) -> bool {
-    doc.is_visible(e) && !doc.is_locked(e) && !matches!(e.kind, Kind::Viewport(_))
+    doc.is_visible(e) && !doc.is_locked(e)
 }
 
 pub type Filter<'a> = Option<&'a dyn Fn(&Entity) -> bool>;

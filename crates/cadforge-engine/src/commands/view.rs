@@ -30,7 +30,13 @@ fn zoom_rect(c: &Ctx, rect: Bounds, margin: f64) {
 fn apply_scale(c: &Ctx, n: f64, rel: Option<NumRel>) {
     c.ed(|e| {
         e.view.push();
-        if rel.is_some() {
+        if let (Some(NumRel::Xp), Some(m)) = (rel, e.mspace.as_ref()) {
+            // inside a layout viewport nXP sets the viewport scale: n sheet units per model unit
+            let f = m.paper_view.scale * n / e.view.scale;
+            let centre = e.mspace_centre().unwrap_or(Pt::new(e.view.w / 2.0, e.view.h / 2.0));
+            e.view.zoom_at(centre.x, centre.y, f);
+            e.sync_mspace_view();
+        } else if rel.is_some() {
             let (w, h) = (e.view.w, e.view.h);
             e.view.zoom_at(w / 2.0, h / 2.0, n);
         } else {

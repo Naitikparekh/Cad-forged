@@ -71,6 +71,8 @@ pub struct PlotOptions {
     pub format: PlotFormat,
     pub dpi: f64,
     pub title: String,
+    /// Plot this layout (paper space) instead of model space: the sheet is the layout's paper at 1:1.
+    pub layout: Option<String>,
 }
 
 pub fn default_plot_options(doc: &Drawing) -> PlotOptions {
@@ -88,6 +90,7 @@ pub fn default_plot_options(doc: &Drawing) -> PlotOptions {
         format: PlotFormat::Pdf,
         dpi: 200.0,
         title: doc.name.clone(),
+        layout: None,
     }
 }
 
@@ -135,6 +138,14 @@ pub struct PlotLayout {
 
 /// Work out the world → sheet mapping. Fails when there is nothing to plot.
 pub fn plot_layout(doc: &Drawing, o: &PlotOptions, view_bounds: Option<Bounds>) -> Result<PlotLayout, String> {
+    if let Some(name) = &o.layout {
+        // a layout plots as it is laid out: the sheet is its paper, drawn 1:1 in millimetres
+        let l = doc.layout(name).ok_or_else(|| format!("There is no layout named \"{name}\"."))?;
+        let page = (l.paper.w, l.paper.h);
+        let bounds = Bounds::new(0.0, 0.0, page.0, page.1);
+        let world_m = [10.0, 0.0, 0.0, -10.0, 0.0, 10.0 * page.1];
+        return Ok(PlotLayout { page, bounds, mm_per_unit: 1.0, world_m, fits: true, w: (page.0 * 10.0).round(), h: (page.1 * 10.0).round() });
+    }
     let page = page_size(o);
     let bounds = plot_bounds(doc, o, view_bounds).ok_or("There is nothing to plot.")?;
     let bw = (bounds.max_x - bounds.min_x).max(1e-9);
@@ -160,6 +171,10 @@ pub fn render_plot(doc: &Drawing, o: &PlotOptions, layout: &PlotLayout) -> Vec<O
     rc.mono = o.mono;
     rc.lw_mode = LwMode::Plot(o.lineweights);
     rc.tol = 0.08;
+    if let Some(name) = &o.layout {
+        rc.draw_layout_plot(name);
+        return rc.ops;
+    }
     for e in &doc.model.entities {
         if plottable(doc, e) {
             rc.draw_entity(e, DrawOpts::default());

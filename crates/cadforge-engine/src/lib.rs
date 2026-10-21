@@ -9,6 +9,7 @@ pub mod registry;
 pub mod runtime;
 pub mod select;
 pub mod snap;
+pub mod spaces;
 pub mod solid_pick;
 pub mod sysvars;
 pub mod view;

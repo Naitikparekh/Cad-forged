@@ -233,7 +233,11 @@ impl Ctx {
     }
 
     pub fn view<R>(&self, f: impl FnOnce(&mut View) -> R) -> R {
-        self.ed(|e| f(&mut e.view))
+        self.ed(|e| {
+            let r = f(&mut e.view);
+            e.sync_mspace_view();
+            r
+        })
     }
 
     pub fn name(&self) -> String {

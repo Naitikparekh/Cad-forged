@@ -135,11 +135,68 @@ pub struct RegionData {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ViewportData {
+    /// Centre of the viewport rectangle on the sheet (paper units, mm).
     pub c: Pt,
     pub w: f64,
     pub h: f64,
+    /// Paper units per model unit (1:50 = 0.02). `None` = not set yet: fit the model extents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scale: Option<f64>,
+    /// Model-space point shown at the centre of the viewport.
+    #[serde(default)]
+    pub vc: Pt,
+    /// Display locked: zoom and pan inside the viewport do not change it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Viewport switched off: its border and contents are hidden.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub off: bool,
+    /// Non-rectangular clip polygon in paper units (VPCLIP / MVIEW Polygonal).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip: Option<Vec<Pt>>,
+}
+
+impl ViewportData {
+    pub fn new(c: Pt, w: f64, h: f64) -> ViewportData {
+        ViewportData { c, w, h, scale: None, vc: Pt::ZERO, locked: false, off: false, clip: None }
+    }
+
+    /// The viewport outline on the sheet (the rectangle or the clip polygon).
+    pub fn outline(&self) -> Vec<Pt> {
+        match &self.clip {
+            Some(p) if p.len() >= 3 => p.clone(),
+            _ => vec![pt(self.c.x - self.w / 2.0, self.c.y - self.h / 2.0), pt(self.c.x + self.w / 2.0, self.c.y - self.h / 2.0), pt(self.c.x + self.w / 2.0, self.c.y + self.h / 2.0), pt(self.c.x - self.w / 2.0, self.c.y + self.h / 2.0)],
+        }
+    }
+
+    /// Model centre and paper-per-model scale of the viewport; a viewport without a scale fits the model extents.
+    pub fn model_view(&self, doc: &Drawing) -> (Pt, f64) {
+        if let Some(s) = self.scale {
+            if s > 0.0 {
+                return (self.vc, s);
+            }
+        }
+        let mut b: Option<Bounds> = None;
+        for e in &doc.model.entities {
+            if doc.is_visible(e) {
+                b = Bounds::union_opt(b, bounds_of(e, doc));
+            }
+        }
+        for sd in &doc.solids {
+            if doc.solid_visible(sd) {
+                let mb = crate::solid::mesh::mesh_bounds(&sd.vertices);
+                b = Bounds::union_opt(b, Some(Bounds::new(mb.min.x, mb.min.y, mb.max.x, mb.max.y)));
+            }
+        }
+        match b {
+            Some(b) if b.max_x - b.min_x > 1e-9 || b.max_y - b.min_y > 1e-9 => {
+                let (bw, bh) = ((b.max_x - b.min_x).max(1e-9), (b.max_y - b.min_y).max(1e-9));
+                (b.center(), (self.w / bw).min(self.h / bh) * 0.9)
+            }
+            Some(b) => (b.center(), 1.0),
+            None => (Pt::ZERO, 1.0),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

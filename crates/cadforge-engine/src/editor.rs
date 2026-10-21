@@ -19,6 +19,11 @@ pub struct Editor {
     pub hover_id: Option<u64>,
     pub zoomed: bool,
     pub visual_style: String,
+    /// Last view of each space (`model` or a layout name, lower-cased), restored when switching tabs.
+    pub views: std::collections::HashMap<String, cadforge_core::drawing::ViewState>,
+    /// Set while a layout viewport is active (MSPACE): `doc.space` is model space and `view` shows the viewport's
+    /// model region at the viewport's place on the sheet.
+    pub mspace: Option<crate::spaces::MSpace>,
 }
 
 impl Editor {
@@ -27,7 +32,7 @@ impl Editor {
         if let Some(s) = &doc.view {
             view.set_state(s);
         }
-        Editor { id, doc, view, sel: IndexSet::new(), temp_sel: IndexSet::new(), hover_id: None, zoomed: false, visual_style: "2D Wireframe".into() }
+        Editor { id, doc, view, sel: IndexSet::new(), temp_sel: IndexSet::new(), hover_id: None, zoomed: false, visual_style: "2D Wireframe".into(), views: Default::default(), mspace: None }
     }
 
     pub fn entity_by_id(&self, id: u64) -> Option<&Entity> {

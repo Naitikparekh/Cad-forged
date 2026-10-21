@@ -3,3 +3,4 @@ tests/browser/out/
 *.log
 target/
 dist-web/
+.claude/worktrees/
