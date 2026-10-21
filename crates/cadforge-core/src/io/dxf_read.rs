@@ -221,9 +221,10 @@ fn parse_f(s: &str) -> f64 {
         return v;
     }
     let mut end = 0;
-    for (i, _) in t.char_indices() {
-        if t[..=i.min(t.len() - 1)].parse::<f64>().is_ok() {
-            end = i + 1;
+    for (i, ch) in t.char_indices() {
+        let upto = i + ch.len_utf8();
+        if t[..upto].parse::<f64>().is_ok() {
+            end = upto;
         }
     }
     if end > 0 {
@@ -367,7 +368,9 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
     let Some(mut i) = gs.iter().position(|(c, _)| *c == 91) else {
         return loops;
     };
-    let n = parse_f(&gs[i].1) as i64;
+    // counts come from the file: never trust them beyond the number of records that could back them
+    let cap = gs.len();
+    let n = (parse_f(&gs[i].1) as i64).clamp(0, cap as i64);
     i += 1;
     // read the next value with `code`, skipping everything in between
     let num = |i: &mut usize, code: i32| -> f64 {
@@ -390,7 +393,7 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
         if (flags as i64) & 2 != 0 {
             // polyline path
             let has_bulge = num(&mut i, 72);
-            let nv = num(&mut i, 93) as usize;
+            let nv = (num(&mut i, 93) as usize).min(cap);
             num(&mut i, 73);
             let mut verts = vec![];
             for _ in 0..nv {
@@ -408,7 +411,7 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
             }
         } else {
             // edge path
-            let ne = num(&mut i, 93) as usize;
+            let ne = (num(&mut i, 93) as usize).min(cap);
             let mut edges: Vec<Seg> = vec![];
             for _ in 0..ne {
                 let ty = num(&mut i, 72) as i64;
@@ -461,11 +464,11 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
                     }
                     4 => {
                         // spline edge: approximate through its control polygon
-                        let deg = num(&mut i, 94) as usize;
+                        let deg = (num(&mut i, 94) as usize).min(cap);
                         num(&mut i, 73);
                         num(&mut i, 74);
-                        let nk = num(&mut i, 95) as usize;
-                        let nc = num(&mut i, 96) as usize;
+                        let nk = (num(&mut i, 95) as usize).min(cap);
+                        let nc = (num(&mut i, 96) as usize).min(cap);
                         let knots: Vec<f64> = (0..nk).map(|_| num(&mut i, 40)).collect();
                         let ctrl: Vec<Pt> = (0..nc).map(|_| pt(num(&mut i, 10), num(&mut i, 20))).collect();
                         if ctrl.len() > deg && knots.len() == ctrl.len() + deg + 1 {
