@@ -55,6 +55,14 @@ impl CadForgeApp {
             "PURGEDIALOG" => self.dialog = Some(Dialog::purge()),
             "MENUBAR" => self.ui.show_menubar = !self.ui.show_menubar,
             "CLEANSCREENON" => self.ui.clean = !self.ui.clean,
+            "CLEANSCREENOFF" => self.ui.clean = false,
+            "TEXTSCR" => self.ui.text_window = true,
+            "GRAPHSCR" => self.ui.text_window = false,
+            "COPYHIST" => {
+                if let Some(l) = args.lines("lines") {
+                    self.copy_text(&l.join("\n"));
+                }
+            }
             "SCRIPT" => self.open_files(ctx, "script"),
             _ => self.toast(&format!("{name} is not available in this environment.")),
         }
