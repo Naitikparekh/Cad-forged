@@ -524,8 +524,8 @@ fn plan_returns_to_the_top_view_and_fits_the_drawing() {
     near(s.with_view(|v| v.target.x), 50.0);
     assert!(s.view_scale() > 1.0, "fitted to the drawing");
     assert!(s.with_view(|v| v.pop_previous()), "the previous view is kept");
-    s.cmd("PLAN").ty("ucs");
-    assert!(s.history_has("Named UCSs are not available"));
+    s.cmd("PLAN").ty("ucs").ty("Nope");
+    assert!(s.history_has("There is no saved UCS named"));
 }
 
 #[test]

@@ -102,3 +102,15 @@ fn ucs_persists_in_the_file() {
     near(back.ucs.origin.x, 3.0);
     assert!(back.ucs_named.contains_key("Home"));
 }
+
+#[test]
+fn plan_aligns_the_view_with_the_ucs() {
+    let s = Sim::new();
+    s.add(Entity::line(pt(0.0, 0.0), pt(100.0, 0.0)));
+    s.cmd("UCS").ty("New").ty("Z").ty("30");
+    s.cmd("PLAN").enter();
+    let yaw = s.h.borrow().editor().unwrap().view.yaw;
+    near(yaw, -30f64.to_radians());
+    s.cmd("PLAN").ty("World");
+    near(s.h.borrow().editor().unwrap().view.yaw, 0.0);
+}

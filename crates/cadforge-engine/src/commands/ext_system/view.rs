@@ -184,13 +184,25 @@ fn view_dir_xy(xy: f64, z: f64) -> V3 {
 
 async fn plan(c: Ctx, _a: Args) -> CmdResult<()> {
     let k = c.keyword(ps("Enter an option").options(&["Current ucs", "Ucs", "World"]).default_str("Current ucs")).await?;
-    if k.kw() == Some("Ucs") {
-        c.log_error("Named UCSs are not available in this version; use Current or World.");
-        return Ok(());
-    }
+    let angle = match k.kw() {
+        Some("World") => 0.0,
+        Some("Ucs") => {
+            let n = c.string(ps("Enter name of UCS or [?]")).await?.text;
+            match c.doc(|d| d.ucs_named.iter().find(|(k, _)| k.eq_ignore_ascii_case(n.trim())).map(|(_, u)| u.angle)) {
+                Some(a) => a,
+                None => {
+                    c.log_error(&format!("There is no saved UCS named \"{}\".", n.trim()));
+                    return Ok(());
+                }
+            }
+        }
+        _ => c.doc(|d| d.ucs.angle),
+    };
     c.ed(|e| {
         e.view.push();
         e.view.set_preset("top");
+        // plan view of a UCS shows its X axis horizontal
+        e.view.yaw = -angle;
         let mut b = e.extents();
         for s in &e.doc.solids {
             let pts: Vec<Pt> = s.vertices.iter().map(|v| pt(v.x, v.y)).collect();
