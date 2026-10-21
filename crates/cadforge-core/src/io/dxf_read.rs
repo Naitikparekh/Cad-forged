@@ -7,7 +7,7 @@ use crate::entities::*;
 use crate::geom::*;
 use crate::hatch::pattern;
 use crate::style::*;
-use crate::text::{HJust, TextData, VJust};
+use crate::text::{AttDef, HJust, TextData, VJust};
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------- text decoding
@@ -682,24 +682,12 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 }
             }
         }
-        "TEXT" => {
-            let hh = r.num(40, 0.0);
-            let s = decode_text(r.first(1).unwrap_or(""));
-            if hh > 0.0 && !s.is_empty() {
-                let jh = r.int(72, 0);
-                let jv = r.int(73, 0);
-                let anchor = if (jh != 0 || jv != 0) && r.first(11).is_some() { r.pt(1) } else { r.pt(0) };
-                let vj = if jh == 4 {
-                    VJust::Middle
-                } else {
-                    match jv {
-                        1 => VJust::Bottom,
-                        2 => VJust::Middle,
-                        3 => VJust::Top,
-                        _ => VJust::Baseline,
-                    }
-                };
-                let t = TextData::new(anchor, hh, &s).with_rot(rad(r.num(50, 0.0))).with_just(jh_of(jh), vj);
+        "TEXT" | "ATTDEF" => {
+            if let Some(mut t) = text_of_rec(r) {
+                if r.ty == "ATTDEF" {
+                    let f = r.int(70, 0);
+                    t.att = Some(AttDef { tag: decode_text(r.first(2).unwrap_or("")), prompt: decode_text(r.first(3).unwrap_or("")), invisible: f & 1 != 0, constant: f & 2 != 0, verify: f & 4 != 0, preset: f & 8 != 0 });
+                }
                 push(Entity::new(Kind::Text(t)), true, &mut out);
             }
         }
@@ -730,6 +718,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     i.sx = if sx == 0.0 { 1.0 } else { sx };
                     i.sy = if sy == 0.0 { 1.0 } else { sy };
                     i.rot = rad(r.num(50, 0.0));
+                    for a in &r.vertices {
+                        if let Some(t) = text_of_rec(a) {
+                            i.attribs.push(AttribData { tag: decode_text(a.first(2).unwrap_or("")), t, hidden: a.int(70, 0) & 1 != 0 });
+                        }
+                    }
                 }
                 push(e, false, &mut out);
             }
@@ -813,21 +806,56 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
     out
 }
 
+/// TEXT / ATTDEF / ATTRIB record to text data.
+fn text_of_rec(r: &Rec) -> Option<TextData> {
+    let hh = r.num(40, 0.0);
+    let s = decode_text(r.first(1).unwrap_or(""));
+    if !(hh > 0.0) || (s.is_empty() && r.ty == "TEXT") {
+        return None;
+    }
+    let jh = r.int(72, 0);
+    let jv = r.int(74, 0).max(r.int(73, 0));
+    let anchor = if (jh != 0 || jv != 0) && r.first(11).is_some() { r.pt(1) } else { r.pt(0) };
+    let vj = if jh == 4 {
+        VJust::Middle
+    } else {
+        match jv {
+            1 => VJust::Bottom,
+            2 => VJust::Middle,
+            3 => VJust::Top,
+            _ => VJust::Baseline,
+        }
+    };
+    Some(TextData::new(anchor, hh, &s).with_rot(rad(r.num(50, 0.0))).with_just(jh_of(jh), vj))
+}
+
 /// Merge POLYLINE/VERTEX/SEQEND and INSERT/ATTRIB/SEQEND runs into single records.
 fn group_entities(list: &[Rec]) -> Vec<Rec> {
     let mut out: Vec<Rec> = vec![];
     let mut in_poly = false;
+    let mut in_ins = false;
     for r in list {
         match r.ty.as_str() {
             "POLYLINE" => {
                 out.push(Rec { vertices: vec![], ..r.clone() });
                 in_poly = true;
+                in_ins = false;
             }
             "VERTEX" if in_poly => out.last_mut().unwrap().vertices.push(r.clone()),
-            "SEQEND" => in_poly = false,
-            "ATTRIB" => {} // attributes are not imported
+            "INSERT" => {
+                out.push(Rec { vertices: vec![], ..r.clone() });
+                in_poly = false;
+                in_ins = r.int(66, 0) == 1;
+            }
+            "ATTRIB" if in_ins => out.last_mut().unwrap().vertices.push(r.clone()),
+            "SEQEND" => {
+                in_poly = false;
+                in_ins = false;
+            }
+            "ATTRIB" => {}
             _ => {
                 in_poly = false;
+                in_ins = false;
                 out.push(r.clone());
             }
         }

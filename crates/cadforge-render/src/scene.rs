@@ -292,11 +292,41 @@ impl<'a> Renderer<'a> {
                 }
             }
             Kind::Point { p } => self.draw_point(*p, style, o.selected, o.hover),
+            Kind::Text(t) if t.att.is_some() => {
+                // an attribute template shows its tag until a block reference supplies a value
+                let mut shown = t.clone();
+                if let Some(a) = &t.att {
+                    shown.s = a.tag.clone();
+                }
+                self.draw_text_at(&shown, style.color, style.alpha, o.selected, o.hover)
+            }
             Kind::Text(t) => self.draw_text_at(t, style.color, style.alpha, o.selected, o.hover),
             Kind::Hatch(h) => self.draw_hatch(e, h, style, o.selected, o.hover),
             Kind::Dim(_) => self.draw_dim(e, style, o.selected, o.hover),
             Kind::Leader { pts, s, h } => self.draw_leader(pts, s, *h, style, o.selected, o.hover),
             Kind::Insert(ins) => self.draw_insert(e, ins, style, o),
+            Kind::Table(t) => {
+                let (segs, texts) = table_geometry(t);
+                let paths: Vec<Poly> = segs.iter().flat_map(|sg| self.trace_segs(std::slice::from_ref(sg), false)).collect();
+                self.stroke(paths, style, o.selected, o.hover, 0.0);
+                for tx in &texts {
+                    self.draw_text_at(tx, style.color, style.alpha, false, o.hover);
+                }
+            }
+            Kind::Wipeout(w) => {
+                let pts: Vec<[f64; 2]> = w.pts.iter().map(|p| self.dev(*p)).collect();
+                if pts.len() >= 3 {
+                    self.ops.push(Op::Fill { paths: vec![Poly { pts: pts.clone(), closed: true }], color: self.theme.canvas, alpha: 1.0, evenodd: false });
+                    // the frame is shown on screen (WIPEOUTFRAME 1) but never plotted
+                    if !matches!(self.lw_mode, LwMode::Plot(_)) || o.selected {
+                        self.stroke(vec![Poly { pts, closed: true }], style, o.selected, o.hover, 0.0);
+                    }
+                }
+            }
+            Kind::Region(r) => {
+                let paths = self.loops_paths(&r.loops);
+                self.stroke(paths, style, o.selected, o.hover, 0.0);
+            }
             Kind::Viewport(v) => {
                 let c = v.c;
                 let corners = [pt(c.x - v.w / 2.0, c.y - v.h / 2.0), pt(c.x + v.w / 2.0, c.y - v.h / 2.0), pt(c.x + v.w / 2.0, c.y + v.h / 2.0), pt(c.x - v.w / 2.0, c.y + v.h / 2.0)];
@@ -316,6 +346,9 @@ impl<'a> Renderer<'a> {
         self.world = mat::mul(&saved, &insert_matrix(ins, def.base));
         self.vis = None;
         for be in &def.entities {
+            if matches!(&be.kind, Kind::Text(t) if t.att.is_some()) {
+                continue; // the reference's own ATTRIB values are drawn below
+            }
             let on_zero = be.layer.is_empty() || be.layer == "0";
             if !on_zero {
                 if let Some(l) = self.layers.get(&be.layer.to_lowercase()) {
@@ -337,6 +370,11 @@ impl<'a> Renderer<'a> {
         }
         self.world = saved;
         self.vis = saved_vis;
+        for a in &ins.attribs {
+            if !a.hidden && !a.t.s.is_empty() {
+                self.draw_text_at(&a.t, style.color, style.alpha, false, o.hover);
+            }
+        }
     }
 
     fn draw_point(&mut self, p: Pt, style: &Style, selected: bool, hover: bool) {
@@ -469,6 +507,80 @@ impl<'a> Renderer<'a> {
         self.draw_text_at(&geo.text, style.color, style.alpha, false, hover);
     }
 
+    /// Gradient fill drawn as overlapping flat bands (painter's algorithm), so every backend renders it.
+    fn gradient_fill(&mut self, paths: &[Poly], g: &GradientData, alpha: f32) {
+        let white = [255u8, 255, 255];
+        let (mut c1, mut c2) = if g.one_color { (g.c1, mix_rgb(g.c1, white, g.tint.clamp(0.0, 1.0))) } else { (g.c1, g.c2) };
+        if self.mono {
+            let gray = |c: Rgb| {
+                let v = (0.3 * c[0] as f64 + 0.59 * c[1] as f64 + 0.11 * c[2] as f64) as u8;
+                [v, v, v]
+            };
+            c1 = gray(c1);
+            c2 = gray(c2);
+        }
+        let all: Vec<[f64; 2]> = paths.iter().flat_map(|p| p.pts.iter().copied()).collect();
+        if all.len() < 3 {
+            return;
+        }
+        let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for q in &all {
+            x0 = x0.min(q[0]);
+            y0 = y0.min(q[1]);
+            x1 = x1.max(q[0]);
+            y1 = y1.max(q[1]);
+        }
+        let ctr = [(x0 + x1) / 2.0, (y0 + y1) / 2.0];
+        let kind = g.kind.to_uppercase();
+        let push = |ops: &mut Vec<Op>, ps: Vec<Poly>, color: Rgb| {
+            if !ps.is_empty() {
+                ops.push(Op::Fill { paths: ps, color, alpha, evenodd: true });
+            }
+        };
+        if matches!(kind.as_str(), "SPHERICAL" | "HEMISPHERICAL" | "CURVED") {
+            let n = 28;
+            let focus = if kind == "HEMISPHERICAL" { [x0 + (x1 - x0) * 0.35, y0 + (y1 - y0) * 0.35] } else { ctr };
+            for i in 0..n {
+                let f = 1.0 - i as f64 / n as f64;
+                let col = mix_rgb(c1, c2, i as f64 / (n - 1) as f64);
+                let ps: Vec<Poly> = paths.iter().map(|p| Poly { pts: p.pts.iter().map(|q| [focus[0] + (q[0] - focus[0]) * f, focus[1] + (q[1] - focus[1]) * f]).collect(), closed: true }).collect();
+                push(&mut self.ops, ps, col);
+            }
+            return;
+        }
+        let a = g.angle;
+        let dir = [a.cos(), -a.sin()];
+        let proj = |q: &[f64; 2]| (q[0] - ctr[0]) * dir[0] + (q[1] - ctr[1]) * dir[1];
+        let (mut tmin, mut tmax) = (f64::MAX, f64::MIN);
+        for q in &all {
+            tmin = tmin.min(proj(q));
+            tmax = tmax.max(proj(q));
+        }
+        if tmax - tmin < 1e-9 {
+            return;
+        }
+        let (cyl, inv) = (kind == "CYLINDER", kind == "INVCYLINDER");
+        if cyl || inv {
+            let (ca, cb) = if inv { (c2, c1) } else { (c1, c2) };
+            let n = 16;
+            let half = (tmax - tmin) / 2.0;
+            let mid = (tmax + tmin) / 2.0;
+            push(&mut self.ops, paths.to_vec(), ca);
+            for k in 1..n {
+                let w = half * (1.0 - k as f64 / n as f64);
+                let ps: Vec<Poly> = paths.iter().filter_map(|p| clip_band(p, dir, ctr, mid - w, mid + w)).collect();
+                push(&mut self.ops, ps, mix_rgb(ca, cb, k as f64 / (n - 1) as f64));
+            }
+            return;
+        }
+        let n = 40;
+        for i in 0..n {
+            let t = tmin + (tmax - tmin) * i as f64 / n as f64;
+            let ps: Vec<Poly> = if i == 0 { paths.to_vec() } else { paths.iter().filter_map(|p| clip_band(p, dir, ctr, t, f64::MAX)).collect() };
+            push(&mut self.ops, ps, mix_rgb(c1, c2, (i as f64 + 0.5) / n as f64));
+        }
+    }
+
     fn loops_paths(&self, loops: &[Vec<Vertex>]) -> Vec<Poly> {
         let mut out = vec![];
         for l in loops {
@@ -482,6 +594,20 @@ impl<'a> Renderer<'a> {
             Some(c) if !self.mono && !matches!(c, Color::ByLayer | Color::ByBlock) => color_rgb(c, self.theme.dark, self.theme.contrast),
             _ => style.color,
         };
+        if let Some(g) = &h.gradient {
+            let paths = self.loops_paths(&h.loops);
+            if self.prefs.fill {
+                self.gradient_fill(&paths, g, style.alpha);
+            } else {
+                let st = Style { color, ..style.clone() };
+                self.stroke(paths, &st, false, false, 0.0);
+            }
+            if selected || hover {
+                let paths = self.loops_paths(&h.loops);
+                self.stroke(paths, style, selected, hover, 0.0);
+            }
+            return;
+        }
         if h.pattern == "SOLID" {
             let paths = self.loops_paths(&h.loops);
             if self.prefs.fill {
@@ -643,4 +769,40 @@ pub fn render_scene(doc: &Drawing, view: &View, w: f64, h: f64, theme: Theme, pr
     rc.draw_entities(hl);
     rc.draw_ucs_icon();
     rc.ops
+}
+
+fn mix_rgb(a: Rgb, b: Rgb, t: f64) -> Rgb {
+    let m = |x: u8, y: u8| (x as f64 + (y as f64 - x as f64) * t.clamp(0.0, 1.0)).round() as u8;
+    [m(a[0], b[0]), m(a[1], b[1]), m(a[2], b[2])]
+}
+
+/// Clip a closed polygon to the band `lo <= (p - o)·dir <= hi` (Sutherland–Hodgman against two half-planes).
+fn clip_band(p: &Poly, dir: [f64; 2], o: [f64; 2], lo: f64, hi: f64) -> Option<Poly> {
+    let f = |q: &[f64; 2]| (q[0] - o[0]) * dir[0] + (q[1] - o[1]) * dir[1];
+    let mut pts = p.pts.clone();
+    for (bound, keep_ge) in [(lo, true), (hi, false)] {
+        if pts.len() < 3 || (!keep_ge && bound == f64::MAX) {
+            continue;
+        }
+        let inside = |q: &[f64; 2]| if keep_ge { f(q) >= bound } else { f(q) <= bound };
+        let mut out: Vec<[f64; 2]> = vec![];
+        for i in 0..pts.len() {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            let (ia, ib) = (inside(&a), inside(&b));
+            if ia {
+                out.push(a);
+            }
+            if ia != ib {
+                let (fa, fb) = (f(&a), f(&b));
+                let t = (bound - fa) / (fb - fa);
+                out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+            }
+        }
+        pts = out;
+    }
+    if pts.len() >= 3 {
+        Some(Poly { pts, closed: true })
+    } else {
+        None
+    }
 }

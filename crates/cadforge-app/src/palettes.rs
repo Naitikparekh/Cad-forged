@@ -166,6 +166,22 @@ pub fn geom_fields(e: &Entity) -> Vec<Field> {
             ro("Angle", |e, _| if let Kind::Xline { d, .. } | Kind::Ray { d, .. } = &e.kind { Val::Text(format!("{}°", fmt_num(deg(norm_angle(d.y.atan2(d.x))), 4, true))) } else { Val::Text(String::new()) }),
         ],
         Kind::Viewport(_) => vec![],
+        Kind::Table(_) => vec![
+            ro_n("Rows", |e| if let Kind::Table(t) = &e.kind { t.rows.len() as f64 } else { 0.0 }),
+            ro_n("Columns", |e| if let Kind::Table(t) = &e.kind { t.cols.len() as f64 } else { 0.0 }),
+            ro_n("Table width", |e| if let Kind::Table(t) = &e.kind { t.cols.iter().sum() } else { 0.0 }),
+            ro_n("Table height", |e| if let Kind::Table(t) = &e.kind { t.rows.iter().sum() } else { 0.0 }),
+            xmin("Text height", 1e-9, |e| if let Kind::Table(t) = &e.kind { t.h } else { 0.0 }, |e, v| if let Kind::Table(t) = &mut e.kind { t.h = v }),
+            x("Position X", |e| if let Kind::Table(t) = &e.kind { t.p.x } else { 0.0 }, |e, v| if let Kind::Table(t) = &mut e.kind { t.p.x = v }),
+            x("Position Y", |e| if let Kind::Table(t) = &e.kind { t.p.y } else { 0.0 }, |e, v| if let Kind::Table(t) = &mut e.kind { t.p.y = v }),
+            ang("Rotation", |e| if let Kind::Table(t) = &e.kind { t.rot } else { 0.0 }, |e, v| if let Kind::Table(t) = &mut e.kind { t.rot = v }),
+        ],
+        Kind::Wipeout(_) => vec![ro_n("Vertices", |e| if let Kind::Wipeout(w) = &e.kind { w.pts.len() as f64 } else { 0.0 })],
+        Kind::Region(_) => vec![
+            ro_n("Loops", |e| if let Kind::Region(r) = &e.kind { r.loops.len() as f64 } else { 0.0 }),
+            ro_n("Area", |e| if let Kind::Region(r) = &e.kind { r.loops.iter().enumerate().map(|(i, l)| if i == 0 { pline_area(l).abs() } else { -pline_area(l).abs() }).sum() } else { 0.0 }),
+            ro_n("Perimeter", |e| if let Kind::Region(r) = &e.kind { r.loops.iter().flat_map(|l| pline_segs(l, true)).map(|s| s.length()).sum() } else { 0.0 }),
+        ],
     }
 }
 

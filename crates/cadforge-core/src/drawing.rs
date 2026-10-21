@@ -24,6 +24,19 @@ pub struct Block {
     pub base: Pt,
     #[serde(default)]
     pub entities: Vec<Entity>,
+    /// Set when the block is an external reference (XREF) to another drawing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xref: Option<XrefInfo>,
+}
+
+/// External reference bookkeeping for a block definition.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XrefInfo {
+    pub path: String,
+    #[serde(default)]
+    pub overlay: bool,
+    #[serde(default)]
+    pub loaded: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
@@ -685,7 +698,7 @@ impl Drawing {
                 self.next_id = e.id + 1;
             }
         }
-        self.blocks.insert(name.to_string(), Block { name: name.to_string(), base, entities });
+        self.blocks.insert(name.to_string(), Block { name: name.to_string(), base, entities, xref: None });
         self.touch();
     }
 
@@ -1039,6 +1052,9 @@ fn kind_name(k: &Kind) -> &'static str {
         Kind::Xline { .. } => "xline",
         Kind::Ray { .. } => "ray",
         Kind::Viewport(_) => "viewport",
+        Kind::Table(_) => "table",
+        Kind::Wipeout(_) => "wipeout",
+        Kind::Region(_) => "region",
     }
 }
 

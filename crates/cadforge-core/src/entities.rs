@@ -44,6 +44,31 @@ pub struct HatchData {
     pub ps: f64,
     #[serde(default)]
     pub pa: f64,
+    /// Gradient fill (GRADIENT); when set the pattern is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<GradientData>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GradientData {
+    pub c1: [u8; 3],
+    pub c2: [u8; 3],
+    #[serde(default)]
+    pub angle: f64,
+    /// `LINEAR`, `CYLINDER`, `INVCYLINDER`, `SPHERICAL`, `HEMISPHERICAL`, `CURVED` ...
+    #[serde(default = "linear")]
+    pub kind: String,
+    #[serde(default)]
+    pub one_color: bool,
+    #[serde(default = "tint_half")]
+    pub tint: f64,
+}
+
+fn linear() -> String {
+    "LINEAR".into()
+}
+fn tint_half() -> f64 {
+    0.5
 }
 
 fn ansi31() -> String {
@@ -60,6 +85,52 @@ pub struct InsertData {
     pub sy: f64,
     #[serde(default)]
     pub rot: f64,
+    /// Attribute values of this reference (ATTRIB), positioned in world coordinates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attribs: Vec<AttribData>,
+}
+
+/// One attribute instance of a block reference.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AttribData {
+    pub tag: String,
+    pub t: TextData,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
+}
+
+/// ACAD_TABLE: a grid of text cells. `p` is the top-left corner; rows run downwards.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TableData {
+    pub p: Pt,
+    pub cols: Vec<f64>,
+    pub rows: Vec<f64>,
+    /// `cells[row][col]`
+    pub cells: Vec<Vec<String>>,
+    #[serde(default = "d25")]
+    pub h: f64,
+    /// Merged ranges `[row0, col0, row1, col1]` (inclusive).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub merges: Vec<[usize; 4]>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub style: String,
+    /// The first row is a title row (larger text).
+    #[serde(default)]
+    pub title: bool,
+    #[serde(default)]
+    pub rot: f64,
+}
+
+/// WIPEOUT: a polygon that masks what is below it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WipeoutData {
+    pub pts: Vec<Pt>,
+}
+
+/// REGION: one or more closed loops forming a 2D area (outer loop plus holes).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RegionData {
+    pub loops: Vec<Vec<Vertex>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -89,6 +160,9 @@ pub enum Kind {
     Xline { p: Pt, d: Pt },
     Ray { p: Pt, d: Pt },
     Viewport(ViewportData),
+    Table(TableData),
+    Wipeout(WipeoutData),
+    Region(RegionData),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -171,10 +245,10 @@ impl Entity {
         Entity::new(Kind::Leader { pts, s: s.into(), h })
     }
     pub fn hatch(loops: Vec<Vec<Vertex>>, pattern: &str) -> Entity {
-        Entity::new(Kind::Hatch(HatchData { loops, pattern: pattern.into(), ps: 1.0, pa: 0.0 }))
+        Entity::new(Kind::Hatch(HatchData { loops, pattern: pattern.into(), ps: 1.0, pa: 0.0, gradient: None }))
     }
     pub fn insert(name: &str, p: Pt) -> Entity {
-        Entity::new(Kind::Insert(InsertData { name: name.into(), p, sx: 1.0, sy: 1.0, rot: 0.0 }))
+        Entity::new(Kind::Insert(InsertData { name: name.into(), p, sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![] }))
     }
     pub fn xline(p: Pt, d: Pt) -> Entity {
         Entity::new(Kind::Xline { p, d: unit(d) })
@@ -224,6 +298,9 @@ impl Entity {
             Kind::Xline { .. } => "xline",
             Kind::Ray { .. } => "ray",
             Kind::Viewport(_) => "viewport",
+            Kind::Table(_) => "table",
+            Kind::Wipeout(_) => "wipeout",
+            Kind::Region(_) => "region",
         }
     }
 
@@ -246,6 +323,9 @@ impl Entity {
             Kind::Xline { .. } => "Construction Line",
             Kind::Ray { .. } => "Ray",
             Kind::Viewport(_) => "Viewport",
+            Kind::Table(_) => "Table",
+            Kind::Wipeout(_) => "Wipeout",
+            Kind::Region(_) => "Region",
         }
     }
 
@@ -468,7 +548,81 @@ fn compute_segs(e: &Entity, doc: &Drawing, depth: usize) -> Vec<Seg> {
                 Seg::line(pt(c.x - w / 2.0, c.y + h / 2.0), pt(c.x - w / 2.0, c.y - h / 2.0)),
             ]
         }
+        Kind::Table(t) => table_geometry(t).0,
+        Kind::Wipeout(w) => {
+            let n = w.pts.len();
+            (0..n).filter(|_| n >= 2).map(|i| Seg::line(w.pts[i], w.pts[(i + 1) % n])).collect()
+        }
+        Kind::Region(r) => r.loops.iter().flat_map(|l| pline_segs(l, true)).collect(),
     }
+}
+
+/// Grid lines and cell texts of a table (rotation about the insertion point applied).
+pub fn table_geometry(t: &TableData) -> (Vec<Seg>, Vec<TextData>) {
+    let mut xs = vec![0.0];
+    for w in &t.cols {
+        xs.push(xs.last().copied().unwrap_or(0.0) + w);
+    }
+    let mut ys = vec![0.0];
+    for h in &t.rows {
+        ys.push(ys.last().copied().unwrap_or(0.0) + h);
+    }
+    let (nr, nc) = (t.rows.len(), t.cols.len());
+    let (cs, sn) = (t.rot.cos(), t.rot.sin());
+    let w = |x: f64, y: f64| {
+        let (dx, dy) = (x, -y);
+        pt(t.p.x + dx * cs - dy * sn, t.p.y + dx * sn + dy * cs)
+    };
+    let hidden_h = |i: usize, c: usize| t.merges.iter().any(|m| m[0] < i && i <= m[2] && m[1] <= c && c <= m[3]);
+    let hidden_v = |j: usize, r: usize| t.merges.iter().any(|m| m[1] < j && j <= m[3] && m[0] <= r && r <= m[2]);
+    let mut segs = vec![];
+    for i in 0..=nr {
+        let mut start: Option<usize> = None;
+        for c in 0..=nc {
+            let vis = c < nc && !hidden_h(i, c);
+            match (vis, start) {
+                (true, None) => start = Some(c),
+                (false, Some(s)) => {
+                    segs.push(Seg::line(w(xs[s], ys[i]), w(xs[c], ys[i])));
+                    start = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    for j in 0..=nc {
+        let mut start: Option<usize> = None;
+        for r in 0..=nr {
+            let vis = r < nr && !hidden_v(j, r);
+            match (vis, start) {
+                (true, None) => start = Some(r),
+                (false, Some(s)) => {
+                    segs.push(Seg::line(w(xs[j], ys[s]), w(xs[j], ys[r])));
+                    start = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut texts = vec![];
+    for r in 0..nr {
+        for c in 0..nc {
+            let s = t.cells.get(r).and_then(|row| row.get(c)).map(String::as_str).unwrap_or("");
+            if s.is_empty() {
+                continue;
+            }
+            if t.merges.iter().any(|m| (m[0] != r || m[1] != c) && m[0] <= r && r <= m[2] && m[1] <= c && c <= m[3]) {
+                continue;
+            }
+            let (r1, c1) = t.merges.iter().find(|m| m[0] == r && m[1] == c).map(|m| (m[2], m[3])).unwrap_or((r, c));
+            let ctr = w((xs[c] + xs[c1 + 1]) / 2.0, (ys[r] + ys[r1 + 1]) / 2.0);
+            let h = if t.title && r == 0 { t.h * 1.25 } else { t.h };
+            let mut td = TextData::new(ctr, h, s).with_just(HJust::Center, VJust::Middle);
+            td.rot = t.rot;
+            texts.push(td);
+        }
+    }
+    (segs, texts)
 }
 
 /// Text-like entities visible inside a block reference, dimension or leader (for bounds / rendering).
@@ -481,6 +635,7 @@ fn texts_of_depth(e: &Entity, doc: &Drawing, depth: usize) -> Vec<TextData> {
         Kind::Text(t) => vec![t.clone()],
         Kind::Dim(d) => vec![dim_geometry(d, &doc.settings).text],
         Kind::Leader { pts, s, h } if !s.is_empty() => vec![leader_text(pts, s, *h)],
+        Kind::Table(t) => table_geometry(t).1,
         Kind::Insert(ins) => {
             let def = match doc.blocks.get(&ins.name) {
                 Some(d) if depth <= MAX_BLOCK_DEPTH => d,
@@ -488,8 +643,11 @@ fn texts_of_depth(e: &Entity, doc: &Drawing, depth: usize) -> Vec<TextData> {
             };
             let m = insert_matrix(ins, def.base);
             let (k, ang) = (mat::scale_factor(&m), mat::angle(&m));
-            def.entities
+            // attribute templates are not shown inside the reference: its ATTRIB values replace them
+            let mut out: Vec<TextData> = def
+                .entities
                 .iter()
+                .filter(|be| !matches!(&be.kind, Kind::Text(t) if t.att.is_some()))
                 .flat_map(|be| texts_of_depth(be, doc, depth + 1))
                 .map(|mut t| {
                     t.p = mat::apply(&m, t.p);
@@ -498,7 +656,9 @@ fn texts_of_depth(e: &Entity, doc: &Drawing, depth: usize) -> Vec<TextData> {
                     t.w = t.w.map(|w| w * k);
                     t
                 })
-                .collect()
+                .collect();
+            out.extend(ins.attribs.iter().filter(|a| !a.hidden && !a.t.s.is_empty()).map(|a| a.t.clone()));
+            out
         }
         _ => vec![],
     }
@@ -799,12 +959,54 @@ pub fn transform_entity(e: &mut Entity, m: &Mat) {
                 i.sx *= k;
                 i.sy *= k;
             }
+            for a in i.attribs.iter_mut() {
+                transform_text(&mut a.t, m);
+            }
         }
         Kind::Xline { p, d } | Kind::Ray { p, d } => {
             *p = mp(*p);
             *d = unit(mat::apply_vec(m, *d));
         }
         Kind::Viewport(v) => v.c = mp(v.c),
+        Kind::Table(t) => {
+            t.p = mp(t.p);
+            t.rot = norm_angle(t.rot + theta);
+            for c in t.cols.iter_mut().chain(t.rows.iter_mut()) {
+                *c *= k;
+            }
+            t.h *= k;
+        }
+        Kind::Wipeout(w) => {
+            for q in w.pts.iter_mut() {
+                *q = mp(*q);
+            }
+        }
+        Kind::Region(r) => {
+            for l in r.loops.iter_mut() {
+                flip_verts(l, m, flip);
+            }
+        }
+    }
+}
+
+fn transform_text(t: &mut TextData, m: &Mat) {
+    let Decomp { k, theta, flip } = decompose(m);
+    t.p = mat::apply(m, t.p);
+    t.h *= k;
+    if let Some(w) = t.w.as_mut() {
+        if *w != 0.0 {
+            *w *= k;
+        }
+    }
+    if flip {
+        let v = mat::apply_vec(m, pt(t.rot.cos(), t.rot.sin()));
+        let mut a = v.y.atan2(v.x);
+        if a.cos() < -1e-9 || (a.cos().abs() <= 1e-9 && a.sin() < 0.0) {
+            a += PI;
+        }
+        t.rot = norm_angle(a);
+    } else {
+        t.rot = norm_angle(t.rot + theta);
     }
 }
 
@@ -940,6 +1142,37 @@ pub fn stretch_entity(e: &mut Entity, win: &Bounds, d: Pt, doc: &Drawing) -> boo
             }
         }
         Kind::Viewport(_) => false,
+        Kind::Table(t) => {
+            if inside(t.p) {
+                mv(&mut t.p);
+                true
+            } else {
+                false
+            }
+        }
+        Kind::Wipeout(w) => {
+            let mut c = false;
+            for q in w.pts.iter_mut() {
+                if inside(*q) {
+                    mv(q);
+                    c = true;
+                }
+            }
+            c
+        }
+        Kind::Region(r) => {
+            if fully(&snapshot) {
+                for l in r.loops.iter_mut() {
+                    for v in l.iter_mut() {
+                        v.x += d.x;
+                        v.y += d.y;
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        }
     }
 }
 
@@ -1023,6 +1256,15 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
             add("tp", Some(geo.text.p));
             out
         }
+        Kind::Table(t) => vec![grip("p", t.p, Move)],
+        Kind::Wipeout(w) => {
+            let mut out: Vec<Grip> = w.pts.iter().enumerate().map(|(i, q)| grip(&format!("v{}", i), *q, Stretch)).collect();
+            if let Some(b) = bounds_of(e, doc) {
+                out.push(grip("c", b.center(), Move));
+            }
+            out
+        }
+        Kind::Region(_) => bounds_of(e, doc).map(|b| vec![grip("c", b.center(), Move)]).unwrap_or_default(),
         Kind::Viewport(v) => {
             let mut out = vec![grip("c", v.c, Move)];
             for (i, (sx, sy)) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)].iter().enumerate() {
@@ -1107,6 +1349,11 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
             }
         }
         (Kind::Spline { fit, .. }, _) => fit[idx(id)] = to,
+        (Kind::Wipeout(w), _) => {
+            if let Some(q) = w.pts.get_mut(idx(id)) {
+                *q = to;
+            }
+        }
         (Kind::Leader { pts, .. }, _) => pts[idx(id)] = to,
         (Kind::Dim(d), _) => {
             if id == "tp" {

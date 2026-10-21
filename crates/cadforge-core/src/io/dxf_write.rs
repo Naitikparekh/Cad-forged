@@ -275,6 +275,17 @@ impl<'a> W<'a> {
                     o.out.pt(p, 0);
                 }
             }
+            Kind::Text(t) if t.att.is_some() => {
+                let a = t.att.as_ref().expect("att");
+                self.common(o, "ATTDEF", &props, Some("AcDbText"), None);
+                o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, "Standard");
+                if jh_code(t.jh) != 0 || jv_code(t.jv) != 0 {
+                    o.out.i(72, jh_code(t.jh) as i64);
+                    o.out.pt(t.p, 1);
+                }
+                let flags = a.invisible as i64 | (a.constant as i64) << 1 | (a.verify as i64) << 2 | (a.preset as i64) << 3;
+                o.out.s(100, "AcDbAttributeDefinition").s(3, &clean(&a.prompt)).s(2, &a.tag).i(70, flags).i(74, jv_code(t.jv) as i64);
+            }
             Kind::Text(t) => {
                 if t.multi {
                     self.common(o, "MTEXT", &props, Some("AcDbMText"), None);
@@ -297,7 +308,47 @@ impl<'a> W<'a> {
                     return;
                 }
                 self.common(o, "INSERT", &props, Some("AcDbBlockReference"), None);
+                if !ins.attribs.is_empty() {
+                    o.out.i(66, 1);
+                }
                 o.out.s(2, &ins.name).pt(ins.p, 0).n(41, ins.sx).n(42, ins.sy).n(43, 1.0).n(50, deg(ins.rot));
+                if !ins.attribs.is_empty() {
+                    for a in &ins.attribs {
+                        self.common(o, "ATTRIB", &props, Some("AcDbText"), None);
+                        let t = &a.t;
+                        o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, "Standard");
+                        if jh_code(t.jh) != 0 || jv_code(t.jv) != 0 {
+                            o.out.i(72, jh_code(t.jh) as i64);
+                            o.out.pt(t.p, 1);
+                        }
+                        o.out.s(100, "AcDbAttribute").s(2, &a.tag).i(70, a.hidden as i64).i(74, jv_code(t.jv) as i64);
+                    }
+                    let hnd = self.h();
+                    let layer = if props.layer.is_empty() { "0" } else { props.layer };
+                    o.out.s(0, "SEQEND").s(5, &hnd).s(330, &o.owner.clone()).s(100, "AcDbEntity").s(8, layer);
+                }
+            }
+            Kind::Table(t) => {
+                let (segs, texts) = crate::entities::table_geometry(t);
+                for sg in segs {
+                    if let crate::geom::Seg::L { a, b, .. } = sg {
+                        self.line(o, a, b, &props, None);
+                    }
+                }
+                for tx in texts {
+                    self.text(o, tx.p, tx.h, &tx.s, tx.rot, tx.jh, tx.jv, &props, None);
+                }
+            }
+            Kind::Wipeout(w) => {
+                let v: Vec<Vertex> = w.pts.iter().map(|p| Vertex { x: p.x, y: p.y, b: 0.0 }).collect();
+                if v.len() >= 3 {
+                    self.lwpoly(o, &v, true, &props);
+                }
+            }
+            Kind::Region(r) => {
+                for l in &r.loops {
+                    self.lwpoly(o, l, true, &props);
+                }
             }
             Kind::Leader { pts, s, h } => {
                 self.common(o, "LEADER", &props, Some("AcDbLeader"), None);

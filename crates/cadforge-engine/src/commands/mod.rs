@@ -9,6 +9,11 @@ pub mod aliases;
 pub mod annotate;
 pub mod blocks;
 pub mod draw;
+pub mod ext_annotate;
+pub mod ext_blocks;
+pub mod ext_modify;
+pub mod ext_solids;
+pub mod ext_system;
 pub mod helpers;
 pub mod inquiry;
 pub mod layer;
@@ -43,6 +48,11 @@ pub fn build_registry() -> Registry {
     blocks::register(&mut r);
     solids::register(&mut r);
     system::register(&mut r);
+    ext_solids::register(&mut r);
+    ext_annotate::register(&mut r);
+    ext_modify::register(&mut r);
+    ext_blocks::register(&mut r);
+    ext_system::register(&mut r);
     aliases::install(&mut r);
     r
 }

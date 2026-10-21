@@ -61,11 +61,30 @@ pub struct TextData {
     pub w: Option<f64>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub multi: bool,
+    /// Attribute definition (ATTDEF) data when this text is a block attribute template.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub att: Option<AttDef>,
+}
+
+/// Attribute definition: tag, prompt and mode flags (ATTDEF).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AttDef {
+    pub tag: String,
+    #[serde(default)]
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub invisible: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub constant: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub verify: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub preset: bool,
 }
 
 impl TextData {
     pub fn new(p: Pt, h: f64, s: &str) -> TextData {
-        TextData { p, h, s: s.to_string(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false }
+        TextData { p, h, s: s.to_string(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false, att: None }
     }
     pub fn with_rot(mut self, rot: f64) -> TextData {
         self.rot = rot;
