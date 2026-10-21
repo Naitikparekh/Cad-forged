@@ -1,5 +1,6 @@
 //! 3D solids: triangle meshes with an optional linked extrusion history (port of `src/solid`).
 pub mod boolean;
+pub mod ext;
 pub mod mesh;
 
 use crate::style::Color;
