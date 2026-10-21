@@ -334,11 +334,11 @@ mod tests {
     fn points() {
         let base = Some(pt(10.0, 10.0));
         assert_eq!(parse_input("1,2", InputOpts::default()), Some(Input::Point { pt: pt(1.0, 2.0), z: None, polar: None }));
-        assert_eq!(parse_input("@5,5", InputOpts { base, relative_default: false }), Some(Input::Point { pt: pt(15.0, 15.0), z: None, polar: None }));
-        assert_eq!(parse_input("5,5", InputOpts { base, relative_default: true }), Some(Input::Point { pt: pt(15.0, 15.0), z: None, polar: None }));
-        assert_eq!(parse_input("#5,5", InputOpts { base, relative_default: true }), Some(Input::Point { pt: pt(5.0, 5.0), z: None, polar: None }));
-        assert_eq!(parse_input("@", InputOpts { base, relative_default: false }), Some(Input::Point { pt: pt(10.0, 10.0), z: None, polar: None }));
-        match parse_input("@10<90", InputOpts { base, relative_default: false }) {
+        assert_eq!(parse_input("@5,5", InputOpts { base, relative_default: false, ..InputOpts::default() }), Some(Input::Point { pt: pt(15.0, 15.0), z: None, polar: None }));
+        assert_eq!(parse_input("5,5", InputOpts { base, relative_default: true, ..InputOpts::default() }), Some(Input::Point { pt: pt(15.0, 15.0), z: None, polar: None }));
+        assert_eq!(parse_input("#5,5", InputOpts { base, relative_default: true, ..InputOpts::default() }), Some(Input::Point { pt: pt(5.0, 5.0), z: None, polar: None }));
+        assert_eq!(parse_input("@", InputOpts { base, relative_default: false, ..InputOpts::default() }), Some(Input::Point { pt: pt(10.0, 10.0), z: None, polar: None }));
+        match parse_input("@10<90", InputOpts { base, relative_default: false, ..InputOpts::default() }) {
             Some(Input::Point { pt: p, polar: Some((d, _)), .. }) => {
                 assert!((p.x - 10.0).abs() < 1e-9 && (p.y - 20.0).abs() < 1e-9 && d == 10.0);
             }
