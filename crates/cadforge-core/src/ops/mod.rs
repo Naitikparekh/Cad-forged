@@ -3,4 +3,5 @@ pub mod boundary;
 pub mod fillet;
 pub mod offset;
 pub mod path;
+pub mod polybool;
 pub mod trim;
