@@ -143,6 +143,12 @@ struct File {
     #[serde(rename = "nextId")]
     next_id: u64,
     view: Option<ViewState>,
+    #[serde(default, skip_serializing_if = "at_origin")]
+    base: Pt,
+}
+
+fn at_origin(p: &Pt) -> bool {
+    *p == Pt::ZERO
 }
 
 #[derive(Serialize, Deserialize)]
@@ -157,6 +163,8 @@ struct Snap {
     cur: Current,
     #[serde(rename = "nextId")]
     next_id: u64,
+    #[serde(default)]
+    base: Pt,
 }
 
 struct UndoStep {
@@ -186,6 +194,8 @@ pub struct Drawing {
     pub solids: Vec<Solid>,
     pub views: IndexMap<String, NamedView>,
     pub cur: Current,
+    /// Insertion base point of the drawing (BASE / `$INSBASE`), used when it is inserted or attached elsewhere.
+    pub base: Pt,
     /// Active space: `"model"` or a layout name.
     pub space: String,
     /// Last camera state (persisted).
@@ -225,6 +235,7 @@ impl Clone for Drawing {
         d.solids = self.solids.clone();
         d.views = self.views.clone();
         d.cur = self.cur.clone();
+        d.base = self.base;
         d.space = self.space.clone();
         d.view = self.view;
         d.dirty = self.dirty;
@@ -247,6 +258,7 @@ impl Drawing {
             solids: Vec::new(),
             views: IndexMap::new(),
             cur: Current::default(),
+            base: Pt::ZERO,
             space: MODEL.into(),
             view: None,
             dirty: false,
@@ -760,6 +772,7 @@ impl Drawing {
             views: self.views.clone(),
             cur: self.cur.clone(),
             next_id: self.next_id,
+            base: self.base,
         };
         serde_json::to_string(&s).expect("snapshot serialises")
     }
@@ -774,6 +787,7 @@ impl Drawing {
         self.solids = s.solids;
         self.views = s.views;
         self.cur = s.cur;
+        self.base = s.base;
         self.next_id = self.next_id.max(s.next_id);
         if self.space != MODEL && !self.layouts.iter().any(|l| l.name == self.space) {
             self.space = MODEL.into();
@@ -839,6 +853,7 @@ impl Drawing {
             cur: self.cur.clone(),
             next_id: self.next_id,
             view: self.view,
+            base: self.base,
         };
         serde_json::to_value(f).expect("drawing serialises")
     }
@@ -905,6 +920,7 @@ impl Drawing {
         d.views = f.views;
         d.cur = f.cur;
         d.view = f.view;
+        d.base = f.base;
         d.next_id = f.next_id.max(1);
         let max_id = d.all_entities().map(|e| e.id).chain(d.solids.iter().map(|s| s.id)).max().unwrap_or(0);
         if max_id >= d.next_id {

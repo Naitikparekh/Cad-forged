@@ -394,6 +394,22 @@ impl Default for Units {
     }
 }
 
+/// Attribute display mode (ATTDISP): `Normal` honours each attribute's own visibility.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AttDisp {
+    #[default]
+    Normal,
+    On,
+    Off,
+}
+
+impl AttDisp {
+    fn is_normal(&self) -> bool {
+        *self == AttDisp::Normal
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -411,6 +427,8 @@ pub struct Settings {
     pub chamfer_d2: f64,
     pub offset_gap: f64,
     pub plinewid: f64,
+    #[serde(skip_serializing_if = "AttDisp::is_normal")]
+    pub attdisp: AttDisp,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layer_states: Option<IndexMap<String, Vec<Layer>>>,
 }
@@ -434,6 +452,7 @@ impl Default for Settings {
             chamfer_d2: 0.0,
             offset_gap: 0.0,
             plinewid: 0.0,
+            attdisp: AttDisp::Normal,
             layer_states: None,
         }
     }
