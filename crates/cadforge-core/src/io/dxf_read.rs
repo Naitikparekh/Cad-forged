@@ -579,6 +579,11 @@ fn attach_of(n: i64) -> (HJust, VJust) {
 struct Ctx {
     blocks: HashMap<String, BlockRaw>,
     skipped: std::collections::BTreeMap<String, usize>,
+    /// IMAGEDEF objects by handle: (path, width px, height px).
+    image_defs: HashMap<String, (String, u32, u32)>,
+    /// Picture names given to IMAGEDEF handles and the pictures themselves (their files are not part of a DXF).
+    image_keys: HashMap<String, String>,
+    images: indexmap::IndexMap<String, crate::picture::ImageDef>,
 }
 
 struct BlockRaw {
@@ -914,6 +919,56 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 push(Entity::new(Kind::Viewport(vp)), false, &mut out);
             }
         }
+        "IMAGE" => {
+            let (up, vp) = (r.pt(1), r.pt(2));
+            let (mut wpx, mut hpx) = (r.num(13, 0.0), r.num(23, 0.0));
+            let def = r.first(340).and_then(|h| ctx.image_defs.get(h)).cloned();
+            if let Some((_, w, h)) = &def {
+                if wpx <= 0.0 {
+                    wpx = *w as f64;
+                }
+                if hpx <= 0.0 {
+                    hpx = *h as f64;
+                }
+            }
+            if wpx >= 1.0 && hpx >= 1.0 && wpx <= 1e6 && hpx <= 1e6 && (up.x != 0.0 || up.y != 0.0) && (vp.x != 0.0 || vp.y != 0.0) {
+                let (path, hnd) = (def.map_or_else(|| "image".to_string(), |d| d.0), r.first(340).unwrap_or("").to_string());
+                let key = match ctx.image_keys.get(&hnd) {
+                    Some(k) if !hnd.is_empty() => k.clone(),
+                    _ => {
+                        let k = crate::picture::unique_key(&path, |k| ctx.images.contains_key(k));
+                        ctx.images.insert(k.clone(), crate::picture::ImageDef::missing(&path, wpx as u32, hpx as u32));
+                        ctx.image_keys.insert(hnd, k.clone());
+                        k
+                    }
+                };
+                let mut im = ImageData { name: key, p: r.pt(0), u: up * wpx, v: vp * hpx, clip: vec![], clip_off: false, brightness: r.int(281, 50).clamp(0, 100) as i32, contrast: r.int(282, 50).clamp(0, 100) as i32, fade: r.int(283, 0).clamp(0, 100) as i32 };
+                // boundary vertices are in pixels from the top-left corner of the picture, y down
+                let to_world = |x: f64, y: f64| im.p + up * (x + 0.5) + vp * (hpx - y - 0.5);
+                let (xs, ys) = (r.all_num(14), r.all_num(24));
+                let verts: Vec<Pt> = xs.iter().zip(&ys).map(|(x, y)| to_world(*x, *y)).collect();
+                let active = r.int(280, 0) != 0;
+                let poly = match (r.int(71, 1), verts.len()) {
+                    (1, 2) if active => {
+                        let (a, b) = (pt(xs[0], ys[0]), pt(xs[1], ys[1]));
+                        vec![to_world(a.x, a.y), to_world(b.x, a.y), to_world(b.x, b.y), to_world(a.x, b.y)]
+                    }
+                    (2, n) if n >= 3 => {
+                        let mut v = verts.clone();
+                        if v.first() == v.last() {
+                            v.pop();
+                        }
+                        v
+                    }
+                    _ => vec![],
+                };
+                if poly.len() >= 3 {
+                    im.clip = poly;
+                    im.clip_off = !active;
+                }
+                push(Entity::new(Kind::Image(im)), false, &mut out);
+            }
+        }
         "DIMENSION" => {
             let bname = r.first(2).unwrap_or("").to_string();
             let recs: Vec<Rec> = ctx.blocks.get(&bname).map(|b| b.entities.clone()).unwrap_or_default();
@@ -1136,7 +1191,13 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     }
 
     // ---- blocks (including anonymous dimension blocks, used for DIMENSION import)
-    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default() };
+    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default() };
+    for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "IMAGEDEF") {
+        if let Some(h) = r.first(5) {
+            let px = |v: f64| if v.is_finite() && v > 0.0 { v.min(1e6) as u32 } else { 0 };
+            ctx.image_defs.insert(h.to_string(), (decode_text(r.first(1).unwrap_or("")), px(r.num(10, 0.0)), px(r.num(20, 0.0))));
+        }
+    }
     let mut order: Vec<String> = vec![];
     {
         let mut cur: Option<BlockRaw> = None;
@@ -1280,6 +1341,7 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let cl = decode_text(header.get("$CLAYER").and_then(|v| v.iter().find(|(c, _)| *c == 8)).map(|(_, v)| v.as_str()).unwrap_or("0"));
     doc.cur.layer = doc.layer(&cl).map(|l| l.name.clone()).unwrap_or_else(|| doc.layers[0].name.clone());
 
+    doc.images = std::mem::take(&mut ctx.images);
     doc.skipped = ctx.skipped;
     doc.paper_skipped = 0;
     let _ = paper;

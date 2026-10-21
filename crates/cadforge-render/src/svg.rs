@@ -55,6 +55,29 @@ pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Str
                     if *evenodd { "evenodd" } else { "nonzero" }
                 ));
             }
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => {
+                if *alpha <= 0.0 {
+                    continue;
+                }
+                let Some(png) = cadforge_core::picture::encode_png(pix.0.w, pix.0.h, pix.0.adjusted(adj[0], adj[1], adj[2], *bg)) else { continue };
+                use base64::Engine as _;
+                let data = base64::engine::general_purpose::STANDARD.encode(png);
+                let id = format!("imgclip{}", out.len());
+                let (open, close) = if clip.len() >= 3 {
+                    out.push(format!("<clipPath id=\"{id}\"><path d=\"{}\"/></clipPath>", d(&[Poly { pts: clip.clone(), closed: true }])));
+                    (format!("<g clip-path=\"url(#{id})\">"), "</g>")
+                } else {
+                    (String::new(), "")
+                };
+                out.push(format!(
+                    "{open}<image transform=\"matrix({})\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"{}{} href=\"data:image/png;base64,{data}\"/>{close}",
+                    m.iter().map(|v| format!("{}", (v * 1e6).round() / 1e6)).collect::<Vec<_>>().join(" "),
+                    pix.0.w,
+                    pix.0.h,
+                    if *alpha < 1.0 { format!(" opacity=\"{}\"", f(*alpha as f64)) } else { String::new() },
+                    if *smooth { "" } else { " image-rendering=\"pixelated\"" },
+                ));
+            }
             Op::Text { s, x, y, m, em, color, alpha } => {
                 if *alpha <= 0.0 {
                     continue;

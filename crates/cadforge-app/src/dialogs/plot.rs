@@ -82,6 +82,7 @@ fn scale_ops(ops: &[Op], k: f64) -> Vec<Op> {
             },
             Op::Fill { paths, color, alpha, evenodd } => Op::Fill { paths: paths.iter().map(|p| Poly { pts: p.pts.iter().map(|q| [q[0] * k, q[1] * k]).collect(), closed: p.closed }).collect(), color: *color, alpha: *alpha, evenodd: *evenodd },
             Op::Text { s, x, y, m, em, color, alpha } => Op::Text { s: s.clone(), x: *x, y: *y, m: [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k], em: *em, color: *color, alpha: *alpha },
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => Op::Image { pix: pix.clone(), adj: *adj, bg: *bg, m: [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k], clip: clip.iter().map(|q| [q[0] * k, q[1] * k]).collect(), alpha: *alpha, smooth: *smooth },
         })
         .collect()
 }

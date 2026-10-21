@@ -2,7 +2,7 @@
 //! TrueType font (the plot uses a Helvetica-compatible face so it matches the PDF and SVG output).
 use crate::ops::Op;
 use ab_glyph::{Font, FontRef, OutlineCurve};
-use tiny_skia::{Color, FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
+use tiny_skia::{Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Stroke, StrokeDash, Transform};
 
 fn paint(rgb: [u8; 3], alpha: f32) -> Paint<'static> {
     let mut p = Paint::default();
@@ -61,6 +61,45 @@ pub fn render_png(ops: &[Op], page: (f64, f64), unit_mm: f64, dpi: f64, font_byt
                 }
                 if let Some(path) = pb.finish() {
                     pm.fill_path(&path, &paint(*color, *alpha), if *evenodd { FillRule::EvenOdd } else { FillRule::Winding }, sc, None);
+                }
+            }
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => {
+                let (w, h) = (pix.0.w, pix.0.h);
+                let mut src = pix.0.adjusted(adj[0], adj[1], adj[2], *bg);
+                // tiny-skia wants premultiplied pixels
+                for px in src.chunks_exact_mut(4) {
+                    let a = px[3] as u32;
+                    for v in px[..3].iter_mut() {
+                        *v = ((*v as u32 * a + 127) / 255) as u8;
+                    }
+                }
+                let Some(size) = tiny_skia::IntSize::from_wh(w, h) else { continue };
+                let Some(tex) = Pixmap::from_vec(src, size) else { continue };
+                let quality = if *smooth { FilterQuality::Bilinear } else { FilterQuality::Nearest };
+                let ts = Transform::from_row(m[0] as f32, m[1] as f32, m[2] as f32, m[3] as f32, m[4] as f32, m[5] as f32);
+                let mut pt = Paint::default();
+                pt.shader = Pattern::new(tex.as_ref(), SpreadMode::Pad, quality, alpha.clamp(0.0, 1.0), ts);
+                pt.anti_alias = true;
+                let mut pb = PathBuilder::new();
+                if clip.len() >= 3 {
+                    pb.move_to(clip[0][0] as f32, clip[0][1] as f32);
+                    for q in &clip[1..] {
+                        pb.line_to(q[0] as f32, q[1] as f32);
+                    }
+                } else {
+                    for (i, q) in [[0.0, 0.0], [w as f64, 0.0], [w as f64, h as f64], [0.0, h as f64]].iter().enumerate() {
+                        let (x, y) = (m[0] * q[0] + m[2] * q[1] + m[4], m[1] * q[0] + m[3] * q[1] + m[5]);
+                        if i == 0 {
+                            pb.move_to(x as f32, y as f32);
+                        } else {
+                            pb.line_to(x as f32, y as f32);
+                        }
+                    }
+                }
+                pb.close();
+                if let Some(path) = pb.finish() {
+                    // the page scale `sc` applies to the path and (after the pixel-to-device map) to the pattern
+                    pm.fill_path(&path, &pt, FillRule::Winding, sc, None);
                 }
             }
             Op::Text { s, x, y, m, em, color, alpha } => {

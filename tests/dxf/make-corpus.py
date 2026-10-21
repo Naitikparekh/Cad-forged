@@ -125,4 +125,13 @@ d.header["$LIMMAX"] = (420, 297)
 d.header["$INSBASE"] = (10, 20, 0)
 d.modelspace().add_point((1, 1))
 d.saveas(out / "header-R2010.dxf")
+# raster image with a polygonal clip and adjustments (the picture file itself is only referenced)
+d = ezdxf.new("R2018")
+idef = d.add_image_def(filename="site/aerial photo.jpg", size_in_pixel=(800, 600))
+im = d.modelspace().add_image(idef, insert=(100, 50), size_in_units=(80, 60), rotation=0)
+im.set_boundary_path([(100, 100), (700, 100), (400, 500)])
+im.dxf.brightness = 70
+im.dxf.contrast = 30
+im.dxf.fade = 15
+d.saveas(out / "image-R2018.dxf")
 print("wrote", len(list(out.glob('*.dxf'))), "files")

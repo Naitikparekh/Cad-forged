@@ -162,6 +162,8 @@ struct File {
     settings: Settings,
     layers: Vec<Layer>,
     blocks: IndexMap<String, Block>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    images: IndexMap<String, crate::picture::ImageDef>,
     model: Space,
     layouts: Vec<Layout>,
     solids: Vec<Solid>,
@@ -219,6 +221,9 @@ pub struct Drawing {
     pub next_id: u64,
     pub layers: Vec<Layer>,
     pub blocks: IndexMap<String, Block>,
+    /// Raster pictures attached with IMAGEATTACH, by name. Append-only and outside the undo history (large), so
+    /// undoing an attach leaves the picture here until PURGE.
+    pub images: IndexMap<String, crate::picture::ImageDef>,
     pub settings: Settings,
     pub model: Space,
     pub layouts: Vec<Layout>,
@@ -265,6 +270,7 @@ impl Clone for Drawing {
         d.next_id = self.next_id;
         d.layers = self.layers.clone();
         d.blocks = self.blocks.clone();
+        d.images = self.images.clone();
         d.settings = self.settings.clone();
         d.model = self.model.clone();
         d.layouts = self.layouts.clone();
@@ -288,6 +294,7 @@ impl Drawing {
             next_id: 1,
             layers: vec![Layer::new("0")],
             blocks: IndexMap::new(),
+            images: IndexMap::new(),
             settings: Settings::default(),
             model: Space::default(),
             layouts: Vec::new(),
@@ -1028,6 +1035,7 @@ impl Drawing {
             settings: self.settings.clone(),
             layers: self.layers.clone(),
             blocks: self.blocks.clone(),
+            images: self.images.clone(),
             model: self.model.clone(),
             layouts: self.layouts.clone(),
             solids: self.solids.clone(),
@@ -1098,6 +1106,7 @@ impl Drawing {
         d.settings = f.settings;
         d.layers = f.layers;
         d.blocks = f.blocks;
+        d.images = f.images;
         d.model = f.model;
         d.layouts = f.layouts;
         d.solids = f.solids;
@@ -1117,6 +1126,22 @@ impl Drawing {
         Ok(d)
     }
 
+    // ------------------------------------------------------------ pictures
+
+    /// Attach a PNG / JPEG file; returns the name entities use to refer to it.
+    pub fn add_image(&mut self, path: &str, bytes: Vec<u8>) -> Result<String, String> {
+        let def = crate::picture::ImageDef::from_file(path, bytes)?;
+        let key = crate::picture::unique_key(path, |k| self.images.contains_key(k));
+        self.images.insert(key.clone(), def);
+        Ok(key)
+    }
+
+    /// Names of the pictures no entity (in any space or block) refers to.
+    pub fn unused_images(&self) -> Vec<String> {
+        let used: std::collections::HashSet<&str> = self.all_entities().chain(self.blocks.values().flat_map(|b| b.entities.iter())).filter_map(|e| if let Kind::Image(i) = &e.kind { Some(i.name.as_str()) } else { None }).collect();
+        self.images.keys().filter(|k| !used.contains(k.as_str())).cloned().collect()
+    }
+
     /// Structural sanity check run on every load.
     pub fn validate(&self) -> Result<(), String> {
         let fin = |n: f64| n.is_finite();
@@ -1133,6 +1158,7 @@ impl Drawing {
                 Kind::Point { p } => okp(p),
                 Kind::Text(t) => okp(&t.p) && fin(t.h) && t.h > 0.0,
                 Kind::Insert(i) => okp(&i.p),
+                Kind::Image(i) => okp(&i.p) && okp(&i.u) && okp(&i.v) && i.clip.iter().all(okp),
                 _ => true,
             };
             if !ok {
@@ -1257,6 +1283,7 @@ fn kind_name(k: &Kind) -> &'static str {
         Kind::Table(_) => "table",
         Kind::Wipeout(_) => "wipeout",
         Kind::Region(_) => "region",
+        Kind::Image(_) => "image",
     }
 }
 

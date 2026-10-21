@@ -18,9 +18,13 @@ pub struct FileBrowserState {
 
 impl FileBrowserState {
     pub fn open(purpose: &'static str) -> FileBrowserState {
-        let exts = if purpose == "script" { vec!["scr", "txt"] } else { vec!["json", "cadforge", "dxf"] };
+        let exts = match purpose {
+            "script" => vec!["scr", "txt"],
+            "image" => vec!["png", "jpg", "jpeg"],
+            _ => vec!["json", "cadforge", "dxf"],
+        };
         let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
+        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
     }
 
     fn reload(&mut self) {

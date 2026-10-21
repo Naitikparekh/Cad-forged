@@ -36,7 +36,7 @@ pub fn pick_at(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Option<&H
         if d > ap {
             continue;
         }
-        if matches!(e.kind, Kind::Hatch(_)) {
+        if matches!(e.kind, Kind::Hatch(_) | Kind::Image(_)) {
             d += ap * 0.9;
         }
         if d <= best_score + 1e-12 {

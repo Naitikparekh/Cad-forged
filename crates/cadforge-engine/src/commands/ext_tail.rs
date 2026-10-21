@@ -8,6 +8,7 @@ use crate::runtime::PromptSpec;
 
 mod data;
 mod draw;
+mod images;
 mod nav;
 mod props;
 mod ui;
@@ -18,6 +19,7 @@ fn ps(m: &str) -> PromptSpec {
 
 pub fn register(r: &mut crate::registry::Registry) {
     draw::register(r);
+    images::register(r);
     props::register(r);
     nav::register(r);
     ui::register(r);

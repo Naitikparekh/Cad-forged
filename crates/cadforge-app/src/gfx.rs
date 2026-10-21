@@ -1,5 +1,6 @@
 //! Drawing primitives shared by the viewport and the icon renderer: renderer [`Op`]s → egui shapes, dashing,
 //! polygon filling with holes, rotated text.
+use cadforge_core::picture::Decoded;
 use cadforge_render::{Op, Poly};
 use eframe::egui::epaint::{Mesh, PathShape, PathStroke, TextShape, Vertex};
 use eframe::egui::{self, Align2, Color32, FontFamily, FontId, Painter, Pos2, Rect, Shape, Stroke};
@@ -148,8 +149,60 @@ pub fn fill_mesh(loops: &[Vec<[f64; 2]>], color: Color32, origin: Pos2) -> Mesh 
     mesh
 }
 
+type ImgKey = (usize, [i32; 3], [u8; 3], bool);
+
+thread_local! {
+    /// Uploaded pictures. The pixels are kept alongside the texture so that the key (their address) stays unique.
+    static IMAGES: std::cell::RefCell<std::collections::HashMap<ImgKey, (std::rc::Rc<Decoded>, egui::TextureHandle)>> = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Upload (or find) the texture of a picture with its IMAGEADJUST settings applied.
+fn image_texture(ctx: &egui::Context, pix: &std::rc::Rc<Decoded>, adj: [i32; 3], bg: [u8; 3], smooth: bool) -> egui::TextureHandle {
+    let key: ImgKey = (std::rc::Rc::as_ptr(pix) as usize, adj, bg, smooth);
+    IMAGES.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some((_, t)) = c.get(&key) {
+            return t.clone();
+        }
+        if c.len() > 24 {
+            c.clear();
+        }
+        let img = egui::ColorImage::from_rgba_unmultiplied([pix.w as usize, pix.h as usize], &pix.adjusted(adj[0], adj[1], adj[2], bg));
+        let opts = egui::TextureOptions { magnification: if smooth { egui::TextureFilter::Linear } else { egui::TextureFilter::Nearest }, minification: egui::TextureFilter::Linear, wrap_mode: egui::TextureWrapMode::ClampToEdge, mipmap_mode: None };
+        let t = ctx.load_texture("cad-image", img, opts);
+        c.insert(key, (pix.clone(), t.clone()));
+        t
+    })
+}
+
+/// A textured mesh for a picture; the boundary polygon (device space) is triangulated, UVs come from the inverse map.
+fn image_mesh(tex: &egui::TextureHandle, pix: &Decoded, m: &[f64; 6], clip: &[[f64; 2]], alpha: f32, origin: Pos2) -> Option<Mesh> {
+    let det = m[0] * m[3] - m[1] * m[2];
+    if det.abs() < 1e-18 {
+        return None;
+    }
+    let uv = |p: [f64; 2]| {
+        let (dx, dy) = (p[0] - m[4], p[1] - m[5]);
+        let (px, py) = ((dx * m[3] - dy * m[2]) / det, (m[0] * dy - m[1] * dx) / det);
+        Pos2::new((px / pix.w as f64) as f32, (py / pix.h as f64) as f32)
+    };
+    let (w, h) = (pix.w as f64, pix.h as f64);
+    let poly: Vec<[f64; 2]> = if clip.len() >= 3 { clip.to_vec() } else { [[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]].iter().map(|q| [m[0] * q[0] + m[2] * q[1] + m[4], m[1] * q[0] + m[3] * q[1] + m[5]]).collect() };
+    let flat: Vec<f64> = poly.iter().flat_map(|p| [p[0], p[1]]).collect();
+    let tris = earcutr::earcut(&flat, &[], 2).ok()?;
+    let tint = Color32::from_white_alpha((alpha.clamp(0.0, 1.0) * 255.0).round() as u8);
+    let mut mesh = Mesh::with_texture(tex.id());
+    for p in &poly {
+        mesh.vertices.push(Vertex { pos: pos(*p, origin), uv: uv(*p), color: tint });
+    }
+    for t in tris.chunks_exact(3) {
+        mesh.indices.extend([t[0] as u32, t[1] as u32, t[2] as u32]);
+    }
+    Some(mesh)
+}
+
 /// Draw renderer ops; `origin` is the screen position of device (0, 0).
-pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip: Rect) {
+pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
     for op in ops {
         match op {
             Op::Stroke { paths, color, alpha, width, dash, round } => {
@@ -162,7 +215,7 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip: Rect) {
                         continue;
                     }
                     let pts: Vec<Pos2> = p.pts.iter().map(|q| pos(*q, origin)).collect();
-                    if !visible(&pts, clip) {
+                    if !visible(&pts, clip_arg) {
                         continue;
                     }
                     if dash_f.is_empty() {
@@ -181,6 +234,16 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip: Rect) {
                 let m = fill_mesh(&loops, col(*color, *alpha), origin);
                 if !m.is_empty() {
                     painter.add(Shape::mesh(m));
+                }
+            }
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => {
+                let pts: Vec<Pos2> = [[0.0, 0.0], [pix.0.w as f64, 0.0], [pix.0.w as f64, pix.0.h as f64], [0.0, pix.0.h as f64]].iter().map(|q| pos([m[0] * q[0] + m[2] * q[1] + m[4], m[1] * q[0] + m[3] * q[1] + m[5]], origin)).collect();
+                if !visible(&pts, clip_arg) {
+                    continue;
+                }
+                let tex = image_texture(painter.ctx(), &pix.0, *adj, *bg, *smooth);
+                if let Some(mesh) = image_mesh(&tex, &pix.0, m, clip, *alpha, origin) {
+                    painter.add(Shape::mesh(mesh));
                 }
             }
             Op::Text { s, x, y, m, em, color, alpha } => {

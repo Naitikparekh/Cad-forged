@@ -64,6 +64,7 @@ impl CadForgeApp {
                 }
             }
             "SCRIPT" => self.open_files(ctx, "script"),
+            "IMAGEATTACH" => self.open_files(ctx, "image"),
             "WORKSPACE" => {
                 if let Some(n) = args.str("name") {
                     self.set_workspace(n);
@@ -102,7 +103,11 @@ impl CadForgeApp {
     pub fn open_files(&mut self, ctx: &egui::Context, purpose: &'static str) {
         #[cfg(target_arch = "wasm32")]
         {
-            let accept = if purpose == "script" { ".scr,.txt" } else { ".json,.cadforge,.dxf" };
+            let accept = match purpose {
+                "script" => ".scr,.txt",
+                "image" => ".png,.jpg,.jpeg",
+                _ => ".json,.cadforge,.dxf",
+            };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -116,6 +121,10 @@ impl CadForgeApp {
     pub fn process_inbox(&mut self) {
         let items: Vec<Picked> = std::mem::take(&mut *self.inbox.borrow_mut());
         for p in items {
+            if p.purpose == "image" {
+                self.attach_image(&p.name, p.bytes);
+                continue;
+            }
             let text = if p.name.to_lowercase().ends_with(".dxf") { cadforge_core::io::decode_dxf_bytes(&p.bytes) } else { String::from_utf8_lossy(&p.bytes).to_string() };
             match p.purpose {
                 "open" => match self.parse_drawing(&p.name, &text) {
@@ -144,6 +153,22 @@ impl CadForgeApp {
         }
     }
 
+    /// A picture chosen for IMAGEATTACH: register it with the drawing and let the command place it.
+    fn attach_image(&mut self, name: &str, bytes: Vec<u8>) {
+        let r = self.h.borrow_mut().editor_mut().map(|ed| ed.doc.add_image(name, bytes));
+        match r {
+            Some(Ok(key)) => {
+                self.run_command("IMAGEATTACH", Args::none().with("name", cadforge_engine::runtime::ArgVal::Str(key)));
+                self.h.pump();
+            }
+            Some(Err(e)) => {
+                self.h.borrow_mut().log(&e, "error");
+                self.toast(&e);
+            }
+            None => {}
+        }
+    }
+
     fn parse_drawing(&self, name: &str, text: &str) -> Result<Drawing, String> {
         let base = strip_ext(name);
         if name.to_lowercase().ends_with(".dxf") {
@@ -165,6 +190,11 @@ impl CadForgeApp {
             for (k, b) in &src.blocks {
                 if !d.blocks.contains_key(k) {
                     d.blocks.insert(k.clone(), b.clone());
+                }
+            }
+            for (k, im) in &src.images {
+                if !d.images.contains_key(k) {
+                    d.images.insert(k.clone(), im.clone());
                 }
             }
             for e in &src.model.entities {

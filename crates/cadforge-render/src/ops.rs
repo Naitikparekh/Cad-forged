@@ -1,6 +1,8 @@
 //! Backend-independent draw operations (the Rust counterpart of the recorded canvas operations in the web app).
 //! Geometry is flattened to polylines in *device space* (screen pixels for the viewport, 0.1 mm for plots).
 use cadforge_core::geom::Mat;
+use cadforge_core::picture::Decoded;
+use std::rc::Rc;
 
 pub type Rgb = [u8; 3];
 
@@ -10,6 +12,16 @@ pub struct Poly {
     pub closed: bool,
 }
 
+/// Shared decoded pixels of a picture (compared by identity, not by content).
+#[derive(Clone, Debug)]
+pub struct Pix(pub Rc<Decoded>);
+
+impl PartialEq for Pix {
+    fn eq(&self, o: &Pix) -> bool {
+        Rc::ptr_eq(&self.0, &o.0)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
     Stroke { paths: Vec<Poly>, color: Rgb, alpha: f32, width: f64, dash: Vec<f64>, round: bool },
@@ -17,6 +29,10 @@ pub enum Op {
     /// A line of text. `m` maps text-local coordinates (x along the baseline, y downwards, units of the em box) to
     /// device space; `(x, y)` is the start of the baseline in local coordinates and `em` the font size in local units.
     Text { s: String, x: f64, y: f64, m: Mat, em: f64, color: Rgb, alpha: f32 },
+    /// A raster picture. `m` maps pixel coordinates (origin at the top-left corner, y down) to device space; `clip` is
+    /// the visible boundary in device space (empty = the whole picture); `adj` is brightness / contrast / fade, mixed
+    /// toward `bg`; `smooth` selects bilinear sampling over nearest-neighbour.
+    Image { pix: Pix, adj: [i32; 3], bg: Rgb, m: Mat, clip: Vec<[f64; 2]>, alpha: f32, smooth: bool },
 }
 
 impl Op {

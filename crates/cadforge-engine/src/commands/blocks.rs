@@ -210,6 +210,13 @@ async fn wblock(c: Ctx, _a: Args) -> CmdResult<()> {
             e.id = 0;
             out.add(e);
         }
+        // pictures used by the objects or by the blocks they insert
+        let pics: Vec<String> = out.all_entities().chain(out.blocks.values().flat_map(|b| b.entities.iter())).filter_map(|e| if let Kind::Image(i) = &e.kind { Some(i.name.clone()) } else { None }).collect();
+        for n in pics {
+            if let Some(def) = d.images.get(&n) {
+                out.images.insert(n, def.clone());
+            }
+        }
         out
     });
     let text = cadforge_core::io::write_dxf(&out);

@@ -152,6 +152,8 @@ struct W<'a> {
     block_rec: HashMap<String, (String, String, String)>,
     /// Next viewport id in the layout being written (id 1 is the sheet's own viewport).
     vp_id: i64,
+    /// IMAGEDEF handle of each picture used, with the (reactor, IMAGE entity) handles that point at it.
+    image_defs: Vec<(String, String, Vec<(String, String)>)>,
 }
 
 impl<'a> W<'a> {
@@ -217,6 +219,49 @@ impl<'a> W<'a> {
         o.out.n(16, 0.0).n(26, 0.0).n(36, 1.0).n(17, 0.0).n(27, 0.0).n(37, 0.0).n(42, 50.0).n(43, 0.0).n(44, 0.0).n(45, view_h).n(50, 0.0).n(51, 0.0).i(72, 100);
         o.out.i(90, if id == 1 { 557088 } else if locked { 16384 } else { 0 }).s(1, "").i(281, 0).i(71, 0).i(74, 0);
         o.out.n(110, 0.0).n(120, 0.0).n(130, 0.0).n(111, 1.0).n(121, 0.0).n(131, 0.0).n(112, 0.0).n(122, 1.0).n(132, 0.0).i(79, 0).n(146, 0.0).i(282, 0);
+    }
+
+    /// IMAGE entity; the picture itself stays outside the file (IMAGEDEF carries its path), as in AutoCAD.
+    fn image(&mut self, o: &mut EOut, im: &ImageData, props: &Props) {
+        let Some(def) = self.doc.images.get(&im.name) else { return };
+        let (wpx, hpx) = (def.w.max(1) as f64, def.h.max(1) as f64);
+        let def_h = match self.image_defs.iter().position(|d| d.0 == im.name) {
+            Some(i) => self.image_defs[i].1.clone(),
+            None => {
+                let h = self.h();
+                self.image_defs.push((im.name.clone(), h.clone(), vec![]));
+                h
+            }
+        };
+        let reactor = self.h();
+        let ent_h = format!("{:X}", self.handle);
+        self.common(o, "IMAGE", props, Some("AcDbRasterImage"), None);
+        if let Some(d) = self.image_defs.iter_mut().find(|d| d.0 == im.name) {
+            d.2.push((reactor.clone(), ent_h));
+        }
+        let (up, vp) = (im.u * (1.0 / wpx), im.v * (1.0 / hpx));
+        let active = !im.clip.is_empty() && !im.clip_off;
+        o.out.i(90, 0).pt(im.p, 0).pt(up, 1).pt(vp, 2).n(13, wpx).n(23, hpx).s(340, &def_h);
+        o.out.i(70, 3 | if active { 4 } else { 0 }).i(280, active as i64).i(281, im.brightness as i64).i(282, im.contrast as i64).i(283, im.fade as i64).s(360, &reactor);
+        if im.clip.is_empty() {
+            o.out.i(71, 1).i(91, 2).n(14, -0.5).n(24, -0.5).n(14, wpx - 0.5).n(24, hpx - 0.5);
+        } else {
+            // pixel coordinates with the origin at the top-left corner of the picture (y down), pixel centres at whole numbers
+            let det = im.u.x * im.v.y - im.u.y * im.v.x;
+            o.out.i(71, 2).i(91, im.clip.len() as i64 + 1);
+            let px = |q: Pt| {
+                let d = q - im.p;
+                if det.abs() < 1e-18 {
+                    return (0.0, 0.0);
+                }
+                let (s, t) = ((d.x * im.v.y - d.y * im.v.x) / det, (im.u.x * d.y - im.u.y * d.x) / det);
+                (s * wpx - 0.5, (1.0 - t) * hpx - 0.5)
+            };
+            for q in im.clip.iter().chain(im.clip.first()) {
+                let (x, y) = px(*q);
+                o.out.n(14, x).n(24, y);
+            }
+        }
     }
 
     fn line(&mut self, o: &mut EOut, a: Pt, b: Pt, props: &Props, layer: Option<&str>) {
@@ -363,6 +408,7 @@ impl<'a> W<'a> {
                     self.lwpoly(o, l, true, &props);
                 }
             }
+            Kind::Image(im) => self.image(o, im, &props),
             Kind::Leader { pts, s, h } => {
                 self.common(o, "LEADER", &props, Some("AcDbLeader"), None);
                 o.out.s(3, "Standard").i(71, 1).i(72, 0).i(73, 3).i(74, 1).i(75, 0).n(40, *h).n(41, 0.0).i(76, pts.len() as i64);
@@ -502,7 +548,7 @@ impl<'a> W<'a> {
 
 /// Serialise a drawing to DXF text.
 pub fn write_dxf(doc: &Drawing) -> String {
-    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2 };
+    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2, image_defs: vec![] };
     let mut o = Out::default();
 
     // ---------- collect names
@@ -719,7 +765,11 @@ pub fn write_dxf(doc: &Drawing) -> String {
 
     // ---------- OBJECTS (root dictionary, groups and the layout dictionary)
     o.s(0, "SECTION").s(2, "OBJECTS");
+    let dict_images = w.h();
     o.s(0, "DICTIONARY").s(5, &hs["dictRoot"]).i(330, 0).s(100, "AcDbDictionary").i(281, 1).s(3, "ACAD_GROUP").s(350, &hs["dictGroup"]).s(3, "ACAD_LAYOUT").s(350, &dict_layout);
+    if !w.image_defs.is_empty() {
+        o.s(3, "ACAD_IMAGE_DICT").s(350, &dict_images);
+    }
     o.s(0, "DICTIONARY").s(5, &hs["dictGroup"]).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
     o.s(0, "DICTIONARY").s(5, &dict_layout).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
     o.s(3, "Model").s(350, &model_layout);
@@ -735,6 +785,23 @@ pub fn write_dxf(doc: &Drawing) -> String {
         o.n(14, 0.0).n(24, 0.0).n(34, 0.0).n(15, pw).n(25, ph).n(35, 0.0).n(146, 0.0).n(13, 0.0).n(23, 0.0).n(33, 0.0);
         o.n(16, 1.0).n(26, 0.0).n(36, 0.0).n(17, 0.0).n(27, 1.0).n(37, 0.0).i(76, 0).s(330, block_rec);
     };
+    if !w.image_defs.is_empty() {
+        o.s(0, "DICTIONARY").s(5, &dict_images).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
+        for (name, def_h, _) in &w.image_defs {
+            o.s(3, &enc(name)).s(350, def_h);
+        }
+        for (name, def_h, reactors) in &w.image_defs {
+            let d = &doc.images[name];
+            o.s(0, "IMAGEDEF").s(5, def_h).s(102, "{ACAD_REACTORS").s(330, &dict_images);
+            for (r, _) in reactors {
+                o.s(330, r);
+            }
+            o.s(102, "}").s(330, &dict_images).s(100, "AcDbRasterImageDef").i(90, 0).s(1, &enc(&d.path)).n(10, d.w as f64).n(20, d.h as f64).n(11, 1.0).n(21, 1.0).i(280, 1).i(281, 0);
+            for (r, ent) in reactors {
+                o.s(0, "IMAGEDEF_REACTOR").s(5, r).s(330, ent).s(100, "AcDbRasterImageDefReactor").i(90, 2).s(330, ent);
+            }
+        }
+    }
     layout_obj(&mut o, &model_layout, "Model", 0, &hs["msRec"], None);
     for (i, ((name, paper, _), h)) in sheets.iter().zip(&sheet_h).enumerate() {
         layout_obj(&mut o, &h.layout, &enc(name), i as i64 + 1, &h.rec, Some(paper));

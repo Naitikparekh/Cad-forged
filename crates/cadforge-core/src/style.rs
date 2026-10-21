@@ -527,6 +527,16 @@ pub struct Settings {
     pub table_styles: IndexMap<String, TableStyle>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub cur_table_style: String,
+    /// IMAGEFRAME: 0 frames hidden, 1 shown and plotted, 2 shown but not plotted.
+    #[serde(skip_serializing_if = "is_one")]
+    pub image_frame: u8,
+    /// IMAGEQUALITY draft: pictures are drawn without smoothing.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub image_draft: bool,
+}
+
+fn is_one(v: &u8) -> bool {
+    *v == 1
 }
 
 impl Default for Settings {
@@ -555,6 +565,8 @@ impl Default for Settings {
             cur_mleader_style: String::new(),
             table_styles: IndexMap::new(),
             cur_table_style: String::new(),
+            image_frame: 1,
+            image_draft: false,
         }
     }
 }

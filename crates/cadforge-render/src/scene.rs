@@ -272,6 +272,39 @@ impl<'a> Renderer<'a> {
         });
     }
 
+    /// IMAGE: the picture (or a crossed frame when the file is not available) and, per IMAGEFRAME, its boundary.
+    fn draw_image(&mut self, im: &ImageData, style: &Style, o: DrawOpts) {
+        let Some(def) = self.doc.images.get(&im.name) else { return };
+        let plotting = matches!(self.lw_mode, LwMode::Plot(_));
+        let boundary: Vec<[f64; 2]> = im.boundary().iter().map(|p| self.dev(*p)).collect();
+        let cs = im.corners();
+        let pix = def.decoded();
+        let mut frame = match self.doc.settings.image_frame {
+            0 => false,
+            2 => !plotting,
+            _ => true,
+        };
+        if let Some(px) = pix {
+            let (tl, tr, bl) = (self.dev(cs[3]), self.dev(cs[2]), self.dev(cs[0]));
+            let (w, h) = (px.w as f64, px.h as f64);
+            let m = [(tr[0] - tl[0]) / w, (tr[1] - tl[1]) / w, (bl[0] - tl[0]) / h, (bl[1] - tl[1]) / h, tl[0], tl[1]];
+            let clipped = !im.clip.is_empty() && !im.clip_off;
+            self.ops.push(Op::Image { pix: Pix(px), adj: [im.brightness, im.contrast, im.fade], bg: self.theme.canvas, m, clip: if clipped { boundary.clone() } else { vec![] }, alpha: style.alpha, smooth: !self.doc.settings.image_draft });
+        } else {
+            // a picture that cannot be shown: a light panel with the diagonals and the file name
+            frame = true;
+            let quad: Vec<[f64; 2]> = cs.iter().map(|p| self.dev(*p)).collect();
+            self.ops.push(Op::Fill { paths: vec![Poly { pts: quad.clone(), closed: true }], color: style.color, alpha: 0.08 * style.alpha, evenodd: false });
+            let diag = vec![Poly { pts: vec![quad[0], quad[2]], closed: false }, Poly { pts: vec![quad[1], quad[3]], closed: false }];
+            self.stroke(diag, style, false, false, 1.0);
+            let c = [(quad[0][0] + quad[2][0]) / 2.0, (quad[0][1] + quad[2][1]) / 2.0];
+            self.ops.push(Op::Text { s: format!("Missing image: {}", def.path), x: 0.0, y: 0.0, m: [1.0, 0.0, 0.0, 1.0, c[0], c[1]], em: 11.0, color: style.color, alpha: style.alpha });
+        }
+        if frame || o.selected || o.hover {
+            self.stroke(vec![Poly { pts: boundary, closed: true }], style, o.selected, o.hover, 0.0);
+        }
+    }
+
     fn fill_poly(&mut self, pts: &[Pt], style: &Style) {
         let poly = Poly { pts: pts.iter().map(|p| self.dev(*p)).collect(), closed: true };
         self.ops.push(Op::Fill { paths: vec![poly], color: style.color, alpha: style.alpha, evenodd: false });
@@ -327,6 +360,7 @@ impl<'a> Renderer<'a> {
                 let paths = self.loops_paths(&r.loops);
                 self.stroke(paths, style, o.selected, o.hover, 0.0);
             }
+            Kind::Image(im) => self.draw_image(im, style, o),
             Kind::Viewport(v) => {
                 let c = v.c;
                 let corners = [pt(c.x - v.w / 2.0, c.y - v.h / 2.0), pt(c.x + v.w / 2.0, c.y - v.h / 2.0), pt(c.x + v.w / 2.0, c.y + v.h / 2.0), pt(c.x - v.w / 2.0, c.y + v.h / 2.0)];
@@ -1038,6 +1072,19 @@ pub fn clip_ops_to_convex(ops: Vec<Op>, polygon: &[[f64; 2]]) -> Vec<Op> {
             t @ Op::Text { .. } => {
                 if t.text_origin().map_or(false, |o| inside_convex(&poly, o)) {
                     out.push(t);
+                }
+            }
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => {
+                // the visible part is the picture's boundary cut by the window
+                let subject: Vec<[f64; 2]> = if clip.is_empty() {
+                    let (w, h) = (pix.0.w as f64, pix.0.h as f64);
+                    [[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]].iter().map(|q| [m[0] * q[0] + m[2] * q[1] + m[4], m[1] * q[0] + m[3] * q[1] + m[5]]).collect()
+                } else {
+                    clip
+                };
+                let pts = clip_polygon_convex(&subject, &poly);
+                if pts.len() >= 3 {
+                    out.push(Op::Image { pix, adj, bg, m, clip: pts, alpha, smooth });
                 }
             }
         }

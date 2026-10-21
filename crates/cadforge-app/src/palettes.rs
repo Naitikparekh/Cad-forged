@@ -201,6 +201,30 @@ pub fn geom_fields(e: &Entity) -> Vec<Field> {
             x("Position Y", |e| if let Kind::Table(t) = &e.kind { t.p.y } else { 0.0 }, |e, v| if let Kind::Table(t) = &mut e.kind { t.p.y = v }),
             ang("Rotation", |e| if let Kind::Table(t) = &e.kind { t.rot } else { 0.0 }, |e, v| if let Kind::Table(t) = &mut e.kind { t.rot = v }),
         ],
+        Kind::Image(_) => vec![
+            x("Position X", |e| if let Kind::Image(i) = &e.kind { i.p.x } else { 0.0 }, |e, v| if let Kind::Image(i) = &mut e.kind { i.p.x = v }),
+            x("Position Y", |e| if let Kind::Image(i) = &e.kind { i.p.y } else { 0.0 }, |e, v| if let Kind::Image(i) = &mut e.kind { i.p.y = v }),
+            xmin("Width", 1e-9, |e| if let Kind::Image(i) = &e.kind { i.size().0 } else { 0.0 }, |e, v| {
+                // the proportions are kept: width and height scale together
+                if let Kind::Image(i) = &mut e.kind {
+                    let k = v / i.size().0.max(1e-12);
+                    i.u = i.u * k;
+                    i.v = i.v * k;
+                }
+            }),
+            xmin("Height", 1e-9, |e| if let Kind::Image(i) = &e.kind { i.size().1 } else { 0.0 }, |e, v| {
+                if let Kind::Image(i) = &mut e.kind {
+                    let k = v / i.size().1.max(1e-12);
+                    i.u = i.u * k;
+                    i.v = i.v * k;
+                }
+            }),
+            ro("Rotation", |e, _| if let Kind::Image(i) = &e.kind { Val::Text(format!("{}°", fmt_num(deg(norm_angle(i.rotation())), 4, true))) } else { Val::Text(String::new()) }),
+            x("Brightness", |e| if let Kind::Image(i) = &e.kind { i.brightness as f64 } else { 0.0 }, |e, v| if let Kind::Image(i) = &mut e.kind { i.brightness = v.round().clamp(0.0, 100.0) as i32 }),
+            x("Contrast", |e| if let Kind::Image(i) = &e.kind { i.contrast as f64 } else { 0.0 }, |e, v| if let Kind::Image(i) = &mut e.kind { i.contrast = v.round().clamp(0.0, 100.0) as i32 }),
+            x("Fade", |e| if let Kind::Image(i) = &e.kind { i.fade as f64 } else { 0.0 }, |e, v| if let Kind::Image(i) = &mut e.kind { i.fade = v.round().clamp(0.0, 100.0) as i32 }),
+            ro("Image", |e, _| if let Kind::Image(i) = &e.kind { Val::Text(i.name.clone()) } else { Val::Text(String::new()) }),
+        ],
         Kind::Wipeout(_) => vec![ro_n("Vertices", |e| if let Kind::Wipeout(w) = &e.kind { w.pts.len() as f64 } else { 0.0 })],
         Kind::Region(_) => vec![
             ro_n("Loops", |e| if let Kind::Region(r) = &e.kind { r.loops.len() as f64 } else { 0.0 }),

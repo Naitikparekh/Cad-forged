@@ -130,6 +130,69 @@ pub struct WipeoutData {
     pub pts: Vec<Pt>,
 }
 
+/// IMAGE: a raster picture (`name` keys [`crate::drawing::Drawing::images`]). `p` is the lower-left corner; `u` runs
+/// along the bottom edge for the whole width and `v` along the left edge for the whole height, so rotation, scale and
+/// mirroring are all carried by the two vectors.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ImageData {
+    pub name: String,
+    pub p: Pt,
+    pub u: Pt,
+    pub v: Pt,
+    /// Clipping polygon in world coordinates (IMAGECLIP); empty for the whole picture.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clip: Vec<Pt>,
+    /// The clipping boundary is switched off (IMAGECLIP OFF) while the polygon is kept.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clip_off: bool,
+    #[serde(default = "fifty")]
+    pub brightness: i32,
+    #[serde(default = "fifty")]
+    pub contrast: i32,
+    #[serde(default)]
+    pub fade: i32,
+}
+
+fn fifty() -> i32 {
+    50
+}
+
+impl ImageData {
+    /// A picture of `w` x `h` drawing units with its lower-left corner at `p`, rotated by `rot` radians.
+    pub fn new(name: &str, p: Pt, w: f64, h: f64, rot: f64) -> ImageData {
+        let (c, s) = (rot.cos(), rot.sin());
+        ImageData { name: name.to_string(), p, u: pt(c * w, s * w), v: pt(-s * h, c * h), clip: vec![], clip_off: false, brightness: 50, contrast: 50, fade: 0 }
+    }
+
+    /// The four corners, counter-clockwise from the lower-left.
+    pub fn corners(&self) -> [Pt; 4] {
+        [self.p, self.p + self.u, self.p + self.u + self.v, self.p + self.v]
+    }
+
+    /// The visible boundary: the clip polygon (cut to the picture), or the whole picture.
+    pub fn boundary(&self) -> Vec<Pt> {
+        if self.clip.len() >= 3 && !self.clip_off {
+            let cut = crate::picture::clip_to_convex(&self.clip, &self.corners());
+            if cut.len() >= 3 {
+                return cut;
+            }
+            self.clip.clone()
+        } else {
+            self.corners().to_vec()
+        }
+    }
+
+    /// Width and height in drawing units.
+    pub fn size(&self) -> (f64, f64) {
+        (len(self.u), len(self.v))
+    }
+
+    /// Rotation of the bottom edge, radians.
+    pub fn rotation(&self) -> f64 {
+        self.u.y.atan2(self.u.x)
+    }
+}
+
 /// REGION: one or more closed loops forming a 2D area (outer loop plus holes).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RegionData {
@@ -223,6 +286,7 @@ pub enum Kind {
     Table(TableData),
     Wipeout(WipeoutData),
     Region(RegionData),
+    Image(ImageData),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -361,6 +425,7 @@ impl Entity {
             Kind::Table(_) => "table",
             Kind::Wipeout(_) => "wipeout",
             Kind::Region(_) => "region",
+            Kind::Image(_) => "image",
         }
     }
 
@@ -386,6 +451,7 @@ impl Entity {
             Kind::Table(_) => "Table",
             Kind::Wipeout(_) => "Wipeout",
             Kind::Region(_) => "Region",
+            Kind::Image(_) => "Image",
         }
     }
 
@@ -614,6 +680,11 @@ fn compute_segs(e: &Entity, doc: &Drawing, depth: usize) -> Vec<Seg> {
             (0..n).filter(|_| n >= 2).map(|i| Seg::line(w.pts[i], w.pts[(i + 1) % n])).collect()
         }
         Kind::Region(r) => r.loops.iter().flat_map(|l| pline_segs(l, true)).collect(),
+        Kind::Image(im) => {
+            let b = im.boundary();
+            let n = b.len();
+            (0..n).map(|i| Seg::line(b[i], b[(i + 1) % n])).collect()
+        }
     }
 }
 
@@ -800,6 +871,12 @@ pub fn pick_distance(e: &Entity, p: Pt, doc: &Drawing) -> f64 {
     }
     if let Kind::Hatch(h) = &e.kind {
         best = best.min(hatch_pick_distance(e, h, p, doc));
+    }
+    if let Kind::Image(im) = &e.kind {
+        // a picture is picked anywhere on its visible area, not only on the frame
+        if point_in_polygon(p, &im.boundary()) {
+            return 0.0;
+        }
     }
     best
 }
@@ -1046,6 +1123,14 @@ pub fn transform_entity(e: &mut Entity, m: &Mat) {
                 flip_verts(l, m, flip);
             }
         }
+        Kind::Image(im) => {
+            im.p = mp(im.p);
+            im.u = mat::apply_vec(m, im.u);
+            im.v = mat::apply_vec(m, im.v);
+            for q in im.clip.iter_mut() {
+                *q = mp(*q);
+            }
+        }
     }
 }
 
@@ -1220,6 +1305,17 @@ pub fn stretch_entity(e: &mut Entity, win: &Bounds, d: Pt, doc: &Drawing) -> boo
             }
             c
         }
+        Kind::Image(im) => {
+            if inside(im.p) {
+                mv(&mut im.p);
+                for q in im.clip.iter_mut() {
+                    mv(q);
+                }
+                true
+            } else {
+                false
+            }
+        }
         Kind::Region(r) => {
             if fully(&snapshot) {
                 for l in r.loops.iter_mut() {
@@ -1325,6 +1421,12 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
             out
         }
         Kind::Region(_) => bounds_of(e, doc).map(|b| vec![grip("c", b.center(), Move)]).unwrap_or_default(),
+        Kind::Image(im) => {
+            let cs = im.corners();
+            let mut out = vec![grip("c", pt((cs[0].x + cs[2].x) / 2.0, (cs[0].y + cs[2].y) / 2.0), Move)];
+            out.extend(cs.iter().enumerate().map(|(i, q)| grip(&format!("k{i}"), *q, Stretch)));
+            out
+        }
         Kind::Viewport(v) => {
             let mut out = vec![grip("c", v.c, Move)];
             for (i, (sx, sy)) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)].iter().enumerate() {
@@ -1412,6 +1514,20 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
         (Kind::Wipeout(w), _) => {
             if let Some(q) = w.pts.get_mut(idx(id)) {
                 *q = to;
+            }
+        }
+        (Kind::Image(im), Kind::Image(o)) => {
+            // a corner grip resizes the picture about the opposite corner, keeping its proportions
+            let cs = o.corners();
+            let i = idx(id) % 4;
+            let (anchor, moved) = (cs[(i + 2) % 4], cs[i]);
+            let diag = moved - anchor;
+            let k = (dot(to - anchor, diag) / dot(diag, diag).max(1e-18)).max(0.001);
+            im.u = o.u * k;
+            im.v = o.v * k;
+            im.p = anchor + (o.p - anchor) * k;
+            for (q, oq) in im.clip.iter_mut().zip(&o.clip) {
+                *q = anchor + (*oq - anchor) * k;
             }
         }
         (Kind::Leader { pts, .. }, _) => pts[idx(id)] = to,

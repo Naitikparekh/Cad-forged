@@ -236,3 +236,24 @@ fn our_writer_keeps_sheet_sizes_viewports_and_gradients() {
     assert!(grads(&d) > 0);
     assert_eq!(grads(&d), grads(&back), "gradient hatches survive");
 }
+
+#[test]
+fn raster_images_arrive_with_clip_and_adjustments() {
+    let d = load("image-R2018.dxf");
+    let Kind::Image(i) = &d.model.entities[0].kind else { panic!("{:?}", d.model.entities) };
+    near(i.p.x, 100.0);
+    near(i.p.y, 50.0);
+    near(i.size().0, 80.0);
+    near(i.size().1, 60.0);
+    assert_eq!((i.brightness, i.contrast, i.fade), (70, 30, 15));
+    // the boundary is given in pixels from the top-left corner: (100,100) is 1/8 across and 1/6 down
+    assert_eq!(i.clip.len(), 3);
+    let (a, c) = (i.clip[0], i.clip[2]);
+    near(a.x, 100.0 + 80.0 * (100.5 / 800.0));
+    near(a.y, 50.0 + 60.0 * (1.0 - 100.5 / 600.0));
+    near(c.x, 100.0 + 80.0 * (400.5 / 800.0));
+    let def = &d.images[&i.name];
+    assert_eq!((def.w, def.h), (800, 600));
+    assert_eq!(def.path, "site/aerial photo.jpg");
+    assert!(def.is_missing());
+}

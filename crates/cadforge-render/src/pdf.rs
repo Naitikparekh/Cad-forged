@@ -62,6 +62,14 @@ fn path_ops(c: &mut Vec<String>, paths: &[Poly]) {
     }
 }
 
+struct PdfImage {
+    w: u32,
+    h: u32,
+    rgb: Vec<u8>,
+    alpha: Option<Vec<u8>>,
+    smooth: bool,
+}
+
 /// `ops` are in device units of `unit_mm` millimetres (y down, origin top-left); `page` is the size in device units.
 pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec<u8> {
     let pt = unit_mm * 72.0 / 25.4;
@@ -76,12 +84,13 @@ pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec
         alphas.push((k, name.clone()));
         name
     };
+    let mut images: Vec<PdfImage> = vec![];
     let mut c: Vec<String> = vec![];
     c.push(format!("q {} 0 0 {} 0 {} cm", f(pt), f(-pt), f(h)));
     c.push("1 J 1 j".into());
     for op in ops {
         let a = match op {
-            Op::Stroke { alpha, .. } | Op::Fill { alpha, .. } | Op::Text { alpha, .. } => *alpha as f64,
+            Op::Stroke { alpha, .. } | Op::Fill { alpha, .. } | Op::Text { alpha, .. } | Op::Image { alpha, .. } => *alpha as f64,
         };
         if a <= 0.0 {
             continue;
@@ -104,6 +113,27 @@ pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec
                 path_ops(&mut c, paths);
                 c.push(if *evenodd { "f*".into() } else { "f".into() });
             }
+            Op::Image { pix, adj, bg, m, clip, smooth, .. } => {
+                let rgba = pix.0.adjusted(adj[0], adj[1], adj[2], *bg);
+                let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+                let alpha: Vec<u8> = rgba.chunks_exact(4).map(|p| p[3]).collect();
+                images.push(PdfImage {
+                    w: pix.0.w,
+                    h: pix.0.h,
+                    rgb: miniz_oxide::deflate::compress_to_vec_zlib(&rgb, 6),
+                    alpha: alpha.iter().any(|a| *a != 255).then(|| miniz_oxide::deflate::compress_to_vec_zlib(&alpha, 6)),
+                    smooth: *smooth,
+                });
+                // the unit square of the image space (y up) onto pixel space (y down), then onto the page
+                let (iw, ih) = (pix.0.w as f64, pix.0.h as f64);
+                let cm = [m[0] * iw, m[1] * iw, -m[2] * ih, -m[3] * ih, m[4] + m[2] * ih, m[5] + m[3] * ih];
+                c.push("q".into());
+                if clip.len() >= 3 {
+                    path_ops(&mut c, &[Poly { pts: clip.clone(), closed: true }]);
+                    c.push("W n".into());
+                }
+                c.push(format!("{} cm /Im{} Do Q", cm.iter().map(|v| format!("{}", (v * 1e6).round() / 1e6)).collect::<Vec<_>>().join(" "), images.len()));
+            }
             Op::Text { s, x, y, m, em, color, .. } => {
                 c.push(format!(
                     "q {} cm 1 0 0 -1 0 0 cm BT /F1 {} Tf {} rg {} {} Td {} Tj ET Q",
@@ -120,14 +150,37 @@ pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec
     c.push("Q".into());
     let content = c.join("\n");
     let gs_dict = std::iter::once("/GS0 << /ca 1 /CA 1 >>".to_string()).chain(alphas.iter().map(|(a, n)| format!("/{n} << /ca {a} /CA {a} >>"))).collect::<Vec<_>>().join(" ");
-    let objs = [
+    // image XObjects follow the six fixed objects (an image, then its soft mask when it has transparency)
+    let latin1_str = |b: &[u8]| -> String { b.iter().map(|v| *v as char).collect() };
+    let mut image_objs: Vec<String> = vec![];
+    let mut xobjects: Vec<String> = vec![];
+    for (i, im) in images.iter().enumerate() {
+        let num = 7 + image_objs.len();
+        xobjects.push(format!("/Im{} {} 0 R", i + 1, num));
+        let smask = im.alpha.as_ref().map(|_| format!(" /SMask {} 0 R", num + 1)).unwrap_or_default();
+        image_objs.push(format!(
+            "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode{}{} /Length {} >>\nstream\n{}\nendstream",
+            im.w,
+            im.h,
+            if im.smooth { " /Interpolate true" } else { "" },
+            smask,
+            im.rgb.len(),
+            latin1_str(&im.rgb)
+        ));
+        if let Some(a) = &im.alpha {
+            image_objs.push(format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n{}\nendstream", im.w, im.h, a.len(), latin1_str(a)));
+        }
+    }
+    let xobject_dict = if xobjects.is_empty() { String::new() } else { format!(" /XObject << {} >>", xobjects.join(" ")) };
+    let mut objs: Vec<String> = vec![
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ExtGState << {} >> >> >>", f(w), f(h), gs_dict),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ExtGState << {} >>{} >> >>", f(w), f(h), gs_dict, xobject_dict),
         format!("<< /Length {} >>\nstream\n{}\nendstream", content.chars().count(), content),
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
         format!("<< /Title {} /Producer (CadForge) /Creator (CadForge) >>", pdf_string(title)),
     ];
+    objs.extend(image_objs);
     // every character is <= 0xFF, so a latin-1 byte mapping preserves the offsets
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();
     let mut offsets = vec![];
