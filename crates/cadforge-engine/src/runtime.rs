@@ -588,6 +588,7 @@ impl App {
         if let Some(t) = self.rt.tasks.get_mut(&task) {
             t.pending = Some(p);
         }
+        self.prompt_seq += 1;
         if is_top {
             self.log(&text, "prompt");
         }
@@ -1179,6 +1180,12 @@ impl App {
 
     fn select_text(&mut self, task: TaskId, text: &str) {
         let t = text.trim().to_uppercase();
+        // `<ID:12,13>`: objects passed by a Lisp routine (an entity name or a selection set given to `command`)
+        if let Some(ids) = parse_id_token(&t) {
+            let ids: Vec<u64> = self.editor().map(|e| ids.into_iter().filter(|i| e.doc.by_id(*i).is_some()).collect()).unwrap_or_default();
+            self.sel_add(task, &ids);
+            return;
+        }
         // polygon / fence point entry
         let in_polygon = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.polygon.is_some());
         if in_polygon {
@@ -1350,7 +1357,10 @@ impl App {
                     let kw = kw.clone();
                     self.deliver(task, Reply::Kw(kw))
                 }
-                None => self.log("Select an object or option keyword.", "error"),
+                None => match parse_id_token(&t.to_uppercase()).and_then(|v| v.first().copied()).and_then(|id| self.editor().and_then(|e| e.doc.by_id(id).and_then(|en| cadforge_core::entities::bounds_of(en, &e.doc)).map(|b| (id, b.center())))) {
+                    Some((id, pt)) => self.deliver(task, Reply::Entity { id, pt, shift: false }),
+                    None => self.log("Select an object or option keyword.", "error"),
+                },
             },
             PromptKind::Point => self.point_text(task, &t),
             PromptKind::Solid | PromptKind::Dialog => {}
@@ -1596,6 +1606,11 @@ impl App {
             return;
         }
         self.log(&format!("Command: {t}"), "input");
+        // a Lisp expression typed at the command line: `(+ 1 2)`, or `!var` to show a variable
+        if t.starts_with('(') || (t.starts_with('!') && t.len() > 1) {
+            self.run("_LISP", Args::none().with("source", ArgVal::Str(t.to_string())), false);
+            return;
+        }
         let name = t.trim_start_matches('\'');
         if self.registry.find(name).is_some() {
             self.run(name, Args::none(), false);
@@ -1608,6 +1623,12 @@ impl App {
         self.log(&format!("Unknown command \"{t}\".  Press F1 for help."), "error");
         self.emit(Event::Change);
     }
+}
+
+/// `<ID:1,2,3>`: entity ids handed over by `(command ...)` of the Lisp interpreter.
+fn parse_id_token(t: &str) -> Option<Vec<u64>> {
+    let inner = t.strip_prefix("<ID:")?.strip_suffix('>')?;
+    Some(inner.split(',').filter_map(|n| n.trim().parse().ok()).collect())
 }
 
 /// `2x` / `0.5xp` scale-factor typed at a point prompt that accepts numbers (ZOOM).

@@ -903,15 +903,14 @@ fn etransmit_lists_external_references_and_declines_to_package() {
 }
 
 #[test]
-fn appload_explains_what_cannot_be_loaded_and_offers_scripts() {
+fn appload_asks_the_host_for_a_lisp_or_script_file() {
     let s = with_ui();
     events(&s);
     s.cmd("AP");
-    assert!(s.history_has("Loading .lsp, .vlx, .arx and .dll applications is not supported"));
-    assert_eq!(ui_actions(&s)[0].0, "SCRIPT");
+    assert_eq!(ui_actions(&s)[0].0, "APPLOAD");
     let h = Sim::new();
     h.cmd("APPLOAD");
-    assert!(h.history_has("No script selected."));
+    assert!(h.history_has("APPLOAD needs a file chooser"));
 }
 
 #[test]

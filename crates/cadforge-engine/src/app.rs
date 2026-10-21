@@ -111,6 +111,13 @@ pub struct App {
     me: Weak<RefCell<App>>,
     deferred_start: Option<(String, Args)>,
     script: std::collections::VecDeque<String>,
+    /// Lines a running Lisp `(command ...)` feeds to the command it started; `None` is PAUSE (wait for the user).
+    pub(crate) lisp_input: std::collections::VecDeque<Option<String>>,
+    /// Counts prompts; a Lisp PAUSE waits for the prompt it was reached at to be answered.
+    pub(crate) prompt_seq: u64,
+    pub(crate) lisp_pause: Option<u64>,
+    /// The interpreter shared by every Lisp command of this session.
+    pub lisp: Rc<crate::lisp::Interp>,
 }
 
 impl App {
@@ -135,6 +142,10 @@ impl App {
             me: Weak::new(),
             deferred_start: None,
             script: Default::default(),
+            lisp_input: Default::default(),
+            prompt_seq: 0,
+            lisp_pause: None,
+            lisp: Rc::new(crate::lisp::Interp::new()),
         }
     }
 
@@ -322,6 +333,33 @@ impl Handle {
                         continue;
                     }
                     None => {
+                        // a Lisp `(command ...)` has priority; PAUSE hands the next answer to the user
+                        let holding = {
+                            let mut a = self.0.borrow_mut();
+                            match a.lisp_pause {
+                                Some(seq) if seq == a.prompt_seq && a.busy() => true,
+                                _ => {
+                                    a.lisp_pause = None;
+                                    false
+                                }
+                            }
+                        };
+                        if holding {
+                            break;
+                        }
+                        let lisp_line = self.0.borrow_mut().lisp_input.pop_front();
+                        match lisp_line {
+                            Some(Some(l)) => {
+                                self.0.borrow_mut().text(&l, false);
+                                continue;
+                            }
+                            Some(None) => {
+                                let mut a = self.0.borrow_mut();
+                                a.lisp_pause = Some(a.prompt_seq);
+                                break;
+                            }
+                            None => {}
+                        }
                         // scripts feed the same input channel as the command line
                         let line = self.0.borrow_mut().next_script_line();
                         match line {

@@ -9,6 +9,7 @@ use crate::runtime::PromptSpec;
 mod data;
 mod draw;
 mod images;
+mod lisp_cmds;
 mod nav;
 mod props;
 mod ui;
@@ -20,6 +21,7 @@ fn ps(m: &str) -> PromptSpec {
 pub fn register(r: &mut crate::registry::Registry) {
     draw::register(r);
     images::register(r);
+    lisp_cmds::register(r);
     props::register(r);
     nav::register(r);
     ui::register(r);

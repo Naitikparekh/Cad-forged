@@ -3,6 +3,7 @@
 pub mod app;
 pub mod ctx;
 pub mod editor;
+pub mod lisp;
 pub mod memory;
 pub mod parse;
 pub mod registry;

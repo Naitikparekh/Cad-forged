@@ -1,6 +1,7 @@
 //! File, output and utility commands: AUDIT, RECOVER, CLOSEALL, SAVEALL, PREVIEW, PLOTSTYLE, PUBLISH, ETRANSMIT,
 //! APPLOAD, REINIT, RECORD.
 use super::{confirm, plural, ui_action};
+use crate::app::Event;
 use crate::commands::{def, run};
 use crate::ctx::*;
 use crate::registry::Registry;
@@ -178,9 +179,12 @@ async fn etransmit(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- utilities
 
 async fn appload(c: Ctx, _a: Args) -> CmdResult<()> {
-    c.log_error("Loading .lsp, .vlx, .arx and .dll applications is not supported in this version.");
-    c.log("Script files (.scr) can be run with SCRIPT.");
-    c.sub_forced("SCRIPT", Args::none()).await;
+    if c.app(|a| a.ui.dialogs) {
+        c.log("Choose an AutoLISP (.lsp) or script (.scr) file to load.");
+        c.app(|a| a.emit(Event::UiAction { name: "APPLOAD".into(), args: Args::none() }));
+    } else {
+        c.log_error("APPLOAD needs a file chooser; type AutoLISP expressions at the command line instead, or run a script with SCRIPT.");
+    }
     Ok(())
 }
 
