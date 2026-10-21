@@ -378,6 +378,38 @@ impl Default for DimStyle {
     }
 }
 
+/// Multileader style (MLEADERSTYLE).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MLeaderStyle {
+    pub name: String,
+    pub text_height: f64,
+    pub arrow: f64,
+    pub landing: f64,
+}
+
+impl Default for MLeaderStyle {
+    fn default() -> MLeaderStyle {
+        MLeaderStyle { name: "Standard".into(), text_height: 2.5, arrow: 2.5, landing: 5.0 }
+    }
+}
+
+/// Table style (TABLESTYLE).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TableStyle {
+    pub name: String,
+    pub text_height: f64,
+    /// The first row is a merged title row with larger text.
+    pub title: bool,
+}
+
+impl Default for TableStyle {
+    fn default() -> TableStyle {
+        TableStyle { name: "Standard".into(), text_height: 2.5, title: false }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Units {
@@ -413,6 +445,14 @@ pub struct Settings {
     pub plinewid: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layer_states: Option<IndexMap<String, Vec<Layer>>>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub mleader_styles: IndexMap<String, MLeaderStyle>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub cur_mleader_style: String,
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub table_styles: IndexMap<String, TableStyle>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub cur_table_style: String,
 }
 
 impl Default for Settings {
@@ -435,6 +475,10 @@ impl Default for Settings {
             offset_gap: 0.0,
             plinewid: 0.0,
             layer_states: None,
+            mleader_styles: IndexMap::new(),
+            cur_mleader_style: String::new(),
+            table_styles: IndexMap::new(),
+            cur_table_style: String::new(),
         }
     }
 }
@@ -442,6 +486,16 @@ impl Default for Settings {
 impl Settings {
     pub fn cur_dim(&self) -> &DimStyle {
         self.dim_styles.get(&self.cur_dim_style).or_else(|| self.dim_styles.values().next()).expect("a dimension style")
+    }
+
+    /// The current multileader style (the built-in Standard style until MLEADERSTYLE defines one).
+    pub fn cur_mleader(&self) -> MLeaderStyle {
+        self.mleader_styles.get(&self.cur_mleader_style).cloned().unwrap_or_default()
+    }
+
+    /// The current table style (the built-in Standard style until TABLESTYLE defines one).
+    pub fn cur_table(&self) -> TableStyle {
+        self.table_styles.get(&self.cur_table_style).cloned().unwrap_or_default()
     }
 }
 
