@@ -13,11 +13,13 @@ use cadforge_core::style::fmt_num;
 
 /// Included angle of every cloud arc.
 const SWEEP: f64 = TAU / 3.0;
+/// Upper bound on the arcs of one path piece (a tiny arc length must not exhaust memory).
+const MAX_ARCS: usize = 100_000;
 const OPTIONS: [&str; 7] = ["Arc length", "Object", "Rectangular", "Polygonal", "Freehand", "Style", "Modify"];
 
 /// The arc length the cloud is built with: AutoCAD varies arcs between the minimum and maximum, this uses the mean.
 fn arc_length(c: &Ctx) -> (f64, f64) {
-    let min = pref_num(c, "REVCLOUDMINARCLENGTH", 0.5);
+    let min = pref_num(c, "REVCLOUDMINARCLENGTH", 0.5).max(1e-6);
     (min, pref_num(c, "REVCLOUDMAXARCLENGTH", min).max(min))
 }
 
@@ -34,14 +36,14 @@ fn cloud(path: &[Seg], closed: bool, arc_len: f64, reverse: bool) -> Vec<Vertex>
     if path.iter().any(|s| s.is_approx()) {
         // a curve stored as a fine polyline (ellipse, spline) is divided as a whole
         let total: f64 = path.iter().map(|s| s.length()).sum();
-        let n = ((total / arc_len).round() as usize).max(if closed { 3 } else { 1 });
+        let n = ((total / arc_len).round() as usize).clamp(if closed { 3 } else { 1 }, MAX_ARCS);
         let pts = resample(path, n, closed);
         let last = pts.len() - 1;
         return pts.iter().enumerate().map(|(i, p)| Vertex::new(p.x, p.y, if closed || i < last { bulge(ccw) } else { 0.0 })).collect();
     }
     let mut v: Vec<Vertex> = vec![];
     for s in path {
-        let n = ((s.length() / arc_len).round() as usize).max(1);
+        let n = ((s.length() / arc_len).round() as usize).clamp(1, MAX_ARCS);
         v.extend((0..n).map(|k| {
             let p = s.at(k as f64 / n as f64);
             Vertex::new(p.x, p.y, bulge(ccw))
@@ -147,6 +149,10 @@ async fn from_object(c: &Ctx) -> CmdResult<()> {
     let Some(e) = c.entity_by_id(id) else { return Ok(()) };
     let reverse = c.keyword(ps("Reverse direction?").options(&["Yes", "No"]).default_str("No")).await?.kw() == Some("Yes");
     let path = c.doc(|d| segs_of(&e, d).to_vec());
+    if path.is_empty() {
+        c.log_error("The selected object has no length.");
+        return Ok(());
+    }
     let closed = match &e.kind {
         Kind::Circle { .. } => true,
         Kind::Pline { closed, .. } | Kind::Spline { closed, .. } => *closed,
@@ -225,5 +231,5 @@ async fn revcloud(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dd("REVCLOUD", run(revcloud)).title("Revision Cloud").icon("revcloud").desc("Creates a polyline of sequential arcs to form a cloud-shaped object. Modify only reverses the arc direction; the Calligraphy style is not available."));
+    r.define(dd("REVCLOUD", run(revcloud)).title("Revision Cloud").icon("spline").desc("Creates a polyline of sequential arcs to form a cloud-shaped object. Modify only reverses the arc direction; the Calligraphy style is not available."));
 }

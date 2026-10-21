@@ -90,5 +90,5 @@ async fn arraypath(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dm("ARRAYPATH", run(arraypath)).title("Path Array").icon("arraypath").desc("Evenly distributes copies of the selected object along a path or a portion of a path."));
+    r.define(dm("ARRAYPATH", run(arraypath)).title("Path Array").icon("array").desc("Evenly distributes copies of the selected object along a path or a portion of a path."));
 }

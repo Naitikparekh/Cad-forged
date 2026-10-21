@@ -181,6 +181,6 @@ async fn sketch(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dd("MLINE", run(mline)).aliases(&["ML"]).title("Multiline").icon("mline").desc("Creates multiple parallel lines as a group of two polylines (STANDARD style; justification and scale are supported, styles and MLEDIT are not)."));
-    r.define(dd("SKETCH", run(sketch)).title("Sketch").icon("sketch").desc("Creates a series of freehand line segments, a polyline or a spline from consecutive picked points spaced at least the increment apart."));
+    r.define(dd("MLINE", run(mline)).aliases(&["ML"]).title("Multiline").icon("line").desc("Creates multiple parallel lines as a group of two polylines (STANDARD style; justification and scale are supported, styles and MLEDIT are not)."));
+    r.define(dd("SKETCH", run(sketch)).title("Sketch").icon("pline").desc("Creates a series of freehand line segments, a polyline or a spline from consecutive picked points spaced at least the increment apart."));
 }

@@ -52,7 +52,7 @@ fn load_list(c: &Ctx) -> Vec<Crit> {
 }
 
 fn store_list(c: &Ctx, list: &[Crit]) {
-    let text: Vec<String> = list.iter().map(|k| format!("{}\t{}\t{}", k.kind, k.op, k.value)).collect();
+    let text: Vec<String> = list.iter().map(|k| format!("{}\t{}\t{}", k.kind, k.op, k.value.replace(['\t', '\n'], " "))).collect();
     set_pref(c, FILTER_KEY, Value::Str(text.join("\n")));
 }
 
@@ -348,9 +348,9 @@ async fn groups(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dsel("SELECT", run(select)).title("Select").desc("Places selected objects in the Previous selection set and keeps them selected for the next command."));
-    r.define(dsel("FILTER", run(filter)).aliases(&["FI"]).title("Filter").desc("Creates a list of requirements that an object must meet to be included in a selection set (command-line form of the Object Selection Filters dialog)."));
+    r.define(dsel("SELECT", run(select)).title("Select").icon("cursor").desc("Places selected objects in the Previous selection set and keeps them selected for the next command."));
+    r.define(dsel("FILTER", run(filter)).aliases(&["FI"]).title("Filter").icon("qselect").desc("Creates a list of requirements that an object must meet to be included in a selection set (command-line form of the Object Selection Filters dialog)."));
     r.define(dm("MULTIPLE", run(multiple)).title("Multiple").desc("Repeats the next command until you cancel it.").no_pickfirst());
-    r.define(crate::commands::def("Blocks", "GROUPEDIT", run(groupedit)).title("Edit Group").desc("Adds objects to and removes objects from a group.").no_pickfirst());
-    r.define(crate::commands::def("Blocks", "GROUPS", run(groups)).title("Groups").desc("Lists the groups defined in the drawing.").no_pickfirst());
+    r.define(crate::commands::def("Blocks", "GROUPEDIT", run(groupedit)).title("Edit Group").icon("group").desc("Adds objects to and removes objects from a group.").no_pickfirst());
+    r.define(crate::commands::def("Blocks", "GROUPS", run(groups)).title("Groups").icon("group").desc("Lists the groups defined in the drawing.").no_pickfirst());
 }

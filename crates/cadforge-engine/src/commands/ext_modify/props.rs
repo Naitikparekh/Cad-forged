@@ -305,7 +305,7 @@ fn same_geometry(a: &Entity, b: &Entity, doc: &Drawing, tol: f64) -> bool {
     let fits = |other: &[Seg]| (0..shifts).any(|k| (0..n).all(|i| seg_same(&sa[i], &other[(i + k) % n], tol)));
     match a.kind {
         Kind::Circle { c, r } => matches!(b.kind, Kind::Circle { c: c2, r: r2 } if dist(c, c2) <= tol && (r - r2).abs() <= tol),
-        _ => fits(&sb) || fits(&rev) || (matches!(a.kind, Kind::Arc { .. }) && seg_same(&sa[0], &sb[0], tol)),
+        _ => fits(&sb) || fits(&rev),
     }
 }
 
@@ -468,9 +468,9 @@ async fn flatten(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dm("CHPROP", run(chprop)).title("Change Properties").desc("Changes the properties of objects: color, layer, linetype, linetype scale, lineweight, thickness and transparency."));
-    r.define(dm("CHANGE", run(change)).title("Change").desc("Changes the properties of existing objects: moves line ends, resizes circles, edits text and block insertions, or edits properties."));
-    r.define(dm("ALIGN", run(align)).aliases(&["AL"]).title("Align").desc("Aligns objects with other objects in 2D by moving, rotating (and optionally scaling) them between pairs of points."));
-    r.define(dm("OVERKILL", run(overkill)).title("Overkill").desc("Deletes duplicate objects and combines overlapping or end-to-end collinear lines and arcs of the same circle. Polylines and circles are only checked for duplicates."));
+    r.define(dm("CHPROP", run(chprop)).title("Change Properties").icon("properties").desc("Changes the properties of objects: color, layer, linetype, linetype scale, lineweight, thickness and transparency."));
+    r.define(dm("CHANGE", run(change)).title("Change").icon("properties").desc("Changes the properties of existing objects: moves line ends, resizes circles, edits text and block insertions, or edits properties."));
+    r.define(dm("ALIGN", run(align)).aliases(&["AL"]).title("Align").icon("move").desc("Aligns objects with other objects in 2D by moving, rotating (and optionally scaling) them between pairs of points."));
+    r.define(dm("OVERKILL", run(overkill)).title("Overkill").icon("erase").desc("Deletes duplicate objects and combines overlapping or end-to-end collinear lines and arcs of the same circle. Polylines and circles are only checked for duplicates."));
     r.define(dm("FLATTEN", run(flatten)).title("Flatten").desc("Sets the Z coordinate of objects to zero. Drawing geometry is already 2D, so nothing changes."));
 }

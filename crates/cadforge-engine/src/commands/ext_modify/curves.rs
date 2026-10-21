@@ -221,6 +221,6 @@ async fn splineedit(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dm("BLEND", run(blend)).title("Blend Curve").icon("blend").desc("Creates a spline in the gap between two selected lines or open curves (tangent or smooth continuity)."));
-    r.define(dm("SPLINEDIT", run(splineedit)).aliases(&["SPE"]).title("Edit Spline").icon("splinedit").desc("Edits a fit-point spline: move, add or delete fit points, close or open it, reverse it."));
+    r.define(dm("BLEND", run(blend)).title("Blend Curve").icon("spline").desc("Creates a spline in the gap between two selected lines or open curves (tangent or smooth continuity)."));
+    r.define(dm("SPLINEDIT", run(splineedit)).aliases(&["SPE"]).title("Edit Spline").icon("pedit").desc("Edits a fit-point spline: move, add or delete fit points, close or open it, reverse it."));
 }

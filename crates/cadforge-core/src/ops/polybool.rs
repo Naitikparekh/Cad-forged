@@ -255,12 +255,17 @@ pub fn boolean(a: &[Loop], b: &[Loop], op: Op) -> Vec<Area> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::f64::consts::PI;
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Loop {
         vec![Vertex::new(x0, y0, 0.0), Vertex::new(x1, y0, 0.0), Vertex::new(x1, y1, 0.0), Vertex::new(x0, y1, 0.0)]
     }
     fn circle(cx: f64, cy: f64, r: f64) -> Loop {
         vec![Vertex::new(cx + r, cy, 1.0), Vertex::new(cx - r, cy, 1.0)]
+    }
+    /// `a` op `b` for two single-loop operands.
+    fn run(a: &Loop, b: &Loop, op: Op) -> Vec<Area> {
+        boolean(std::slice::from_ref(a), std::slice::from_ref(b), op)
     }
     fn total(areas: &[Area]) -> f64 {
         areas.iter().map(area_of).sum()
@@ -272,79 +277,123 @@ mod tests {
     #[test]
     fn overlapping_squares() {
         let (a, b) = (rect(0.0, 0.0, 10.0, 10.0), rect(5.0, 5.0, 15.0, 15.0));
-        let u = boolean(&[a.clone()], &[b.clone()], Op::Union);
+        let u = run(&a, &b, Op::Union);
         assert_eq!(u.len(), 1);
         assert_eq!(u[0].len(), 1);
         assert_eq!(u[0][0].len(), 8, "a stepped outline has eight corners");
         near(total(&u), 175.0);
-        near(total(&boolean(&[a.clone()], &[b.clone()], Op::Intersect)), 25.0);
-        near(total(&boolean(&[a.clone()], &[b.clone()], Op::Subtract)), 75.0);
-        near(total(&boolean(&[b], &[a], Op::Subtract)), 75.0);
+        near(total(&run(&a, &b, Op::Intersect)), 25.0);
+        near(total(&run(&a, &b, Op::Subtract)), 75.0);
+        near(total(&run(&b, &a, Op::Subtract)), 75.0);
     }
 
     #[test]
     fn disjoint_and_identical_operands() {
         let (a, b) = (rect(0.0, 0.0, 10.0, 10.0), rect(20.0, 0.0, 30.0, 10.0));
-        assert_eq!(boolean(&[a.clone()], &[b.clone()], Op::Union).len(), 2);
-        assert!(boolean(&[a.clone()], &[b.clone()], Op::Intersect).is_empty());
-        near(total(&boolean(&[a.clone()], &[b], Op::Subtract)), 100.0);
-        near(total(&boolean(&[a.clone()], &[a.clone()], Op::Union)), 100.0);
-        assert!(boolean(&[a.clone()], &[a.clone()], Op::Subtract).is_empty());
-        near(total(&boolean(&[a.clone()], &[a], Op::Intersect)), 100.0);
+        assert_eq!(run(&a, &b, Op::Union).len(), 2);
+        assert!(run(&a, &b, Op::Intersect).is_empty());
+        near(total(&run(&a, &b, Op::Subtract)), 100.0);
+        near(total(&run(&a, &a, Op::Union)), 100.0);
+        assert!(run(&a, &a, Op::Subtract).is_empty());
+        near(total(&run(&a, &a, Op::Intersect)), 100.0);
     }
 
     #[test]
     fn shared_edge_unites_into_one_rectangle() {
-        let u = boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[rect(10.0, 0.0, 20.0, 10.0)], Op::Union);
+        let (a, b) = (rect(0.0, 0.0, 10.0, 10.0), rect(10.0, 0.0, 20.0, 10.0));
+        let u = run(&a, &b, Op::Union);
         assert_eq!(u.len(), 1);
         assert_eq!(u[0][0].len(), 4, "collinear pieces merge back into single edges");
         near(total(&u), 200.0);
-        assert!(boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[rect(10.0, 0.0, 20.0, 10.0)], Op::Intersect).is_empty());
-        near(total(&boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[rect(10.0, 0.0, 20.0, 10.0)], Op::Subtract)), 100.0);
+        assert!(run(&a, &b, Op::Intersect).is_empty());
+        near(total(&run(&a, &b, Op::Subtract)), 100.0);
     }
 
     #[test]
     fn a_contained_operand_becomes_a_hole() {
-        let r = boolean(&[rect(0.0, 0.0, 20.0, 20.0)], &[circle(10.0, 10.0, 4.0)], Op::Subtract);
+        let (plate, hole) = (rect(0.0, 0.0, 20.0, 20.0), circle(10.0, 10.0, 4.0));
+        let r = run(&plate, &hole, Op::Subtract);
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].len(), 2, "outer loop plus one hole");
-        near(total(&r), 400.0 - std::f64::consts::PI * 16.0);
-        near(total(&boolean(&[rect(0.0, 0.0, 20.0, 20.0)], &[circle(10.0, 10.0, 4.0)], Op::Union)), 400.0);
-        near(total(&boolean(&[rect(0.0, 0.0, 20.0, 20.0)], &[circle(10.0, 10.0, 4.0)], Op::Intersect)), std::f64::consts::PI * 16.0);
-        // subtracting the plate again from a wider disc leaves a ring with a hole
-        let ring = boolean(&[circle(10.0, 10.0, 8.0)], &r.iter().flatten().cloned().collect::<Vec<_>>(), Op::Subtract);
-        assert!(!ring.is_empty());
+        near(total(&r), 400.0 - PI * 16.0);
+        near(total(&run(&plate, &hole, Op::Union)), 400.0);
+        near(total(&run(&plate, &hole, Op::Intersect)), PI * 16.0);
+        // a disc larger than the hole but inside the plate: subtracting the drilled plate leaves the plug
+        let plug = boolean(&[circle(10.0, 10.0, 8.0)], &r.concat(), Op::Subtract);
+        assert_eq!(plug.len(), 1);
+        near(total(&plug), PI * 16.0);
     }
 
     #[test]
     fn arcs_stay_arcs() {
-        let r = boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[circle(10.0, 5.0, 3.0)], Op::Subtract);
+        let (plate, bite) = (rect(0.0, 0.0, 10.0, 10.0), circle(10.0, 5.0, 3.0));
+        let r = run(&plate, &bite, Op::Subtract);
         assert_eq!(r.len(), 1);
         assert!(r[0][0].iter().any(|v| v.b != 0.0), "the bite is a true arc");
-        near(total(&r), 100.0 - std::f64::consts::PI * 9.0 / 2.0);
-        let u = boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[circle(10.0, 5.0, 3.0)], Op::Union);
-        near(total(&u), 100.0 + std::f64::consts::PI * 9.0 / 2.0);
-        let i = boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[circle(10.0, 5.0, 3.0)], Op::Intersect);
-        near(total(&i), std::f64::consts::PI * 9.0 / 2.0);
+        near(total(&r), 100.0 - PI * 9.0 / 2.0);
+        near(total(&run(&plate, &bite, Op::Union)), 100.0 + PI * 9.0 / 2.0);
+        near(total(&run(&plate, &bite, Op::Intersect)), PI * 9.0 / 2.0);
     }
 
     #[test]
     fn two_circles() {
         let (a, b) = (circle(0.0, 0.0, 5.0), circle(6.0, 0.0, 5.0));
-        let lens = {
-            let d: f64 = 6.0;
-            let r: f64 = 5.0;
-            2.0 * r * r * (d / (2.0 * r)).acos() - d / 2.0 * (4.0 * r * r - d * d).sqrt()
-        };
-        near(total(&boolean(&[a.clone()], &[b.clone()], Op::Intersect)), lens);
-        near(total(&boolean(&[a.clone()], &[b.clone()], Op::Union)), 2.0 * std::f64::consts::PI * 25.0 - lens);
-        near(total(&boolean(&[a], &[b], Op::Subtract)), std::f64::consts::PI * 25.0 - lens);
+        let (d, r): (f64, f64) = (6.0, 5.0);
+        let lens = 2.0 * r * r * (d / (2.0 * r)).acos() - d / 2.0 * (4.0 * r * r - d * d).sqrt();
+        near(total(&run(&a, &b, Op::Intersect)), lens);
+        near(total(&run(&a, &b, Op::Union)), 2.0 * PI * 25.0 - lens);
+        near(total(&run(&a, &b, Op::Subtract)), PI * 25.0 - lens);
     }
 
     #[test]
     fn touching_at_a_corner_stays_two_areas() {
-        let u = boolean(&[rect(0.0, 0.0, 10.0, 10.0)], &[rect(10.0, 10.0, 20.0, 20.0)], Op::Union);
+        let u = run(&rect(0.0, 0.0, 10.0, 10.0), &rect(10.0, 10.0, 20.0, 20.0), Op::Union);
         assert_eq!(u.len(), 2);
         near(total(&u), 200.0);
+    }
+
+    #[test]
+    fn operands_with_holes_and_several_areas() {
+        // a frame (square with a square hole) united with a block filling the hole gives a solid square
+        let frame = vec![rect(0.0, 0.0, 30.0, 30.0), rect(10.0, 10.0, 20.0, 20.0)];
+        let u = boolean(&frame, &[rect(10.0, 10.0, 20.0, 20.0)], Op::Union);
+        assert_eq!(u.len(), 1);
+        assert_eq!(u[0].len(), 1);
+        near(total(&u), 900.0);
+        // the frame minus a bar across it splits into two C-shapes
+        let split = boolean(&frame, &[rect(-5.0, 12.0, 35.0, 18.0)], Op::Subtract);
+        assert_eq!(split.len(), 2);
+        near(total(&split), 800.0 - 2.0 * 10.0 * 6.0);
+    }
+
+    /// Random rectangles, circles and D shapes on a coarse grid, so edges coincide, circles touch and
+    /// vertices land on the other shape. Inclusion-exclusion must hold for every pair.
+    #[test]
+    fn inclusion_exclusion_holds_on_degenerate_grids() {
+        let mut seed = 0x2545f491u64;
+        let mut next = |n: u64| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) % n
+        };
+        let shape = |next: &mut dyn FnMut(u64) -> u64| -> Loop {
+            let (x, y) = (next(7) as f64, next(7) as f64);
+            match next(3) {
+                0 => rect(x, y, x + 1.0 + next(5) as f64, y + 1.0 + next(5) as f64),
+                1 => circle(x, y, 1.0 + next(4) as f64),
+                _ => {
+                    // a D shape: a rectangle with a semicircular right end
+                    let (w, h) = (2.0 + next(4) as f64, 2.0 * (1.0 + next(2) as f64));
+                    vec![Vertex::new(x, y, 0.0), Vertex::new(x + w, y, 1.0), Vertex::new(x + w, y + h, 0.0), Vertex::new(x, y + h, 0.0)]
+                }
+            }
+        };
+        for case in 0..400 {
+            let (a, b) = (shape(&mut next), shape(&mut next));
+            let (aa, ab) = (pline_area(&a).abs(), pline_area(&b).abs());
+            let (u, i, d) = (total(&run(&a, &b, Op::Union)), total(&run(&a, &b, Op::Intersect)), total(&run(&a, &b, Op::Subtract)));
+            let msg = format!("case {case}: {a:?} vs {b:?}");
+            assert!((u + i - aa - ab).abs() < 1e-6, "union + intersection != sum of areas ({u} + {i} vs {aa} + {ab}); {msg}");
+            assert!((d - (aa - i)).abs() < 1e-6, "difference {d} != {aa} - {i}; {msg}");
+        }
     }
 }

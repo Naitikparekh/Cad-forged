@@ -75,7 +75,10 @@ fn closed_loops(doc: &Drawing, ents: &[Entity]) -> (Vec<Closed>, usize) {
         let src: Vec<u64> = open.iter().filter(|e| path_of(e, doc).and_then(|p| p.segs.first().map(|s| dist_to_segs(&segs, s.at(0.5)).0 < 1e-6)).unwrap_or(false)).map(|e| e.id).collect();
         out.push(Closed { verts, src, proto: r });
     }
-    (out, skipped)
+    let found = out.len();
+    out.retain(|l| pline_area(&l.verts).abs() > 1e-9);
+    let dropped = found - out.len();
+    (out, skipped + dropped)
 }
 
 fn region_entity(loops: Vec<Loop>, proto: &Entity) -> Entity {
@@ -422,8 +425,10 @@ async fn gradient(c: Ctx, _a: Args) -> CmdResult<()> {
                 let sel = c.select(ps("Select objects")).await?;
                 let ents = c.entities(&sel.ents);
                 let (found, skipped) = c.doc(|d| closed_loops(d, &ents));
-                if skipped > 0 || found.is_empty() {
-                    c.log_error("Some objects do not form a valid closed boundary.");
+                if found.is_empty() {
+                    c.log_error("The selected objects do not form a closed boundary.");
+                } else if skipped > 0 {
+                    c.log_error(&format!("{} not part of a closed, non-self-intersecting loop.", plural(skipped, "object")));
                 }
                 loops.borrow_mut().extend(found.into_iter().map(|l| l.verts));
                 continue;
@@ -532,8 +537,8 @@ async fn wipeout_polyline(c: &Ctx) -> CmdResult<()> {
 
 pub fn register(r: &mut Registry) {
     r.define(dd("REGION", run(region)).aliases(&["REG"]).title("Region").icon("region").desc("Converts an object that encloses an area into a region object. The source objects are deleted."));
-    r.define(dd("GRADIENT", run(gradient)).title("Gradient").icon("gradient").desc("Fills an enclosed area or selected objects with a gradient fill. Settings are chosen at the command line."));
-    r.define(dd("WIPEOUT", run(wipeout)).title("Wipeout").icon("wipeout").desc("Creates a polygonal area that masks existing objects with the background color."));
+    r.define(dd("GRADIENT", run(gradient)).title("Gradient").icon("hatch").desc("Fills an enclosed area or selected objects with a gradient fill. Settings are chosen at the command line."));
+    r.define(dd("WIPEOUT", run(wipeout)).title("Wipeout").icon("region").desc("Creates a polygonal area that masks existing objects with the background color."));
     // UNION / SUBTRACT / INTERSECT keep their solid behaviour and additionally take regions once the drawing has any
     for (name, op, text) in [
         ("UNION", Op::Union, "Combines selected 3D solids or 2D regions into a single object."),

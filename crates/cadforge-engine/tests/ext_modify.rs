@@ -5,6 +5,7 @@ use cadforge_core::entities::*;
 use cadforge_core::geom::*;
 use cadforge_core::ops::polybool::{area_of, Loop};
 use cadforge_core::style::Color;
+use cadforge_core::text::TextData;
 use cadforge_engine::sim::Sim;
 
 fn near(a: f64, b: f64) {
@@ -293,6 +294,27 @@ fn change_moves_line_ends_resizes_circles_and_edits_text() {
 }
 
 #[test]
+fn change_moves_and_turns_block_references_with_their_attributes() {
+    let s = Sim::new();
+    s.doc_mut(|d| d.define_block("B", p(0., 0.), vec![Entity::circle(p(0., 0.), 5.)]));
+    let mut ins = Entity::insert("B", p(0., 0.));
+    if let Kind::Insert(i) = &mut ins.kind {
+        i.attribs.push(AttribData { tag: "T".into(), t: TextData::new(p(6., 0.), 2., "X"), hidden: false });
+    }
+    let id = s.add(ins);
+    s.cmd("CHANGE").click(5., 0.).enter().click(10., 0.);
+    assert_eq!(s.message(), "Enter new block rotation angle");
+    s.ty("90");
+    let Kind::Insert(i) = s.doc(|d| d.by_id(id).unwrap().kind.clone()) else { panic!() };
+    assert_eq!(i.p, p(10., 0.));
+    near(i.rot, rad(90.));
+    let a = &i.attribs[0].t;
+    near(a.p.x, 10.);
+    near(a.p.y, 6.);
+    near(a.rot, rad(90.));
+}
+
+#[test]
 fn change_properties_option_and_unsupported_objects() {
     let s = Sim::new();
     let a = add_line(&s, p(0., 0.), p(10., 0.));
@@ -325,6 +347,31 @@ fn align_moves_and_rotates_between_point_pairs_and_can_scale() {
     let (a, b) = ab(&s.doc(|d| d.by_id(l).unwrap().clone()));
     near(a.y, 5.);
     near(b.y, 25.);
+}
+
+#[test]
+fn align_previews_the_move_and_the_rotation() {
+    let s = Sim::new();
+    add_line(&s, p(0., 0.), p(10., 0.));
+    s.cmd("ALIGN").click(5., 0.).enter().click(0., 0.).mv(3., 4.);
+    let pv = s.preview();
+    assert_eq!(pv.len(), 1);
+    match &pv[0] {
+        cadforge_engine::runtime::PreviewItem::Entity(e) => assert_eq!(ab(e), (p(3., 4.), p(13., 4.))),
+        o => panic!("{o:?}"),
+    }
+    s.click(3., 4.).click(10., 0.).mv(3., 14.);
+    match &s.preview()[0] {
+        cadforge_engine::runtime::PreviewItem::Entity(e) => {
+            let (a, b) = ab(e);
+            near(a.x, 3.);
+            near(b.x, 3.);
+            near(b.y, 14.);
+        }
+        o => panic!("{o:?}"),
+    }
+    s.esc();
+    assert_eq!(s.ent(0).kind, Kind::Line { a: p(0., 0.), b: p(10., 0.) }, "Escape leaves the object where it was");
 }
 
 #[test]
@@ -412,6 +459,17 @@ fn overkill_options_switch_the_combining_rules() {
     assert_eq!(s.n(), 1);
     s.cmd("OVERKILL").ty("all").enter().enter();
     assert!(s.history_has("No duplicate or overlapping objects found."));
+}
+
+#[test]
+fn overkill_merges_arcs_that_cover_the_whole_circle_into_a_circle() {
+    let s = Sim::new();
+    s.add(Entity::arc(p(0., 0.), 5., 0., rad(200.)));
+    s.add(Entity::arc(p(0., 0.), 5., rad(180.), rad(20.)));
+    s.add(Entity::arc(p(0., 0.), 6., 0., rad(90.))); // another circle: untouched
+    overkill(&s);
+    assert_eq!(s.n(), 2);
+    assert!(s.ents().iter().any(|e| matches!(e.kind, Kind::Circle { r, .. } if (r - 5.).abs() < 1e-9)));
 }
 
 #[test]
