@@ -146,7 +146,8 @@ impl CadForgeApp {
                     ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
                 }
                 ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, cadforge_core::style::ltype_display(l.name), egui::FontId::proportional(12.5), t.text);
-                ui.painter().text(r.left_center() + vec2(110.0, 0.0), egui::Align2::LEFT_CENTER, l.desc, egui::FontId::proportional(11.5), t.text3);
+                let desc_clip = egui::Rect::from_min_max(r.left_top() + vec2(130.0, 0.0), egui::pos2(r.right() - 160.0, r.bottom()));
+                ui.painter().with_clip_rect(desc_clip).text(r.left_center() + vec2(130.0, 0.0), egui::Align2::LEFT_CENTER, l.desc, egui::FontId::proportional(11.5), t.text3);
                 crate::ribbon::lt_sample(ui.painter(), Pos2::new(r.right() - 140.0, r.center().y), l.name, 120.0, t.text);
                 if resp.clicked() {
                     s.sel = Some(l.name.to_string());

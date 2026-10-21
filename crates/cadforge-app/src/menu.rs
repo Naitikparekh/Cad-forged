@@ -166,6 +166,10 @@ impl CadForgeApp {
             frame.show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 ui.set_width(width);
+                // long menus (linetypes, fonts...) scroll instead of running off the screen
+                let max_h = (ctx.content_rect().height() * 0.8 - 20.0).max(160.0);
+                egui::ScrollArea::vertical().max_height(max_h).auto_shrink([true, true]).show(ui, |ui| {
+                ui.set_width(width);
                 for (i, it) in items.iter().enumerate() {
                     match it {
                         MItem::Sep => {
@@ -229,6 +233,7 @@ impl CadForgeApp {
                         }
                     }
                 }
+                });
             });
         });
         rects.push(resp.response.rect);

@@ -212,16 +212,47 @@ pub struct LineType {
     pub pattern: &'static [f64],
 }
 
-pub const LINETYPES: [LineType; 9] = [
+/// The standard linetype library (acad.lin): dash lengths in drawing units at LTSCALE 1, negative = gap, 0 = dot.
+pub const LINETYPES: &[LineType] = &[
     LineType { name: "Continuous", desc: "Solid line", pattern: &[] },
-    LineType { name: "DASHED", desc: "Dashed __ __ __ __ __ __", pattern: &[0.5, -0.25] },
-    LineType { name: "HIDDEN", desc: "Hidden __ __ __ __ __ __", pattern: &[0.25, -0.125] },
-    LineType { name: "CENTER", desc: "Center ____ _ ____ _ ____", pattern: &[1.25, -0.25, 0.25, -0.25] },
-    LineType { name: "PHANTOM", desc: "Phantom ______ __ __ ______", pattern: &[1.25, -0.25, 0.25, -0.25, 0.25, -0.25] },
-    LineType { name: "DASHDOT", desc: "Dash dot __ . __ . __ .", pattern: &[0.5, -0.25, 0.0, -0.25] },
-    LineType { name: "DOT", desc: "Dot . . . . . . . . . .", pattern: &[0.0, -0.25] },
-    LineType { name: "BORDER", desc: "Border __ __ . __ __ .", pattern: &[0.5, -0.25, 0.5, -0.25, 0.0, -0.25] },
-    LineType { name: "DIVIDE", desc: "Divide __ . . __ . . __", pattern: &[0.5, -0.25, 0.0, -0.25, 0.0, -0.25] },
+    LineType { name: "BORDER", desc: "Border __ __ . __ __ . __ __ . __ __ . __ __ .", pattern: &[0.5, -0.25, 0.5, -0.25, 0.0, -0.25] },
+    LineType { name: "BORDER2", desc: "Border (.5x) __.__.__.__.__.__.__.__.__.__.__.", pattern: &[0.25, -0.125, 0.25, -0.125, 0.0, -0.125] },
+    LineType { name: "BORDERX2", desc: "Border (2x) ____  ____  .  ____  ____  .  ___", pattern: &[1.0, -0.5, 1.0, -0.5, 0.0, -0.5] },
+    LineType { name: "CENTER", desc: "Center ____ _ ____ _ ____ _ ____ _ ____ _ ____", pattern: &[1.25, -0.25, 0.25, -0.25] },
+    LineType { name: "CENTER2", desc: "Center (.5x) ___ _ ___ _ ___ _ ___ _ ___ _ ___", pattern: &[0.75, -0.125, 0.125, -0.125] },
+    LineType { name: "CENTERX2", desc: "Center (2x) ________  __  ________  __  _____", pattern: &[2.5, -0.5, 0.5, -0.5] },
+    LineType { name: "DASHDOT", desc: "Dash dot __ . __ . __ . __ . __ . __ . __ . __", pattern: &[0.5, -0.25, 0.0, -0.25] },
+    LineType { name: "DASHDOT2", desc: "Dash dot (.5x) _._._._._._._._._._._._._._._.", pattern: &[0.25, -0.125, 0.0, -0.125] },
+    LineType { name: "DASHDOTX2", desc: "Dash dot (2x) ____  .  ____  .  ____  .  ___", pattern: &[1.0, -0.5, 0.0, -0.5] },
+    LineType { name: "DASHED", desc: "Dashed __ __ __ __ __ __ __ __ __ __ __ __ __ _", pattern: &[0.5, -0.25] },
+    LineType { name: "DASHED2", desc: "Dashed (.5x) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _", pattern: &[0.25, -0.125] },
+    LineType { name: "DASHEDX2", desc: "Dashed (2x) ____  ____  ____  ____  ____  ___", pattern: &[1.0, -0.5] },
+    LineType { name: "DIVIDE", desc: "Divide ____ . . ____ . . ____ . . ____ . . ____", pattern: &[0.5, -0.25, 0.0, -0.25, 0.0, -0.25] },
+    LineType { name: "DIVIDE2", desc: "Divide (.5x) __..__..__..__..__..__..__..__.._", pattern: &[0.25, -0.125, 0.0, -0.125, 0.0, -0.125] },
+    LineType { name: "DIVIDEX2", desc: "Divide (2x) ________  .  .  ________  .  .  _", pattern: &[1.0, -0.5, 0.0, -0.5, 0.0, -0.5] },
+    LineType { name: "DOT", desc: "Dot . . . . . . . . . . . . . . . . . . . . . .", pattern: &[0.0, -0.25] },
+    LineType { name: "DOT2", desc: "Dot (.5x) .....................................", pattern: &[0.0, -0.125] },
+    LineType { name: "DOTX2", desc: "Dot (2x) .  .  .  .  .  .  .  .  .  .  .  .  .", pattern: &[0.0, -0.5] },
+    LineType { name: "HIDDEN", desc: "Hidden __ __ __ __ __ __ __ __ __ __ __ __ __ __", pattern: &[0.25, -0.125] },
+    LineType { name: "HIDDEN2", desc: "Hidden (.5x) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _", pattern: &[0.125, -0.0625] },
+    LineType { name: "HIDDENX2", desc: "Hidden (2x) ____ ____ ____ ____ ____ ____ ____", pattern: &[0.5, -0.25] },
+    LineType { name: "PHANTOM", desc: "Phantom ______  __  __  ______  __  __  ______", pattern: &[1.25, -0.25, 0.25, -0.25, 0.25, -0.25] },
+    LineType { name: "PHANTOM2", desc: "Phantom (.5x) ___ _ _ ___ _ _ ___ _ _ ___ _ _ ___", pattern: &[0.625, -0.125, 0.125, -0.125, 0.125, -0.125] },
+    LineType { name: "PHANTOMX2", desc: "Phantom (2x) ____________    ____    ____    _", pattern: &[2.5, -0.5, 0.5, -0.5, 0.5, -0.5] },
+    LineType { name: "ACAD_ISO02W100", desc: "ISO dash __ __ __ __ __ __ __ __ __ __ __ __ __", pattern: &[12.0, -3.0] },
+    LineType { name: "ACAD_ISO03W100", desc: "ISO dash space __    __    __    __    __    __", pattern: &[12.0, -18.0] },
+    LineType { name: "ACAD_ISO04W100", desc: "ISO long-dash dot ____ . ____ . ____ . ____ . _", pattern: &[24.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO05W100", desc: "ISO long-dash double-dot ____ .. ____ .. ____ .", pattern: &[24.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO06W100", desc: "ISO long-dash triple-dot ____ ... ____ ... ____", pattern: &[24.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO07W100", desc: "ISO dot . . . . . . . . . . . . . . . . . . . .", pattern: &[0.0, -3.0] },
+    LineType { name: "ACAD_ISO08W100", desc: "ISO long-dash short-dash ____ __ ____ __ ____ _", pattern: &[24.0, -3.0, 6.0, -3.0] },
+    LineType { name: "ACAD_ISO09W100", desc: "ISO long-dash double-short-dash ____ __ __ ____", pattern: &[24.0, -3.0, 6.0, -3.0, 6.0, -3.0] },
+    LineType { name: "ACAD_ISO10W100", desc: "ISO dash dot __ . __ . __ . __ . __ . __ . __ .", pattern: &[12.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO11W100", desc: "ISO double-dash dot __ __ . __ __ . __ __ . __ _", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO12W100", desc: "ISO dash double-dot __ . . __ . . __ . . __ . .", pattern: &[12.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO13W100", desc: "ISO double-dash double-dot __ __ . . __ __ . . _", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO14W100", desc: "ISO dash triple-dot __ . . . __ . . . __ . . . _", pattern: &[12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO15W100", desc: "ISO double-dash triple-dot __ __ . . . __ __ . .", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
 ];
 
 pub fn linetype(name: &str) -> Option<&'static LineType> {
@@ -232,7 +263,7 @@ pub fn ltype_key(name: &str) -> Option<&'static str> {
     linetype(name).map(|l| l.name)
 }
 pub fn ltype_display(name: &str) -> String {
-    if name == "Continuous" {
+    if name == "Continuous" || name.starts_with("ACAD_") {
         name.into()
     } else {
         let mut c = name.chars();

@@ -19,6 +19,10 @@ pub const DEFAULT_ALIASES: &[(&str, &str)] = &[
     // dimension / drafting extras
     ("QP", "QUICKPROPERTIES"), ("QSAVE", "QSAVE"), ("3DO", "3DORBIT"), ("BEDIT", "BEDIT"), ("RAY", "RAY"), ("ID", "ID"), ("REV", "REVOLVE"),
     ("WE", "WEDGE"), ("CYL", "CYLINDER"), ("SPH", "SPHERE"), ("SUB", "SUBTRACT"),
+    ("FI", "FILTER"), ("IAT", "IMAGEATTACH"), ("ICL", "IMAGECLIP"), ("ML", "MLINE"), ("REG", "REGION"), ("SL", "SLICE"), ("SP", "SPELL"),
+    ("SPE", "SPLINEDIT"), ("TOR", "TORUS"), ("XC", "XCLIP"), ("MS", "MSPACE"), ("PS", "PSPACE"), ("MV", "MVIEW"), ("DCE", "DIMCENTER"),
+    ("DED", "DIMEDIT"), ("DOR", "DIMORDINATE"), ("TOL", "TOLERANCE"), ("XA", "XATTACH"), ("XB", "XBIND"), ("XR", "XREF"), ("ATT", "ATTDEF"),
+    ("ATE", "ATTEDIT"), ("HI", "HIDE"), ("SHA", "SHADEMODE"), ("SPE", "SPLINEDIT"), ("IMP", "IMPORT"),
 ];
 
 pub const DEFAULT_SYNONYMS: &[(&str, &str)] = &[

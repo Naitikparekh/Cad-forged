@@ -32,6 +32,25 @@ fn main() {
         hn += k;
     }
     println!("{:<12} {hn:>3}/{tn:<3} commands   weighted {:>5.1}%", "TOTAL", 100.0 * hw / tw);
+    // aliases: the alias must resolve to the same command as acad.pgp says
+    let pgp = include_str!("../../../tools/benchmark/acad-aliases.tsv");
+    let (mut ok, mut total) = (0, 0);
+    let mut bad: Vec<String> = vec![];
+    for line in pgp.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()) {
+        let f: Vec<&str> = line.split('\t').collect();
+        total += 1;
+        match reg.find(f[0]) {
+            Some(d) if d.name.trim_start_matches('-').eq_ignore_ascii_case(f[1]) => ok += 1,
+            Some(d) => bad.push(format!("{} -> {} (expected {})", f[0], d.name, f[1])),
+            None => bad.push(format!("{} -> (none) (expected {})", f[0], f[1])),
+        }
+    }
+    println!("{:<12} {ok:>3}/{total:<3} aliases    {:>5.1}%", "ALIASES", 100.0 * ok as f64 / total as f64);
+    if show_missing {
+        for b in &bad {
+            println!("  alias {b}");
+        }
+    }
     if show_missing {
         missing.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
         for (w, c, n) in missing {
