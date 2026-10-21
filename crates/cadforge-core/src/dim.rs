@@ -554,7 +554,7 @@ mod tests {
         let s = Settings::default();
         let mut r = DimData::new(DimType::Dia);
         r.c = Some(pt(75.0, 15.0));
-        r.pt = Some(pt(75.0 + 5.0 * 0.7071067811865476, 15.0 + 5.0 * 0.7071067811865476));
+        r.pt = Some(pt(75.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2, 15.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2));
         r.dp = Some(pt(94.0, 29.0));
         let g = dim_geometry(&r, &s);
         assert_eq!(g.text.s, "\u{2300}10.00");

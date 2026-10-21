@@ -111,7 +111,7 @@ impl CadForgeApp {
     pub fn process_inbox(&mut self) {
         let items: Vec<Picked> = std::mem::take(&mut *self.inbox.borrow_mut());
         for p in items {
-            let text = String::from_utf8_lossy(&p.bytes).to_string();
+            let text = if p.name.to_lowercase().ends_with(".dxf") { cadforge_core::io::decode_dxf_bytes(&p.bytes) } else { String::from_utf8_lossy(&p.bytes).to_string() };
             match p.purpose {
                 "open" => match self.parse_drawing(&p.name, &text) {
                     Ok(mut doc) => {

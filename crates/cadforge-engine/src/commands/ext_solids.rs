@@ -751,17 +751,14 @@ async fn rotate3d_gizmo(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn rotate3d(c: Ctx, _a: Args) -> CmdResult<()> {
     let Some(sel) = pick_objects(&c, "Select objects").await? else { return Ok(()) };
     let Some((o, dir)) = pick_axis(&c, "Specify first point on axis or define axis by", "Specify second point on axis", &["Object", "View", "Xaxis", "Yaxis", "Zaxis", "2points"], false).await? else { return Ok(()) };
-    let angle = loop {
-        let r = c.angle(ps("Specify rotation angle").options(&["Reference"]).default_num(0.0)).await?;
-        if r.kw() == Some("Reference") {
-            let Some(a) = c.angle(ps("Specify the reference angle").default_num(0.0)).await?.value() else { return Ok(()) };
-            let Some(b) = c.angle(ps("Specify the new angle").default_num(0.0)).await?.value() else { return Ok(()) };
-            break b - a;
-        }
-        match r.value() {
-            Some(v) => break v,
-            None => return Ok(()),
-        }
+    let r = c.angle(ps("Specify rotation angle").options(&["Reference"]).default_num(0.0)).await?;
+    let angle = if r.kw() == Some("Reference") {
+        let Some(a) = c.angle(ps("Specify the reference angle").default_num(0.0)).await?.value() else { return Ok(()) };
+        let Some(b) = c.angle(ps("Specify the new angle").default_num(0.0)).await?.value() else { return Ok(()) };
+        b - a
+    } else {
+        let Some(v) = r.value() else { return Ok(()) };
+        v
     };
     apply_m3(&c, &sel, &xform::rotate_axis(o, dir, angle), false);
     Ok(())

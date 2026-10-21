@@ -2,7 +2,7 @@
 //!
 //! Supported: LINE CIRCLE ARC LWPOLYLINE POLYLINE ELLIPSE SPLINE POINT TEXT MTEXT INSERT HATCH SOLID/TRACE XLINE RAY
 //! LEADER and DIMENSION (imported as the geometry of its anonymous block, so it looks exactly like the source drawing).
-use crate::drawing::Drawing;
+use crate::drawing::{Drawing, Layout, Paper};
 use crate::entities::*;
 use crate::geom::*;
 use crate::hatch::pattern;
@@ -393,8 +393,8 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
         if (flags as i64) & 2 != 0 {
             // polyline path
             let has_bulge = num(&mut i, 72);
+            num(&mut i, 73); // closed flag (the order is 72, 73, 93)
             let nv = (num(&mut i, 93) as usize).min(cap);
-            num(&mut i, 73);
             let mut verts = vec![];
             for _ in 0..nv {
                 let x = num(&mut i, 10);
@@ -657,7 +657,7 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 push(Entity::ellipse(r.pt(0), m, ratio.min(1.0), r.num(41, 0.0), r.num(42, TAU)), false, &mut out);
             }
         }
-        "SPLINE" => {
+        "SPLINE" | "HELIX" => {
             let flags = r.int(70, 0);
             let deg = r.int(71, 3).max(1) as usize;
             let fit = r.pts(11, 21);
@@ -766,6 +766,23 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     let ps = r.num(41, 1.0);
                     h.ps = if ps == 0.0 { 1.0 } else { ps };
                     h.pa = rad(r.num(52, 0.0));
+                    if r.int(450, 0) == 1 {
+                        // gradient fill: two (or one tinted) true colours, the pattern name and the rotation
+                        let cols: Vec<[u8; 3]> = r.all(421).iter().map(|v| {
+                            let n = v.trim().parse::<i64>().unwrap_or(0) & 0xFFFFFF;
+                            [(n >> 16) as u8, (n >> 8) as u8, n as u8]
+                        }).collect();
+                        let one = r.int(452, 0) == 1 || cols.len() < 2;
+                        let c1 = cols.first().copied().unwrap_or([255, 255, 255]);
+                        h.gradient = Some(GradientData {
+                            c1,
+                            c2: cols.get(1).copied().unwrap_or([255, 255, 255]),
+                            angle: r.num(460, 0.0),
+                            kind: r.first(470).map(|k| k.to_uppercase()).unwrap_or_else(|| "LINEAR".into()),
+                            one_color: one,
+                            tint: r.num(462, 0.5),
+                        });
+                    }
                 }
                 push(e, false, &mut out);
             }
@@ -781,6 +798,120 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             if uniq.len() >= 3 {
                 let loop_: Vec<Vertex> = uniq.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect();
                 push(Entity::hatch(vec![loop_], "SOLID"), false, &mut out);
+            }
+        }
+        "3DFACE" => {
+            // a planar face: draw its outline in the XY plane
+            let mut pts: Vec<Pt> = vec![r.pt(0), r.pt(1), r.pt(2)];
+            if r.first(13).is_some() {
+                pts.push(r.pt(3));
+            }
+            let mut uniq: Vec<Pt> = vec![];
+            for q in pts {
+                if uniq.last().map_or(true, |l| dist(*l, q) > 1e-12) {
+                    uniq.push(q);
+                }
+            }
+            if uniq.len() > 1 && dist(uniq[0], *uniq.last().expect("point")) < 1e-12 {
+                uniq.pop();
+            }
+            if uniq.len() >= 3 {
+                push(Entity::pline(uniq.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect(), true), false, &mut out);
+            }
+        }
+        "MLINE" => {
+            // the STANDARD style's two elements; the vertices come as repeated group 11/21 points
+            let verts: Vec<Pt> = r.pts(11, 21);
+            let scale = r.num(40, 1.0);
+            let (lo, hi) = match r.int(70, 1) {
+                0 => (-scale, 0.0),
+                2 => (0.0, scale),
+                _ => (-scale / 2.0, scale / 2.0),
+            };
+            let closed = r.int(71, 0) & 2 != 0;
+            if verts.len() >= 2 {
+                let grp = format!("*M{}", ctx.skipped.len() + verts.len());
+                for off in [lo, hi] {
+                    let pts = offset_polyline(&verts, off, closed);
+                    let mut e = Entity::pline(pts.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect(), closed);
+                    e.grp = Some(grp.clone());
+                    push(e, false, &mut out);
+                }
+            }
+        }
+        "MULTILEADER" => {
+            let mut line: Vec<Pt> = vec![];
+            let mut text = String::new();
+            let (mut text_h, mut landing, mut dogleg_dir, mut dogleg_len) = (0.0, None, None, 0.0);
+            let mut in_line = false;
+            let mut x: Option<f64> = None;
+            let mut section = String::new();
+            for (c, v) in &r.g {
+                match (*c, v.as_str()) {
+                    (300, "CONTEXT_DATA{") => section = "ctx".into(),
+                    (302, "LEADER{") => section = "leader".into(),
+                    (304, "LEADER_LINE{") => in_line = true,
+                    (305, "}") => in_line = false,
+                    (304, t) if section == "ctx" && !in_line => text = decode_mtext(t),
+                    (41, t) if section == "ctx" && text_h == 0.0 => text_h = parse_f(t),
+                    (10, t) if in_line => x = Some(parse_f(t)),
+                    (20, t) if in_line => {
+                        if let Some(px) = x.take() {
+                            line.push(pt(px, parse_f(t)));
+                        }
+                    }
+                    (10, t) if section == "leader" && landing.is_none() => x = Some(parse_f(t)),
+                    (20, t) if section == "leader" && landing.is_none() && x.is_some() => landing = Some(pt(x.take().unwrap_or(0.0), parse_f(t))),
+                    (11, t) if section == "leader" && dogleg_dir.is_none() => x = Some(parse_f(t)),
+                    (21, t) if section == "leader" && dogleg_dir.is_none() && x.is_some() => dogleg_dir = Some(pt(x.take().unwrap_or(0.0), parse_f(t))),
+                    (40, t) if section == "leader" && dogleg_len == 0.0 => dogleg_len = parse_f(t),
+                    _ => {}
+                }
+            }
+            if line.len() >= 2 {
+                if let Some(l) = landing {
+                    if dist(*line.last().expect("point"), l) > 1e-9 {
+                        line.push(l);
+                    }
+                    if let Some(d) = dogleg_dir {
+                        if dogleg_len > 0.0 {
+                            line.push(pt(l.x + d.x * dogleg_len, l.y + d.y * dogleg_len));
+                        }
+                    }
+                }
+                push(Entity::leader(line, &text, if text_h > 0.0 { text_h } else { 2.5 }), false, &mut out);
+            }
+        }
+        "WIPEOUT" => {
+            // clip boundary in image pixel space: x from -0.5 to the pixel width, mapped with the u / v vectors
+            let (o, u, v) = (r.pt(0), r.pt(1), r.pt(2));
+            let raw: Vec<Pt> = r.pts(14, 24);
+            let size = (r.num(13, 1.0), r.num(23, 1.0));
+            let pts: Vec<Pt> = if r.int(71, 1) == 1 || raw.len() < 3 {
+                vec![pt(-0.5, -0.5), pt(size.0 - 0.5, -0.5), pt(size.0 - 0.5, size.1 - 0.5), pt(-0.5, size.1 - 0.5)]
+            } else {
+                raw
+            };
+            let world: Vec<Pt> = pts.iter().map(|q| pt(o.x + u.x * (q.x + 0.5) + v.x * (q.y + 0.5), o.y + u.y * (q.x + 0.5) + v.y * (q.y + 0.5))).collect();
+            let n = world.len();
+            let world = if n > 3 && dist(world[0], world[n - 1]) < 1e-9 { world[..n - 1].to_vec() } else { world };
+            if world.len() >= 3 {
+                push(Entity::new(Kind::Wipeout(WipeoutData { pts: world })), false, &mut out);
+            }
+        }
+        "VIEWPORT" => {
+            // id 1 is the sheet's own viewport, not a window onto model space
+            let (w, h) = (r.num(40, 0.0), r.num(41, 0.0));
+            if r.int(69, 0) != 1 && w > 0.0 && h > 0.0 {
+                let mut vp = ViewportData::new(r.pt(0), w, h);
+                let vh = r.num(45, 0.0);
+                if vh > 0.0 {
+                    vp.scale = Some(h / vh);
+                }
+                vp.vc = pt(r.num(17, 0.0) + r.num(12, 0.0), r.num(27, 0.0) + r.num(22, 0.0));
+                vp.off = r.int(68, 1) == 0;
+                vp.locked = r.int(90, 0) & 16384 != 0;
+                push(Entity::new(Kind::Viewport(vp)), false, &mut out);
             }
         }
         "DIMENSION" => {
@@ -807,6 +938,36 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
         }
     }
     out
+}
+
+/// A polyline offset by `d` to its left with mitred corners (used for multilines).
+fn offset_polyline(pts: &[Pt], d: f64, closed: bool) -> Vec<Pt> {
+    let n = pts.len();
+    let seg_normal = |i: usize, j: usize| {
+        let t = unit(pts[j] - pts[i]);
+        pt(-t.y, t.x)
+    };
+    (0..n)
+        .map(|i| {
+            let prev = if i > 0 { Some(i - 1) } else if closed { Some(n - 1) } else { None };
+            let next = if i + 1 < n { Some(i + 1) } else if closed { Some(0) } else { None };
+            let n1 = prev.map(|p| seg_normal(p, i));
+            let n2 = next.map(|q| seg_normal(i, q));
+            let m = match (n1, n2) {
+                (Some(a), Some(b)) => {
+                    let k = 1.0 + dot(a, b);
+                    if k.abs() < 1e-9 {
+                        a
+                    } else {
+                        pt((a.x + b.x) / k, (a.y + b.y) / k)
+                    }
+                }
+                (Some(a), None) | (None, Some(a)) => a,
+                (None, None) => pt(0.0, 0.0),
+            };
+            pt(pts[i].x + m.x * d, pts[i].y + m.y * d)
+        })
+        .collect()
 }
 
 /// TEXT / ATTDEF / ATTRIB record to text data.
@@ -867,6 +1028,33 @@ fn group_entities(list: &[Rec]) -> Vec<Rec> {
 }
 
 // ---------------------------------------------------------------- entry point
+
+/// Windows-1252 code points for the bytes 0x80..=0x9F (the rest of the range equals Latin-1).
+const CP1252_HIGH: [char; 32] = [
+    '\u{20AC}', '\u{81}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}', '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{8D}', '\u{017D}', '\u{8F}', '\u{90}', '\u{2018}',
+    '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}', '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{9D}', '\u{017E}', '\u{0178}',
+];
+
+/// Decode the bytes of a DXF file: UTF-8 (AutoCAD 2007 and later, with or without BOM) or, failing that, the ANSI
+/// code page 1252 that older files and AutoCAD LT use.
+pub fn decode_dxf_bytes(bytes: &[u8]) -> String {
+    let b = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+    match std::str::from_utf8(b) {
+        Ok(s) => s.to_string(),
+        Err(_) => b
+            .iter()
+            .map(|&c| match c {
+                0x80..=0x9F => CP1252_HIGH[(c - 0x80) as usize],
+                _ => c as char,
+            })
+            .collect(),
+    }
+}
+
+/// Parse the bytes of a DXF file (see [`decode_dxf_bytes`]).
+pub fn read_dxf_bytes(bytes: &[u8], name: &str) -> Result<Drawing, String> {
+    read_dxf(&decode_dxf_bytes(bytes), name)
+}
 
 /// Parse DXF text into a drawing.
 pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
@@ -986,15 +1174,93 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         doc.define_block(n, base, ents);
     }
 
-    // ---- model space
-    let mut paper = 0;
+    // ---- layouts: LAYOUT objects name them and give the sheet size; BLOCK_RECORDs tie each paper-space block to one
+    struct LayoutDef {
+        name: String,
+        tab: i64,
+        paper: Paper,
+    }
+    let mut layout_defs: HashMap<String, LayoutDef> = HashMap::new(); // by LAYOUT handle
+    for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYOUT") {
+        let Some(h) = r.first(5) else { continue };
+        let Some(at) = r.g.iter().position(|(c, v)| *c == 100 && v == "AcDbLayout") else { continue };
+        let after = &r.g[at..];
+        let name = decode_text(after.iter().find(|(c, _)| *c == 1).map_or("", |(_, v)| v.as_str()));
+        if name.is_empty() || name.eq_ignore_ascii_case("Model") {
+            continue;
+        }
+        let tab = after.iter().find(|(c, _)| *c == 71).and_then(|(_, v)| v.trim().parse::<i64>().ok()).unwrap_or(0);
+        let k = if r.int(72, 1) == 0 { 25.4 } else { 1.0 };
+        let (mut w, mut hh) = (r.num(44, 297.0) * k, r.num(45, 210.0) * k);
+        if matches!(r.int(73, 0), 1 | 3) {
+            std::mem::swap(&mut w, &mut hh);
+        }
+        if !(w > 1.0 && hh > 1.0 && w.is_finite() && hh.is_finite()) {
+            (w, hh) = (297.0, 210.0);
+        }
+        let pname = r.first(4).unwrap_or("");
+        let known = ["A0", "A1", "A2", "A3", "A4", "Letter", "Legal", "Tabloid", "ANSI C", "ANSI D"].iter().find(|n| pname.eq_ignore_ascii_case(n)).map(|n| n.to_string());
+        layout_defs.insert(h.to_string(), LayoutDef { name, tab, paper: Paper { w, h: hh, name: known.unwrap_or_else(|| "Custom".into()), landscape: w >= hh } });
+    }
+    let mut block_layout: HashMap<String, String> = HashMap::new(); // paper-space block name -> layout name
+    for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "BLOCK_RECORD") {
+        let bn = decode_text(r.first(2).unwrap_or(""));
+        if let Some(def) = r.first(340).and_then(|h| layout_defs.get(h)) {
+            block_layout.insert(bn.to_lowercase(), def.name.clone());
+        }
+    }
+    let mut sheet_ents: HashMap<String, Vec<Entity>> = HashMap::new();
+    let mut paper = 0usize;
+    let mut fallback_names: Vec<String> = vec![];
+    let layout_of = |bn: &str, fallback: &mut Vec<String>| -> String {
+        if let Some(n) = block_layout.get(&bn.to_lowercase()) {
+            return n.clone();
+        }
+        // files without LAYOUT objects: the first paper-space block becomes "Layout1", then "Layout2"...
+        let key = bn.to_lowercase();
+        if let Some(i) = fallback.iter().position(|k| *k == key) {
+            return format!("Layout{}", i + 1);
+        }
+        fallback.push(key);
+        format!("Layout{}", fallback.len())
+    };
+
+    // ---- model space (and the active layout's entities, stored in ENTITIES with group 67 = 1)
     for r in group_entities(secs.get("ENTITIES").unwrap_or(&empty)) {
         if r.first(67) == Some("1") {
+            let ln = layout_of("*Paper_Space", &mut fallback_names);
+            for e in convert(&r, &mut ctx) {
+                sheet_ents.entry(ln.clone()).or_default().push(e);
+            }
             paper += 1;
             continue;
         }
         for e in convert(&r, &mut ctx) {
             doc.add_to(e, "model");
+        }
+    }
+    // the other layouts live in their own `*Paper_SpaceN` blocks
+    for n in order.iter().filter(|n| n.to_lowercase().starts_with("*paper_space")) {
+        let recs = ctx.blocks[n].entities.clone();
+        let ln = layout_of(n, &mut fallback_names);
+        for r in &recs {
+            for e in convert(r, &mut ctx) {
+                sheet_ents.entry(ln.clone()).or_default().push(e);
+            }
+        }
+    }
+    let mut named: Vec<(i64, String, Paper)> = layout_defs.values().map(|d| (d.tab, d.name.clone(), d.paper.clone())).collect();
+    for n in sheet_ents.keys() {
+        if !named.iter().any(|(_, ln, _)| ln == n) {
+            named.push((1000 + named.len() as i64, n.clone(), Paper::named("A3", true)));
+        }
+    }
+    named.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    for (_, ln, pp) in named {
+        let entities = sheet_ents.remove(&ln).unwrap_or_default();
+        doc.layouts.push(Layout { name: ln.clone(), paper: pp, entities: vec![], fresh: false });
+        for e in entities {
+            doc.add_to(e, &ln);
         }
     }
 
@@ -1015,7 +1281,8 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     doc.cur.layer = doc.layer(&cl).map(|l| l.name.clone()).unwrap_or_else(|| doc.layers[0].name.clone());
 
     doc.skipped = ctx.skipped;
-    doc.paper_skipped = paper;
+    doc.paper_skipped = 0;
+    let _ = paper;
     doc.validate()?;
     doc.dirty = false;
     Ok(doc)

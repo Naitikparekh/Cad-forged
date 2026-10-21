@@ -59,36 +59,34 @@ async fn box_footprint(c: &Ctx) -> CmdResult<Option<Footprint>> {
         r = c.point(ps("Specify center")).await?;
     }
     let Some(a) = r.pt() else { return Ok(None) };
-    loop {
-        let mut spec = ps("Specify other corner").options(&["Cube", "Length"]);
-        if centre {
-            spec = spec.preview(move |_, p| rect_preview(a - (p - a), p));
-        }
-        let o = c.corner(a, spec).await?;
-        match o.kw() {
-            Some("Cube") => {
-                let l = c.distance(ps("Specify length").base(a).default_num(len_mem).nonzero()).await?;
-                let Some(lv) = l.value() else { return Ok(None) };
-                c.app(|app| app.mem.solid.length = lv);
-                return Ok(Some(if centre { Footprint { x0: a.x - lv / 2.0, y0: a.y - lv / 2.0, w: lv, d: lv, h: Some(lv), b: None } } else { Footprint { x0: a.x, y0: a.y, w: lv, d: lv, h: Some(lv), b: None } }));
-            }
-            Some("Length") => {
-                let l = c.distance(ps("Specify length").base(a).default_num(len_mem).nonzero()).await?;
-                let Some(lv) = l.value() else { return Ok(None) };
-                let w = c.distance(ps("Specify width").base(a).default_num(len_mem).nonzero()).await?;
-                let Some(wv) = w.value() else { return Ok(None) };
-                c.app(|app| app.mem.solid.length = lv);
-                return Ok(Some(if centre { Footprint { x0: a.x - lv / 2.0, y0: a.y - wv / 2.0, w: lv, d: wv, h: None, b: None } } else { Footprint { x0: a.x, y0: a.y, w: lv, d: wv, h: None, b: None } }));
-            }
-            _ => {}
-        }
-        let Some(b) = o.pt() else { return Ok(None) };
-        if centre {
-            let (dx, dy) = ((b.x - a.x).abs(), (b.y - a.y).abs());
-            return Ok(Some(Footprint { x0: a.x - dx, y0: a.y - dy, w: 2.0 * dx, d: 2.0 * dy, h: None, b: None }));
-        }
-        return Ok(Some(Footprint { x0: a.x.min(b.x), y0: a.y.min(b.y), w: (b.x - a.x).abs(), d: (b.y - a.y).abs(), h: None, b: Some(b) }));
+    let mut spec = ps("Specify other corner").options(&["Cube", "Length"]);
+    if centre {
+        spec = spec.preview(move |_, p| rect_preview(a - (p - a), p));
     }
+    let o = c.corner(a, spec).await?;
+    match o.kw() {
+        Some("Cube") => {
+            let l = c.distance(ps("Specify length").base(a).default_num(len_mem).nonzero()).await?;
+            let Some(lv) = l.value() else { return Ok(None) };
+            c.app(|app| app.mem.solid.length = lv);
+            return Ok(Some(if centre { Footprint { x0: a.x - lv / 2.0, y0: a.y - lv / 2.0, w: lv, d: lv, h: Some(lv), b: None } } else { Footprint { x0: a.x, y0: a.y, w: lv, d: lv, h: Some(lv), b: None } }));
+        }
+        Some("Length") => {
+            let l = c.distance(ps("Specify length").base(a).default_num(len_mem).nonzero()).await?;
+            let Some(lv) = l.value() else { return Ok(None) };
+            let w = c.distance(ps("Specify width").base(a).default_num(len_mem).nonzero()).await?;
+            let Some(wv) = w.value() else { return Ok(None) };
+            c.app(|app| app.mem.solid.length = lv);
+            return Ok(Some(if centre { Footprint { x0: a.x - lv / 2.0, y0: a.y - wv / 2.0, w: lv, d: wv, h: None, b: None } } else { Footprint { x0: a.x, y0: a.y, w: lv, d: wv, h: None, b: None } }));
+        }
+        _ => {}
+    }
+    let Some(b) = o.pt() else { return Ok(None) };
+    if centre {
+        let (dx, dy) = ((b.x - a.x).abs(), (b.y - a.y).abs());
+        return Ok(Some(Footprint { x0: a.x - dx, y0: a.y - dy, w: 2.0 * dx, d: 2.0 * dy, h: None, b: None }));
+    }
+    Ok(Some(Footprint { x0: a.x.min(b.x), y0: a.y.min(b.y), w: (b.x - a.x).abs(), d: (b.y - a.y).abs(), h: None, b: Some(b) }))
 }
 
 async fn height_prompt(c: &Ctx, base: Pt, label: &str) -> CmdResult<Option<f64>> {

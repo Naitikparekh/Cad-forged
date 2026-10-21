@@ -1,7 +1,7 @@
 //! DXF writer (AutoCAD R2000 / AC1015), port of `src/io/dxf-write.js`. Output is validated against ezdxf by the tests
 //! in `tests/dxf.rs`.
 use crate::dim::{arrow_lines, arrow_polygon, dim_geometry, DimType};
-use crate::drawing::Drawing;
+use crate::drawing::{Drawing, Paper};
 use crate::entities::*;
 use crate::geom::*;
 use crate::hatch::pattern;
@@ -150,6 +150,8 @@ struct W<'a> {
     handle: u32,
     dim_blocks: Vec<DimBlock>,
     block_rec: HashMap<String, (String, String, String)>,
+    /// Next viewport id in the layout being written (id 1 is the sheet's own viewport).
+    vp_id: i64,
 }
 
 impl<'a> W<'a> {
@@ -162,7 +164,7 @@ impl<'a> W<'a> {
     fn common(&mut self, o: &mut EOut, ty: &str, p: &Props, sub: Option<&str>, layer: Option<&str>) {
         let hnd = self.h();
         o.out.s(0, ty).s(5, &hnd).s(330, &o.owner.clone()).s(100, "AcDbEntity");
-        if o.block_name == "*Paper_Space" {
+        if o.block_name.starts_with("*Paper_Space") {
             o.out.i(67, 1);
         }
         let layer = layer.unwrap_or(p.layer);
@@ -204,6 +206,17 @@ impl<'a> W<'a> {
             o.out.pt(p, 1);
         }
         o.out.s(100, "AcDbText").i(73, jv_code(jv) as i64);
+    }
+
+    /// A layout VIEWPORT (`view_h` is the height of the model region shown, in model units).
+    #[allow(clippy::too_many_arguments)]
+    fn viewport(&mut self, o: &mut EOut, c: Pt, w: f64, h: f64, id: i64, status: i64, view_c: Pt, view_h: f64, locked: bool, off: bool, props: &Props) {
+        self.common(o, "VIEWPORT", props, Some("AcDbViewport"), None);
+        o.out.pt(c, 0).n(40, w).n(41, h).i(68, if off { 0 } else { status }).i(69, id);
+        o.out.n(12, view_c.x).n(22, view_c.y).n(13, 0.0).n(23, 0.0).n(14, 10.0).n(24, 10.0).n(15, 10.0).n(25, 10.0);
+        o.out.n(16, 0.0).n(26, 0.0).n(36, 1.0).n(17, 0.0).n(27, 0.0).n(37, 0.0).n(42, 50.0).n(43, 0.0).n(44, 0.0).n(45, view_h).n(50, 0.0).n(51, 0.0).i(72, 100);
+        o.out.i(90, if id == 1 { 557088 } else if locked { 16384 } else { 0 }).s(1, "").i(281, 0).i(71, 0).i(74, 0);
+        o.out.n(110, 0.0).n(120, 0.0).n(130, 0.0).n(111, 1.0).n(121, 0.0).n(131, 0.0).n(112, 0.0).n(122, 1.0).n(132, 0.0).i(79, 0).n(146, 0.0).i(282, 0);
     }
 
     fn line(&mut self, o: &mut EOut, a: Pt, b: Pt, props: &Props, layer: Option<&str>) {
@@ -364,7 +377,7 @@ impl<'a> W<'a> {
             }
             Kind::Hatch(ha) => {
                 let pat = pattern(&ha.pattern).or_else(|| pattern("ANSI31")).expect("ANSI31 exists");
-                let solid_fill = pat.solid;
+                let solid_fill = pat.solid || ha.gradient.is_some();
                 self.common(o, "HATCH", &props, Some("AcDbHatch"), None);
                 o.out.pt(pt(0.0, 0.0), 0).n(210, 0.0).n(220, 0.0).n(230, 1.0).s(2, if solid_fill { "SOLID" } else { &ha.pattern }).i(70, solid_fill as i64).i(71, 0).i(91, ha.loops.len() as i64);
                 for (i, lp) in ha.loops.iter().enumerate() {
@@ -385,9 +398,18 @@ impl<'a> W<'a> {
                     }
                 }
                 o.out.i(98, 0);
+                if let Some(g) = &ha.gradient {
+                    let rgb = |c: [u8; 3]| ((c[0] as i64) << 16) | ((c[1] as i64) << 8) | c[2] as i64;
+                    o.out.i(450, 1).i(451, 0).n(460, g.angle).n(461, 0.0).i(452, g.one_color as i64).n(462, g.tint).i(453, 2).n(463, 0.0).i(421, rgb(g.c1)).n(463, 1.0).i(421, rgb(g.c2)).s(470, &g.kind);
+                }
             }
             Kind::Dim(d) => self.write_dim(o, e, d),
-            Kind::Viewport(_) => {}
+            Kind::Viewport(v) => {
+                let id = self.vp_id;
+                self.vp_id += 1;
+                let (vc, scale) = v.model_view(self.doc);
+                self.viewport(o, v.c, v.w, v.h, id, 2, vc, v.h / scale, v.locked, v.off, &Props::of(e));
+            }
         }
     }
 
@@ -480,7 +502,7 @@ impl<'a> W<'a> {
 
 /// Serialise a drawing to DXF text.
 pub fn write_dxf(doc: &Drawing) -> String {
-    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new() };
+    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2 };
     let mut o = Out::default();
 
     // ---------- collect names
@@ -506,13 +528,29 @@ pub fn write_dxf(doc: &Drawing) -> String {
 
     // handles of fixed table objects
     let mut hs: HashMap<&str, String> = HashMap::new();
-    for k in ["vport", "ltype", "layer", "style", "view", "ucs", "appid", "dimstyle", "blockRecord", "dictRoot", "dictGroup", "vportRec", "styleRec", "appidRec", "dimstyleRec", "msRec", "psRec", "msBlock", "msEnd", "psBlock", "psEnd"] {
+    for k in ["vport", "ltype", "layer", "style", "view", "ucs", "appid", "dimstyle", "blockRecord", "dictRoot", "dictGroup", "vportRec", "styleRec", "appidRec", "dimstyleRec", "msRec", "msBlock", "msEnd"] {
         hs.insert(k, w.h());
     }
     for b in &user_blocks {
         let t = (w.h(), w.h(), w.h());
         w.block_rec.insert(b.name.clone(), t);
     }
+    // paper-space sheets: every layout owns a BLOCK_RECORD / BLOCK / ENDBLK and a LAYOUT object (an empty drawing still gets one)
+    let sheets: Vec<(String, Paper, Vec<&Entity>)> = if doc.layouts.is_empty() {
+        vec![("Layout1".to_string(), Paper::named("A3", true), vec![])]
+    } else {
+        doc.layouts.iter().map(|l| (l.name.clone(), l.paper.clone(), l.entities.iter().collect())).collect()
+    };
+    let sheet_block = |i: usize| if i == 0 { "*Paper_Space".to_string() } else { format!("*Paper_Space{}", i - 1) };
+    struct SheetH {
+        rec: String,
+        blk: String,
+        end: String,
+        layout: String,
+    }
+    let sheet_h: Vec<SheetH> = sheets.iter().map(|_| SheetH { rec: w.h(), blk: w.h(), end: w.h(), layout: w.h() }).collect();
+    let dict_layout = w.h();
+    let model_layout = w.h();
     let layer_handle: Vec<String> = layers.iter().map(|_| w.h()).collect();
     let mut ltype_handle: HashMap<String, String> = HashMap::new();
     for n in ["ByBlock", "ByLayer"].into_iter().chain(ltype_names.iter().map(|l| l.name)) {
@@ -536,10 +574,18 @@ pub fn write_dxf(doc: &Drawing) -> String {
         let list: Vec<&Entity> = b.entities.iter().collect();
         block_outs.push(w.entity_out(&list, &rec, &b.name));
     }
-    let mut layout_lines: Vec<String> = vec![];
-    for l in &doc.layouts {
-        let list: Vec<&Entity> = l.entities.iter().filter(|e| !matches!(e.kind, Kind::Viewport(_))).collect();
-        layout_lines.extend(w.entity_out(&list, &hs["psRec"], "*Paper_Space"));
+    let mut sheet_lines: Vec<Vec<String>> = vec![];
+    for (i, (_, paper, list)) in sheets.iter().enumerate() {
+        w.vp_id = 2;
+        let bn = sheet_block(i);
+        let mut o = EOut { out: Out::default(), owner: sheet_h[i].rec.clone(), block_name: bn };
+        // viewport id 1: the sheet itself
+        let main = Props { layer: "0", ltype: None, color: None, lw: None };
+        w.viewport(&mut o, pt(paper.w / 2.0, paper.h / 2.0), paper.w, paper.h, 1, 1, pt(paper.w / 2.0, paper.h / 2.0), paper.h, false, false, &main);
+        for e in list {
+            w.write(&mut o, e);
+        }
+        sheet_lines.push(o.out.lines);
     }
 
     // ---------- HEADER
@@ -624,18 +670,23 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.s(0, "DIMSTYLE").s(105, &hs["dimstyleRec"]).s(330, &hs["dimstyle"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbDimStyleTableRecord").s(2, "Standard").i(70, 0);
     o.n(40, ds.scale).n(41, ds.asz).n(42, ds.exo).n(43, 3.75).n(44, ds.exe).n(140, ds.txt).n(141, ds.cen).n(147, ds.gap).i(271, ds.dec as i64).i(77, ds.tad as i64);
     o.s(0, "ENDTAB");
-    let br_count = 2 + user_blocks.len() + w.dim_blocks.len();
+    let br_count = 1 + sheets.len() + user_blocks.len() + w.dim_blocks.len();
     table_start(&mut o, "BLOCK_RECORD", &hs["blockRecord"], br_count);
-    let rec = |o: &mut Out, name: &str, hnd: &str| {
+    let rec = |o: &mut Out, name: &str, hnd: &str, layout: Option<&str>| {
         o.s(0, "BLOCK_RECORD").s(5, hnd).s(330, &hs["blockRecord"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbBlockTableRecord").s(2, name).i(70, 0).i(280, 1).i(281, 0);
+        if let Some(l) = layout {
+            o.s(340, l);
+        }
     };
-    rec(&mut o, "*Model_Space", &hs["msRec"]);
-    rec(&mut o, "*Paper_Space", &hs["psRec"]);
+    rec(&mut o, "*Model_Space", &hs["msRec"], Some(&model_layout));
+    for (i, h) in sheet_h.iter().enumerate() {
+        rec(&mut o, &sheet_block(i), &h.rec, Some(&h.layout));
+    }
     for b in &user_blocks {
-        rec(&mut o, &b.name, &w.block_rec[&b.name].0);
+        rec(&mut o, &b.name, &w.block_rec[&b.name].0, None);
     }
     for d in &w.dim_blocks {
-        rec(&mut o, &d.name, &d.rec);
+        rec(&mut o, &d.name, &d.rec, None);
     }
     o.s(0, "ENDTAB");
     o.s(0, "ENDSEC");
@@ -649,7 +700,9 @@ pub fn write_dxf(doc: &Drawing) -> String {
         o.s(0, "ENDBLK").s(5, end_h).s(330, owner).s(100, "AcDbEntity").s(8, layer).s(100, "AcDbBlockEnd");
     };
     block(&mut o, "*Model_Space", &hs["msBlock"], &hs["msEnd"], &hs["msRec"], &[], pt(0.0, 0.0), "0");
-    block(&mut o, "*Paper_Space", &hs["psBlock"], &hs["psEnd"], &hs["psRec"], &layout_lines, pt(0.0, 0.0), "0");
+    for (i, h) in sheet_h.iter().enumerate() {
+        block(&mut o, &sheet_block(i), &h.blk, &h.end, &h.rec, &sheet_lines[i], pt(0.0, 0.0), "0");
+    }
     for (b, body) in user_blocks.iter().zip(&block_outs) {
         let (r, blk, end) = &w.block_rec[&b.name];
         block(&mut o, &b.name, blk, end, r, body, b.base, "0");
@@ -664,10 +717,28 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.lines.extend(model_out);
     o.s(0, "ENDSEC");
 
-    // ---------- OBJECTS (root dictionary only)
+    // ---------- OBJECTS (root dictionary, groups and the layout dictionary)
     o.s(0, "SECTION").s(2, "OBJECTS");
-    o.s(0, "DICTIONARY").s(5, &hs["dictRoot"]).i(330, 0).s(100, "AcDbDictionary").i(281, 1).s(3, "ACAD_GROUP").s(350, &hs["dictGroup"]);
+    o.s(0, "DICTIONARY").s(5, &hs["dictRoot"]).i(330, 0).s(100, "AcDbDictionary").i(281, 1).s(3, "ACAD_GROUP").s(350, &hs["dictGroup"]).s(3, "ACAD_LAYOUT").s(350, &dict_layout);
     o.s(0, "DICTIONARY").s(5, &hs["dictGroup"]).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
+    o.s(0, "DICTIONARY").s(5, &dict_layout).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
+    o.s(3, "Model").s(350, &model_layout);
+    for ((name, _, _), h) in sheets.iter().zip(&sheet_h) {
+        o.s(3, &enc(name)).s(350, &h.layout);
+    }
+    let layout_obj = |o: &mut Out, hnd: &str, name: &str, tab: i64, block_rec: &str, paper: Option<&Paper>| {
+        o.s(0, "LAYOUT").s(5, hnd).s(330, &dict_layout).s(100, "AcDbPlotSettings").s(1, "").s(2, "none_device").s(4, paper.map_or("", |p| if p.name == "Custom" { "" } else { p.name.as_str() }));
+        let (pw, ph) = paper.map_or((0.0, 0.0), |p| if p.landscape { (p.w.max(p.h), p.w.min(p.h)) } else { (p.w.min(p.h), p.w.max(p.h)) });
+        o.s(6, "").n(40, 0.0).n(41, 0.0).n(42, 0.0).n(43, 0.0).n(44, pw).n(45, ph).n(46, 0.0).n(47, 0.0).n(48, 0.0).n(49, 0.0).n(140, 0.0).n(141, 0.0).n(142, 1.0).n(143, 1.0);
+        o.i(70, 688).i(72, 1).i(73, 0).i(74, 5).s(7, "").i(75, 16).n(147, 1.0).n(148, 0.0).n(149, 0.0);
+        o.s(100, "AcDbLayout").s(1, name).i(70, 1).i(71, tab).n(10, 0.0).n(20, 0.0).n(11, pw).n(21, ph).n(12, 0.0).n(22, 0.0).n(32, 0.0);
+        o.n(14, 0.0).n(24, 0.0).n(34, 0.0).n(15, pw).n(25, ph).n(35, 0.0).n(146, 0.0).n(13, 0.0).n(23, 0.0).n(33, 0.0);
+        o.n(16, 1.0).n(26, 0.0).n(36, 0.0).n(17, 0.0).n(27, 1.0).n(37, 0.0).i(76, 0).s(330, block_rec);
+    };
+    layout_obj(&mut o, &model_layout, "Model", 0, &hs["msRec"], None);
+    for (i, ((name, paper, _), h)) in sheets.iter().zip(&sheet_h).enumerate() {
+        layout_obj(&mut o, &h.layout, &enc(name), i as i64 + 1, &h.rec, Some(paper));
+    }
     o.s(0, "ENDSEC").s(0, "EOF");
 
     o.text().replacen("__HANDSEED__", &format!("{:X}", w.handle), 1)
