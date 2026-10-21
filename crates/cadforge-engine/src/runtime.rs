@@ -514,7 +514,9 @@ fn has_word_or(msg: &str) -> bool {
 pub fn prompt_text(p: Option<&Pending>) -> String {
     let Some(p) = p else { return "Command:".into() };
     let mut msg = p.spec.message.clone();
-    if !p.spec.options.is_empty() {
+    // a message that already lists its options in brackets is shown as written
+    let lists_options = msg.contains('[') && msg.contains(']');
+    if !p.spec.options.is_empty() && !lists_options {
         msg += if has_word_or(&msg) || msg.is_empty() { "" } else { " or" };
         msg += " ";
         msg += options_text(&p.spec.options).trim();
