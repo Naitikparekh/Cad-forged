@@ -44,6 +44,7 @@ impl CadForgeApp {
             "UNITS" => self.dialog = Some(Dialog::units()),
             "DIMSTYLE" => self.dialog = Some(Dialog::dimstyle()),
             "PLOT" => self.dialog = Some(Dialog::plot("pdf")),
+            "PAGESETUP" => self.dialog = Some(Dialog::pagesetup()),
             "QSELECT" => self.dialog = Some(Dialog::qselect()),
             "ALIASEDIT" => self.dialog = Some(Dialog::aliasedit()),
             "STYLE" => self.dialog = Some(Dialog::textstyle()),

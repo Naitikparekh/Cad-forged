@@ -165,7 +165,32 @@ pub fn geom_fields(e: &Entity) -> Vec<Field> {
             x("Base Y", |e| match &e.kind { Kind::Xline { p, .. } | Kind::Ray { p, .. } => p.y, _ => 0.0 }, |e, v| if let Kind::Xline { p, .. } | Kind::Ray { p, .. } = &mut e.kind { p.y = v }),
             ro("Angle", |e, _| if let Kind::Xline { d, .. } | Kind::Ray { d, .. } = &e.kind { Val::Text(format!("{}°", fmt_num(deg(norm_angle(d.y.atan2(d.x))), 4, true))) } else { Val::Text(String::new()) }),
         ],
-        Kind::Viewport(_) => vec![],
+        Kind::Viewport(_) => vec![
+            Field {
+                label: "Standard scale",
+                unit: None,
+                kind: FKind::Select(cadforge_render::SCALES.iter().skip(1).map(|(l, _)| l.to_string()).collect()),
+                get: Box::new(|e, _| {
+                    let Kind::Viewport(v) = &e.kind else { return Val::Text(String::new()) };
+                    match v.scale {
+                        None => Val::Text("Fit".into()),
+                        Some(s) => Val::Text(cadforge_render::SCALES.iter().find(|(_, f)| f.is_some_and(|f| (f - s).abs() < 1e-9)).map_or("Custom".to_string(), |(l, _)| l.to_string())),
+                    }
+                }),
+                set: Some(Box::new(|e, v| {
+                    if let (Kind::Viewport(vp), Val::Text(l)) = (&mut e.kind, v) {
+                        if let Some((_, Some(f))) = cadforge_render::SCALES.iter().find(|(n, _)| n == l) {
+                            vp.scale = Some(*f);
+                        }
+                    }
+                })),
+            },
+            xmin("Custom scale", 1e-9, |e| if let Kind::Viewport(v) = &e.kind { v.scale.unwrap_or(1.0) } else { 1.0 }, |e, v| if let Kind::Viewport(vp) = &mut e.kind { vp.scale = Some(v) }),
+            boolf("Display locked", |e| matches!(&e.kind, Kind::Viewport(v) if v.locked), |e, v| if let Kind::Viewport(vp) = &mut e.kind { vp.locked = v }),
+            boolf("On", |e| matches!(&e.kind, Kind::Viewport(v) if !v.off), |e, v| if let Kind::Viewport(vp) = &mut e.kind { vp.off = !v }),
+            ro_n("Width", |e| if let Kind::Viewport(v) = &e.kind { v.w } else { 0.0 }),
+            ro_n("Height", |e| if let Kind::Viewport(v) = &e.kind { v.h } else { 0.0 }),
+        ],
         Kind::Table(_) => vec![
             ro_n("Rows", |e| if let Kind::Table(t) = &e.kind { t.rows.len() as f64 } else { 0.0 }),
             ro_n("Columns", |e| if let Kind::Table(t) = &e.kind { t.cols.len() as f64 } else { 0.0 }),

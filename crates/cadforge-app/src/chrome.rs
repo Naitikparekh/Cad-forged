@@ -35,6 +35,7 @@ impl CadForgeApp {
                 let h = lines * 17.0 + 36.0;
                 egui::Panel::bottom("cmdline").exact_size(h).resizable(false).show_separator_line(false).frame(frame(t.chrome2)).show(ui, |ui| self.cmdline_ui(ui, ctx));
             }
+            egui::Panel::bottom("layouttabs").exact_size(crate::layouts_ui::LAYOUT_TABS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show(ui, |ui| self.layout_tabs(ui, ctx));
             self.palettes_ui(ui, ctx);
         }
         egui::CentralPanel::no_frame().show(ui, |ui| {
@@ -547,7 +548,7 @@ impl CadForgeApp {
 
     fn status_items(&self) -> Vec<StatusItem> {
         vec![
-            StatusItem { id: "model", icon: Some("viewcube"), title: "Model", desc: "Model space. Paper space layouts are not available yet.", key: "", label: Some("MODEL"), text: None, on: |_| true, act: |_, _, _| {}, menu: None },
+            StatusItem { id: "model", icon: Some("viewcube"), title: "Model or Paper Space", desc: "Shows whether the sheet (PAPER) or model space (MODEL) is active. In a layout, click to switch between the sheet and the active viewport.", key: "", label: None, text: Some(|a| a.space_label()), on: |_| true, act: |a, _, _| a.toggle_space(), menu: None },
             StatusItem { id: "grid", icon: Some("grid"), title: "Display Grid", desc: "Displays a reference grid in the drawing area (F7).", key: "F7", label: None, text: None, on: |a| a.sv("GRIDMODE") != 0, act: |a, _, _| a.toggle_sv("GRIDMODE"), menu: Some(|a, ctx, r| a.grid_menu(ctx, r)) },
             StatusItem { id: "snap", icon: Some("snap"), title: "Snap Mode", desc: "Restricts cursor movement to specified intervals (F9).", key: "F9", label: None, text: None, on: |a| a.sv("SNAPMODE") != 0, act: |a, _, _| a.toggle_sv("SNAPMODE"), menu: Some(|a, ctx, r| a.snap_menu(ctx, r)) },
             StatusItem {

@@ -25,6 +25,9 @@ pub struct EllipseData {
     pub t1: f64,
 }
 
+fn pt_is_zero(p: &Pt) -> bool {
+    p.x == 0.0 && p.y == 0.0
+}
 fn tau() -> f64 {
     TAU
 }
@@ -143,7 +146,7 @@ pub struct ViewportData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scale: Option<f64>,
     /// Model-space point shown at the centre of the viewport.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "pt_is_zero")]
     pub vc: Pt,
     /// Display locked: zoom and pan inside the viewport do not change it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

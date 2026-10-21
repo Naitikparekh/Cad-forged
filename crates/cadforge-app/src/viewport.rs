@@ -202,7 +202,11 @@ impl CadForgeApp {
 
     pub fn with_view<R>(&mut self, f: impl FnOnce(&mut cadforge_core::view::View) -> R) -> Option<R> {
         let mut a = self.h.borrow_mut();
-        a.editor_mut().map(|e| f(&mut e.view))
+        a.editor_mut().map(|e| {
+            let r = f(&mut e.view);
+            e.sync_mspace_view();
+            r
+        })
     }
 
     pub fn to_world(&self, m: Pos2) -> Pt {
@@ -368,6 +372,10 @@ impl CadForgeApp {
             prefs.grid_unit_y.to_bits().hash(&mut hs);
             prefs.grid_major.hash(&mut hs);
             ed.doc.rev.hash(&mut hs);
+            ed.doc.space.hash(&mut hs);
+            if let Some(m) = &ed.mspace {
+                (m.vp, m.paper_view.scale.to_bits(), m.paper_view.cx.to_bits(), m.paper_view.cy.to_bits()).hash(&mut hs);
+            }
             let key = hs.finish();
             if key != self.vp.cache_key || self.vp.cache_ops.is_empty() {
                 let hl = Highlight { selected: ed.sel.iter().chain(ed.temp_sel.iter()).copied().collect(), hover: None };
@@ -377,7 +385,10 @@ impl CadForgeApp {
                 // the closure needs a mutable cache; render_scene takes `&dyn Fn`, so route through a RefCell
                 let cell = std::cell::RefCell::new(draw);
                 let f = |rc: &mut Renderer| (cell.borrow_mut())(rc);
-                self.vp.cache_ops = render_scene(&ed.doc, &ed.view, ed.view.w, ed.view.h, theme, prefs, &hl, Some(&f));
+                self.vp.cache_ops = match &ed.mspace {
+                    Some(m) => cadforge_render::render_layout(&ed.doc, &m.layout, &ed.paper_view(), ed.view.w, ed.view.h, theme, prefs, &hl, Some(m.vp)),
+                    None => render_scene(&ed.doc, &ed.view, ed.view.w, ed.view.h, theme, prefs, &hl, Some(&f)),
+                };
                 self.vp.cache_key = key;
             }
         }

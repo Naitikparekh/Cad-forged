@@ -203,11 +203,11 @@ impl App {
             d.cen = 0.09;
             d.dec = 4;
         }
-        doc.ensure_default_layouts();
         self.add_drawing(doc)
     }
 
-    pub fn add_drawing(&mut self, doc: Drawing) -> u64 {
+    pub fn add_drawing(&mut self, mut doc: Drawing) -> u64 {
+        doc.ensure_default_layouts();
         let id = self.next_editor_id;
         self.next_editor_id += 1;
         self.editors.push(Editor::new(id, doc));

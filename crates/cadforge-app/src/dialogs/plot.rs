@@ -33,6 +33,10 @@ impl PlotState {
             _ => PlotFormat::Pdf,
         };
         self.view_bounds = Some(ed.view.world_bounds());
+        let tab = ed.current_tab();
+        if !tab.eq_ignore_ascii_case(cadforge_core::drawing::MODEL) && ed.doc.layout(&tab).is_some() {
+            o.layout = Some(tab);
+        }
         self.o = Some(o);
         self.ready = true;
     }
@@ -87,6 +91,7 @@ impl CadForgeApp {
         let t = self.t;
         let Some(o) = s.o.as_mut() else { return self.ok_cancel(ui, None, Some("Close"), &[]) };
         let mut changed = s.cache.is_empty();
+        let layout_mode = o.layout.is_some();
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(300.0);
@@ -103,6 +108,16 @@ impl CadForgeApp {
                         }
                     });
                     ui.end_row();
+                    if let Some(name) = &o.layout {
+                        ui.label("Layout");
+                        ui.label(RichText::new(name.clone()).strong());
+                        ui.end_row();
+                        ui.label("Paper");
+                        let paper = self.h.borrow().doc().and_then(|d| d.paper_of(name).cloned());
+                        ui.label(paper.map_or(String::new(), |p| format!("{} {} × {} mm, 1:1", p.name, p.w, p.h)));
+                        ui.end_row();
+                    }
+                    if !layout_mode {
                     ui.label("Paper size");
                     egui::ComboBox::from_id_salt("pl-paper").selected_text(&o.paper).width(150.0).show_ui(ui, |ui| {
                         for (n, _, _) in PAPERS.iter() {
@@ -140,6 +155,7 @@ impl CadForgeApp {
                         });
                     });
                     ui.end_row();
+                    }
                     ui.label("");
                     changed |= ui.checkbox(&mut o.lineweights, "Plot with lineweights").changed();
                     ui.end_row();
@@ -160,7 +176,7 @@ impl CadForgeApp {
             ui.vertical(|ui| {
                 let (r, _) = ui.allocate_exact_size(vec2(420.0, 300.0), Sense::hover());
                 ui.painter().rect_filled(r, 0.0, Color32::from_rgb(0x5b, 0x64, 0x70));
-                let key = format!("{:?}|{}|{}|{:?}|{}|{}|{}|{}|{}", o.format, o.paper, o.landscape, o.area as u8, s.scale_idx, o.center, o.lineweights, o.mono, format_args!("{}/{}", s.ox, s.oy));
+                let key = format!("{:?}|{:?}|{}|{}|{:?}|{}|{}|{}|{}|{}", o.format, o.layout, o.paper, o.landscape, o.area as u8, s.scale_idx, o.center, o.lineweights, o.mono, format_args!("{}/{}", s.ox, s.oy));
                 if changed || key != s.cache_key {
                     s.cache_key = key;
                     o.scale = SCALES[s.scale_idx.min(SCALES.len() - 1)].1;

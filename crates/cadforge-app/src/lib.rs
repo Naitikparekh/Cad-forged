@@ -6,6 +6,7 @@ pub mod dialogs;
 pub mod gfx;
 pub mod icons;
 pub mod keys;
+pub mod layouts_ui;
 pub mod menu;
 pub mod misc;
 pub mod palettes;

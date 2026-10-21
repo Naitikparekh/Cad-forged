@@ -172,3 +172,26 @@ fn switching_tabs_remembers_each_view() {
     s.h.borrow_mut().editor_mut().unwrap().switch_space("Layout1").unwrap();
     near(s.view_scale(), paper_scale, 1e-9);
 }
+
+#[test]
+fn double_click_enters_a_viewport_and_leaves_it() {
+    let s = Sim::new();
+    s.add(Entity::line(pt(0.0, 0.0), pt(100.0, 0.0)));
+    s.cmd("LAYOUT").ty("Set").ty("Layout1");
+    // inside the default viewport (centre of the sheet): enter it
+    s.h.double_click(pt(148.0, 105.0));
+    assert!(s.h.borrow().editor().unwrap().mspace.is_some());
+    assert_eq!(space(&s), "model");
+    // double-click far outside the viewport on the sheet margin: back to the sheet. In model coordinates that is a
+    // point whose sheet position is outside, found through the viewport transform.
+    let (outside_model, _) = {
+        let a = s.h.borrow();
+        let ed = a.editor().unwrap();
+        let pv = ed.paper_view();
+        let sp = pv.to_screen(pt(3.0, 3.0));
+        (ed.view.to_world(sp.x, sp.y), 0)
+    };
+    s.h.double_click(outside_model);
+    assert!(s.h.borrow().editor().unwrap().mspace.is_none());
+    assert_eq!(space(&s), "Layout1");
+}

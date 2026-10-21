@@ -63,26 +63,46 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
         }
         "New" => {
             let dflt = next_name(&c);
-            let n = c.string(ps("Enter new layout name").default_str(&dflt)).await?;
-            let name = if n.text.trim().is_empty() { dflt } else { n.text };
+            let name = match args.str("name") {
+                Some(n) => n.to_string(),
+                None => {
+                    let n = c.string(ps("Enter new layout name").default_str(&dflt)).await?;
+                    if n.text.trim().is_empty() { dflt } else { n.text }
+                }
+            };
             match c.doc_mut(|d| d.add_layout(&name)) {
                 Ok(()) => c.log(&format!("Layout \"{name}\" created.")),
                 Err(m) => c.log_error(&m),
             }
         }
         "Copy" => {
-            let from = c.string(ps("Enter layout to copy").default_str(&cur_name)).await?;
-            let from = if from.text.trim().is_empty() { cur_name.clone() } else { from.text };
+            let from = match args.str("name") {
+                Some(n) => n.to_string(),
+                None => {
+                    let from = c.string(ps("Enter layout to copy").default_str(&cur_name)).await?;
+                    if from.text.trim().is_empty() { cur_name.clone() } else { from.text }
+                }
+            };
             let dflt = format!("{from} (2)");
-            let to = c.string(ps("Enter layout name for the copy").default_str(&dflt)).await?;
-            let to = if to.text.trim().is_empty() { dflt } else { to.text };
+            let to = match args.str("to") {
+                Some(n) => n.to_string(),
+                None => {
+                    let to = c.string(ps("Enter layout name for the copy").default_str(&dflt)).await?;
+                    if to.text.trim().is_empty() { dflt } else { to.text }
+                }
+            };
             if let Err(m) = c.doc_mut(|d| d.copy_layout(&from, &to)) {
                 c.log_error(&m);
             }
         }
         "Delete" => {
-            let n = c.string(ps("Enter name of layout to delete").default_str(&cur_name)).await?;
-            let name = if n.text.trim().is_empty() { cur_name.clone() } else { n.text };
+            let name = match args.str("name") {
+                Some(n) => n.to_string(),
+                None => {
+                    let n = c.string(ps("Enter name of layout to delete").default_str(&cur_name)).await?;
+                    if n.text.trim().is_empty() { cur_name.clone() } else { n.text }
+                }
+            };
             if name.eq_ignore_ascii_case("Model") {
                 c.log_error("Model space cannot be deleted.");
             } else {
@@ -97,16 +117,29 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
             }
         }
         "Rename" => {
-            let from = c.string(ps("Enter layout to rename").default_str(&cur_name)).await?;
-            let from = if from.text.trim().is_empty() { cur_name.clone() } else { from.text };
-            let to = c.string(ps("Enter new layout name")).await?.text;
+            let from = match args.str("name") {
+                Some(n) => n.to_string(),
+                None => {
+                    let from = c.string(ps("Enter layout to rename").default_str(&cur_name)).await?;
+                    if from.text.trim().is_empty() { cur_name.clone() } else { from.text }
+                }
+            };
+            let to = match args.str("to") {
+                Some(n) => n.to_string(),
+                None => c.string(ps("Enter new layout name")).await?.text,
+            };
             if let Err(m) = c.doc_mut(|d| d.rename_layout(&from, &to)) {
                 c.log_error(&m);
             }
         }
         "Set" => {
-            let n = c.string(ps("Enter layout to make current").default_str(&cur_name)).await?;
-            let name = if n.text.trim().is_empty() { cur_name.clone() } else { n.text };
+            let name = match args.str("name") {
+                Some(n) => n.to_string(),
+                None => {
+                    let n = c.string(ps("Enter layout to make current").default_str(&cur_name)).await?;
+                    if n.text.trim().is_empty() { cur_name.clone() } else { n.text }
+                }
+            };
             if let Err(m) = c.ed(|e| e.switch_space(&name)) {
                 c.log_error(&m);
             }
@@ -422,7 +455,7 @@ async fn pagesetup(c: Ctx, args: Args) -> CmdResult<()> {
         c.log_error("Page setup applies to a layout. Switch to a layout tab first.");
         return Ok(());
     };
-    if c.app(|a| a.ui.dialogs) {
+    if args.str("paper").is_none() && c.app(|a| a.ui.dialogs) {
         c.app(|a| a.emit(Event::UiAction { name: "PAGESETUP".into(), args: Args::none() }));
         return Ok(());
     }

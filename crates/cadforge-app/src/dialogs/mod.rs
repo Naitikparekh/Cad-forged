@@ -8,6 +8,7 @@ use eframe::egui::{self, vec2, Color32, CornerRadius, FontFamily, FontId, Margin
 mod colors;
 mod dimstyle;
 mod files;
+mod layout;
 mod plot;
 mod settings;
 mod simple;
@@ -16,6 +17,7 @@ mod text;
 pub use colors::*;
 pub use dimstyle::*;
 pub use files::*;
+pub use layout::*;
 pub use plot::*;
 pub use settings::*;
 pub use simple::*;
@@ -68,6 +70,7 @@ pub enum Kind {
     Hatch(HatchDlgState),
     EditText(TextEditState),
     FileBrowser(FileBrowserState),
+    PageSetup(Option<PageSetupState>),
 }
 
 pub struct Dialog {
@@ -218,6 +221,7 @@ impl CadForgeApp {
             Kind::QSelect(s) if s.is_none() => *s = Some(QSelectState::new(self)),
             Kind::TextStyle(s) if s.is_none() => *s = Some(TextStyleState::new(self)),
             Kind::Units(s) if s.is_none() => *s = Some(UnitsState::new(self)),
+            Kind::PageSetup(s) if s.is_none() => *s = Some(PageSetupState::new(self)),
             Kind::Options(s) if s.is_none() => *s = Some(OptionsState::new(self)),
             Kind::DimStyle(s) if s.is_none() => *s = Some(DimStyleState::new(self)),
             Kind::DSettings(s) if !s.ready => s.load(self),
@@ -274,6 +278,7 @@ impl CadForgeApp {
             Kind::Hatch(s) => self.ui_hatch(ui, s),
             Kind::EditText(s) => self.ui_edit_text(ui, s),
             Kind::FileBrowser(s) => self.ui_file_browser(ui, s),
+            Kind::PageSetup(s) => self.ui_pagesetup(ui, s.as_mut().expect("state")),
         }
     }
 
@@ -350,6 +355,11 @@ impl CadForgeApp {
                 }
             }
             Kind::Units(Some(s)) => {
+                if ok {
+                    s.apply(self);
+                }
+            }
+            Kind::PageSetup(Some(s)) => {
                 if ok {
                     s.apply(self);
                 }
@@ -547,7 +557,7 @@ fn dialog_title_width(k: &Kind) -> (String, f32) {
         Kind::DSettings(_) => ("Drafting Settings".into(), 540.0),
         Kind::DimStyle(_) => ("Dimension Style Manager".into(), 500.0),
         Kind::DimStyleEdit(s) => (s.title.clone(), 460.0),
-        Kind::Plot(_) => ("Plot — Model".into(), 780.0),
+        Kind::Plot(s) => (format!("Plot — {}", s.o.as_ref().and_then(|o| o.layout.clone()).unwrap_or_else(|| "Model".into())), 780.0),
         Kind::Color(_) => ("Select Color".into(), 520.0),
         Kind::Linetype(_) => ("Linetype Manager".into(), 520.0),
         Kind::Lweight(_) => ("Lineweight Settings".into(), 380.0),
@@ -555,6 +565,7 @@ fn dialog_title_width(k: &Kind) -> (String, f32) {
         Kind::Hatch(_) => ("Hatch Settings".into(), 380.0),
         Kind::EditText(s) => (if s.multi { "Multiline Text Editor".into() } else { "Single Line Text".into() }, 460.0),
         Kind::FileBrowser(s) => (s.title.clone(), 560.0),
+        Kind::PageSetup(_) => ("Page Setup".into(), 420.0),
     }
 }
 
@@ -566,6 +577,9 @@ impl Dialog {
     }
     pub fn options() -> Dialog {
         Dialog::new(Kind::Options(None))
+    }
+    pub fn pagesetup() -> Dialog {
+        Dialog::new(Kind::PageSetup(None))
     }
     pub fn units() -> Dialog {
         Dialog::new(Kind::Units(None))

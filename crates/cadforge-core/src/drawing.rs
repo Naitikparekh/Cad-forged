@@ -454,9 +454,11 @@ impl Drawing {
         let Some(i) = self.layouts.iter().position(|l| l.name.eq_ignore_ascii_case(name) && l.fresh) else { return };
         let vp = Drawing::default_viewport(&self.layouts[i].paper);
         let lname = self.layouts[i].name.clone();
+        let dirty = self.dirty;
         self.layouts[i].fresh = false;
         self.add_to(vp, &lname);
         self.touch();
+        self.dirty = dirty;
     }
 
     /// Activate model space or a layout (no undo step: it is a display state).

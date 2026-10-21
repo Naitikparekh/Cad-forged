@@ -977,6 +977,9 @@ impl App {
         if self.busy() || self.editor().is_none() {
             return;
         }
+        if self.double_click_space(raw) {
+            return;
+        }
         let ap = self.aperture_world(None);
         let hit = pick_at(&self.editor().expect("editor").doc, raw, ap, None, None);
         let Some(id) = hit else {

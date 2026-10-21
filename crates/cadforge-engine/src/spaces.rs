@@ -172,3 +172,46 @@ impl Editor {
         self.doc.set_viewport_view(&m.layout, m.vp, vc, s);
     }
 }
+
+impl crate::app::App {
+    /// Double-click on the sheet activates the viewport under the cursor; double-click outside the active viewport
+    /// returns to the sheet. Returns true when the click was consumed.
+    pub fn double_click_space(&mut self, raw: Pt) -> bool {
+        let Some(ed) = self.editor_mut() else { return false };
+        if let Some(m) = ed.mspace.clone() {
+            // `raw` is a model point; ask where it sits on the sheet
+            let s = ed.view.to_screen(raw);
+            let mut pv = View::new();
+            pv.w = ed.view.w;
+            pv.h = ed.view.h;
+            pv.set_state(&m.paper_view);
+            let on_sheet = pv.to_world(s.x, s.y);
+            let inside = ed.viewport(&m.layout, m.vp).is_some_and(|v| point_in_polygon(on_sheet, &v.outline()));
+            if !inside {
+                ed.leave_mspace();
+                self.emit(crate::app::Event::Regen);
+                self.emit(crate::app::Event::Change);
+                return true;
+            }
+            return false;
+        }
+        if ed.doc.is_model() {
+            return false;
+        }
+        // a double-click on a sheet object edits it; only an empty spot inside a viewport enters it
+        let ap = 6.0 / ed.view.scale.max(1e-9);
+        let hit = crate::select::pick_at(&ed.doc, raw, ap, Some(&|e: &cadforge_core::entities::Entity| !matches!(e.kind, Kind::Viewport(_))), None);
+        if hit.is_some() {
+            return false;
+        }
+        match ed.viewport_at(raw) {
+            Some(id) => {
+                let _ = ed.enter_mspace(id);
+                self.emit(crate::app::Event::Regen);
+                self.emit(crate::app::Event::Change);
+                true
+            }
+            None => false,
+        }
+    }
+}
