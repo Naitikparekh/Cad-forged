@@ -27,7 +27,9 @@ impl CadForgeApp {
                 1 => TABS_H + 1.0,
                 _ => TABS_H + 22.0,
             };
-            egui::Panel::top("ribbon").exact_size(rh).resizable(false).show_separator_line(false).frame(frame(t.ribbon)).show(ui, |ui| self.ribbon_ui(ui, ctx));
+            if self.ui.show_ribbon {
+                egui::Panel::top("ribbon").exact_size(rh).resizable(false).show_separator_line(false).frame(frame(t.ribbon)).show(ui, |ui| self.ribbon_ui(ui, ctx));
+            }
             egui::Panel::top("doctabs").exact_size(DOCTABS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show(ui, |ui| self.doctabs(ui, ctx));
             egui::Panel::bottom("statusbar").exact_size(STATUS_H).resizable(false).show_separator_line(false).frame(frame(t.chrome)).show(ui, |ui| self.statusbar(ui, ctx));
             if self.ui.show_cmd {

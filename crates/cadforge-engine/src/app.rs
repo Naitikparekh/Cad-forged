@@ -63,6 +63,8 @@ pub enum Event {
     Export(Vec<Entity>),
     /// Export solids as `obj` / `stl`.
     ExportMesh(String),
+    /// Hand a generated file (CSV extracts, images...) to the host: download in the browser, write next to the drawing natively.
+    SaveFile { name: String, data: Vec<u8>, mime: String },
     /// A command asked for a modal dialog (see [`App::pending`]).
     Dialog,
 }

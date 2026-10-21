@@ -177,7 +177,46 @@ async fn wblock(c: Ctx, _a: Args) -> CmdResult<()> {
     }
     let Some(base) = c.point(ps("Specify insertion base point")).await?.pt() else { return Ok(()) };
     let shifted = transformed_clones(&c.entities(&sel.ents), &mat::translate(-base.x, -base.y));
-    c.app(|a| a.emit(Event::Export(shifted)));
+    let typed = c.string(ps("Enter file name").default_str("Block")).await?.text;
+    let name = typed.trim().trim_end_matches(".dxf").trim_end_matches(".DXF").to_string();
+    if name.is_empty() {
+        return Ok(());
+    }
+    // the new drawing carries the layers, settings and every block definition the objects insert
+    let out = c.doc(|d| {
+        let mut out = cadforge_core::drawing::Drawing::new(&name);
+        out.layers = d.layers.clone();
+        out.settings = d.settings.clone();
+        let mut todo: Vec<String> = vec![];
+        let want = |es: &[Entity], todo: &mut Vec<String>| {
+            for e in es {
+                if let Kind::Insert(i) = &e.kind {
+                    if !todo.contains(&i.name) {
+                        todo.push(i.name.clone());
+                    }
+                }
+            }
+        };
+        want(&shifted, &mut todo);
+        let mut i = 0;
+        while i < todo.len() {
+            if let Some(b) = d.blocks.get(&todo[i]) {
+                want(&b.entities, &mut todo);
+                out.define_block(&b.name, b.base, b.entities.clone());
+            }
+            i += 1;
+        }
+        for mut e in shifted.clone() {
+            e.id = 0;
+            out.add(e);
+        }
+        out
+    });
+    let text = cadforge_core::io::write_dxf(&out);
+    c.app(|a| {
+        a.emit(Event::SaveFile { name: format!("{name}.dxf"), data: text.into_bytes(), mime: "application/dxf".into() });
+        a.log(&format!("Wrote {} object{} to {name}.dxf.", shifted.len(), if shifted.len() == 1 { "" } else { "s" }), "info");
+    });
     Ok(())
 }
 

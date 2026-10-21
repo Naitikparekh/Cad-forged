@@ -64,6 +64,11 @@ impl CadForgeApp {
                 }
             }
             "SCRIPT" => self.open_files(ctx, "script"),
+            "WORKSPACE" => {
+                if let Some(n) = args.str("name") {
+                    self.set_workspace(n);
+                }
+            }
             _ => self.toast(&format!("{name} is not available in this environment.")),
         }
     }

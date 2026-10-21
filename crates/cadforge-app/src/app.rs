@@ -39,6 +39,9 @@ pub struct UiState {
     pub workspace: String,
     pub cmd: CmdLine,
     pub show_props: bool,
+    pub show_ribbon: bool,
+    /// Palettes (properties, tool palettes, layers, command line) that HIDEPALETTES put away.
+    pub hidden_pals: Option<[bool; 4]>,
     pub show_tools: bool,
     pub show_cmd: bool,
     pub show_menubar: bool,
@@ -121,6 +124,8 @@ impl CadForgeApp {
                 workspace: "Drafting & Annotation".into(),
                 cmd: CmdLine { lines: 3, lines_f: 3.0, ..Default::default() },
                 show_props: false,
+                show_ribbon: true,
+                hidden_pals: None,
                 show_tools: false,
                 show_cmd: true,
                 show_menubar: false,
@@ -204,13 +209,34 @@ impl CadForgeApp {
                 Event::Palette { name, show } => self.toggle_palette(&name, show),
                 Event::UiAction { name, args } => self.ui_action(ctx, &name, args),
                 Event::HatchSession => self.hatch_session_changed(),
+                Event::Export(ents) => self.export_entities(ents),
+                Event::ExportMesh(fmt) => self.export_mesh(&fmt),
+                Event::SaveFile { name, data, mime } => self.deliver_file(&name, data, &mime),
                 _ => {}
             }
         }
     }
 
     pub fn toggle_palette(&mut self, name: &str, show: Option<bool>) {
+        match name {
+            // HIDEPALETTES / SHOWPALETTES: remember what was open and bring it back
+            "hide-all" => {
+                if self.ui.hidden_pals.is_none() {
+                    self.ui.hidden_pals = Some([self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd]);
+                    (self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd) = (false, false, false, false);
+                }
+                return;
+            }
+            "show-all" => {
+                if let Some([p, t, l, c]) = self.ui.hidden_pals.take() {
+                    (self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd) = (p, t, l, c);
+                }
+                return;
+            }
+            _ => {}
+        }
         let slot = match name {
+            "ribbon" => &mut self.ui.show_ribbon,
             "properties" => &mut self.ui.show_props,
             "layers" => &mut self.pal.lm_open,
             "tools" => &mut self.ui.show_tools,
