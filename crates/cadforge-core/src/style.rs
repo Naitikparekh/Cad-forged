@@ -394,6 +394,29 @@ impl Default for Units {
     }
 }
 
+/// Model-space drawing limits (LIMITS): the rectangle and whether limits checking is on.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Limits {
+    pub min_x: f64,
+    pub min_y: f64,
+    pub max_x: f64,
+    pub max_y: f64,
+    pub on: bool,
+}
+
+impl Default for Limits {
+    fn default() -> Limits {
+        Limits { min_x: 0.0, min_y: 0.0, max_x: 420.0, max_y: 297.0, on: false }
+    }
+}
+
+impl Limits {
+    fn is_default(&self) -> bool {
+        *self == Limits::default()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -411,6 +434,8 @@ pub struct Settings {
     pub chamfer_d2: f64,
     pub offset_gap: f64,
     pub plinewid: f64,
+    #[serde(skip_serializing_if = "Limits::is_default")]
+    pub limits: Limits,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layer_states: Option<IndexMap<String, Vec<Layer>>>,
 }
@@ -434,6 +459,7 @@ impl Default for Settings {
             chamfer_d2: 0.0,
             offset_gap: 0.0,
             plinewid: 0.0,
+            limits: Limits::default(),
             layer_states: None,
         }
     }
@@ -510,6 +536,17 @@ mod tests {
         let back = norm(serde_json::to_value(&s).unwrap());
         let orig = norm(serde_json::from_str(json).unwrap());
         assert_eq!(back, orig);
+    }
+
+    #[test]
+    fn limits_stay_out_of_default_files_and_round_trip() {
+        let mut s = Settings::default();
+        assert!(serde_json::to_value(&s).unwrap().get("limits").is_none());
+        s.limits.max_x = 1000.0;
+        s.limits.on = true;
+        let back: Settings = serde_json::from_value(serde_json::to_value(&s).unwrap()).unwrap();
+        assert_eq!(back.limits, s.limits);
+        assert_eq!(serde_json::to_value(&s).unwrap()["limits"]["maxX"], 1000.0);
     }
 
     #[test]
