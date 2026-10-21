@@ -151,6 +151,79 @@ await test('Ctrl+0 toggles clean screen and OPTIONS switches to the light theme'
   assert.ok(px);
 });
 
+// ---- features added for AutoCAD parity: layouts, UCS, tables, solids of revolution, regions
+await test('layout tabs switch to paper space and a double-click enters the viewport', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('ERASE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  await t.cmd('REC'); await t.cmd('0,0'); await t.cmd('100,60'); await t.cmd('ZOOM'); await t.cmd('E');
+  let s = await t.state();
+  assert.ok(s.layouts.includes('Layout1')); assert.equal(s.tab.toLowerCase(), 'model');
+  // the layout tabs live under the drawing area: Model | Layout1 | Layout2
+  await page.mouse.move(103, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(103, 770); await t.frame(5);
+  s = await t.state();
+  assert.equal(s.space, 'Layout1'); assert.equal(s.mspace, false);
+  await page.mouse.move(720, 460, { steps: 3 }); await t.frame(3); await page.mouse.dblclick(720, 460); await t.frame(5);       // inside the default viewport
+  s = await t.state();
+  assert.equal(s.mspace, true, 'double-click activates the viewport'); assert.equal(s.space, 'model');
+  await t.cmd('PSPACE'); s = await t.state();
+  assert.equal(s.mspace, false); assert.equal(s.space, 'Layout1');
+  await page.mouse.move(37, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(37, 770); await t.frame(4);   // back to Model
+  assert.equal((await t.state()).space, 'model');
+});
+
+await test('PLOT from a layout downloads a PDF the size of its sheet', async () => {
+  await page.mouse.move(103, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(103, 770); await t.frame(5);
+  await t.cmd('PLOT'); await t.frame(4);
+  const pdf = await download(() => page.mouse.click(971, 634));
+  assert.ok(pdf.data.subarray(0, 5).toString() === '%PDF-');
+  const m = pdf.data.toString('latin1').match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/);
+  assert.ok(m, 'MediaBox'); assert.ok(Math.abs(Number(m[1]) - 297 * 72 / 25.4) < 2, `width ${m[1]}`);
+  await page.keyboard.press('Escape'); await t.frame(3);
+  await page.mouse.move(37, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(37, 770); await t.frame(4);
+});
+
+await test('UCS: a rotated user coordinate system rotates typed coordinates', async () => {
+  await t.cmd('UCS'); await t.cmd('N'); await t.cmd('Z'); await t.cmd('90');
+  let s = await t.state();
+  assert.ok(Math.abs(s.ucs.angle - Math.PI / 2) < 1e-6, `angle ${s.ucs.angle}`);
+  const before = s.entities;
+  await t.cmd('L'); await t.cmd('0,0'); await t.cmd('@10,0'); await page.keyboard.press('Enter'); await t.frame(3);
+  s = await t.state(); assert.equal(s.entities, before + 1);
+  await t.cmd('UCS'); await t.cmd('W');
+  assert.equal((await t.state()).ucs.angle, 0);
+});
+
+await test('TABLE builds a grid with typed cell text', async () => {
+  const n0 = (await t.state()).entities;
+  await t.cmd('TABLE'); for (const v of ['2', '2', '30', '8']) await t.cmd(v);
+  const p = await t.pt(10, 40); await page.mouse.move(p.x, p.y, { steps: 3 }); await t.frame(3); await page.mouse.click(p.x, p.y); await t.frame(4);
+  await t.cmd('no');
+  const s = await t.state();
+  assert.ok(s.types.includes('table'), JSON.stringify(s.types)); assert.equal(s.entities, n0 + 1);
+});
+
+await test('REVOLVE a rectangle into a solid; SLICE halves it', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('ERASE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  await t.cmd('REC'); await t.cmd('20,0'); await t.cmd('50,40');
+  await t.cmd('REVOLVE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(2);
+  await t.cmd('0,0'); await t.cmd('0,40'); await t.cmd('360');
+  let s = await t.state(); assert.equal(s.solids, 1, JSON.stringify(s.history));
+  await t.cmd('SLICE'); const lines = await t.state();
+  assert.equal(lines.busy, true);
+  await page.keyboard.press('Escape'); await t.frame(3);
+});
+
+await test('REGION booleans: UNION of two overlapping regions leaves one region', async () => {
+  await t.cmd('ERASE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  await t.cmd('REC'); await t.cmd('0,0'); await t.cmd('40,30');
+  await t.cmd('REC'); await t.cmd('20,10'); await t.cmd('60,50');
+  await t.cmd('REGION'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  let s = await t.state(); assert.deepEqual(s.types, ['region', 'region']);
+  await t.cmd('UNION'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  s = await t.state(); assert.deepEqual(s.types, ['region'], JSON.stringify(s.history));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();

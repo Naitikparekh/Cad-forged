@@ -61,6 +61,13 @@ mod web {
                 "osmode": a.sysvars.int("OSMODE"),
                 "canUndo": ed.doc.can_undo(),
                 "style": ed.visual_style,
+                "space": ed.doc.space,
+                "tab": ed.current_tab(),
+                "mspace": ed.mspace.is_some(),
+                "layouts": ed.doc.layout_names(),
+                "ucs": { "x": ed.doc.ucs.origin.x, "y": ed.doc.ucs.origin.y, "angle": ed.doc.ucs.angle },
+                "modelEntities": ed.doc.model.entities.len(),
+                "modelTypes": ed.doc.model.entities.iter().map(|e| e.type_name()).collect::<Vec<_>>(),
             })
             .to_string()
         })
