@@ -74,6 +74,7 @@ pub fn render_prefs(a: &App) -> Prefs {
         grid_unit_y: sv.real("GRIDUNIT_Y"),
         grid_major: sv.int("GRIDMAJOR"),
         ucs_icon: sv.int("UCSICON") != 0,
+        ucs_origin: sv.int("UCSORG") != 0,
     }
 }
 
@@ -367,7 +368,7 @@ impl CadForgeApp {
             for id in ed.sel.iter().chain(ed.temp_sel.iter()) {
                 id.hash(&mut hs);
             }
-            (prefs.lw_display, prefs.fill, prefs.grid, prefs.ucs_icon, prefs.transparency).hash(&mut hs);
+            (prefs.lw_display, prefs.fill, prefs.grid, prefs.ucs_icon, prefs.ucs_origin, prefs.transparency).hash(&mut hs);
             prefs.grid_unit_x.to_bits().hash(&mut hs);
             prefs.grid_unit_y.to_bits().hash(&mut hs);
             prefs.grid_major.hash(&mut hs);
@@ -565,16 +566,18 @@ impl CadForgeApp {
                 let msg = if p.spec.options.is_empty() { msg } else { format!("{msg}  ▾") };
                 let typed = if self.ui.cmd.dynamic { self.ui.cmd.text.clone() } else { String::new() };
                 let cur = rt.cursor.pt;
+                let ucs = doc.ucs;
                 let field = if !typed.is_empty() {
                     Some(format!("{typed}|"))
                 } else if matches!(p.kind, PromptKind::Point | PromptKind::Distance | PromptKind::Angle) && a.sysvars.pointer_input() {
                     let base = p.base();
                     if let (Some(b), true) = (base, a.sysvars.dimension_input()) {
                         let d = dist(b, cur);
-                        let ang = cadforge_core::geom::deg(cadforge_core::geom::norm_angle(cadforge_core::geom::angle_of(b, cur)));
+                        let ang = cadforge_core::geom::deg(cadforge_core::geom::norm_angle(cadforge_core::geom::angle_of(b, cur) - ucs.angle));
                         Some(format!("L {}   ∠ {}°", cadforge_core::style::fmt_num(d, prec, true), cadforge_core::style::fmt_num(ang, 0, true)))
                     } else {
-                        Some(format!("{},  {}", cadforge_core::style::fmt_num(cur.x, prec.min(4), true), cadforge_core::style::fmt_num(cur.y, prec.min(4), true)))
+                        let u = ucs.from_wcs(cur);
+                        Some(format!("{},  {}", cadforge_core::style::fmt_num(u.x, prec.min(4), true), cadforge_core::style::fmt_num(u.y, prec.min(4), true)))
                     }
                 } else {
                     None

@@ -136,11 +136,13 @@ pub struct SnapOptions {
     pub polar_add: Vec<f64>,
     pub otrack: bool,
     pub grid: Option<Grid>,
+    /// Rotation of the user coordinate system: ortho and polar directions follow its axes.
+    pub ucs_angle: f64,
 }
 
 impl SnapOptions {
     pub fn new(scale: f64) -> SnapOptions {
-        SnapOptions { scale, aperture_px: 12.0, osmask: 0, base: None, ortho: false, polar: false, polar_inc: PI / 2.0, polar_add: vec![], otrack: false, grid: None }
+        SnapOptions { scale, aperture_px: 12.0, osmask: 0, base: None, ortho: false, polar: false, polar_inc: PI / 2.0, polar_add: vec![], otrack: false, grid: None, ucs_angle: 0.0 }
     }
 }
 
@@ -352,24 +354,31 @@ impl Snapper {
     pub fn tracking(&self, raw: Pt, ap: f64, o: &SnapOptions) -> Option<Track> {
         let base = o.base;
         if let (Some(base), true) = (base, o.ortho) {
-            let (dx, dy) = (raw.x - base.x, raw.y - base.y);
+            let ua = o.ucs_angle;
+            let (c, sn) = (ua.cos(), ua.sin());
+            let w = raw - base;
+            // offset in the user coordinate system
+            let (dx, dy) = (w.x * c + w.y * sn, -w.x * sn + w.y * c);
             let horizontal = dx.abs() >= dy.abs();
-            let p = if horizontal { pt(raw.x, base.y) } else { pt(base.x, raw.y) };
+            let (lx, ly) = if horizontal { (dx, 0.0) } else { (0.0, dy) };
+            let p = pt(base.x + lx * c - ly * sn, base.y + lx * sn + ly * c);
             let d = dist(base, p);
-            let a = if horizontal {
-                if dx >= 0.0 {
-                    0.0
+            let a = ua
+                + if horizontal {
+                    if dx >= 0.0 {
+                        0.0
+                    } else {
+                        PI
+                    }
+                } else if dy >= 0.0 {
+                    PI / 2.0
                 } else {
-                    PI
-                }
-            } else if dy >= 0.0 {
-                PI / 2.0
-            } else {
-                -PI / 2.0
-            };
-            return Some(Track { pt: p, lines: vec![], marks: vec![], label: format!("Ortho: {} < {}", fmt(d), degs(a)), kind: TrackKind::Ortho, dist: Some(d), angle: Some(a) });
+                    -PI / 2.0
+                };
+            return Some(Track { pt: p, lines: vec![], marks: vec![], label: format!("Ortho: {} < {}", fmt(d), degs(a - ua)), kind: TrackKind::Ortho, dist: Some(d), angle: Some(a) });
         }
         let angles: Vec<f64> = if o.polar { polar_angles(if o.polar_inc > 0.0 { o.polar_inc } else { PI / 2.0 }, &o.polar_add) } else { vec![0.0, PI / 2.0, PI, 3.0 * PI / 2.0] };
+        let angles: Vec<f64> = angles.into_iter().map(|a| a + o.ucs_angle).collect();
         let mut vectors: Vec<TrackVec> = vec![];
         if let (Some(base), true) = (base, o.polar) {
             for &a in &angles {
@@ -426,7 +435,7 @@ impl Snapper {
             }
         }
         let p = first.v.origin + first.v.dir * first.t;
-        let label = if first.v.kind == TrackKind::Polar { format!("Polar: {} < {}", fmt(first.t), degs(first.v.angle)) } else { format!("Track: {} < {}", fmt(first.t), degs(first.v.angle)) };
+        let label = if first.v.kind == TrackKind::Polar { format!("Polar: {} < {}", fmt(first.t), degs(first.v.angle - o.ucs_angle)) } else { format!("Track: {} < {}", fmt(first.t), degs(first.v.angle - o.ucs_angle)) };
         Some(Track { pt: p, lines: vec![mk_line(&first.v, p)], marks: self.acquired.clone(), label, kind: first.v.kind, dist: Some(first.t), angle: Some(first.v.angle) })
     }
 }

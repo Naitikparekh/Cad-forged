@@ -21,6 +21,7 @@ pub mod layer;
 pub mod view;
 pub mod modify;
 pub mod solids;
+pub mod ucs;
 pub mod system;
 
 /// Wrap an `async fn(Ctx, Args) -> CmdResult<()>` as a registry entry point.
@@ -50,6 +51,7 @@ pub fn build_registry() -> Registry {
     solids::register(&mut r);
     system::register(&mut r);
     layouts::register(&mut r);
+    ucs::register(&mut r);
     ext_solids::register(&mut r);
     ext_annotate::register(&mut r);
     ext_modify::register(&mut r);

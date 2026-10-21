@@ -1,7 +1,7 @@
 //! The drawing database (port of `src/core/drawing.js`): layers, blocks, model/paper-space entities, solids and
 //! settings, plus snapshot-based undo. Serialises to the same JSON as the web application (format version 2).
 use crate::entities::{Entity, Kind};
-use crate::geom::{Pt, Seg};
+use crate::geom::{Pt, Seg, Ucs};
 use crate::solid::Solid;
 use crate::style::{Color, Layer, Settings};
 use indexmap::IndexMap;
@@ -170,6 +170,10 @@ struct File {
     #[serde(rename = "nextId")]
     next_id: u64,
     view: Option<ViewState>,
+    #[serde(default, skip_serializing_if = "Ucs::is_world")]
+    ucs: Ucs,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    ucs_named: IndexMap<String, Ucs>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -212,6 +216,11 @@ pub struct Drawing {
     pub layouts: Vec<Layout>,
     pub solids: Vec<Solid>,
     pub views: IndexMap<String, NamedView>,
+    /// Current user coordinate system and the saved ones (UCS command).
+    pub ucs: Ucs,
+    pub ucs_named: IndexMap<String, Ucs>,
+    /// Earlier user coordinate systems for UCS Previous (not persisted).
+    pub ucs_prev: Vec<Ucs>,
     pub cur: Current,
     /// Active space: `"model"` or a layout name.
     pub space: String,
@@ -273,6 +282,9 @@ impl Drawing {
             layouts: Vec::new(),
             solids: Vec::new(),
             views: IndexMap::new(),
+            ucs: Ucs::default(),
+            ucs_named: IndexMap::new(),
+            ucs_prev: Vec::new(),
             cur: Current::default(),
             space: MODEL.into(),
             view: None,
@@ -1009,6 +1021,8 @@ impl Drawing {
             cur: self.cur.clone(),
             next_id: self.next_id,
             view: self.view,
+            ucs: self.ucs,
+            ucs_named: self.ucs_named.clone(),
         };
         serde_json::to_value(f).expect("drawing serialises")
     }
@@ -1075,6 +1089,8 @@ impl Drawing {
         d.views = f.views;
         d.cur = f.cur;
         d.view = f.view;
+        d.ucs = f.ucs;
+        d.ucs_named = f.ucs_named;
         d.next_id = f.next_id.max(1);
         let max_id = d.all_entities().map(|e| e.id).chain(d.solids.iter().map(|s| s.id)).max().unwrap_or(0);
         if max_id >= d.next_id {

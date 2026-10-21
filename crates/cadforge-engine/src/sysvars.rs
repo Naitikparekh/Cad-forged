@@ -104,6 +104,7 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("NAVVCUBE", 1.0),
         ("NAVBAR", 1.0),
         ("UCSICON", 1.0),
+        ("UCSORG", 0.0),
         ("QPMODE", -1.0),
         ("OTRACKMODE", 1.0),
         ("POLARMODE", 0.0),

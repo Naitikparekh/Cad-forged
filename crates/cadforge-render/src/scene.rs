@@ -655,7 +655,8 @@ impl<'a> Renderer<'a> {
         if !prefs.grid || !view.can_draft() {
             return;
         }
-        let c: Vec<Pt> = [(0.0, 0.0), (self.w, 0.0), (self.w, self.h), (0.0, self.h)].iter().map(|(x, y)| view.to_world(*x, *y)).collect();
+        let ucs = self.doc.ucs;
+        let c: Vec<Pt> = [(0.0, 0.0), (self.w, 0.0), (self.w, self.h), (0.0, self.h)].iter().map(|(x, y)| ucs.from_wcs(view.to_world(*x, *y))).collect();
         let b = Bounds::of_points(&c);
         let (mut gx, mut gy) = (prefs.grid_unit_x, prefs.grid_unit_y);
         if gx <= 0.0 || gy <= 0.0 {
@@ -678,14 +679,14 @@ impl<'a> Renderer<'a> {
             let mut i = (b.min_x / step).ceil() as i64;
             while i as f64 * step <= b.max_x {
                 if !every.is_some_and(|e| i % e == 0) {
-                    paths.push(Poly { pts: vec![me.dev(pt(i as f64 * step, b.min_y)), me.dev(pt(i as f64 * step, b.max_y))], closed: false });
+                    paths.push(Poly { pts: vec![me.dev(ucs.to_wcs(pt(i as f64 * step, b.min_y))), me.dev(ucs.to_wcs(pt(i as f64 * step, b.max_y)))], closed: false });
                 }
                 i += 1;
             }
             let mut j = (b.min_y / step_y).ceil() as i64;
             while j as f64 * step_y <= b.max_y {
                 if !every.is_some_and(|e| j % e == 0) {
-                    paths.push(Poly { pts: vec![me.dev(pt(b.min_x, j as f64 * step_y)), me.dev(pt(b.max_x, j as f64 * step_y))], closed: false });
+                    paths.push(Poly { pts: vec![me.dev(ucs.to_wcs(pt(b.min_x, j as f64 * step_y))), me.dev(ucs.to_wcs(pt(b.max_x, j as f64 * step_y)))], closed: false });
                 }
                 j += 1;
             }
@@ -695,19 +696,29 @@ impl<'a> Renderer<'a> {
         self.ops.push(Op::Stroke { paths: minor, color: theme.grid, alpha: theme.grid_alpha, width: 1.0, dash: vec![], round: false });
         let majors = line(self, gx * major as f64, gy * major as f64, None);
         self.ops.push(Op::Stroke { paths: majors, color: theme.grid_major, alpha: theme.grid_major_alpha, width: 1.0, dash: vec![], round: false });
-        let ax = vec![Poly { pts: vec![self.dev(pt(b.min_x, 0.0)), self.dev(pt(b.max_x, 0.0))], closed: false }];
+        let ax = vec![Poly { pts: vec![self.dev(ucs.to_wcs(pt(b.min_x, 0.0))), self.dev(ucs.to_wcs(pt(b.max_x, 0.0)))], closed: false }];
         self.ops.push(Op::Stroke { paths: ax, color: [230, 90, 90], alpha: 0.55, width: 1.0, dash: vec![], round: false });
-        let ay = vec![Poly { pts: vec![self.dev(pt(0.0, b.min_y)), self.dev(pt(0.0, b.max_y))], closed: false }];
+        let ay = vec![Poly { pts: vec![self.dev(ucs.to_wcs(pt(0.0, b.min_y))), self.dev(ucs.to_wcs(pt(0.0, b.max_y)))], closed: false }];
         self.ops.push(Op::Stroke { paths: ay, color: [90, 200, 120], alpha: 0.55, width: 1.0, dash: vec![], round: false });
     }
 
     pub fn draw_ucs_icon(&mut self) {
-        if !self.prefs.ucs_icon {
+        if !self.prefs.ucs_icon || !self.doc.is_model() {
             return;
         }
         let (view, theme) = (self.view, self.theme);
-        let o = [54.0, self.h - 52.0];
+        let ucs = self.doc.ucs;
+        let mut o = [54.0, self.h - 52.0];
+        if self.prefs.ucs_origin && view.is_plan() {
+            let s = view.to_screen(ucs.origin);
+            if s.x > 30.0 && s.x < self.w - 30.0 && s.y > 30.0 && s.y < self.h - 30.0 {
+                o = [s.x, s.y];
+            }
+        }
+        let (c, sn) = (ucs.angle.cos(), ucs.angle.sin());
         let axis = |me: &mut Renderer, v: (f64, f64, f64), color: Rgb, label: &str| {
+            // the axis direction in world coordinates (the UCS rotates the X and Y axes about Z)
+            let v = (v.0 * c - v.1 * sn, v.0 * sn + v.1 * c, v.2);
             let p = if view.is_plan() {
                 [v.0 * 38.0, -v.1 * 38.0]
             } else {
@@ -727,8 +738,11 @@ impl<'a> Renderer<'a> {
         if view.is_plan() {
             axis(self, (1.0, 0.0, 0.0), [0xff, 0x6b, 0x5e], "X");
             axis(self, (0.0, 1.0, 0.0), [0x6b, 0xdc, 0x86], "Y");
-            let sq = Poly { pts: vec![[o[0] - 5.0, o[1] - 5.0], [o[0] + 5.0, o[1] - 5.0], [o[0] + 5.0, o[1] + 5.0], [o[0] - 5.0, o[1] + 5.0]], closed: true };
-            self.ops.push(Op::Stroke { paths: vec![sq], color: if theme.dark { [0xcf, 0xd6, 0xdd] } else { [0x44, 0x44, 0x55] }, alpha: 1.0, width: 1.0, dash: vec![], round: false });
+            // the box marks the world coordinate system
+            if ucs.is_world() {
+                let sq = Poly { pts: vec![[o[0] - 5.0, o[1] - 5.0], [o[0] + 5.0, o[1] - 5.0], [o[0] + 5.0, o[1] + 5.0], [o[0] - 5.0, o[1] + 5.0]], closed: true };
+                self.ops.push(Op::Stroke { paths: vec![sq], color: if theme.dark { [0xcf, 0xd6, 0xdd] } else { [0x44, 0x44, 0x55] }, alpha: 1.0, width: 1.0, dash: vec![], round: false });
+            }
         } else {
             axis(self, (1.0, 0.0, 0.0), [0xff, 0x6b, 0x5e], "X");
             axis(self, (0.0, 1.0, 0.0), [0x6b, 0xdc, 0x86], "Y");

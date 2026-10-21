@@ -1004,3 +1004,34 @@ mod tests {
         assert!(!seg_touches_rect(&Seg::line(pt(20.0, 20.0), pt(30.0, 30.0)), &r));
     }
 }
+
+/// A user coordinate system in the XY plane: origin and rotation of the X axis, both in world coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub struct Ucs {
+    pub origin: Pt,
+    #[serde(default)]
+    pub angle: f64,
+}
+
+impl Ucs {
+    pub fn is_world(&self) -> bool {
+        self.origin.x == 0.0 && self.origin.y == 0.0 && self.angle == 0.0
+    }
+    pub fn to_wcs(&self, p: Pt) -> Pt {
+        let (c, s) = (self.angle.cos(), self.angle.sin());
+        Pt { x: self.origin.x + p.x * c - p.y * s, y: self.origin.y + p.x * s + p.y * c }
+    }
+    pub fn from_wcs(&self, p: Pt) -> Pt {
+        let (c, s) = (self.angle.cos(), self.angle.sin());
+        let (dx, dy) = (p.x - self.origin.x, p.y - self.origin.y);
+        Pt { x: dx * c + dy * s, y: -dx * s + dy * c }
+    }
+    pub fn vec_to_wcs(&self, v: Pt) -> Pt {
+        let (c, s) = (self.angle.cos(), self.angle.sin());
+        Pt { x: v.x * c - v.y * s, y: v.x * s + v.y * c }
+    }
+    pub fn vec_from_wcs(&self, v: Pt) -> Pt {
+        let (c, s) = (self.angle.cos(), self.angle.sin());
+        Pt { x: v.x * c + v.y * s, y: -v.x * s + v.y * c }
+    }
+}

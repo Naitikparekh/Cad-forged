@@ -140,6 +140,11 @@ impl App {
         Handle(self.me.upgrade().expect("App is owned by a Handle"))
     }
 
+    /// The current user coordinate system (world when there is no drawing).
+    pub fn ucs(&self) -> cadforge_core::geom::Ucs {
+        self.doc().map(|d| d.ucs).unwrap_or_default()
+    }
+
     pub fn editor(&self) -> Option<&Editor> {
         self.active.and_then(|i| self.editors.get(i))
     }

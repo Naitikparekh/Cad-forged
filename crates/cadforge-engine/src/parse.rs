@@ -204,6 +204,8 @@ pub struct InputOpts {
     pub base: Option<Pt>,
     /// Dynamic-input rule: a second point is relative unless prefixed with `#`.
     pub relative_default: bool,
+    /// Typed coordinates and angles are read in this user coordinate system.
+    pub ucs: cadforge_core::geom::Ucs,
 }
 
 /// Interpret typed text as a point (`x,y[,z]`, `d<a`, `@...`, `#...`) or a bare number.
@@ -221,7 +223,8 @@ pub fn parse_input(text: &str, o: InputOpts) -> Option<Input> {
         t = r.trim();
     }
     let rel = !force_abs && (force_rel || (o.relative_default && o.base.is_some()));
-    let origin = if rel { o.base.unwrap_or(pt(0.0, 0.0)) } else { pt(0.0, 0.0) };
+    let origin = if rel { o.base.unwrap_or(pt(0.0, 0.0)) } else { o.ucs.origin };
+    let u = o.ucs;
     if force_rel && t.is_empty() {
         return Some(Input::Point { pt: origin, z: None, polar: None }); // "@" alone = last point
     }
@@ -232,19 +235,21 @@ pub fn parse_input(text: &str, o: InputOpts) -> Option<Input> {
             let r = skip_ws(r);
             if let Some((y, n2)) = scan_number(r) {
                 let after = skip_ws(&r[n2..]);
+                let v = u.vec_to_wcs(pt(x, y));
                 if after.is_empty() {
-                    return Some(Input::Point { pt: pt(origin.x + x, origin.y + y), z: None, polar: None });
+                    return Some(Input::Point { pt: pt(origin.x + v.x, origin.y + v.y), z: None, polar: None });
                 }
                 if let Some(zr) = after.strip_prefix(',') {
                     if let Some(z) = full_number(skip_ws(zr)) {
-                        return Some(Input::Point { pt: pt(origin.x + x, origin.y + y), z: Some(z), polar: None });
+                        return Some(Input::Point { pt: pt(origin.x + v.x, origin.y + v.y), z: Some(z), polar: None });
                     }
                 }
             }
         } else if let Some(r) = rest.strip_prefix('<') {
             if let Some(a) = full_number(skip_ws(r)) {
-                let p = pt(origin.x + x * rad(a).cos(), origin.y + x * rad(a).sin());
-                return Some(Input::Point { pt: p, z: None, polar: Some((x, rad(a))) });
+                let wa = rad(a) + u.angle;
+                let p = pt(origin.x + x * wa.cos(), origin.y + x * wa.sin());
+                return Some(Input::Point { pt: p, z: None, polar: Some((x, wa)) });
             }
         }
     }

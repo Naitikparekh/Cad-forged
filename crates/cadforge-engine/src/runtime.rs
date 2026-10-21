@@ -753,7 +753,8 @@ impl App {
             polar_inc: rad(sv.real("POLARANG")),
             polar_add: vec![],
             otrack: sv.otrack() && !p.spec.no_snap,
-            grid: sv.snap_on().then(|| Grid { sx: sv.real("SNAPUNIT_X"), sy: sv.real("SNAPUNIT_Y"), base: pt(0.0, 0.0), angle: rad(sv.real("SNAPANG")) }),
+            grid: sv.snap_on().then(|| Grid { sx: sv.real("SNAPUNIT_X"), sy: sv.real("SNAPUNIT_Y"), base: ed.doc.ucs.origin, angle: rad(sv.real("SNAPANG")) + ed.doc.ucs.angle }),
+            ucs_angle: ed.doc.ucs.angle,
         };
         self.rt.snapper.resolve(&ed.doc, raw, &o)
     }
@@ -1190,7 +1191,7 @@ impl App {
                 return;
             }
             let base = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).and_then(|p| p.polygon.as_ref()).and_then(|g| g.pts.last().copied());
-            match parse_input(text, InputOpts { base, relative_default: false }) {
+            match parse_input(text, InputOpts { base, relative_default: false, ucs: self.ucs() }) {
                 Some(Input::Point { pt: p, .. }) => {
                     if let Some(poly) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()).and_then(|p| p.polygon.as_mut()) {
                         poly.pts.push(p);
@@ -1201,7 +1202,7 @@ impl App {
             }
             return;
         }
-        if let Some(Input::Point { pt: p, .. }) = parse_input(text, InputOpts::default()) {
+        if let Some(Input::Point { pt: p, .. }) = parse_input(text, InputOpts { ucs: self.ucs(), ..InputOpts::default() }) {
             self.select_click(task, p, Mods::default());
             return;
         }
@@ -1391,7 +1392,7 @@ impl App {
             }
         }
         let origin = if from_stage == FromStage::Offset { from_base } else { base };
-        let input = parse_input(t, InputOpts { base: origin, relative_default: rel || from_stage == FromStage::Offset });
+        let input = parse_input(t, InputOpts { base: origin, relative_default: rel || from_stage == FromStage::Offset, ucs: self.ucs() });
         let Some(input) = input else {
             self.log("Point or option keyword required.", "error");
             return;
@@ -1462,7 +1463,7 @@ impl App {
             return self.deliver(task, Reply::Kw(kw));
         }
         let (kind, min, nonzero, base, first) = (p.kind, p.spec.min, p.spec.nonzero, p.spec.base, p.first_point);
-        match parse_input(t, InputOpts { base, relative_default: false }) {
+        match parse_input(t, InputOpts { base, relative_default: false, ucs: self.ucs() }) {
             Some(Input::Number(v)) => {
                 if min.is_some_and(|m| v < m) {
                     self.log("Requires a positive value.", "error");
