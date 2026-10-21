@@ -418,8 +418,8 @@ impl<'a> W<'a> {
             let t = &geo.text;
             w.text(o, t.p, t.h, &t.s, t.rot, t.jh, t.jv, &sub, None);
         };
-        if d.kind == DimType::Ang {
-            // angular dimensions are written as plain geometry
+        if matches!(d.kind, DimType::Ang | DimType::Arc) {
+            // angular and arc-length dimensions are written as plain geometry
             emit(self, o);
             return;
         }
@@ -428,15 +428,15 @@ impl<'a> W<'a> {
         emit(self, &mut inner);
         let rec = DimBlock { lines: inner.out.lines, ..rec };
         let ty = match d.kind {
-            DimType::Lin => 0,
+            DimType::Lin | DimType::Ang | DimType::Arc => 0,
             DimType::Ali => 1,
             DimType::Dia => 3,
-            DimType::Rad => 4,
-            DimType::Ang => 0,
+            DimType::Rad | DimType::Jog => 4,
+            DimType::Ord => 6 | if d.xd { 64 } else { 0 },
         };
         let zero = pt(0.0, 0.0);
         let def = match d.kind {
-            DimType::Rad => d.c.unwrap_or(zero),
+            DimType::Rad | DimType::Jog | DimType::Ord => d.c.unwrap_or(zero),
             DimType::Dia => {
                 let (c, p) = (d.c.unwrap_or(zero), d.pt.unwrap_or(zero));
                 pt(2.0 * c.x - p.x, 2.0 * c.y - p.y)
@@ -459,6 +459,9 @@ impl<'a> W<'a> {
                 if d.kind == DimType::Lin {
                     o.out.n(50, deg(d.ang.unwrap_or(0.0))).s(100, "AcDbRotatedDimension");
                 }
+            }
+            DimType::Ord => {
+                o.out.s(100, "AcDbOrdinateDimension").pt(d.pt.unwrap_or(zero), 3).pt(d.dp.unwrap_or(zero), 4);
             }
             _ => {
                 o.out.s(100, if d.kind == DimType::Dia { "AcDbDiametricDimension" } else { "AcDbRadialDimension" }).pt(d.pt.unwrap_or(zero), 5).n(40, 0.0);
