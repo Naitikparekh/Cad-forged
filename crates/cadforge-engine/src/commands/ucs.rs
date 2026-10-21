@@ -195,9 +195,12 @@ fn list(c: &Ctx) {
     c.log(&lines.join("\n"));
 }
 
-async fn ucsicon(c: Ctx, _args: Args) -> CmdResult<()> {
-    let r = c.keyword(ps("Enter an option [ON/OFF/All/Noorigin/ORigin/Properties]").options(&["ON", "OFF", "All", "Noorigin", "ORigin", "Properties"]).default_str("ON").allow_enter()).await?;
-    match r.kw().unwrap_or("ON") {
+async fn ucsicon(c: Ctx, args: Args) -> CmdResult<()> {
+    let kw = match args.str("option") {
+        Some(o) => o.to_string(),
+        None => c.keyword(ps("Enter an option [ON/OFF/All/Noorigin/ORigin/Properties]").options(&["ON", "OFF", "All", "Noorigin", "ORigin", "Properties"]).default_str("ON").allow_enter()).await?.kw().unwrap_or("ON").to_string(),
+    };
+    match kw.as_str() {
         "OFF" => {
             let _ = c.setvar("UCSICON", 0.0);
         }

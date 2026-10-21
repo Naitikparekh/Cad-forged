@@ -236,13 +236,18 @@ async fn make_array(c: &Ctx, n: usize) -> CmdResult<()> {
     Ok(())
 }
 
-async fn mview(c: Ctx, _args: Args) -> CmdResult<()> {
+async fn mview(c: Ctx, args: Args) -> CmdResult<()> {
     if paper_space(&c, "MVIEW").is_none() {
         return Ok(());
     }
     let opts = ["ON", "OFF", "Fit", "Lock", "Object", "Polygonal", "2", "3", "4"];
+    // the ribbon starts MVIEW with an option already chosen
+    let mut preset = args.str("option").map(str::to_string);
     loop {
-        let r = c.point(ps("Specify corner of viewport or [ON/OFF/Fit/Lock/Object/Polygonal/Restore/LAyer/2/3/4] <Fit>").options(&opts).allow_enter().no_ortho()).await?;
+        let r = match preset.take() {
+            Some(o) => PointR::Kw(o),
+            None => c.point(ps("Specify corner of viewport or [ON/OFF/Fit/Lock/Object/Polygonal/Restore/LAyer/2/3/4] <Fit>").options(&opts).allow_enter().no_ortho()).await?,
+        };
         match r.kw() {
             Some("ON") | Some("OFF") => {
                 let on = r.kw() == Some("ON");

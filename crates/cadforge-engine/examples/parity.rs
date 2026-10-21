@@ -5,6 +5,12 @@ use std::collections::BTreeMap;
 
 fn main() {
     let reg = build_registry();
+    if std::env::args().any(|a| a == "--list") {
+        for n in reg.names() {
+            println!("{n}");
+        }
+        return;
+    }
     let tsv = include_str!("../../../tools/benchmark/acad-commands.tsv");
     let show_missing = std::env::args().any(|a| a == "--missing");
     let mut cats: BTreeMap<String, (f64, f64, usize, usize)> = BTreeMap::new();
