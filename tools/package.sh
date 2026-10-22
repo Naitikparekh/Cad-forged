@@ -9,7 +9,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-version=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml | head -1)
+# (awk, not sed: BSD sed on macOS rejects the usual one-liner)
+version=$(awk -F'"' '/^\[workspace.package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{print $2; exit}' Cargo.toml)
 [ -n "$version" ] || { echo "cannot read the version from Cargo.toml" >&2; exit 1; }
 arch=$(uname -m); [ "$arch" = "arm64" ] && arch=aarch64
 case "$(uname -s)" in
@@ -30,7 +31,9 @@ rm -rf dist && mkdir -p "dist/$name"
 cp "$bin" README.md CSG-LICENSE.txt "dist/$name/"
 (cd dist
  if [ "$os" = windows ]; then
-   if command -v zip >/dev/null; then zip -qr "$name.zip" "$name"; else powershell -NoProfile -Command "Compress-Archive -Path '$name' -DestinationPath '$name.zip'"; fi
+   # Git Bash has no zip: Python's zipfile writes forward-slash paths everywhere
+   py=$(command -v python3 || command -v python)
+   "$py" -m zipfile -c "$name.zip" "$name"
  else
    tar -czf "$name.tar.gz" "$name"
  fi)
