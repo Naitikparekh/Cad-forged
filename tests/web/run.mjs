@@ -224,6 +224,99 @@ await test('REGION booleans: UNION of two overlapping regions leaves one region'
   s = await t.state(); assert.deepEqual(s.types, ['region'], JSON.stringify(s.history));
 });
 
+// ---------------------------------------------------------------- images, Lisp, block palette, exports
+import zlib from 'node:zlib';
+/** A tiny RGBA PNG: left half red, right half blue. */
+function testPng(w = 4, h = 2) {
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = b => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6;
+  const raw = Buffer.alloc((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = y * (w * 4 + 1) + 1 + x * 4; raw[o] = x < w / 2 ? 255 : 0; raw[o + 2] = x < w / 2 ? 0 : 255; raw[o + 3] = 255; }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+const pixel = (file, x, y) => {
+  try { return execFileSync('python3', ['-I', '-c', 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nprint(*im.getpixel((int(float(sys.argv[2])), int(float(sys.argv[3])))))', file, String(x), String(y)], { encoding: 'utf8' }).trim().split(' ').map(Number); }
+  catch (e) { return null; }
+};
+
+await test('IMAGEATTACH: choose a PNG, place it, and see its pixels on the canvas', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('ERASE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('IMAGEATTACH')]);
+  await fc.setFiles({ name: 'pic.png', mimeType: 'image/png', buffer: testPng() }); await page.waitForTimeout(500); await t.frame(4);
+  let s = await t.state(); assert.equal(s.busy, true, JSON.stringify(s.history));
+  await t.cmd('0,0'); await t.cmd('10'); await t.cmd('0');      // insertion point, 10 units per pixel, no rotation
+  s = await t.state(); assert.deepEqual(s.types, ['image'], JSON.stringify(s.history));
+  await t.cmd('ZOOM'); await t.cmd('E'); await t.frame(6);
+  await page.keyboard.press('Escape'); await t.frame(3);
+  const file = path.join(root, 'target', 'tmp', 'web-image.png'); await t.shot(file);
+  const left = await t.pt(10, 15), right = await t.pt(30, 15);
+  const [lp, rp] = [pixel(file, left.x, left.y), pixel(file, right.x, right.y)];
+  if (!lp) { console.log('       (PIL not installed: skipped the pixel check)'); return; }
+  assert.ok(lp[0] > 200 && lp[2] < 60, `left half should be red, got ${lp}`);
+  assert.ok(rp[2] > 200 && rp[0] < 60, `right half should be blue, got ${rp}`);
+});
+
+await test('IMAGECLIP crops the picture; the clipped half shows the canvas again', async () => {
+  await t.cmd('IMAGECLIP'); await t.click(10, 10);
+  await t.cmd(''); await t.cmd('');                               // New boundary, Rectangular
+  await t.cmd('0,0'); await t.cmd('20,20'); await t.frame(4);
+  const file = path.join(root, 'target', 'tmp', 'web-image-clip.png'); await t.shot(file);
+  const right = await t.pt(30, 15), left = await t.pt(10, 15);
+  const [lp, rp] = [pixel(file, left.x, left.y), pixel(file, right.x, right.y)];
+  if (!lp) return;
+  assert.ok(lp[0] > 200, `left still red: ${lp}`);
+  assert.ok(!(rp[2] > 200 && rp[0] < 60), `the blue half is clipped away: ${rp}`);
+});
+
+await test('AutoLISP at the command line: (command ...) draws, defun c:name defines a command', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('ERASE'); await t.cmd('ALL'); await page.keyboard.press('Enter'); await t.frame(3);
+  await t.cmd('(command "circle" (list 5 5) 3)');
+  let s = await t.state(); assert.deepEqual(s.types, ['circle'], JSON.stringify(s.history));
+  await t.cmd('(defun c:ring (/ r) (setq r 4) (command "circle" (list 20 5) r) (princ))');
+  await t.cmd('RING');
+  s = await t.state(); assert.deepEqual(s.types, ['circle', 'circle'], JSON.stringify(s.history));
+  await t.cmd('(setq total 0)'); await t.cmd('(foreach x (list 1 2 3 4) (setq total (+ total x)))');
+  await t.cmd('!total'); s = await t.state(); assert.equal(s.history[0], '10', JSON.stringify(s.history));
+});
+
+await test('the AutoLISP console runs code from its dialog', async () => {
+  await t.cmd('VLISP'); await t.frame(4);
+  await page.mouse.click(720, 385); await t.type('(command "line" (list 0 0) (list 40 0) "")');
+  await page.mouse.click(463, 470); await t.frame(5);              // Run
+  let s = await t.state(); assert.ok(s.types.includes('line'), JSON.stringify(s.history));
+  await page.mouse.click(976, 470); await t.frame(4);              // Close
+});
+
+await test('BLOCK then the Blocks palette lists it and a click starts INSERT', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('BLOCK'); await t.cmd('unit'); await t.cmd('0,0'); await t.cmd('ALL'); await t.cmd(''); await t.frame(3);
+  await t.cmd('BLOCKPALETTE'); await t.frame(4);
+  await page.mouse.move(50, 255, { steps: 3 }); await t.frame(2); await page.mouse.click(50, 255); await t.frame(4);
+  const s = await t.state(); assert.equal(s.busy, true, JSON.stringify(s.history));
+  assert.ok(/insertion point|Specify/i.test(s.prompt), s.prompt);
+  await page.keyboard.press('Escape'); await t.frame(3);
+});
+
+await test('WBLOCK downloads a DXF with the chosen objects', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('WBLOCK'); await t.cmd('ALL'); await t.cmd(''); await t.cmd('0,0');
+  const f = await download(() => t.cmd('part'));
+  assert.equal(f.name, 'part.dxf');
+  assert.ok(f.data.toString('latin1').includes('SECTION'), f.data.subarray(0, 40).toString());
+});
+
+await test('DATAEXTRACTION downloads a CSV of object counts', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('DATAEXTRACTION');
+  const f = await download(() => t.cmd('Objects'));
+  assert.ok(f.name.endsWith('-extract.csv'), f.name);
+  assert.ok(f.data.toString().startsWith('Count,Name,Layer'), f.data.toString().slice(0, 60));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();
