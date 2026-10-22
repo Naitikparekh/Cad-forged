@@ -1,0 +1,46 @@
+name: Release
+
+# Pushing a tag such as v2.0.0 builds the packages on all three platforms and attaches them to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    name: Package (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: System packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+      - name: Build and package
+        shell: bash
+        run: tools/package.sh
+      - name: Check the packages
+        shell: bash
+        run: tests/package/check.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cadforge-${{ matrix.os }}
+          path: dist/*
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: packages/*
+          generate_release_notes: true

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CadForge
+GenericName=CAD
+Comment=2D drafting and 3D solid modelling with an AutoCAD-style interface
+Exec=cadforge %f
+Terminal=false
+Categories=Graphics;Engineering;
+MimeType=image/vnd.dxf;application/dxf;application/json;

@@ -19,10 +19,11 @@ export function serve(dir = path.join(root, 'dist-web')) {
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${server.address().port}/` })));
 }
 
-export async function launch({ width = 1440, height = 900 } = {}) {
+/** `scale` > 1 starts Chromium with a real device scale factor (a HiDPI screen), not Playwright's emulation. */
+export async function launch({ width = 1440, height = 900, scale = 1 } = {}) {
   const { server, url } = await serve();
-  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'] });
-  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', ...(scale > 1 ? [`--force-device-scale-factor=${scale}`] : [])] });
+  const page = await browser.newPage({ viewport: { width, height } });
   const logs = [];
   page.on('console', m => logs.push(`[${m.type()}] ${m.text()}`));
   page.on('pageerror', e => logs.push(`[pageerror] ${e.message}`));

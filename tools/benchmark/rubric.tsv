@@ -81,7 +81,7 @@ ui	cui	0	User interface customization		not implemented
 ui	drag-drop	0.75	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	files only: blocks cannot be dragged out of the palette into the drawing
 ui	localization	0	Interface in other languages		English only
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
-ui	hidpi	0.25	High-DPI scaling	crates/cadforge-app/src/main.rs::eframe::run_native	relies on the toolkit's automatic scaling; not tested on high-DPI displays
+ui	hidpi	0.5	High-DPI scaling	tests/web/run.mjs::a high-DPI display (scale 2)	checked only that the canvas renders at native resolution in headless Chromium at scale 2; pointer mapping and real HiDPI hardware are untested
 ui	touch	0	Touch and pen input		not implemented
 annotation	text-styles	0.5	Text styles with any installed font and SHX fonts	crates/cadforge-app/src/dialogs/settings.rs::TextStyleState	five built-in fonts only
 annotation	dim-styles	1	Dimension style manager	crates/cadforge-app/src/dialogs/dimstyle.rs::DimStyle ; crates/cadforge-engine/tests/ext_annotate.rs::dim_styles	
@@ -145,7 +145,7 @@ extend	library	0.5	Embeddable libraries	crates/cadforge-engine/src/sim.rs::pub s
 platform	desktop	0.75	Native desktop application	crates/cadforge-app/src/main.rs::fn main	built and run headless on Linux only
 platform	web	1	Runs in a browser	tests/web/run.mjs::OPEN a DXF	
 platform	offline	1	No installation or account needed; works offline	crates/cadforge-app/web/index.html::cadforge_app	
-platform	installer	0	Installer, updates, licensing server		not implemented
+platform	installer	0.4	Installer, updates, licensing server	tools/package.sh::dpkg-deb ; tests/package/check.sh::deb ok ; .github/workflows/release.yml::tools/package.sh	tar.gz and .deb are built and checked on Linux; the Windows and macOS packages come from CI and have not been run; no auto-update or licensing
 platform	cloud	0	Cloud storage and collaboration		not implemented
 platform	mobile	0	Mobile apps		not implemented
 platform	licence	1	Open licence	Cargo.toml::license = "MIT"	

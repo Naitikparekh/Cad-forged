@@ -5,3 +5,4 @@ target/
 dist-web/
 .claude/worktrees/
 __pycache__/
+dist/

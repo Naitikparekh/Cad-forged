@@ -394,6 +394,17 @@ await test('autosave keeps unsaved work in the browser and a reload recovers it'
   } finally { await t2.close(); }
 });
 
+await test('a high-DPI display (scale 2): the canvas is rendered at native resolution', async () => {
+  // Chromium started with a real device scale factor of 2; the canvas backing store must be twice its CSS size.
+  // (Pointer mapping is not asserted: headless Chromium reports devicePixelRatio 1 in this mode.)
+  const t2 = await launch({ width: 1280, height: 800, scale: 2 });
+  try {
+    const dims = await t2.page.evaluate(() => { const c = document.querySelector('canvas'); return { w: c.width, h: c.height, cw: c.clientWidth, ch: c.clientHeight }; });
+    assert.ok(Math.abs(dims.w - dims.cw * 2) <= 2 && Math.abs(dims.h - dims.ch * 2) <= 2, `canvas backing store ${dims.w}x${dims.h} for ${dims.cw}x${dims.ch} CSS px`);
+    const s = await t2.state(); assert.equal(s.editors, 1);        // and the app is up and running
+  } finally { await t2.close(); }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();
