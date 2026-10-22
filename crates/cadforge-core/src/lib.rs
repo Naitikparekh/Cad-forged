@@ -7,6 +7,7 @@ pub mod geom;
 pub mod hatch;
 pub mod io;
 pub mod picture;
+pub mod plotstyle;
 pub mod ops;
 pub mod sample;
 pub mod solid;

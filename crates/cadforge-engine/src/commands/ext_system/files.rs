@@ -152,8 +152,72 @@ async fn preview(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
-async fn plotstyle(c: Ctx, _a: Args) -> CmdResult<()> {
-    c.log_error("Plot styles are not supported in this version; objects plot with their own colour, linetype and lineweight.");
+/// PLOTSTYLE: the plot style table the drawing plots with (a `.ctb` colour dependent table decides the colour, lineweight
+/// and screening of what it covers). Named `.stb` tables can be loaded and listed but objects cannot be assigned
+/// to their styles yet, so they change nothing when plotting.
+async fn plotstyle(c: Ctx, a: Args) -> CmdResult<()> {
+    use cadforge_core::plotstyle::{describe, parse_base64, PlotStyleTable};
+    let opt = match a.str("option") {
+        Some(o) => o.to_string(),
+        None => c.keyword(ps("Enter an option [?/Load/Monochrome/None]").options(&["?", "Load", "Monochrome", "None"]).default_str("?")).await?.kw().unwrap_or("?").to_string(),
+    };
+    match opt.as_str() {
+        "Load" => {
+            let Some(data) = a.str("data") else {
+                if c.app(|app| app.ui.dialogs) {
+                    c.app(|app| app.emit(Event::UiAction { name: "PLOTSTYLELOAD".into(), args: Args::none() }));
+                } else {
+                    c.log_error("Loading a plot style table needs a file chooser; pass the file's bytes, base64 encoded, as the \"data\" argument instead.");
+                }
+                return Ok(());
+            };
+            let name = a.str("name").unwrap_or("plot styles").to_string();
+            let name = name.rsplit(['/', '\\']).next().unwrap_or(&name).to_string();
+            let name = name.rsplit_once('.').map_or(name.clone(), |(stem, _)| stem.to_string());
+            match parse_base64(&name, data) {
+                Ok(t) => {
+                    let kind = if t.color_based { "colour dependent" } else { "named" };
+                    let n = t.styles.len();
+                    c.doc_mut(|d| d.change(|d| d.plot_styles = Some(std::rc::Rc::new(t))));
+                    c.log(&format!("Plot style table \"{name}\" ({kind}, {}) will be used when plotting.", plural(n, "style")));
+                    if !c.doc(|d| d.plot_styles.as_ref().is_some_and(|t| t.color_based)) {
+                        c.log_error("A named table cannot be applied yet: objects have no plot style assignment. Colour dependent (.ctb) tables work.");
+                    }
+                }
+                Err(e) => c.log_error(&e),
+            }
+        }
+        "Monochrome" => {
+            c.doc_mut(|d| d.change(|d| d.plot_styles = Some(std::rc::Rc::new(PlotStyleTable::monochrome()))));
+            c.log("Everything will plot in black (table \"monochrome\").");
+        }
+        "None" => {
+            let had = c.doc(|d| d.plot_styles.is_some());
+            if had {
+                c.doc_mut(|d| d.change(|d| d.plot_styles = None));
+            }
+            c.log(if had { "The plot style table was removed: objects plot with their own colour, linetype and lineweight." } else { "The drawing has no plot style table." });
+        }
+        _ => match c.doc(|d| d.plot_styles.clone()) {
+            None => c.log("No plot style table: objects plot with their own colour, linetype and lineweight (Load one, or choose Monochrome)."),
+            Some(t) => {
+                c.log(&format!("Plot style table \"{}\": {}, {}. {}", t.name, if t.color_based { "colour dependent" } else { "named" }, plural(t.styles.len(), "style"), t.description));
+                if t.color_based {
+                    // the colours that change something
+                    let mut shown = 0;
+                    for (i, s) in t.styles.iter().enumerate() {
+                        if (s.color.is_some() || s.lineweight.is_some() || s.screen != 100) && shown < 24 {
+                            c.log(&format!("  colour {:>3}: {}", i + 1, describe(&t, (i + 1) as u8)));
+                            shown += 1;
+                        }
+                    }
+                    if shown == 0 {
+                        c.log("  every colour plots as itself");
+                    }
+                }
+            }
+        },
+    }
     Ok(())
 }
 
@@ -221,7 +285,7 @@ pub(super) fn register(r: &mut Registry) {
     r.define(def("File", "CLOSEALL", run(closeall)).title("Close All").icon("close").desc("Closes all currently open drawings.").once());
     r.define(def("Utilities", "SAVEALL", run(saveall)).title("Save All").icon("save").desc("Saves all open drawings.").once());
     r.define(def("Output", "PREVIEW", run(preview)).aliases(&["PRE"]).title("Plot Preview").icon("plot").desc("Displays the drawing as it will be plotted.").once());
-    r.define(def("Output", "PLOTSTYLE", run(plotstyle)).title("Plot Style").desc("Sets the plot style for new objects.").once());
+    r.define(def("Output", "PLOTSTYLE", run(plotstyle)).title("Plot Style Table").desc("Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting.").once());
     r.define(def("Output", "PUBLISH", run(publish)).title("Publish").icon("pdf").desc("Publishes drawings to PDF or plotters.").once());
     r.define(def("Output", "ETRANSMIT", run(etransmit)).title("eTransmit").desc("Lists the files needed to send a drawing to someone else.").once());
     r.define(def("Utilities", "APPLOAD", run(appload)).aliases(&["AP"]).title("Load Application").desc("Loads applications and script files.").once());

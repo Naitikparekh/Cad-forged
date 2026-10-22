@@ -182,6 +182,8 @@ struct File {
     custom_patterns: Vec<crate::defs::PatternDef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_ltypes: Vec<crate::defs::LinetypeDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plot_styles: Option<std::rc::Rc<crate::plotstyle::PlotStyleTable>>,
 }
 
 fn at_origin(p: &Pt) -> bool {
@@ -204,8 +206,15 @@ struct Snap {
     base: Pt,
 }
 
+/// The state an undo step returns to: the drawing as JSON, plus the plot style table by reference (it is large, rarely changes
+/// and so is not part of the JSON).
+struct Snapshot {
+    json: String,
+    plot: Option<std::rc::Rc<crate::plotstyle::PlotStyleTable>>,
+}
+
 struct UndoStep {
-    snap: String,
+    snap: Snapshot,
     label: String,
 }
 
@@ -262,9 +271,11 @@ pub struct Drawing {
     /// Hatch patterns and linetypes loaded from `.pat` / `.lin` files; saved with the drawing and registered on load.
     pub custom_patterns: Vec<crate::defs::PatternDef>,
     pub custom_ltypes: Vec<crate::defs::LinetypeDef>,
+    /// The plot style table the drawing plots with (kept inside the drawing so a plot looks the same everywhere).
+    pub plot_styles: Option<std::rc::Rc<crate::plotstyle::PlotStyleTable>>,
     undo_stack: Vec<UndoStep>,
     redo_stack: Vec<UndoStep>,
-    pre: Option<String>,
+    pre: Option<Snapshot>,
     cmd_active: bool,
     cmd_rev: u64,
     caches: RefCell<Caches>,
@@ -331,6 +342,7 @@ impl Drawing {
             active_vp: None,
             custom_patterns: vec![],
             custom_ltypes: vec![],
+            plot_styles: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             pre: None,
@@ -1022,13 +1034,13 @@ impl Drawing {
     }
 
     fn trim_undo(&mut self) {
-        let mut bytes: usize = self.undo_stack.iter().map(|s| s.snap.len()).sum();
+        let mut bytes: usize = self.undo_stack.iter().map(|s| s.snap.json.len()).sum();
         while self.undo_stack.len() > MAX_UNDO || (bytes > MAX_UNDO_BYTES && self.undo_stack.len() > 1) {
-            bytes -= self.undo_stack.remove(0).snap.len();
+            bytes -= self.undo_stack.remove(0).snap.json.len();
         }
     }
 
-    fn snapshot(&self) -> String {
+    fn snapshot(&self) -> Snapshot {
         let s = Snap {
             layers: self.layers.clone(),
             blocks: self.blocks.clone(),
@@ -1041,11 +1053,12 @@ impl Drawing {
             next_id: self.next_id,
             base: self.base,
         };
-        serde_json::to_string(&s).expect("snapshot serialises")
+        Snapshot { json: serde_json::to_string(&s).expect("snapshot serialises"), plot: self.plot_styles.clone() }
     }
 
-    fn restore(&mut self, snap: &str) {
-        let s: Snap = serde_json::from_str(snap).expect("snapshot parses");
+    fn restore(&mut self, snap: &Snapshot) {
+        let s: Snap = serde_json::from_str(&snap.json).expect("snapshot parses");
+        self.plot_styles = snap.plot.clone();
         self.layers = s.layers;
         self.blocks = s.blocks;
         self.settings = s.settings;
@@ -1126,6 +1139,7 @@ impl Drawing {
             base: self.base,
             custom_patterns: self.custom_patterns.clone(),
             custom_ltypes: self.custom_ltypes.clone(),
+            plot_styles: self.plot_styles.clone(),
         };
         serde_json::to_value(f).expect("drawing serialises")
     }
@@ -1196,6 +1210,7 @@ impl Drawing {
         d.ucs = f.ucs;
         d.ucs_named = f.ucs_named;
         d.base = f.base;
+        d.plot_styles = f.plot_styles;
         for def in f.custom_ltypes {
             let _ = d.define_linetype(def);
         }

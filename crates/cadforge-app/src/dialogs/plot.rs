@@ -160,9 +160,18 @@ impl CadForgeApp {
                     ui.label("");
                     changed |= ui.checkbox(&mut o.lineweights, "Plot with lineweights").changed();
                     ui.end_row();
+                    let table = self.h.borrow().doc().and_then(|d| d.plot_styles.as_ref().map(|t| t.name.clone()));
+                    let styled = table.is_some() && o.use_styles;
                     ui.label("");
-                    changed |= ui.checkbox(&mut o.mono, "Monochrome (black ink)").changed();
+                    ui.add_enabled_ui(!styled, |ui| {
+                        changed |= ui.checkbox(&mut o.mono, "Monochrome (black ink)").changed();
+                    });
                     ui.end_row();
+                    if let Some(name) = table {
+                        ui.label("Plot styles");
+                        changed |= ui.checkbox(&mut o.use_styles, format!("Use table \"{name}\" (colours, lineweights)")).changed();
+                        ui.end_row();
+                    }
                     ui.label("PNG resolution (dpi)");
                     ui.add_enabled_ui(o.format == PlotFormat::Png, |ui| {
                         egui::ComboBox::from_id_salt("pl-dpi").selected_text(format!("{}", o.dpi as i32)).width(150.0).show_ui(ui, |ui| {
@@ -177,7 +186,7 @@ impl CadForgeApp {
             ui.vertical(|ui| {
                 let (r, _) = ui.allocate_exact_size(vec2(420.0, 300.0), Sense::hover());
                 ui.painter().rect_filled(r, 0.0, Color32::from_rgb(0x5b, 0x64, 0x70));
-                let key = format!("{:?}|{:?}|{}|{}|{:?}|{}|{}|{}|{}|{}", o.format, o.layout, o.paper, o.landscape, o.area as u8, s.scale_idx, o.center, o.lineweights, o.mono, format_args!("{}/{}", s.ox, s.oy));
+                let key = format!("{:?}|{:?}|{}|{}|{:?}|{}|{}|{}|{}|{}|{}", o.format, o.layout, o.paper, o.landscape, o.area as u8, s.scale_idx, o.center, o.lineweights, o.mono, format_args!("{}/{}", s.ox, s.oy), o.use_styles);
                 if changed || key != s.cache_key {
                     s.cache_key = key;
                     o.scale = SCALES[s.scale_idx.min(SCALES.len() - 1)].1;

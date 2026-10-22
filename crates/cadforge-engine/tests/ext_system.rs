@@ -1,5 +1,5 @@
 //! Tests for the ext_system command batch (limits, layer tools, view switches, clipboard variants, reports, files).
-use cadforge_core::drawing::{Block, Drawing, Layout, Paper, XrefInfo};
+use cadforge_core::drawing::{Drawing, Layout, Paper};
 use cadforge_core::entities::*;
 use cadforge_core::geom::*;
 use cadforge_core::style::Color;
@@ -864,15 +864,6 @@ fn preview_opens_the_plot_dialog_in_preview_mode() {
     let acts = ui_actions(&s);
     assert_eq!(acts[0].0, "PLOT");
     assert_eq!(acts[0].1 .0.get("preview"), Some(&ArgVal::Bool(true)));
-}
-
-#[test]
-fn plotstyle_reports_what_is_unsupported() {
-    let s = with_ui();
-    events(&s);
-    s.cmd("PLOTSTYLE");
-    assert!(s.history_has("Plot styles are not supported"));
-    // (PUBLISH is tested in publish.rs)
 }
 
 #[test]

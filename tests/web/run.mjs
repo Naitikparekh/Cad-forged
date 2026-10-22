@@ -372,20 +372,34 @@ await test('dropping an unsupported file changes nothing', async () => {
   assert.equal(after.editors, before.editors); assert.equal(after.entities, before.entities); assert.equal(after.busy, false);
 });
 
+/** Type a command into a freshly started page until it is really running: keys typed before the app is ready are lost. */
+const startCommand = async (tt, name) => {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await tt.cmd(name);
+    for (let i = 0; i < 10; i++) { if ((await tt.state()).busy) return; await tt.page.waitForTimeout(100); }
+    await tt.page.keyboard.press('Escape'); await tt.page.waitForTimeout(300);
+  }
+  throw new Error(`${name} did not start`);
+};
+/** Poll until `fn` returns a truthy value (or fail after `ms`). */
+const until = async (tt, fn, what, ms = 8000) => {
+  for (let waited = 0; waited < ms; waited += 100) { const v = await fn(); if (v) return v; await tt.page.waitForTimeout(100); }
+  throw new Error(`timed out waiting for ${what}`);
+};
+
 await test('autosave keeps unsaved work in the browser and a reload recovers it', async () => {
   const t2 = await launch();                    // a fresh browser context: empty localStorage
   try {
-    await t2.cmd('CIRCLE'); await t2.cmd('12,34'); await t2.cmd('7');
-    let s = await t2.state(); assert.deepEqual(s.types, ['circle']); assert.equal(s.dirty, true);
+    await startCommand(t2, 'CIRCLE'); await t2.cmd('12,34'); await t2.cmd('7');
+    let s = await until(t2, async () => { const x = await t2.state(); return x.types.length === 1 && x; }, 'the circle to exist');
+    assert.deepEqual(s.types, ['circle']); assert.equal(s.dirty, true);
     const wrote = await t2.page.evaluate(() => window.cf.autosave_now());
     assert.equal(wrote, 1);
     const keys = await t2.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('cf.autosave.')));
     assert.equal(keys.length, 1, JSON.stringify(keys));
     await t2.page.reload();
     await t2.page.waitForFunction(() => !document.getElementById('loading') || document.getElementById('loading').textContent.startsWith('Could not'), null, { timeout: 60000 });
-    await t2.page.waitForTimeout(1000);
-    s = await t2.state();
-    assert.equal(s.editors, 2, JSON.stringify(s));                 // the blank start-up drawing and the recovered one
+    s = await until(t2, async () => { try { const x = await t2.state(); return x.editors === 2 && x; } catch { return false; } }, 'the recovered drawing to open');
     assert.equal(s.name, 'Drawing1 (recovered)'); assert.deepEqual(s.types, ['circle']); assert.equal(s.dirty, true);
     assert.ok(s.history.some(h => /Recovered 1 unsaved drawing from the last session/.test(h.text || h)), JSON.stringify(s.history));
     // the file stays until the drawing is saved or closed
@@ -403,6 +417,38 @@ await test('a high-DPI display (scale 2): the canvas is rendered at native resol
     assert.ok(Math.abs(dims.w - dims.cw * 2) <= 2 && Math.abs(dims.h - dims.ch * 2) <= 2, `canvas backing store ${dims.w}x${dims.h} for ${dims.cw}x${dims.ch} CSS px`);
     const s = await t2.state(); assert.equal(s.editors, 1);        // and the app is up and running
   } finally { await t2.close(); }
+});
+
+// a colour dependent plot style table in AutoCAD's compressed container: colour 1 prints black at 0.25 mm
+const ctbBytes = () => {
+  let t = 'description="web test"\naci_table_available=TRUE\nlineweight_table{\n\t0=0.000000\n\t1=0.250000\n}\naci_table{\n';
+  for (let i = 0; i < 255; i++) t += `\t${i}="Color_${i + 1}"\n`;
+  t += '}\nplot_style{\n';
+  for (let i = 0; i < 255; i++) t += `\t${i}{\n\t\tname="Color_${i + 1}"\n\t\tcolor=${i === 0 ? -1006632960 : -1}\n\t\tscreen=100\n\t\tlineweight=${i === 0 ? 1 : 0}\n\t}\n`;
+  t += '}\n';
+  return Buffer.concat([Buffer.from('PIAFILEVERSION_2.0,CTBVER1,compress\r\npmzlibcodec'), Buffer.alloc(12), zlib.deflateSync(Buffer.from(t)), Buffer.alloc(4)]);
+};
+
+await test('PLOTSTYLE Load reads a compressed .ctb through the chooser', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('PLOTSTYLE');
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('Load')]);
+  await fc.setFiles({ name: 'Office.ctb', mimeType: 'application/octet-stream', buffer: ctbBytes() }); await page.waitForTimeout(500); await t.frame(4);
+  let s = await t.state();
+  assert.ok(s.history.some(h => /Plot style table "Office" \(colour dependent, 255 styles\)/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
+  await t.cmd('PLOTSTYLE'); await t.cmd('?'); await t.frame(3);
+  s = await t.state();
+  assert.ok(s.history.some(h => /colour\s+1: 0,0,0, 0\.25 mm/.test(h.text || h)), JSON.stringify(s.history.slice(-8)));
+});
+
+await test('dropping a .ctb loads it, and PLOTSTYLE None removes it again', async () => {
+  await t.cmd('PLOTSTYLE'); await t.cmd('None'); await t.frame(3);
+  await drop('Dropped.ctb', 'application/octet-stream', ctbBytes());
+  let s = await t.state();
+  assert.ok(s.history.some(h => /Plot style table "Dropped"/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
+  await t.cmd('PLOTSTYLE'); await t.cmd('None'); await t.frame(3);
+  s = await t.state();
+  assert.ok(s.history.some(h => /The plot style table was removed/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

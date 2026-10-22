@@ -36,7 +36,7 @@ io	dxf-layouts	1	Paper space layouts, viewports and sheet sizes in DXF	crates/ca
 io	dxf-objects	0.75	Newer entities in DXF: multileader, mline, wipeout, images, gradients, attributes	crates/cadforge-core/tests/corpus.rs::modern_annotation_and_misc_entities ; crates/cadforge-core/tests/image.rs::ezdxf_accepts_the_image	some are read as simpler geometry (MLINE as polylines, multileaders as leader and text)
 io	pdf-export	1	Vector PDF with text, lineweights, images and layouts	crates/cadforge-render/tests/image.rs::pdf_embeds_the_picture ; crates/cadforge-render/tests/render.rs::plot_pdf_and_svg	
 io	svg-png-export	1	SVG and PNG output	crates/cadforge-render/tests/image.rs::svg_embeds_the_picture ; crates/cadforge-render/tests/render.rs::png_raster_has_ink	
-io	plot-styles	0	Plot style tables (CTB / STB) and device drivers		not implemented
+io	plot-styles	0.5	Plot style tables (CTB / STB) and device drivers	crates/cadforge-core/src/plotstyle.rs::pub fn parse_bytes ; crates/cadforge-core/tests/plotstyle.rs::the_compressed_container_gives_the_same_table ; tests/web/run.mjs::PLOTSTYLE Load reads a compressed	.ctb / .stb read from the text layout and from the zlib container, kept in the drawing; never tested against a file written by AutoCAD (none was available), so the container handling rests on the documented layout; no .pc3 device drivers; lineweight index 0 is taken to mean "use object lineweight"
 io	mesh-export	1	STL / OBJ export of solids	crates/cadforge-engine/src/commands/solids.rs::STLOUT	
 io	cad-interchange	0	SAT, STEP, IGES, FBX, 3DS and other exchange formats		not implemented
 io	clipboard	1	Copy / paste with base point, between drawings	crates/cadforge-engine/src/commands/ext_system/clipboard.rs::COPYBASE	
@@ -106,7 +106,7 @@ output	vp-layers	0.75	Per-viewport layer overrides	crates/cadforge-engine/src/co
 output	plot-dialog	1	Plot with scale, area, offset, centre, lineweights, monochrome, preview	crates/cadforge-app/src/dialogs/plot.rs::PlotState ; tests/web/run.mjs::PLOT dialog	
 output	plot-formats	1	PDF, SVG and PNG output	crates/cadforge-render/tests/render.rs::plot_pdf_and_svg	
 output	publish	0.75	Batch plotting of several sheets	crates/cadforge-engine/src/commands/ext_system/files.rs::fn publish ; crates/cadforge-engine/tests/publish.rs::publish_writes_one_pdf_page_per_sheet ; crates/cadforge-render/src/pdf.rs::pub fn write_pdf_pages	one drawing at a time, PDF only: no sheet-list files, DWF or plotter output
-output	plot-style-tables	0	Pen assignments and plot style tables		not implemented
+output	plot-style-tables	0.6	Pen assignments and plot style tables	crates/cadforge-render/tests/plotstyle.rs::a_table_changes_colour_lineweight_and_screening ; crates/cadforge-engine/tests/plotstyle_cmd.rs::load_reads_a_table_from_the_file_bytes ; crates/cadforge-engine/src/commands/ext_system/files.rs::async fn plotstyle	colour dependent tables set colour, lineweight and screening in plots (model, layouts, viewports); no linetype / end / join / fill styles; named (.stb) tables load but cannot be used because objects have no plot style property; no table editor
 output	layout-wizard	0.5	Layout wizard and templates	crates/cadforge-engine/src/commands/layouts.rs::LAYOUTWIZARD	no DWT templates
 output	hidden-shaded-plot	0.5	Hidden line and shaded plots	crates/cadforge-render/src/solids.rs::Hidden	one hidden / shaded style
 solids3d	primitives	1	Box, cylinder, cone, sphere, wedge, torus, pyramid, polysolid	crates/cadforge-engine/tests/ext_solids.rs::TORUS ; crates/cadforge-engine/tests/ext_solids.rs::POLYSOLID	

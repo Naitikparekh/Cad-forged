@@ -67,6 +67,7 @@ impl CadForgeApp {
             "IMAGEATTACH" => self.open_files(ctx, "image"),
             "APPLOAD" => self.open_files(ctx, "lisp"),
             "LINETYPELOAD" => self.open_files(ctx, "lin"),
+            "PLOTSTYLELOAD" => self.open_files(ctx, "plotstyle"),
             "LOADPAT" => self.open_files(ctx, "pat"),
             "VLISP" => self.dialog = Some(Dialog::vlisp()),
             "WORKSPACE" => {
@@ -113,6 +114,7 @@ impl CadForgeApp {
                 "lisp" => ".lsp,.scr,.txt",
                 "lin" => ".lin,.txt",
                 "pat" => ".pat,.txt",
+                "plotstyle" => ".ctb,.stb",
                 _ => ".json,.cadforge,.dxf",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
@@ -137,7 +139,7 @@ impl CadForgeApp {
         for f in dropped {
             let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             let Some(purpose) = dropped_purpose(&name) else {
-                self.toast(&format!("{name}: CadForge opens .dxf and .json drawings, .png / .jpg pictures, .lsp / .scr, .lin and .pat files."));
+                self.toast(&format!("{name}: CadForge opens .dxf and .json drawings, .png / .jpg pictures, .lsp / .scr, .lin, .pat, .ctb and .stb files."));
                 continue;
             };
             #[cfg(not(target_arch = "wasm32"))]
@@ -165,6 +167,14 @@ impl CadForgeApp {
         for p in items {
             if p.purpose == "image" {
                 self.attach_image(&p.name, p.bytes);
+                continue;
+            }
+            if p.purpose == "plotstyle" {
+                // binary: pass the bytes through untouched
+                use cadforge_engine::runtime::ArgVal;
+                let data = base64_encode(&p.bytes);
+                self.run_command("PLOTSTYLE", Args::none().with("option", ArgVal::Str("Load".into())).with("name", ArgVal::Str(p.name.clone())).with("data", ArgVal::Str(data)));
+                self.h.pump();
                 continue;
             }
             let text = if p.name.to_lowercase().ends_with(".dxf") { cadforge_core::io::decode_dxf_bytes(&p.bytes) } else { String::from_utf8_lossy(&p.bytes).to_string() };
@@ -937,6 +947,7 @@ pub fn dropped_purpose(name: &str) -> Option<&'static str> {
         "lsp" | "scr" => "lisp",
         "lin" => "lin",
         "pat" => "pat",
+        "ctb" | "stb" => "plotstyle",
         _ => return None,
     })
 }
@@ -954,7 +965,15 @@ mod drop_tests {
         assert_eq!(dropped_purpose("setup.scr"), Some("lisp"));
         assert_eq!(dropped_purpose("fence.lin"), Some("lin"));
         assert_eq!(dropped_purpose("weave.pat"), Some("pat"));
+        assert_eq!(dropped_purpose("office.CTB"), Some("plotstyle"));
+        assert_eq!(dropped_purpose("named.stb"), Some("plotstyle"));
         assert_eq!(dropped_purpose("notes.docx"), None);
         assert_eq!(dropped_purpose("noext"), None);
     }
+}
+
+/// Standard base64 (the engine takes file bytes as text arguments).
+fn base64_encode(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }

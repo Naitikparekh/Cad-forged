@@ -64,6 +64,8 @@ pub struct Renderer<'a> {
     layers: HashMap<String, &'a Layer>,
     /// Layer overrides of the viewport being drawn (lower-cased layer name).
     vp_over: HashMap<String, &'a LayerOverride>,
+    /// Plot style table to plot with (plots only).
+    pub plot_styles: Option<&'a cadforge_core::plotstyle::PlotStyleTable>,
     fade: f64,
     ltscale: f64,
     vis: Option<Bounds>,
@@ -86,6 +88,7 @@ impl<'a> Renderer<'a> {
             ops: vec![],
             layers,
             vp_over: HashMap::new(),
+            plot_styles: None,
             fade: if prefs.lock_fade > 0.0 { prefs.lock_fade / 100.0 } else { 0.0 },
             ltscale: doc.settings.ltscale,
             vis: None,
@@ -129,14 +132,25 @@ impl<'a> Renderer<'a> {
         }
         let transp = e.transp.or(over.and_then(|o| o.transp)).or(layer.transp).unwrap_or(0.0);
         let fade = if layer.locked && self.fade > 0.0 { (1.0 - self.fade).max(0.12) } else { 1.0 };
-        let color = if self.mono { [0, 0, 0] } else { color_rgb(raw_color, self.theme.dark, self.theme.contrast) };
+        let mut color = if self.mono { [0, 0, 0] } else { color_rgb(raw_color, self.theme.dark, self.theme.contrast) };
+        // a plot style table decides colour, lineweight and screening of what it covers
+        let mut screen = 1.0;
+        if let Some(ps) = self.plot_styles.and_then(|t| t.style_for(raw_color)) {
+            if let Some(c) = ps.color {
+                color = c;
+            }
+            if let Some(w) = ps.lineweight {
+                lw = w;
+            }
+            screen = ps.screen as f64 / 100.0;
+        }
         Style {
             raw_color,
             color,
             ltype,
             lw,
             lts: e.lts.unwrap_or(1.0) * parent.map_or(1.0, |p| p.lts),
-            alpha: ((if self.prefs.transparency { 1.0 - transp.min(90.0) / 100.0 } else { 1.0 }) * fade) as f32,
+            alpha: ((if self.prefs.transparency { 1.0 - transp.min(90.0) / 100.0 } else { 1.0 }) * fade * screen) as f32,
         }
     }
 
@@ -665,7 +679,7 @@ impl<'a> Renderer<'a> {
 
     fn draw_hatch(&mut self, e: &Entity, h: &HatchData, style: &Style, selected: bool, hover: bool) {
         let color = match e.color {
-            Some(c) if !self.mono && !matches!(c, Color::ByLayer | Color::ByBlock) => color_rgb(c, self.theme.dark, self.theme.contrast),
+            Some(c) if !self.mono && self.plot_styles.is_none() && !matches!(c, Color::ByLayer | Color::ByBlock) => color_rgb(c, self.theme.dark, self.theme.contrast),
             _ => style.color,
         };
         if let Some(g) = &h.gradient {
@@ -886,6 +900,7 @@ impl<'a> Renderer<'a> {
             let mut sub = Renderer::new(doc, self.view, self.w, self.h, self.theme, self.prefs);
             sub.world = mat::mul(&self.world, &from_model);
             sub.mono = self.mono;
+            sub.plot_styles = self.plot_styles;
             sub.lw_mode = self.lw_mode;
             sub.tol = self.tol;
             sub.ltscale = self.ltscale;

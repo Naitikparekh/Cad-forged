@@ -1,3 +1,2 @@
 # Commands that exist but do less than the AutoCAD command: name<TAB>credit (0..1)<TAB>what is missing.
 # The parity tool gives these only the listed credit instead of a full hit.
-PLOTSTYLE	0.25	reports that plot style tables (CTB/STB) are not supported

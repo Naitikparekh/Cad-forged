@@ -73,6 +73,8 @@ pub struct PlotOptions {
     pub title: String,
     /// Plot this layout (paper space) instead of model space: the sheet is the layout's paper at 1:1.
     pub layout: Option<String>,
+    /// Plot with the drawing's plot style table, if it has one. The table decides colours, so `mono` no longer applies.
+    pub use_styles: bool,
 }
 
 pub fn default_plot_options(doc: &Drawing) -> PlotOptions {
@@ -91,6 +93,7 @@ pub fn default_plot_options(doc: &Drawing) -> PlotOptions {
         dpi: 200.0,
         title: doc.name.clone(),
         layout: None,
+        use_styles: true,
     }
 }
 
@@ -168,7 +171,8 @@ pub fn render_plot(doc: &Drawing, o: &PlotOptions, layout: &PlotLayout) -> Vec<O
     let prefs = Prefs { lw_display: true, lock_fade: 0.0, transparency: true, fill: true, grid: false, ucs_icon: false, ..Prefs::default() };
     let mut rc = Renderer::new(doc, &view, layout.w, layout.h, Theme::PAPER, prefs);
     rc.world = layout.world_m;
-    rc.mono = o.mono;
+    rc.plot_styles = if o.use_styles { doc.plot_styles.as_deref() } else { None };
+    rc.mono = o.mono && rc.plot_styles.is_none();
     rc.lw_mode = LwMode::Plot(o.lineweights);
     rc.tol = 0.08;
     if let Some(name) = &o.layout {
