@@ -50,3 +50,20 @@ fn a_loaded_linetype_draws_dashed_with_its_own_pattern() {
     assert!(!dashes.is_empty(), "the line is dashed");
     assert!((dashes[0][0] / dashes[0][1].abs() - 2.0).abs() < 1e-6, "dash:gap = 4:2, got {:?}", dashes[0]);
 }
+
+#[test]
+fn quick_text_draws_boxes_instead_of_glyphs() {
+    let mut d = Drawing::new("t");
+    d.add(Entity::text(pt(0., 0.), 5.0, "HELLO"));
+    let mut v = View::default();
+    v.w = 800.0;
+    v.h = 600.0;
+    v.fit(Some(Bounds::new(-5.0, -5.0, 30.0, 10.0)), 0.1);
+    let draw = |qtext: bool| render_scene(&d, &v, 800.0, 600.0, Theme::DARK, Prefs { qtext, ..Prefs::default() }, &Highlight::default(), None);
+    let texts = |ops: &[Op]| ops.iter().filter(|o| matches!(o, Op::Text { .. })).count();
+    let closed_boxes = |ops: &[Op]| ops.iter().filter(|o| matches!(o, Op::Stroke { paths, .. } if paths.iter().any(|p| p.closed && p.pts.len() == 4))).count();
+    let (normal, quick) = (draw(false), draw(true));
+    // (the UCS icon has its own X / Y labels, so compare the two renderings rather than counting)
+    assert_eq!(texts(&normal) - texts(&quick), 1, "the drawing's text is no longer drawn as glyphs");
+    assert!(closed_boxes(&quick) > closed_boxes(&normal), "a box takes their place");
+}
