@@ -50,7 +50,28 @@ def read_rubric():
         f = line.rstrip("\n").split("\t")
         f += [""] * (6 - len(f))
         items.append(dict(axis=f[0], id=f[1], credit=float(f[2]), text=f[3], evidence=[e.strip() for e in f[4].split(" ; ") if e.strip()], missing=f[5]))
+    scope = read_scope()
+    known = {(i["axis"], i["id"]) for i in items}
+    for key in scope:
+        if key not in known:
+            sys.exit(f"scope.tsv names {key[0]}/{key[1]}, which is not in rubric.tsv")
+    for i in items:
+        i["out"] = scope.get((i["axis"], i["id"]), "")
     return items
+
+
+def read_scope():
+    """Rubric items the project owner has put out of scope: {(axis, id): reason}. They leave the axis average and the gap list."""
+    path = os.path.join(BENCH, "scope.tsv")
+    out = {}
+    if os.path.exists(path):
+        for line in open(path, encoding="utf-8"):
+            if line.startswith("#") or not line.strip():
+                continue
+            f = line.rstrip("\n").split("\t")
+            f += [""] * (3 - len(f))
+            out[(f[0], f[1])] = f[2]
+    return out
 
 
 def check_evidence(items):
@@ -123,7 +144,7 @@ def compute(par, items, covered, missing):
         "tested": len(covered) / max(1, len(covered) + len(missing)),
     }
     for a in AXES[4:]:
-        mine = [i for i in items if i["axis"] == a[0]]
+        mine = [i for i in items if i["axis"] == a[0] and not i["out"]]
         frac[a[0]] = sum(i["credit"] for i in mine) / len(mine) if mine else 0.0
     points = {k: frac[k] * weight[k] for k in frac}
     return frac, points
@@ -182,21 +203,35 @@ def write_doc(par, items, frac, points, covered, missing, total):
             ev = "; ".join(f"`{e}`" for e in i["evidence"])
             note = i["missing"]
             cell = ev if not note else (f"{ev}<br>*{note}*" if ev else f"*{note}*")
-            w(f"| {i['text']} | {i['credit']:g} | {cell} |")
+            if i["out"]:
+                w(f"| ~~{i['text']}~~ | out of scope | *{i['out']}* |")
+            else:
+                w(f"| {i['text']} | {i['credit']:g} | {cell} |")
     w("")
     w("## What stands between this and 95")
     w("")
-    gaps = sorted((i for i in items if i["credit"] < 1), key=lambda i: -dict((a[0], a[2]) for a in AXES)[i["axis"]] / max(1, len([x for x in items if x["axis"] == i["axis"]])) * (1 - i["credit"]))
+    live = [i for i in items if not i["out"]]
+    per_item = lambda i: dict((a[0], a[2]) for a in AXES)[i["axis"]] / max(1, len([x for x in live if x["axis"] == i["axis"]]))
+    gaps = sorted((i for i in live if i["credit"] < 1), key=lambda i: -per_item(i) * (1 - i["credit"]))
     w("Points still on the table, largest first (checklist items below full credit):")
     w("")
     for i in gaps[:25]:
-        per = dict((a[0], a[2]) for a in AXES)[i["axis"]] / len([x for x in items if x["axis"] == i["axis"]])
+        per = per_item(i)
         w(f"- {per * (1 - i['credit']):.2f} pt: {i['text']} ({i['axis']}) {('- ' + i['missing']) if i['missing'] else ''}")
     w("")
     w("Long-tail commands that do not exist yet are listed by `cargo run -p cadforge-engine --example parity -- --missing`. Many are tied to features this program does not have at all "
       "(meshes and surfaces, sheet sets, annotative scaling, dynamic blocks, PDF / DGN underlays, DWG, VBA / .NET, rendering). Closing the gap to 95 means building those, "
       "not polishing what is here; some of them (DWG, the plug-in ecosystem, 40 years of drawings and habits) cannot be reproduced at all.")
     w("")
+    out = [i for i in items if i["out"]]
+    if out:
+        w("## Out of scope (by decision)")
+        w("")
+        w("These rubric items were taken out of the score by the project owner. They no longer count in their axis; the other items in that axis now carry the weight.")
+        w("")
+        for i in out:
+            w(f"- {i['text']} ({i['axis']}): {i['out']}")
+        w("")
     w("## Untested commands")
     w("")
     w(f"{len(missing)} registered commands are not named by any test: " + ", ".join(f"`{m}`" for m in missing))

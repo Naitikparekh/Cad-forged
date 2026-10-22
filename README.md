@@ -13,7 +13,7 @@ It exists in two forms that share one design:
   `CadForge.html`**. It is no longer extended; its modules and unit tests are the specification the Rust code was
   ported from.
 
-How close is it to AutoCAD? [docs/BENCHMARK.md](docs/BENCHMARK.md) scores it against a written rubric: **66.6 / 100**
+How close is it to AutoCAD? [docs/BENCHMARK.md](docs/BENCHMARK.md) scores it against a written rubric: **66.9 / 100**
 today, with every gap listed. That is a self-assessment (AutoCAD cannot be run here), not a measurement against the
 product.
 

@@ -1,0 +1,3 @@
+# Rubric items the project owner has put out of scope.  axis <TAB> id <TAB> reason (who decided, when)
+# An item listed here leaves its axis average and the gap list; it is shown in docs/BENCHMARK.md so the decision stays visible.
+platform	mobile	Not needed: the project owner said no mobile app is wanted (2026-10-22)
