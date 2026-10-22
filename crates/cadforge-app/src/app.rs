@@ -227,6 +227,11 @@ impl CadForgeApp {
                 }
                 return;
             }
+            "blocks" => {
+                self.ui.show_tools = true;
+                self.pal.tool_tab = usize::MAX;
+                return;
+            }
             "show-all" => {
                 if let Some([p, t, l, c]) = self.ui.hidden_pals.take() {
                     (self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd) = (p, t, l, c);

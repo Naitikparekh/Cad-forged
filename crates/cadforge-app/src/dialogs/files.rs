@@ -21,10 +21,11 @@ impl FileBrowserState {
         let exts = match purpose {
             "script" => vec!["scr", "txt"],
             "image" => vec!["png", "jpg", "jpeg"],
+            "lisp" => vec!["lsp", "scr", "txt"],
             _ => vec!["json", "cadforge", "dxf"],
         };
         let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
+        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
     }
 
     fn reload(&mut self) {

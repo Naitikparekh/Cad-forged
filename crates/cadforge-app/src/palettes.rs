@@ -715,14 +715,21 @@ impl CadForgeApp {
         self.palette_header(ui, "Tool Palettes", |a| a.ui.show_tools = false);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 1.0;
-            for (i, (name, _)) in TOOL_SETS.iter().enumerate() {
-                let active = self.pal.tool_tab == i;
+            // the last tab lists the blocks of the drawing (BLOCKPALETTE)
+            let tabs: Vec<&str> = TOOL_SETS.iter().map(|(n, _)| *n).chain(std::iter::once("Blocks")).collect();
+            for (i, name) in tabs.iter().enumerate() {
+                let active = self.pal.tool_tab.min(tabs.len() - 1) == i;
                 let b = egui::Button::new(RichText::new(*name).color(if active { t.text } else { t.text2 })).fill(if active { t.raised } else { Color32::TRANSPARENT }).stroke(Stroke::new(1.0, if active { t.sep } else { Color32::TRANSPARENT }));
                 if ui.add(b).clicked() {
                     self.pal.tool_tab = i;
                 }
             }
         });
+        self.pal.tool_tab = self.pal.tool_tab.min(TOOL_SETS.len());
+        if self.pal.tool_tab >= TOOL_SETS.len() {
+            self.block_tab(ui);
+            return;
+        }
         let names = TOOL_SETS[self.pal.tool_tab.min(TOOL_SETS.len() - 1)].1;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.add_space(4.0);
@@ -748,6 +755,36 @@ impl CadForgeApp {
                     if resp.clicked() {
                         self.run_command(name, Args::none());
                     }
+                }
+            }
+        });
+    }
+
+    /// The block palette: every block of the drawing, a click inserts it.
+    fn block_tab(&mut self, ui: &mut egui::Ui) {
+        let t = self.t;
+        let blocks: Vec<(String, usize, bool)> = {
+            let a = self.h.borrow();
+            a.doc().map(|d| d.blocks.values().filter(|b| !b.name.starts_with('*')).map(|b| (b.name.clone(), b.entities.len(), b.xref.is_some())).collect()).unwrap_or_default()
+        };
+        if blocks.is_empty() {
+            ui.add_space(8.0);
+            ui.label(RichText::new("This drawing has no blocks yet. Create one with BLOCK or attach a drawing with XATTACH.").color(t.text3));
+            return;
+        }
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.add_space(4.0);
+            for (name, n, xref) in &blocks {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
+                    ui.painter().rect_stroke(r, CornerRadius::same(3), Stroke::new(1.0, t.sep), StrokeKind::Inside);
+                }
+                self.icons.paint(ui.painter(), if *xref { "xref" } else { "block" }, Rect::from_center_size(Pos2::new(r.left() + 20.0, r.center().y), vec2(24.0, 24.0)), &t, Tint::Normal);
+                ui.painter().text(Pos2::new(r.left() + 40.0, r.center().y - 7.0), Align2::LEFT_CENTER, name, FontId::proportional(12.0), t.text);
+                ui.painter().text(Pos2::new(r.left() + 40.0, r.center().y + 8.0), Align2::LEFT_CENTER, format!("{n} object{}{}", if *n == 1 { "" } else { "s" }, if *xref { " · external reference" } else { "" }), FontId::proportional(10.0), t.text3);
+                if resp.on_hover_text("Click to insert this block").clicked() {
+                    self.run_command("INSERT", Args::none().with("name", cadforge_engine::runtime::ArgVal::Str(name.clone())));
                 }
             }
         });

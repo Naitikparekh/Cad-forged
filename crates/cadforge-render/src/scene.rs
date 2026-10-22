@@ -379,6 +379,8 @@ impl<'a> Renderer<'a> {
         let saved_vis = self.vis;
         self.world = mat::mul(&saved, &insert_matrix(ins, def.base));
         self.vis = None;
+        // XCLIP: what the block draws is cut to the boundary afterwards
+        let clip_from = (ins.clip.len() >= 3 && !ins.clip_off).then_some(self.ops.len());
         for be in &def.entities {
             if matches!(&be.kind, Kind::Text(t) if t.att.is_some()) {
                 continue; // the reference's own ATTRIB values are drawn below
@@ -404,6 +406,11 @@ impl<'a> Renderer<'a> {
         }
         self.world = saved;
         self.vis = saved_vis;
+        if let Some(from) = clip_from {
+            let drawn = self.ops.split_off(from);
+            let boundary: Vec<[f64; 2]> = ins.clip.iter().map(|p| self.dev(*p)).collect();
+            self.ops.extend(clip_ops_to_convex(drawn, &boundary));
+        }
         for a in &ins.attribs {
             if !a.hidden && !a.t.s.is_empty() {
                 self.draw_text_at(&a.t, style.color, style.alpha, false, o.hover);

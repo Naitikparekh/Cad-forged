@@ -387,7 +387,7 @@ fn make_entity(gs: &[(i64, Value)]) -> Option<Entity> {
             let s = first(1)?.as_str()?.to_string();
             Kind::Text(TextData { p: point(10)?, h: first(40).and_then(gnum).filter(|h| *h > 0.0).unwrap_or(2.5), s, rot: first(50).and_then(gnum).unwrap_or(0.0), jh: HJust::Left, jv: VJust::Baseline, w: first(41).and_then(gnum), multi: ty == "MTEXT", att: None })
         }
-        "INSERT" => Kind::Insert(InsertData { name: first(2)?.as_str()?.to_string(), p: point(10)?, sx: first(41).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), sy: first(42).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), rot: first(50).and_then(gnum).unwrap_or(0.0), attribs: vec![] }),
+        "INSERT" => Kind::Insert(InsertData { name: first(2)?.as_str()?.to_string(), p: point(10)?, sx: first(41).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), sy: first(42).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), rot: first(50).and_then(gnum).unwrap_or(0.0), attribs: vec![], clip: vec![], clip_off: false }),
         "LWPOLYLINE" => {
             let mut v: Vec<Vertex> = vec![];
             for (code, val) in gs {

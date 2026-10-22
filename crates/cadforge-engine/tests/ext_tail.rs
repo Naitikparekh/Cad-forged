@@ -142,7 +142,7 @@ fn tableexport_writes_quoted_csv() {
 
 fn tagged_insert(name: &str, x: f64, tag: &str, value: &str) -> Entity {
     let t = match text(2.5, value).kind { Kind::Text(t) => t, _ => unreachable!() };
-    Entity::new(Kind::Insert(InsertData { name: name.into(), p: p(x, 0.), sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![AttribData { tag: tag.into(), t, hidden: false }] }))
+    Entity::new(Kind::Insert(InsertData { name: name.into(), p: p(x, 0.), sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![AttribData { tag: tag.into(), t, hidden: false }], clip: vec![], clip_off: false }))
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn palette_and_workspace_commands_emit_host_events() {
 fn wblock_saves_a_dxf_with_the_blocks_it_uses() {
     let s = Sim::new();
     s.doc_mut(|d| d.define_block("BOLT", p(0., 0.), vec![Entity::new(Kind::Circle { c: p(0., 0.), r: 1.0 })]));
-    s.add(Entity::new(Kind::Insert(InsertData { name: "BOLT".into(), p: p(10., 10.), sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![] })));
+    s.add(Entity::new(Kind::Insert(InsertData { name: "BOLT".into(), p: p(10., 10.), sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![], clip: vec![], clip_off: false })));
     s.cmd("WBLOCK").click(11., 10.).enter().click(10., 10.).ty("bolt-part");
     let (name, dxf) = saved_file(&s).expect("wblock file");
     assert_eq!(name, "bolt-part.dxf");

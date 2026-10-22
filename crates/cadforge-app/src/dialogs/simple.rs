@@ -187,6 +187,48 @@ impl CadForgeApp {
         o
     }
 
+    /// The AutoLISP console: a code box, Run, Load, and the command history it writes to.
+    pub(super) fn ui_vlisp(&mut self, ui: &mut egui::Ui, s: &mut VLispState) -> Out {
+        let t = self.t;
+        self.note(ui, "Write AutoLISP and press Run (Ctrl+Enter). Results appear below and in the command line history.");
+        let edit = ui.add(egui::TextEdit::multiline(&mut s.src).code_editor().desired_rows(9).desired_width(f32::INFINITY).hint_text("(defun c:hello () (princ \"Hello\") (princ))"));
+        let mut run = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter)) && edit.has_focus();
+        let mut out = Out::Open;
+        ui.horizontal(|ui| {
+            if self.btn(ui, "Run", true).clicked() {
+                run = true;
+            }
+            if self.btn(ui, "Load file...", false).clicked() {
+                self.run_command("APPLOAD", cadforge_engine::runtime::Args::none());
+            }
+            if self.btn(ui, "Clear", false).clicked() {
+                s.src.clear();
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if self.btn(ui, "Close", false).clicked() {
+                    out = Out::Cancel;
+                }
+            });
+        });
+        if run && !s.src.trim().is_empty() {
+            let src = s.src.clone();
+            self.run_command("_LISP", cadforge_engine::runtime::Args::none().with("source", cadforge_engine::runtime::ArgVal::Str(src)).with("echo", cadforge_engine::runtime::ArgVal::Bool(true)));
+        }
+        let lines: Vec<(String, cadforge_engine::app::LogKind)> = self.h.borrow().history.iter().rev().take(14).map(|l| (l.text.clone(), l.kind)).collect::<Vec<_>>().into_iter().rev().collect();
+        egui::ScrollArea::vertical().max_height(170.0).stick_to_bottom(true).auto_shrink([false, true]).show(ui, |ui| {
+            for (text, kind) in &lines {
+                use cadforge_engine::app::LogKind;
+                let colour = match kind {
+                    LogKind::Error => t.err,
+                    LogKind::Input | LogKind::Cmd => t.text2,
+                    _ => t.text,
+                };
+                ui.label(RichText::new(text).monospace().size(12.0).color(colour));
+            }
+        });
+        out
+    }
+
     pub(super) fn ui_purge(&mut self, ui: &mut egui::Ui, s: &mut PurgeState) -> Out {
         self.note(ui, "Unreferenced named objects that can be removed:");
         self.group(ui, &format!("Blocks ({})", s.blocks.len()), |ui| {
@@ -349,6 +391,11 @@ impl CadForgeApp {
 pub struct HelpState {
     pub tab: usize,
     pub query: String,
+}
+
+#[derive(Default)]
+pub struct VLispState {
+    pub src: String,
 }
 
 #[derive(Default)]

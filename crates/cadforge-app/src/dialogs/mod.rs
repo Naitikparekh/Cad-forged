@@ -52,6 +52,7 @@ pub enum Kind {
     About,
     Help(HelpState),
     Calc(CalcState),
+    VLisp(VLispState),
     Purge(Option<PurgeState>),
     LayerStates(LayerStatesState),
     AliasEdit(AliasState),
@@ -254,6 +255,7 @@ impl CadForgeApp {
             Kind::About => self.ui_about(ui),
             Kind::Help(s) => self.ui_help(ui, s),
             Kind::Calc(s) => self.ui_calc(ui, s),
+            Kind::VLisp(s) => self.ui_vlisp(ui, s),
             Kind::Purge(s) => self.ui_purge(ui, s.as_mut().expect("state")),
             Kind::LayerStates(s) => self.ui_layerstates(ui, s),
             Kind::AliasEdit(s) => self.ui_aliasedit(ui, s),
@@ -547,6 +549,7 @@ fn dialog_title_width(k: &Kind) -> (String, f32) {
         Kind::About => ("About CadForge".into(), 420.0),
         Kind::Help(_) => ("Help".into(), 660.0),
         Kind::Calc(_) => ("QuickCalc".into(), 440.0),
+        Kind::VLisp(_) => ("Visual LISP Console".into(), 620.0),
         Kind::Purge(_) => ("Purge".into(), 380.0),
         Kind::LayerStates(_) => ("Layer States Manager".into(), 420.0),
         Kind::AliasEdit(_) => ("Edit Aliases".into(), 500.0),
@@ -607,6 +610,9 @@ impl Dialog {
     }
     pub fn calc() -> Dialog {
         Dialog::new(Kind::Calc(CalcState::default()))
+    }
+    pub fn vlisp() -> Dialog {
+        Dialog::new(Kind::VLisp(VLispState::default()))
     }
     pub fn purge() -> Dialog {
         Dialog::new(Kind::Purge(None))

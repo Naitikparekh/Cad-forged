@@ -261,6 +261,24 @@ extend_panel("solid", "Modify", add_items=[stack(btn("SLICE", "Slice", "small", 
 extend_panel("solid", "Modify", add_items=[stack(btn("SHELL", "Shell", "small", "shell"), btn("THICKEN", "Thicken", "small", "thicken"), btn("SOLIDEDIT", "Solid Edit", "small", "solidedit"))])
 extend_panel("solid", "Modify", add_items=[stack(btn("3DROTATE", "3D Rotate", "small", "rotate3d"), btn("INTERFERE", "Interfere", "small", "interfere"), btn("3DSCALE", "3D Scale", "small", "scale"))])
 
+# ---------------------------------------------------------------- tail commands (images, references, data, automation)
+ICONS.update({
+    "trace": '<path class="l" d="M5 24 24 7l3 3L8 27z"/><path class="a" d="M9 21 22 9"/>',
+    "lisp": '<path class="l" d="M11 5C7 8 7 24 11 27M21 5c4 3 4 19 0 22"/><path class="o" d="M13 12h6M16 12v9"/>',
+    "blocks": '<rect class="l" x="4" y="5" width="10" height="10"/><rect class="l" x="18" y="5" width="10" height="10"/><rect class="a" x="4" y="19" width="10" height="9"/><rect class="l" x="18" y="19" width="10" height="9"/>',
+    "csv": '<path class="l" d="M7 4h13l5 5v19H7z"/><path class="k" d="M20 4v5h5"/><path class="a" d="M11 15h10M11 19h10M11 23h10M16 13v12"/>',
+})
+icons.update(ICONS)
+extend_panel("insert", "Reference", add_items=[stack(btn("IMAGECLIP", "Clip Image", "small", "imageclip"), btn("XCLIP", "Clip Xref", "small", "imageclip"), btn("REFEDIT", "Edit Reference", "small", "refedit"))])
+extend_panel("insert", "Block", add_items=[btn("BLOCKPALETTE", "Blocks\nPalette", icon="blocks")])
+extend_panel("insert", "Block Definition", add_items=[stack(btn("BSAVE", "Save Block", "small", "bedit"), btn("BSAVEAS", "Save Block As", "small", "bedit"), btn("REFCLOSE", "Close Reference", "small", "refedit"))])
+extend_panel("insert", "Data", add_items=[stack(btn("DATAEXTRACTION", "Extract Data", "small", "csv"), btn("ATTEXT", "Extract Attributes", "small", "csv"), btn("TABLEEXPORT", "Export Table", "small", "csv"))])
+extend_panel("manage", "Applications", add_items=[stack(btn("APPLOAD", "Load\nApplication", "small", "lisp"), btn("VLISP", "AutoLISP\nConsole", "small", "lisp"))])
+extend_panel("home", "Draw", add_slideout=[btn("TRACE", "Trace", "small", "trace")])
+extend_panel("home", "Modify", add_slideout=[btn("SETBYLAYER", "SetByLayer", "small", "chprop"), btn("HATCHGENERATEBOUNDARY", "Hatch Boundary", "small", "boundary")])
+extend_panel("annotate", "Text", add_slideout=[btn("TXT2MTXT", "Text to MText", "small", "scaletext")])
+extend_panel("output", "File", add_items=[stack(btn("DATAEXTRACTION", "Data Extraction", "small", "csv"))])
+
 json.dump(ribbon, open(assets / "ribbon.json", "w"), separators=(",", ":"))
 json.dump(icons, open(assets / "icons.json", "w"), separators=(",", ":"))
 print("ribbon tabs:", [t["id"] for t in ribbon["tabs"]], "icons:", len(icons))

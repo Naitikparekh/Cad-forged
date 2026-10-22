@@ -48,5 +48,6 @@ pub(super) fn register(r: &mut Registry) {
     r.define(def("Utilities", "RIBBONCLOSE", palette("ribbon", Some(false))).title("Close Ribbon").desc("Closes the ribbon.").transparent().once());
     r.define(def("Utilities", "HIDEPALETTES", palette("hide-all", None)).title("Hide Palettes").desc("Hides all currently displayed palettes (including the command line).").transparent().once());
     r.define(def("Utilities", "SHOWPALETTES", palette("show-all", None)).title("Restore Palettes").desc("Restores the display of hidden palettes.").transparent().once());
+    r.define(def("Blocks", "BLOCKPALETTE", palette("blocks", Some(true))).title("Blocks Palette").icon("block").desc("Opens the palette that lists the blocks of the drawing; click one to insert it.").transparent().once());
     r.define(def("Utilities", "WORKSPACE", run(workspace)).title("Workspace").icon("gear").desc("Creates, modifies, and saves workspaces and makes a workspace current.").transparent());
 }

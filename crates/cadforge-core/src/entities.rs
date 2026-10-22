@@ -91,6 +91,12 @@ pub struct InsertData {
     /// Attribute values of this reference (ATTRIB), positioned in world coordinates.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attribs: Vec<AttribData>,
+    /// XCLIP boundary in world coordinates (convex): only what lies inside is displayed and plotted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clip: Vec<Pt>,
+    /// The boundary is kept but switched off (XCLIP OFF).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clip_off: bool,
 }
 
 /// One attribute instance of a block reference.
@@ -372,7 +378,7 @@ impl Entity {
         Entity::new(Kind::Hatch(HatchData { loops, pattern: pattern.into(), ps: 1.0, pa: 0.0, gradient: None }))
     }
     pub fn insert(name: &str, p: Pt) -> Entity {
-        Entity::new(Kind::Insert(InsertData { name: name.into(), p, sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![] }))
+        Entity::new(Kind::Insert(InsertData { name: name.into(), p, sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![], clip: vec![], clip_off: false }))
     }
     pub fn xline(p: Pt, d: Pt) -> Entity {
         Entity::new(Kind::Xline { p, d: unit(d) })
@@ -1087,6 +1093,9 @@ pub fn transform_entity(e: &mut Entity, m: &Mat) {
         }
         Kind::Insert(i) => {
             i.p = mp(i.p);
+            for q in i.clip.iter_mut() {
+                *q = mp(*q);
+            }
             if flip {
                 i.rot = norm_angle(theta - i.rot);
                 i.sx *= k;
@@ -1254,6 +1263,9 @@ pub fn stretch_entity(e: &mut Entity, win: &Bounds, d: Pt, doc: &Drawing) -> boo
         Kind::Insert(i) => {
             if inside(i.p) {
                 mv(&mut i.p);
+                for q in i.clip.iter_mut() {
+                    mv(q);
+                }
                 true
             } else {
                 false

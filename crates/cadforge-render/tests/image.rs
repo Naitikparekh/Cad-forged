@@ -174,3 +174,34 @@ fn pdf_embeds_the_picture_and_a_viewer_draws_it() {
         assert!(close(*g, *want), "poppler drew {g:?} at {p:?}, expected {want:?}");
     }
 }
+
+#[test]
+fn a_clipped_block_reference_draws_only_inside_its_boundary() {
+    let mut d = Drawing::new("xclip");
+    d.define_block("RULER", pt(0.0, 0.0), vec![Entity::line(pt(0.0, 0.0), pt(100.0, 0.0)), Entity::circle(pt(50.0, 0.0), 10.0)]);
+    let mut ins = Entity::insert("RULER", pt(0.0, 0.0));
+    if let Kind::Insert(i) = &mut ins.kind {
+        i.clip = vec![pt(20.0, -5.0), pt(40.0, -5.0), pt(40.0, 5.0), pt(20.0, 5.0)];
+    }
+    d.add(ins);
+    let mut v = View::new();
+    v.w = 800.0;
+    v.h = 400.0;
+    v.fit(Some(Bounds::new(0.0, -20.0, 100.0, 20.0)), 0.05);
+    let ops = render_scene(&d, &v, 800.0, 400.0, Theme::DARK, Prefs { grid: false, ucs_icon: false, ..Prefs::default() }, &Highlight::default(), None);
+    let (lo, hi) = (v.to_screen(pt(20.0, 0.0)).x - 0.01, v.to_screen(pt(40.0, 0.0)).x + 0.01);
+    let mut drawn = 0;
+    for o in &ops {
+        if let Op::Stroke { paths, color, .. } = o {
+            // block geometry is drawn in the layer colour; skip anything outside the strip the test looks at
+            for p in paths.iter().filter(|p| p.pts.iter().all(|q| q[1] > v.to_screen(pt(0.0, 6.0)).y - 1.0 && q[1] < v.to_screen(pt(0.0, -6.0)).y + 1.0)) {
+                let _ = color;
+                for q in &p.pts {
+                    assert!(q[0] >= lo && q[0] <= hi, "stroke point at x={} outside [{lo}, {hi}]", q[0]);
+                }
+                drawn += 1;
+            }
+        }
+    }
+    assert!(drawn >= 1, "the part inside the boundary is drawn");
+}

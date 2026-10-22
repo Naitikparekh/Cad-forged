@@ -142,8 +142,74 @@ async fn bclose(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
     Ok(())
 }
 
+/// The block this editor tab edits and the drawing it belongs to.
+fn current_session(c: &Ctx, sessions: &Sessions) -> Option<(u64, String)> {
+    let here = c.ed(|e| e.id);
+    let found = sessions.borrow().iter().find(|s| s.editor == here).map(|s| (s.parent, s.block.clone()));
+    found
+}
+
+/// BSAVE: write the edited block back without closing the editor.
+async fn bsave(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
+    let Some((parent, block)) = current_session(&c, &sessions) else {
+        c.log_error("BSAVE works in a Block Editor tab; open one with BEDIT.");
+        return Ok(());
+    };
+    let (entities, blocks, layers) = c.doc(|d| (d.model.entities.clone(), d.blocks.clone(), d.layers.clone()));
+    let saved = c.app(|a| a.editors.iter_mut().find(|e| e.id == parent).map(|e| write_back(&mut e.doc, &block, &entities, &blocks, &layers)));
+    match saved {
+        Some(()) => {
+            c.doc_mut(|d| d.dirty = false);
+            c.log(&format!("Block \"{block}\" saved."));
+        }
+        None => c.log_error("The drawing this block came from is closed."),
+    }
+    Ok(())
+}
+
+/// BSAVEAS: save the edited content under a new block name (the block being edited is not changed).
+async fn bsaveas(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
+    let Some((parent, block)) = current_session(&c, &sessions) else {
+        c.log_error("BSAVEAS works in a Block Editor tab; open one with BEDIT.");
+        return Ok(());
+    };
+    let name = c.string(ps("Enter new block name")).await?.text.trim().to_string();
+    if name.is_empty() || name.starts_with('*') || name.contains(['|', ',', '=']) {
+        c.log_error("A block name cannot be empty, start with * or contain | , or =.");
+        return Ok(());
+    }
+    let (entities, layers) = c.doc(|d| (d.model.entities.clone(), d.layers.clone()));
+    let result = c.app(|a| {
+        a.editors.iter_mut().find(|e| e.id == parent).map(|e| {
+            if e.doc.blocks.keys().any(|n| n.eq_ignore_ascii_case(&name)) {
+                return Err(());
+            }
+            let base = e.doc.blocks.get(&block).map_or(Pt::ZERO, |b| b.base);
+            e.doc.checkpoint("BSAVEAS");
+            e.doc.change(|p| {
+                for l in &layers {
+                    if p.layer(&l.name).is_none() {
+                        p.layers.push(l.clone());
+                    }
+                }
+                p.define_block(&name, base, transformed_clones(&entities, &mat::translate(base.x, base.y)));
+            });
+            Ok(())
+        })
+    });
+    match result {
+        Some(Ok(())) => c.log(&format!("Block \"{block}\" saved as \"{name}\".")),
+        Some(Err(())) => c.log_error(&format!("A block named \"{name}\" already exists.")),
+        None => c.log_error("The drawing this block came from is closed."),
+    }
+    Ok(())
+}
+
 pub(super) fn register(r: &mut Registry) {
     let sessions = Sessions::default();
+    let (save, save_as) = (sessions.clone(), sessions.clone());
+    r.define(db("BSAVE", run(move |c, a| bsave(c, a, save.clone()))).title("Save Block").icon("block").desc("Saves the current block definition in the Block Editor.").once());
+    r.define(db("BSAVEAS", run(move |c, a| bsaveas(c, a, save_as.clone()))).title("Save Block As").icon("block").desc("Saves a copy of the current block definition under a new name.").once());
     let open = sessions.clone();
     r.define(db("BEDIT", run(move |c, a| bedit(c, a, open.clone()))).aliases(&["BE"]).title("Block Editor").icon("block").desc("Opens a block definition in the Block Editor."));
     r.define(db("BCLOSE", run(move |c, a| bclose(c, a, sessions.clone()))).title("Close Block Editor").icon("block").desc("Closes the Block Editor and saves the block definition."));

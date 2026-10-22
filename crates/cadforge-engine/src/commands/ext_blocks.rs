@@ -12,6 +12,8 @@ use std::collections::HashSet;
 
 mod attrs;
 mod bedit;
+mod refedit;
+mod xclip;
 mod xref;
 
 pub use attrs::fill_attributes;
@@ -75,5 +77,7 @@ pub fn register(r: &mut Registry) {
     r.define(db("BASE", run(base)).title("Base").icon("block").desc("Sets the insertion base point for the current drawing."));
     attrs::register(r);
     bedit::register(r);
+    refedit::register(r);
+    xclip::register(r);
     xref::register(r);
 }

@@ -65,6 +65,8 @@ impl CadForgeApp {
             }
             "SCRIPT" => self.open_files(ctx, "script"),
             "IMAGEATTACH" => self.open_files(ctx, "image"),
+            "APPLOAD" => self.open_files(ctx, "lisp"),
+            "VLISP" => self.dialog = Some(Dialog::vlisp()),
             "WORKSPACE" => {
                 if let Some(n) = args.str("name") {
                     self.set_workspace(n);
@@ -106,6 +108,7 @@ impl CadForgeApp {
             let accept = match purpose {
                 "script" => ".scr,.txt",
                 "image" => ".png,.jpg,.jpeg",
+                "lisp" => ".lsp,.scr,.txt",
                 _ => ".json,.cadforge,.dxf",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
@@ -142,6 +145,16 @@ impl CadForgeApp {
                     Ok(src) => self.import_into_current(&p.name, src),
                     Err(e) => self.h.borrow_mut().log(&format!("Could not import {}: {e}", p.name), "error"),
                 },
+                "lisp" => {
+                    if p.name.to_lowercase().ends_with(".scr") {
+                        let lines: Vec<String> = text.lines().map(str::to_string).collect();
+                        self.h.borrow_mut().queue_script(lines);
+                    } else {
+                        self.h.borrow_mut().log(&format!("Loading {}...", p.name), "info");
+                        self.run_command("_LISP", Args::none().with("source", cadforge_engine::runtime::ArgVal::Str(text.clone())));
+                    }
+                    self.h.pump();
+                }
                 "script" => {
                     let lines: Vec<String> = text.lines().map(str::to_string).collect();
                     self.h.borrow_mut().log(&format!("Running script ({} lines)", lines.len()), "info");
