@@ -116,3 +116,24 @@ fn a_hundred_thousand_entities_still_redraw_interactively() {
     println!("PERF 100k entities: steady frame {steady:?} ({} ops)", ops.len());
     assert!(steady.as_secs_f64() < 3.0, "steady frame {steady:?}");
 }
+
+#[test]
+fn a_zoomed_in_frame_of_a_hundred_thousand_entities_only_touches_what_is_on_screen() {
+    let d = big_drawing(100_000);
+    let v = full_view(&d);
+    let full = render_scene(&d, &v, v.w, v.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
+    // zoom in on a small part: roughly 1/1600 of the drawing is visible
+    let mut z = v.clone();
+    z.scale *= 40.0;
+    let _ = render_scene(&d, &z, z.w, z.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
+    let t = Instant::now();
+    let n = 20;
+    let mut ops = vec![];
+    for _ in 0..n {
+        ops = render_scene(&d, &z, z.w, z.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
+    }
+    let per_frame = t.elapsed() / n;
+    println!("PERF 100k zoomed frame: {per_frame:?} ({} ops, full view {} ops)", ops.len(), full.len());
+    assert!(ops.len() < full.len() / 50, "only a small part is drawn");
+    assert!(per_frame.as_secs_f64() < 0.060, "zoomed frame {per_frame:?}");
+}

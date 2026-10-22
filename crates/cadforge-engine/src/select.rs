@@ -30,7 +30,8 @@ pub fn pick_at_locked(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Op
     let mut best: Option<u64> = None;
     let mut best_score = f64::INFINITY;
     let win = Bounds::new(p.x - ap, p.y - ap, p.x + ap, p.y + ap);
-    for e in doc.entities() {
+    let ents = doc.entities();
+    for e in doc.candidates(&win).into_iter().map(|i| &ents[i]) {
         if !(doc.is_visible(e) && (locked_ok || !doc.is_locked(e))) || !passes(filter, e) || exclude.is_some_and(|x| x.contains(&e.id)) {
             continue;
         }
@@ -56,7 +57,8 @@ pub fn pick_at_locked(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Op
 pub fn pick_all(doc: &Drawing, p: Pt, ap: f64, filter: Filter) -> Vec<u64> {
     let mut list: Vec<(u64, f64)> = vec![];
     let win = Bounds::new(p.x - ap, p.y - ap, p.x + ap, p.y + ap);
-    for e in doc.entities() {
+    let ents = doc.entities();
+    for e in doc.candidates(&win).into_iter().map(|i| &ents[i]) {
         if !selectable(doc, e) || !passes(filter, e) {
             continue;
         }
@@ -78,7 +80,9 @@ pub fn rect_of(a: Pt, b: Pt) -> Bounds {
 
 /// Window (fully inside) or crossing (touching) selection.
 pub fn select_rect(doc: &Drawing, rect: &Bounds, crossing: bool, filter: Filter) -> Vec<u64> {
-    doc.entities().iter().filter(|e| selectable(doc, e) && passes(filter, e) && if crossing { crosses_rect(e, rect, doc) } else { in_window(e, rect, doc) }).map(|e| e.id).collect()
+    // an entity that is inside or touches the rectangle has bounds that overlap it, so only those few need testing
+    let ents = doc.entities();
+    doc.candidates(rect).into_iter().map(|i| &ents[i]).filter(|e| selectable(doc, e) && passes(filter, e) && if crossing { crosses_rect(e, rect, doc) } else { in_window(e, rect, doc) }).map(|e| e.id).collect()
 }
 
 fn sample_points(e: &Entity, doc: &Drawing) -> Vec<Pt> {
@@ -132,7 +136,9 @@ fn crosses_path(e: &Entity, doc: &Drawing, edges: &[Seg]) -> bool {
 pub fn select_polygon(doc: &Drawing, poly: &[Pt], crossing: bool, filter: Filter) -> Vec<u64> {
     let edges = poly_edges(poly, true);
     let mut out = vec![];
-    for e in doc.entities() {
+    let ents = doc.entities();
+    let reach = Bounds::of_points(poly);
+    for e in doc.candidates(&reach).into_iter().map(|i| &ents[i]) {
         if !selectable(doc, e) || !passes(filter, e) {
             continue;
         }
@@ -153,7 +159,9 @@ pub fn select_polygon(doc: &Drawing, poly: &[Pt], crossing: bool, filter: Filter
 /// Fence: entities crossed by an open polyline.
 pub fn select_fence(doc: &Drawing, pts: &[Pt], filter: Filter) -> Vec<u64> {
     let edges = poly_edges(pts, false);
-    doc.entities().iter().filter(|e| selectable(doc, e) && passes(filter, e) && crosses_path(e, doc, &edges)).map(|e| e.id).collect()
+    let ents = doc.entities();
+    let reach = Bounds::of_points(pts);
+    doc.candidates(&reach).into_iter().map(|i| &ents[i]).filter(|e| selectable(doc, e) && passes(filter, e) && crosses_path(e, doc, &edges)).map(|e| e.id).collect()
 }
 
 #[cfg(test)]

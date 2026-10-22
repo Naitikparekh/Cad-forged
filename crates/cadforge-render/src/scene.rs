@@ -908,7 +908,7 @@ impl<'a> Renderer<'a> {
             let inv = mat::invert(&sub.world);
             let vis = Bounds::of_points(&outline.iter().map(|q| mat::apply(&inv, pt(q[0], q[1]))).collect::<Vec<_>>()).grow(1.0);
             let plotting = matches!(self.lw_mode, LwMode::Plot(_));
-            for me in &doc.model.entities {
+            for me in doc.candidates_in(cadforge_core::drawing::MODEL, &vis).into_iter().map(|i| &doc.model.entities[i]) {
                 if !doc.is_visible_in_sheet(me) || (plotting && !doc.layer_of(me).plot) || v.is_frozen(&doc.layer_of(me).name) {
                     continue;
                 }
@@ -926,7 +926,10 @@ impl<'a> Renderer<'a> {
     pub fn draw_entities(&mut self, hl: &Highlight) {
         let doc = self.doc;
         let plan = self.view.is_plan();
-        for e in doc.entities() {
+        let ents = doc.entities();
+        // only what can be on screen (in drawing order); other views draw everything
+        let order: Vec<usize> = if plan { doc.candidates(&self.visible_world()) } else { (0..ents.len()).collect() };
+        for e in order.into_iter().map(|i| &ents[i]) {
             if !doc.is_visible(e) {
                 continue;
             }

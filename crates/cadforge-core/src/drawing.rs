@@ -225,6 +225,8 @@ pub struct Caches {
     pub bounds: HashMap<u64, Option<crate::geom::Bounds>>,
     pub hatch: HashMap<u64, Option<Rc<Vec<[f64; 4]>>>>,
     pub snaps: HashMap<u64, Rc<Vec<crate::entities::SnapPt>>>,
+    /// Spatial index per space (the name is the key); built on first use after a change.
+    pub spatial: HashMap<String, Rc<crate::spatial::SpatialIndex>>,
 }
 
 pub struct Drawing {
@@ -388,6 +390,32 @@ impl Drawing {
     /// Entities of the active space.
     pub fn entities(&self) -> &Vec<Entity> {
         self.space_entities(&self.space)
+    }
+
+    /// Positions in [`Drawing::entities`] of the entities that may overlap `win`, in drawing order. Entities without
+    /// bounds (construction lines) are always included, and so may be others that do not overlap: callers still test
+    /// the entities they get. Small drawings simply return every position.
+    pub fn candidates(&self, win: &crate::geom::Bounds) -> Vec<usize> {
+        self.candidates_in(&self.space, win)
+    }
+
+    /// [`Drawing::candidates`] for any space (`model` or a layout name).
+    pub fn candidates_in(&self, space: &str, win: &crate::geom::Bounds) -> Vec<usize> {
+        let ents = self.space_entities(space);
+        if ents.len() < crate::spatial::MIN_ENTITIES {
+            return (0..ents.len()).collect();
+        }
+        let key = if space != MODEL && self.layouts.iter().any(|l| l.name == space) { space } else { MODEL };
+        let cached = self.caches.borrow().spatial.get(key).cloned();
+        let idx = match cached {
+            Some(i) if i.len() == ents.len() => i,
+            _ => {
+                let i = Rc::new(crate::spatial::SpatialIndex::build(ents.len(), |k| crate::entities::bounds_of(&ents[k], self)));
+                self.caches.borrow_mut().spatial.insert(key.to_string(), i.clone());
+                i
+            }
+        };
+        idx.candidates(win)
     }
 
     pub fn space_entities(&self, id: &str) -> &Vec<Entity> {

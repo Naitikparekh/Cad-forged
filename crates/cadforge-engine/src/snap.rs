@@ -256,7 +256,8 @@ impl Snapper {
         let mask = o.osmask;
         let win = Bounds::new(raw.x - ap, raw.y - ap, raw.x + ap, raw.y + ap);
         let mut near = vec![];
-        for e in doc.entities() {
+        let ents = doc.entities();
+        for e in doc.candidates(&win).into_iter().map(|i| &ents[i]) {
             if !doc.is_visible(e) {
                 continue;
             }

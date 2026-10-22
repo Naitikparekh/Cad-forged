@@ -11,6 +11,7 @@ pub mod plotstyle;
 pub mod ops;
 pub mod sample;
 pub mod solid;
+pub mod spatial;
 pub mod style;
 pub mod text;
 pub mod view;
