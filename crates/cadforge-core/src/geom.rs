@@ -581,18 +581,31 @@ pub fn tangent_centres(s1: &Seg, s2: &Seg, r: f64) -> Vec<Pt> {
 
 // ---------------------------------------------------------------- polylines
 
-/// A polyline vertex with the bulge of the edge that starts here.
+fn is_zero(x: &f64) -> bool {
+    *x == 0.0
+}
+
+/// A polyline vertex with the bulge and the start / end widths of the edge that starts here.
 #[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Vertex {
     pub x: f64,
     pub y: f64,
     #[serde(default)]
     pub b: f64,
+    /// Width at the start / end of the edge that starts at this vertex (0 = a plain line).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sw: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ew: f64,
 }
 
 impl Vertex {
     pub fn new(x: f64, y: f64, b: f64) -> Vertex {
-        Vertex { x, y, b }
+        Vertex { x, y, b, sw: 0.0, ew: 0.0 }
+    }
+    /// A vertex whose outgoing edge tapers from `sw` to `ew`.
+    pub fn wide(x: f64, y: f64, b: f64, sw: f64, ew: f64) -> Vertex {
+        Vertex { x, y, b, sw, ew }
     }
     pub fn pt(&self) -> Pt {
         pt(self.x, self.y)
@@ -601,8 +614,61 @@ impl Vertex {
 
 impl From<Pt> for Vertex {
     fn from(p: Pt) -> Vertex {
-        Vertex { x: p.x, y: p.y, b: 0.0 }
+        Vertex::new(p.x, p.y, 0.0)
     }
+}
+
+/// Does any edge of the polyline have a width?
+pub fn pline_is_wide(v: &[Vertex]) -> bool {
+    v.iter().any(|q| q.sw != 0.0 || q.ew != 0.0)
+}
+
+/// Largest width on the polyline.
+pub fn pline_max_width(v: &[Vertex]) -> f64 {
+    v.iter().fold(0.0, |m, q| m.max(q.sw.abs()).max(q.ew.abs()))
+}
+
+/// Filled outlines (world coordinates) of the wide edges of a polyline, plus bevel triangles that close the gaps at
+/// the corners between two wide edges. A polyline without widths gives nothing.
+pub fn pline_outline(v: &[Vertex], closed: bool) -> Vec<Vec<Pt>> {
+    if v.len() < 2 || !pline_is_wide(v) {
+        return vec![];
+    }
+    let segs = pline_segs(v, closed);
+    let mut out = vec![];
+    // the four corners of every wide edge: left / right at the start, left / right at the end
+    let mut ends: Vec<Option<[Pt; 4]>> = vec![None; segs.len()];
+    for (i, s) in segs.iter().enumerate() {
+        let (w0, w1) = (v[i].sw.max(0.0), v[i].ew.max(0.0));
+        if (w0 <= 0.0 && w1 <= 0.0) || s.length() < 1e-12 {
+            continue;
+        }
+        let steps = match s {
+            Seg::L { .. } => 1,
+            Seg::A { sw, .. } => ((sw.abs() / (PI / 18.0)).ceil() as usize).clamp(2, 72),
+        };
+        let (mut left, mut right) = (Vec::with_capacity(steps + 1), Vec::with_capacity(steps + 1));
+        for k in 0..=steps {
+            let t = k as f64 / steps as f64;
+            let (p, tan) = (s.at(t), s.tangent(t));
+            let (n, hw) = (pt(-tan.y, tan.x), (w0 + (w1 - w0) * t) / 2.0);
+            left.push(p + n * hw);
+            right.push(p - n * hw);
+        }
+        ends[i] = Some([left[0], right[0], left[steps], right[steps]]);
+        right.reverse();
+        left.extend(right);
+        out.push(left);
+    }
+    for i in 0..segs.len() {
+        let j = if i + 1 < segs.len() { i + 1 } else if closed { 0 } else { continue };
+        if let (Some(a), Some(b)) = (ends[i], ends[j]) {
+            let corner = segs[i].end();
+            out.push(vec![corner, a[2], b[0]]);
+            out.push(vec![corner, a[3], b[1]]);
+        }
+    }
+    out
 }
 
 /// Segments of a bulge polyline.

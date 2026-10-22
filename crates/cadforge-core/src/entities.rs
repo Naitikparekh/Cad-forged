@@ -849,6 +849,11 @@ fn compute_bounds(e: &Entity, doc: &Drawing) -> Option<Bounds> {
             b = Bounds::union_opt(b, Some(Bounds::of_points(&[a.tip])));
         }
     }
+    if let Kind::Pline { v, closed } = &e.kind {
+        for poly in pline_outline(v, *closed) {
+            b = Bounds::union_opt(b, Some(Bounds::of_points(&poly)));
+        }
+    }
     b
 }
 
@@ -881,6 +886,12 @@ pub fn pick_distance(e: &Entity, p: Pt, doc: &Drawing) -> f64 {
     if let Kind::Image(im) = &e.kind {
         // a picture is picked anywhere on its visible area, not only on the frame
         if point_in_polygon(p, &im.boundary()) {
+            return 0.0;
+        }
+    }
+    if let Kind::Pline { v, closed } = &e.kind {
+        // a wide polyline is picked anywhere on its drawn area
+        if pline_outline(v, *closed).iter().any(|poly| point_in_polygon(p, poly)) {
             return 0.0;
         }
     }
@@ -997,11 +1008,14 @@ pub fn decompose(m: &Mat) -> Decomp {
 }
 
 fn flip_verts(v: &mut [Vertex], m: &Mat, flip: bool) {
+    let k = mat::scale_factor(m);
     for q in v.iter_mut() {
         let p = mat::apply(m, q.pt());
         q.x = p.x;
         q.y = p.y;
         q.b = if flip { -q.b } else { q.b };
+        q.sw *= k;
+        q.ew *= k;
     }
 }
 

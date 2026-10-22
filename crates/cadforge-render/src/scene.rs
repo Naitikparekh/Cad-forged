@@ -323,6 +323,12 @@ impl<'a> Renderer<'a> {
                 if let Some(paths) = self.trace_entity(e) {
                     self.stroke(paths, style, o.selected, o.hover, 0.0);
                 }
+                if let Kind::Pline { v, closed } = &e.kind {
+                    // widths are drawn as filled outlines on top of the centre line
+                    for poly in pline_outline(v, *closed) {
+                        self.fill_poly(&poly, style);
+                    }
+                }
             }
             Kind::Point { p } => self.draw_point(*p, style, o.selected, o.hover),
             Kind::Text(t) if t.att.is_some() => {

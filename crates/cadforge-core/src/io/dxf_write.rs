@@ -280,6 +280,9 @@ impl<'a> W<'a> {
         o.out.i(90, verts.len() as i64).i(70, closed as i64).n(43, 0.0);
         for v in verts {
             o.out.n(10, v.x).n(20, v.y);
+            if v.sw != 0.0 || v.ew != 0.0 {
+                o.out.n(40, v.sw).n(41, v.ew);
+            }
             if v.b != 0.0 {
                 o.out.n(42, v.b);
             }
@@ -398,7 +401,7 @@ impl<'a> W<'a> {
                 }
             }
             Kind::Wipeout(w) => {
-                let v: Vec<Vertex> = w.pts.iter().map(|p| Vertex { x: p.x, y: p.y, b: 0.0 }).collect();
+                let v: Vec<Vertex> = w.pts.iter().map(|p| Vertex::new(p.x, p.y, 0.0)).collect();
                 if v.len() >= 3 {
                     self.lwpoly(o, &v, true, &props);
                 }

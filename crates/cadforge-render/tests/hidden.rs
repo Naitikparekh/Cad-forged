@@ -24,3 +24,15 @@ fn hidden_objects_are_not_drawn_until_they_are_shown_again() {
     d.touch();
     assert_eq!(stroke_count(&d), all);
 }
+
+#[test]
+fn wide_polylines_are_drawn_as_filled_outlines() {
+    let fills = |d: &Drawing| render_scene(d, &View::default(), 800.0, 600.0, Theme::DARK, Prefs::default(), &Highlight::default(), None).iter().filter(|o| matches!(o, Op::Fill { .. })).count();
+    let mut plain = Drawing::new("t");
+    plain.add(Entity::pline(vec![Vertex::new(0., 0., 0.), Vertex::new(10., 0., 0.), Vertex::new(10., 5., 0.)], false));
+    let mut wide = Drawing::new("t");
+    wide.add(Entity::pline(vec![Vertex::wide(0., 0., 0., 2.0, 2.0), Vertex::wide(10., 0., 0., 2.0, 2.0), Vertex::new(10., 5., 0.)], false));
+    // (the scene always has a few fills of its own, such as the UCS icon's arrow heads)
+    // two edges and the corner between them (two bevel triangles)
+    assert_eq!(fills(&wide) - fills(&plain), 4);
+}

@@ -626,12 +626,33 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
         "POINT" => push(Entity::point(r.pt(0)), false, &mut out),
         "LWPOLYLINE" => {
             let mut verts: Vec<Vertex> = vec![];
+            // group 43 is the width of every edge that has no widths of its own
+            let constant = r.num(43, 0.0);
+            let mut own: Vec<bool> = vec![];
             for (c, v) in &r.g {
                 match *c {
-                    10 => verts.push(Vertex::new(parse_f(v), 0.0, 0.0)),
+                    10 => {
+                        verts.push(Vertex::wide(parse_f(v), 0.0, 0.0, constant, constant));
+                        own.push(false);
+                    }
                     20 => {
                         if let Some(l) = verts.last_mut() {
                             l.y = parse_f(v);
+                        }
+                    }
+                    40 | 41 => {
+                        if let (Some(l), Some(o)) = (verts.last_mut(), own.last_mut()) {
+                            if !*o {
+                                // the first width given for this vertex replaces the constant; a missing one is 0
+                                l.sw = 0.0;
+                                l.ew = 0.0;
+                                *o = true;
+                            }
+                            if *c == 40 {
+                                l.sw = parse_f(v);
+                            } else {
+                                l.ew = parse_f(v);
+                            }
                         }
                     }
                     42 => {
@@ -649,7 +670,9 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
         "POLYLINE" => {
             let flags = r.int(70, 0);
             if flags & (16 | 64) == 0 {
-                let verts: Vec<Vertex> = r.vertices.iter().filter(|v| v.int(70, 0) & 16 == 0).map(|v| Vertex::new(v.num(10, 0.0), v.num(20, 0.0), v.num(42, 0.0))).collect();
+                // the header carries the default start / end widths of every vertex
+                let (dsw, dew) = (r.num(40, 0.0), r.num(41, 0.0));
+                let verts: Vec<Vertex> = r.vertices.iter().filter(|v| v.int(70, 0) & 16 == 0).map(|v| Vertex::wide(v.num(10, 0.0), v.num(20, 0.0), v.num(42, 0.0), v.num(40, dsw), v.num(41, dew))).collect();
                 if verts.len() > 1 {
                     push(Entity::pline(verts, flags & 1 == 1), true, &mut out);
                 }

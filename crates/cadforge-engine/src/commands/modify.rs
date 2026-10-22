@@ -1124,7 +1124,7 @@ async fn pedit(c: Ctx, args: Args) -> CmdResult<()> {
     loop {
         let Some(cur) = c.entity_by_id(id) else { return Ok(()) };
         let closed = matches!(cur.kind, Kind::Pline { closed: true, .. });
-        let opts = [if closed { "Open" } else { "Close" }, "Join", "Reverse", "Undo"];
+        let opts = [if closed { "Open" } else { "Close" }, "Join", "Width", "Reverse", "Undo"];
         let r = c.keyword(ps("Enter an option").options(&opts).allow_enter()).await?;
         match r.kw() {
             None => return Ok(()),
@@ -1132,12 +1132,34 @@ async fn pedit(c: Ctx, args: Args) -> CmdResult<()> {
                 let v = r.kw() == Some("Close");
                 c.doc_mut(|d| d.change(|d| set_closed(d, id, v)));
             }
+            Some("Width") => {
+                let w = c.distance(ps("Specify new width for all segments").default_num(0.0).min(0.0)).await?;
+                let Some(w) = w.value() else { continue };
+                c.doc_mut(|d| {
+                    d.change(|d| {
+                        if let Some(Entity { kind: Kind::Pline { v, .. }, .. }) = d.by_id_mut(id) {
+                            for q in v.iter_mut() {
+                                q.sw = w;
+                                q.ew = w;
+                            }
+                        }
+                    })
+                });
+            }
             Some("Reverse") => {
                 let segs = c.doc(|d| segs_of(&cur, d).iter().rev().map(|s| s.reverse()).collect::<Vec<_>>());
-                let verts = match entity_from_segs(&segs, &cur, closed) {
+                let mut verts = match entity_from_segs(&segs, &cur, closed) {
                     Some(Entity { kind: Kind::Pline { v, .. }, .. }) => v,
                     _ => segs_to_verts(&segs, closed),
                 };
+                // the edges come back in reverse order and each one tapers the other way round
+                if let Kind::Pline { v: old, .. } = &cur.kind {
+                    let widths: Vec<(f64, f64)> = old.iter().take(if closed { old.len() } else { old.len() - 1 }).rev().map(|q| (q.ew, q.sw)).collect();
+                    for (q, w) in verts.iter_mut().zip(widths) {
+                        q.sw = w.0;
+                        q.ew = w.1;
+                    }
+                }
                 c.doc_mut(|d| {
                     d.change(|d| {
                         if let Some(Entity { kind: Kind::Pline { v, .. }, .. }) = d.by_id_mut(id) {

@@ -6,7 +6,7 @@
 objects	line-xline-ray	1	Lines, construction lines and rays	crates/cadforge-core/src/entities.rs::Xline \{ p: Pt ; crates/cadforge-engine/tests/draw.rs::(?i)xline	
 objects	circle-arc-ellipse	1	Circles, arcs, ellipses and elliptical arcs	crates/cadforge-core/src/entities.rs::Ellipse\(EllipseData\) ; crates/cadforge-engine/tests/draw.rs::(?i)ellipse|crates/cadforge-core/tests/corpus.rs::ellipse	
 objects	polyline	1	Polylines with arc segments, closed shapes, join and edit	crates/cadforge-core/src/entities.rs::Pline \{ ; crates/cadforge-engine/tests/ext_modify.rs::PEDIT	
-objects	polyline-width	0	Polylines with start / end widths		Vertex carries x, y and bulge only
+objects	polyline-width	1	Polylines with start / end widths	crates/cadforge-core/src/geom.rs::pub fn pline_outline ; crates/cadforge-core/tests/pline_width.rs::a_uniform_edge ; crates/cadforge-engine/tests/pline_width.rs::width_sets_the_taper ; crates/cadforge-core/tests/corpus.rs::polyline_widths_arrive	
 objects	spline	0.5	Splines (fit points, control vertices, weights, knots)	crates/cadforge-core/src/entities.rs::Spline \{ fit	fit-point splines only: no control vertices, weights or knots
 objects	point	1	Points with PDMODE / PDSIZE styles	crates/cadforge-core/src/style.rs::pdmode	
 objects	text	0.75	Single-line text and multiline text with width	crates/cadforge-core/src/text.rs::multi	MTEXT supports \P paragraphs only: no inline bold, colour, stacking or columns

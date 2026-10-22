@@ -257,3 +257,40 @@ fn raster_images_arrive_with_clip_and_adjustments() {
     assert_eq!(def.path, "site/aerial photo.jpg");
     assert!(def.is_missing());
 }
+
+#[test]
+fn polyline_widths_arrive_from_every_dxf_form() {
+    let d = load("pline-widths-R2018.dxf");
+    let plines: Vec<(&Vec<Vertex>, bool)> = d.model.entities.iter().filter_map(|e| if let Kind::Pline { v, closed } = &e.kind { Some((v, *closed)) } else { None }).collect();
+    assert_eq!(plines.len(), 4);
+    // per-vertex start / end widths (groups 40 / 41)
+    let (v, _) = plines[0];
+    assert_eq!((v[0].sw, v[0].ew, v[1].sw, v[1].ew, v[2].sw), (2.0, 6.0, 6.0, 6.0, 0.0));
+    // the constant width (group 43) applies to every edge that has none of its own
+    assert!(plines[1].0.iter().all(|q| q.sw == 4.0 && q.ew == 4.0));
+    // the heavy POLYLINE's header holds the default widths
+    assert!(plines[2].0.iter().all(|q| q.sw == 1.0 && q.ew == 3.0), "{:?}", plines[2].0);
+    // widths and bulges together on a closed polyline
+    let (v, closed) = plines[3];
+    assert!(closed);
+    assert_eq!((v[1].sw, v[1].ew, v[1].b), (1.0, 3.0, 0.5));
+}
+
+#[test]
+fn polyline_widths_survive_our_writer_and_the_ezdxf_audit() {
+    let d = load("pline-widths-R2018.dxf");
+    let text = write_dxf(&d);
+    let back = cadforge_core::io::read_dxf(&text, "w.dxf").unwrap();
+    let widths = |d: &Drawing| -> Vec<Vec<(f64, f64)>> { d.model.entities.iter().filter_map(|e| if let Kind::Pline { v, .. } = &e.kind { Some(v.iter().map(|q| (q.sw, q.ew)).collect()) } else { None }).collect() };
+    assert_eq!(widths(&back), widths(&d));
+    if !have_ezdxf() {
+        eprintln!("ezdxf not installed; skipping the audit");
+        return;
+    }
+    let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("rt-pline-widths.dxf");
+    std::fs::write(&out, text).unwrap();
+    let script = "import sys, ezdxf\nfrom ezdxf import recover\ndoc, aud = recover.readfile(sys.argv[1])\nassert not aud.has_errors, [e.message for e in aud.errors][:5]\nws = [tuple((float(p[2]), float(p[3])) for p in e.get_points('xyseb')) for e in doc.modelspace() if e.dxftype() == 'LWPOLYLINE']\nprint(ws[0])";
+    let r = Command::new("python3").args(["-I", "-c", script, out.to_str().unwrap()]).output().unwrap();
+    assert!(r.status.success(), "{}{}", String::from_utf8_lossy(&r.stdout), String::from_utf8_lossy(&r.stderr));
+    assert!(String::from_utf8_lossy(&r.stdout).contains("(2.0, 6.0), (6.0, 6.0), (0.0, 0.0)"), "{}", String::from_utf8_lossy(&r.stdout));
+}

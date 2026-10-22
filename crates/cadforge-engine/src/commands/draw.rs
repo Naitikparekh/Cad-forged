@@ -5,6 +5,7 @@ use super::{def, run};
 use crate::ctx::*;
 use crate::registry::Registry;
 use crate::runtime::*;
+use crate::sysvars::fmt_num;
 use cadforge_core::entities::*;
 use cadforge_core::geom::*;
 use cadforge_core::ops::fillet::{chamfer_pline, fillet_pline};
@@ -88,6 +89,8 @@ fn arc_bulge(mode: &ArcMode, p0: Pt, p1: Pt) -> Option<f64> {
 struct PlineState {
     verts: Vec<Vertex>,
     dir: Pt,
+    /// Start / end width of the next edge; after an edge the ending width carries on as the uniform width.
+    w: (f64, f64),
 }
 
 impl PlineState {
@@ -95,18 +98,42 @@ impl PlineState {
         let v = self.verts.last().expect("a vertex");
         pt(v.x, v.y)
     }
+    /// The vertices with the pending edge's widths on the last one (what the rubber band shows).
+    fn snapshot(&self) -> Vec<Vertex> {
+        let mut v = self.verts.clone();
+        if let Some(l) = v.last_mut() {
+            l.sw = self.w.0;
+            l.ew = self.w.1;
+        }
+        v
+    }
     fn push(&mut self, p: Pt, bulge: f64) {
         let n = self.verts.len();
         self.verts[n - 1].b = bulge;
+        self.verts[n - 1].sw = self.w.0;
+        self.verts[n - 1].ew = self.w.1;
+        self.w = (self.w.1, self.w.1);
         self.verts.push(Vertex::new(p.x, p.y, 0.0));
         let prev = self.verts[n - 1];
         self.dir = if bulge != 0.0 { bulge_seg(prev.pt(), p, bulge).tangent(1.0) } else { unit(p - prev.pt()) };
     }
 }
 
+/// PLINE Width / Halfwidth: ask for the starting and ending width of the next edge.
+async fn ask_pline_width(c: &Ctx, half: bool, cur: (f64, f64)) -> CmdResult<Option<(f64, f64)>> {
+    let k = if half { 2.0 } else { 1.0 };
+    let (kind, shown) = if half { ("half-width", cur.0 / 2.0) } else { ("width", cur.0) };
+    let a = c.number(ps(&format!("Specify starting {kind} <{}>", fmt_num(shown))).default_num(shown).min(0.0)).await?;
+    let Some(start) = a.value() else { return Ok(None) };
+    let b = c.number(ps(&format!("Specify ending {kind} <{}>", fmt_num(start))).default_num(start).min(0.0)).await?;
+    let Some(end) = b.value() else { return Ok(None) };
+    Ok(Some((start * k, end * k)))
+}
+
 async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
     let Some(p0) = c.point(ps("Specify start point")).await?.pt() else { return Ok(()) };
-    let mut st = PlineState { verts: vec![Vertex::new(p0.x, p0.y, 0.0)], dir: pt(1.0, 0.0) };
+    let w0 = c.pref("PLINEWID").max(0.0);
+    let mut st = PlineState { verts: vec![Vertex::new(p0.x, p0.y, 0.0)], dir: pt(1.0, 0.0), w: (w0, w0) };
     let (mut arc_mode, mut closed) = (false, false);
     loop {
         if !arc_mode {
@@ -114,8 +141,8 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
             if st.verts.len() > 2 {
                 opts.push("Close");
             }
-            opts.extend(["Length", "Undo"]);
-            let (cur, snapshot) = (st.cur(), st.verts.clone());
+            opts.extend(["Halfwidth", "Length", "Undo", "Width"]);
+            let (cur, snapshot) = (st.cur(), st.snapshot());
             let r = c.point(ps("Specify next point").options(&opts).base(cur).allow_enter().preview(move |_, p| pline_preview(&with_last_bulge(&snapshot, 0.0), p))).await?;
             match r.kw() {
                 Some("Arc") => {
@@ -123,6 +150,9 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                     continue;
                 }
                 Some("Close") => {
+                    let n = st.verts.len();
+                    st.verts[n - 1].sw = st.w.0;
+                    st.verts[n - 1].ew = st.w.1;
                     closed = true;
                     break;
                 }
@@ -131,9 +161,16 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                         st.verts.pop();
                         let n = st.verts.len();
                         st.verts[n - 1].b = 0.0;
+                        st.w = (st.verts[n - 1].sw, st.verts[n - 1].ew);
                         if n > 1 {
                             st.dir = unit(st.cur() - st.verts[n - 2].pt());
                         }
+                    }
+                    continue;
+                }
+                Some(k @ ("Width" | "Halfwidth")) => {
+                    if let Some(w) = ask_pline_width(&c, k == "Halfwidth", st.w).await? {
+                        st.w = w;
                     }
                     continue;
                 }
@@ -155,8 +192,8 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
             if st.verts.len() > 2 {
                 opts.push("CLose");
             }
-            opts.extend(["Direction", "Line", "Radius", "Second pt", "Undo"]);
-            let (cur, dir, snapshot) = (st.cur(), st.dir, st.verts.clone());
+            opts.extend(["Direction", "Halfwidth", "Line", "Radius", "Second pt", "Undo", "Width"]);
+            let (cur, dir, snapshot) = (st.cur(), st.dir, st.snapshot());
             let r = c
                 .point(ps("Specify endpoint of arc").options(&opts).base(cur).allow_enter().preview(move |_, p| pline_preview(&with_last_bulge(&snapshot, tangent_bulge(cur, dir, p)), p)))
                 .await?;
@@ -169,6 +206,8 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                     let b = tangent_bulge(st.cur(), st.dir, st.verts[0].pt());
                     let n = st.verts.len();
                     st.verts[n - 1].b = b;
+                    st.verts[n - 1].sw = st.w.0;
+                    st.verts[n - 1].ew = st.w.1;
                     closed = true;
                     break;
                 }
@@ -177,6 +216,13 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                         st.verts.pop();
                         let n = st.verts.len();
                         st.verts[n - 1].b = 0.0;
+                        st.w = (st.verts[n - 1].sw, st.verts[n - 1].ew);
+                    }
+                    continue;
+                }
+                Some(k @ ("Width" | "Halfwidth")) => {
+                    if let Some(w) = ask_pline_width(&c, k == "Halfwidth", st.w).await? {
+                        st.w = w;
                     }
                     continue;
                 }
@@ -184,7 +230,7 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                     let a = c.angle(ps("Specify included angle")).await?;
                     let Some(av) = a.value() else { continue };
                     let b = (av / 4.0).tan();
-                    let snapshot = st.verts.clone();
+                    let snapshot = st.snapshot();
                     let e = c.point(ps("Specify endpoint of arc").base(cur).preview(move |_, p| pline_preview(&with_last_bulge(&snapshot, b), p))).await?;
                     if let Some(p) = e.pt() {
                         st.push(p, b);
@@ -198,7 +244,7 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                         let (a0, a1) = (angle_of(cc, cur), angle_of(cc, p));
                         (polar(cc, a1, rad_), (sweep_ccw(a0, a1) / 4.0).tan())
                     };
-                    let snapshot = st.verts.clone();
+                    let snapshot = st.snapshot();
                     let e = c
                         .point(ps("Specify endpoint of arc").base(cc).preview(move |_, p| {
                             let (end, b) = calc(p);
@@ -214,7 +260,7 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                 Some("Direction") => {
                     let Some(d) = c.point(ps("Specify the tangent direction for the start point of the arc").base(cur)).await?.pt() else { continue };
                     let dd = unit(d - cur);
-                    let snapshot = st.verts.clone();
+                    let snapshot = st.snapshot();
                     let e = c.point(ps("Specify endpoint of arc").base(cur).preview(move |_, p| pline_preview(&with_last_bulge(&snapshot, tangent_bulge(cur, dd, p)), p))).await?;
                     if let Some(p) = e.pt() {
                         st.push(p, tangent_bulge(cur, dd, p));
@@ -224,7 +270,7 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                 Some("Radius") => {
                     let rr = c.distance(ps("Specify radius of arc").nonzero()).await?;
                     let Some(rv) = rr.value() else { continue };
-                    let snapshot = st.verts.clone();
+                    let snapshot = st.snapshot();
                     let e = c
                         .point(ps("Specify endpoint of arc").base(cur).preview(move |_, p| pline_preview(&with_last_bulge(&snapshot, arc_bulge(&ArcMode::Radius(rv), cur, p).unwrap_or(0.0)), p)))
                         .await?;
@@ -238,7 +284,7 @@ async fn pline(c: Ctx, _a: Args) -> CmdResult<()> {
                 }
                 Some("Second pt") => {
                     let Some(s) = c.point(ps("Specify second point on arc").base(cur)).await?.pt() else { continue };
-                    let snapshot = st.verts.clone();
+                    let snapshot = st.snapshot();
                     let e = c
                         .point(ps("Specify end point of arc").base(cur).preview(move |_, p| pline_preview(&with_last_bulge(&snapshot, arc_bulge(&ArcMode::Second(s), cur, p).unwrap_or(0.0)), p)))
                         .await?;
