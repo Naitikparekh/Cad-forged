@@ -42,6 +42,10 @@ product.
   multileaders, attributes (`ATTDEF`, `ATTEXT`, `DATAEXTRACTION`), block editing in place (`REFEDIT`, `BEDIT`), external references
   taken from open drawings with `XCLIP`, raster images (`IMAGEATTACH`, `IMAGECLIP`, `IMAGEADJUST`), and an
   **AutoLISP** interpreter (`APPLOAD`, the `VLISP` console, `(command ...)`, `c:` commands and `*error*`).
+* **Working with files**: drag a file onto the window (drawings open, pictures attach, `.lsp` / `.scr` load, `.lin` /
+  `.pat` add linetypes and hatch patterns); **autosave** every `SAVETIME` minutes with recovery of unsaved drawings after
+  a crash (`DRAWINGRECOVERY`); `PUBLISH` writes every sheet as one multi-page PDF; `ARCHIVE` / `ETRANSMIT` pack a
+  drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files.
 * **Files**: CadForge JSON, **DXF R2000 export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by
   other tools), **plot to PDF / SVG / PNG** with paper size, scale, lineweights and monochrome options and a live preview.
 
@@ -55,12 +59,19 @@ cargo run -q -p cadforge-engine --example commands_doc > docs/COMMANDS.md   # re
 cargo run -q -p cadforge-engine --example parity     # command coverage vs. the AutoCAD inventories (-- --missing, --json)
 python3 tools/benchmark/score.py --check             # verify every benchmark credit still points at real code / a test
 python3 tools/benchmark/score.py --write             # regenerate docs/BENCHMARK.md
+tools/package.sh                                     # release build -> dist/ (tar.gz, and a .deb on Debian-like systems; zip on Windows)
+tests/package/check.sh                               # check what tools/package.sh produced
 tools/build-web.sh                                   # WebAssembly build -> dist-web/ (serve it over http)
 tools/build-web.sh dev                               # faster, less optimised wasm build
 node tests/web/run.mjs                               # drive the wasm build in headless Chromium (Playwright)
 node tests/web/tour3.mjs out/                        # screenshot tours (tour, tour2, tour3, tour4)
 node tools/gen-app-data.mjs                          # regenerate crates/cadforge-app/assets/{icons,ribbon}.json (ribbon model)
 ```
+
+CI (`.github/workflows/ci.yml`) runs the tests, clippy, the benchmark evidence check and the wasm build on Linux and builds
+the packages on Linux, macOS and Windows; pushing a `v*` tag runs `release.yml`, which attaches the packages to a GitHub
+release. The dev profile keeps only line tables as debug info (`Cargo.toml`): full debug info made the many test
+binaries take tens of GB.
 
 The wasm build needs the `wasm32-unknown-unknown` target and `wasm-bindgen-cli`
 (`rustup target add wasm32-unknown-unknown && cargo install wasm-bindgen-cli`). Files are opened and saved through the

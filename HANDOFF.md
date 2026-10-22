@@ -74,6 +74,25 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   `score.py --check` fails when an evidence pointer no longer exists; `--write` regenerates `docs/BENCHMARK.md`.
   Only raise a credit when there is code or a test to point at.
 
+* **Autosave** (`crates/cadforge-engine/src/autosave.rs`): the host calls `App::autosave_tick(force)` every frame; it returns
+  recovery files to store (project JSON) and keys to delete. The app keeps them in localStorage (web, key
+  `cf.autosave.<key>`) or `<config>/cadforge/autosave/` (native), flushes on `pagehide` / `visibilitychange`, and at start-up
+  `recover_autosave` reopens leftovers as unsaved "(recovered)" tabs. `SAVETIME` is in minutes (0 = off).
+* **Loaded definitions** (`defs.rs`, `hatch::register_pattern`, `style::register_linetype`): `.pat` / `.lin` text is parsed
+  into owned definitions, kept in `Drawing::custom_patterns` / `custom_ltypes` (saved in the JSON) and registered in a
+  process-wide table that leaks each definition once so it can be `&'static` like the built-in tables. The DXF reader
+  registers simple linetypes of the file's LTYPE table; a pattern defined inside a DXF HATCH is still read as ANSI31.
+* **Hidden objects** (`Drawing::hidden_objs`): session-only set for HIDEOBJECTS / ISOLATEOBJECTS; `is_visible` consults it.
+* **Polyline widths**: `Vertex { sw, ew }` (start / end width of the edge that starts at the vertex); `pline_outline` builds the
+  fill polygons (with bevelled corners) used for drawing, bounds and picking; PLINE has Width / Halfwidth, PEDIT has Width.
+* **Multi-page PDF**: `pdf::write_pdf_pages`; `plot::publish_pdf` lays out model space and every layout; PUBLISH hands the file
+  to the host as `Event::SaveFile`. The engine now depends on `cadforge-render` for this.
+* **Packaging and CI**: `tools/package.sh`, `tests/package/check.sh`, `.github/workflows/{ci,release}.yml`. Windows and macOS
+  packages are only ever built by CI. The browser harness can start Chromium with `--force-device-scale-factor` (`launch({ scale })`);
+  Playwright's `deviceScaleFactor` emulation does not change `devicePixelContentBoxSize`, so it cannot test HiDPI canvases.
+* **Gotcha**: `python3 tools/benchmark/score.py --check` prints "EVIDENCE: ... pattern not found" *above* the score table and
+  exits 1; do not pipe it through `tail`. Evidence patterns are regexes, so write `\(` for a literal parenthesis (or avoid them).
+
 ### Tests
 `cargo test --workspace` (Rust), `node tests/web/run.mjs` (wasm build in headless Chromium; rebuild first with
 `tools/build-web.sh dev`). DXF tests use files made by `ezdxf` (`tests/dxf/make-corpus.py`; add new corpus files, do not
@@ -81,5 +100,7 @@ regenerate old ones). Scenario tests for commands live in `crates/cadforge-engin
 `ui_actions.rs`, `ext_*.rs`, `lisp*.rs`); they drive the `Sim` harness and read `Event`s via `take_events()`.
 
 ### Next steps (largest score gaps first, see docs/BENCHMARK.md)
+Done since the first benchmark: autosave, drag-and-drop, isolate / hide objects, polyline widths, multi-sheet PUBLISH, .lin / .pat
+loading, packaging and CI, ten small commands. Still open:
 Meshes and surfaces, rendering, sheet sets, dynamic blocks, annotative scaling, MTEXT inline formatting, the full hatch
 pattern library, plot styles, PUBLISH, PDF/DGN underlays, DWG, autosave, a spatial index for very large drawings.

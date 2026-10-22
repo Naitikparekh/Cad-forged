@@ -28,7 +28,7 @@ This number is a self-assessment against a written rubric, not a measurement aga
 
 Command inventory: 286 core commands (weighted by how often drawings use them) and 182 long-tail commands. 282 / 286 core and 41 / 182 long-tail commands exist in the registry; commands that only report "not supported" earn part of their weight (`tools/benchmark/stubs.tsv`). All 100% of the standard `acad.pgp` aliases resolve to the right command.
 
-Test inventory: 637 Rust tests and 36 browser tests (headless Chromium driving the WebAssembly build).
+Test inventory: 638 Rust tests and 36 browser tests (headless Chromium driving the WebAssembly build).
 
 ## How to read it
 
