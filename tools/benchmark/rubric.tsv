@@ -145,7 +145,7 @@ extend	library	0.5	Embeddable libraries	crates/cadforge-engine/src/sim.rs::pub s
 platform	desktop	0.75	Native desktop application	crates/cadforge-app/src/main.rs::fn main	built and run headless on Linux only
 platform	web	1	Runs in a browser	tests/web/run.mjs::OPEN a DXF	
 platform	offline	1	No installation or account needed; works offline	crates/cadforge-app/web/index.html::cadforge_app	
-platform	installer	0.4	Installer, updates, licensing server	tools/package.sh::dpkg-deb ; tests/package/check.sh::deb ok ; .github/workflows/release.yml::tools/package.sh	tar.gz and .deb are built and checked on Linux; the Windows and macOS packages come from CI and have not been run; no auto-update or licensing
+platform	installer	0.5	Installer, updates, licensing server	tools/package.sh::dpkg-deb ; tests/package/check.sh::deb ok ; .github/workflows/release.yml::tools/package.sh	tar.gz / .deb / zip packages are built and checked by CI on Linux, macOS and Windows (run 39814144307); the installers are not code-signed or notarised and nothing has been run on a real macOS or Windows desktop; no auto-update or licensing
 platform	cloud	0	Cloud storage and collaboration		not implemented
 platform	mobile	0	Mobile apps		not implemented
 platform	licence	1	Open licence	Cargo.toml::license = "MIT"	
