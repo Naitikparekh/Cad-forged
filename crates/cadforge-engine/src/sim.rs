@@ -171,6 +171,10 @@ impl Sim {
         self.h.borrow_mut().editor_mut().expect("editor").doc.undo();
     }
 
+    pub fn redo(&self) {
+        self.h.borrow_mut().editor_mut().expect("editor").doc.redo();
+    }
+
     pub fn sel_count(&self) -> usize {
         self.h.borrow().editor().expect("editor").sel.len()
     }

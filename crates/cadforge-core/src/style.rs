@@ -361,6 +361,9 @@ pub struct Layer {
     pub desc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transp: Option<f64>,
+    /// VPLAYER Vpvisdflt: frozen in viewports created from now on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vp_frozen_default: bool,
 }
 
 fn default_layer_color() -> Color {
@@ -378,7 +381,7 @@ fn yes() -> bool {
 
 impl Layer {
     pub fn new(name: &str) -> Layer {
-        Layer { name: name.into(), color: Color::Aci(7), ltype: "Continuous".into(), lw: LW_DEFAULT, on: true, frozen: false, locked: false, plot: true, desc: String::new(), transp: None }
+        Layer { name: name.into(), color: Color::Aci(7), ltype: "Continuous".into(), lw: LW_DEFAULT, on: true, frozen: false, locked: false, plot: true, desc: String::new(), transp: None, vp_frozen_default: false }
     }
     pub fn with_color(mut self, c: Color) -> Layer {
         self.color = c;

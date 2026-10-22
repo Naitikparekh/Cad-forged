@@ -584,6 +584,8 @@ struct Ctx {
     /// Picture names given to IMAGEDEF handles and the pictures themselves (their files are not part of a DXF).
     image_keys: HashMap<String, String>,
     images: indexmap::IndexMap<String, crate::picture::ImageDef>,
+    /// Layer names by their LAYER table handle (viewports list their frozen layers by handle).
+    layer_names: HashMap<String, String>,
 }
 
 struct BlockRaw {
@@ -939,6 +941,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 vp.vc = pt(r.num(17, 0.0) + r.num(12, 0.0), r.num(27, 0.0) + r.num(22, 0.0));
                 vp.off = r.int(68, 1) == 0;
                 vp.locked = r.int(90, 0) & 16384 != 0;
+                for h in r.all(331) {
+                    if let Some(name) = ctx.layer_names.get(&h.trim().to_uppercase()) {
+                        vp.set_frozen(name, true);
+                    }
+                }
                 push(Entity::new(Kind::Viewport(vp)), false, &mut out);
             }
         }
@@ -1231,7 +1238,8 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     }
 
     // ---- blocks (including anonymous dimension blocks, used for DIMENSION import)
-    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default() };
+    let layer_names: HashMap<String, String> = secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYER").filter_map(|r| Some((r.first(5)?.to_uppercase(), decode_text(r.first(2)?)))).collect();
+    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default(), layer_names };
     for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "IMAGEDEF") {
         if let Some(h) = r.first(5) {
             let px = |v: f64| if v.is_finite() && v > 0.0 { v.min(1e6) as u32 } else { 0 };

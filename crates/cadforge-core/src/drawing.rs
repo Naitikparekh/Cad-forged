@@ -254,6 +254,11 @@ pub struct Drawing {
     pub layer_iso: Option<Vec<(String, bool, bool)>>,
     /// Objects hidden by HIDEOBJECTS / ISOLATEOBJECTS until UNISOLATEOBJECTS (not persisted, not part of undo).
     pub hidden_objs: std::collections::BTreeSet<u64>,
+    /// Lower-cased names of the layers frozen in the layout viewport that is active (MSPACE); empty otherwise. Session
+    /// only: the editor refreshes it when the active viewport or its overrides change.
+    pub active_vp_frozen: std::collections::BTreeSet<String>,
+    /// The layout viewport that is active (layout name, viewport id); session only.
+    pub active_vp: Option<(String, u64)>,
     /// Hatch patterns and linetypes loaded from `.pat` / `.lin` files; saved with the drawing and registered on load.
     pub custom_patterns: Vec<crate::defs::PatternDef>,
     pub custom_ltypes: Vec<crate::defs::LinetypeDef>,
@@ -322,6 +327,8 @@ impl Drawing {
             paper_skipped: 0,
             layer_iso: None,
             hidden_objs: Default::default(),
+            active_vp_frozen: Default::default(),
+            active_vp: None,
             custom_patterns: vec![],
             custom_ltypes: vec![],
             undo_stack: Vec::new(),
@@ -532,6 +539,23 @@ impl Drawing {
         self.touch();
     }
 
+    /// Change a viewport of `layout` (works while that viewport is active too) as one undo step. Returns false when the
+    /// viewport does not exist.
+    pub fn edit_viewport(&mut self, layout: &str, vp: u64, f: impl FnOnce(&mut crate::entities::ViewportData)) -> bool {
+        let found = self.layout(layout).is_some_and(|l| l.entities.iter().any(|e| e.id == vp && matches!(e.kind, Kind::Viewport(_))));
+        if !found {
+            return false;
+        }
+        self.will_change();
+        if let Some(l) = self.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(layout)) {
+            if let Some(Entity { kind: Kind::Viewport(v), .. }) = l.entities.iter_mut().find(|e| e.id == vp) {
+                f(v);
+            }
+        }
+        self.touch();
+        true
+    }
+
     pub fn paper_of(&self, space: &str) -> Option<&Paper> {
         self.layout(space).map(|l| &l.paper)
     }
@@ -568,6 +592,15 @@ impl Drawing {
         if e.id == 0 {
             e.id = self.next_id;
             self.next_id += 1;
+            // a viewport created now starts with the layers that Vpvisdflt / Newfrz froze for new viewports
+            if let Kind::Viewport(v) = &mut e.kind {
+                if v.layers.is_empty() {
+                    let layers = self.layers.clone();
+                    for l in layers.iter().filter(|l| l.vp_frozen_default) {
+                        v.set_frozen(&l.name, true);
+                    }
+                }
+            }
         } else if e.id >= self.next_id {
             self.next_id = e.id + 1;
         }
@@ -728,6 +761,9 @@ impl Drawing {
         self.rev += 1;
         self.dirty = true;
         *self.caches.get_mut() = Caches::default();
+        if self.active_vp.is_some() {
+            self.refresh_active_vp_frozen();
+        }
     }
 
     // ------------------------------------------------------------ layers
@@ -752,8 +788,38 @@ impl Drawing {
 
     pub fn is_visible(&self, e: &Entity) -> bool {
         let l = self.layer_of(e);
+        l.on && !l.frozen && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&e.id)) && (self.active_vp_frozen.is_empty() || !self.active_vp_frozen.contains(&l.name.to_lowercase()))
+    }
+
+    /// Like [`Drawing::is_visible`] but without the active viewport's frozen layers: the sheet draws each viewport with its
+    /// own overrides.
+    pub fn is_visible_in_sheet(&self, e: &Entity) -> bool {
+        let l = self.layer_of(e);
         l.on && !l.frozen && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&e.id))
     }
+
+    /// Make `vp` (layout name, viewport id) the active viewport, or none when `None`.
+    pub fn set_active_vp(&mut self, vp: Option<(String, u64)>) {
+        self.active_vp = vp;
+        self.refresh_active_vp_frozen();
+    }
+
+    /// Recompute the layers frozen in the active viewport from the viewport's current overrides.
+    pub fn refresh_active_vp_frozen(&mut self) {
+        let frozen: std::collections::BTreeSet<String> = match &self.active_vp {
+            None => Default::default(),
+            Some((layout, id)) => self
+                .layout(layout)
+                .and_then(|l| l.entities.iter().find(|e| e.id == *id))
+                .and_then(|e| if let Kind::Viewport(v) = &e.kind { Some(v) } else { None })
+                .map(|v| v.layers.iter().filter(|o| o.frozen).map(|o| o.layer.to_lowercase()).collect())
+                .unwrap_or_default(),
+        };
+        if frozen != self.active_vp_frozen {
+            self.active_vp_frozen = frozen;
+        }
+    }
+
 
     pub fn is_locked(&self, e: &Entity) -> bool {
         self.layer_of(e).locked

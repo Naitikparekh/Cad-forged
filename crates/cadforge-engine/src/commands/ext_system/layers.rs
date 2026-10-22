@@ -1,4 +1,4 @@
-//! Layer tools: LAYERP, LAYMRG, LAYTRANS, LAYWALK, LAYERPALL, LAYVPI, LAYERCLOSE.
+//! Layer tools: LAYERP, LAYMRG, LAYTRANS, LAYWALK, LAYERCLOSE (viewport layers are in vplayer.rs).
 use super::{confirm, plural, ps, Shared};
 use crate::app::Event;
 use crate::commands::layer::match_layers;
@@ -7,7 +7,6 @@ use crate::ctx::*;
 use crate::registry::Registry;
 use crate::runtime::*;
 use cadforge_core::drawing::Drawing;
-use cadforge_core::entities::Kind;
 use cadforge_core::style::Layer;
 
 fn layer_name_of(c: &Ctx, id: u64) -> Option<String> {
@@ -310,28 +309,6 @@ async fn laywalk(c: Ctx, _a: Args) -> CmdResult<()> {
 
 // ---------------------------------------------------------------- viewport overrides, layer manager
 
-/// Layout viewports in the drawing. Viewports carry no per-viewport layer settings in this version.
-fn viewport_count(c: &Ctx) -> usize {
-    c.doc(|d| d.layouts.iter().flat_map(|l| l.entities.iter()).filter(|e| matches!(e.kind, Kind::Viewport(_))).count())
-}
-
-async fn layerpall(c: Ctx, _a: Args) -> CmdResult<()> {
-    match viewport_count(&c) {
-        0 => c.log_error("There are no layout viewports."),
-        n => c.log_error(&format!("Viewport layer overrides are not supported in this version; nothing to reset in {}.", plural(n, "viewport"))),
-    }
-    Ok(())
-}
-
-async fn layvpi(c: Ctx, _a: Args) -> CmdResult<()> {
-    if c.doc(|d| d.is_model()) {
-        c.log_error("LAYVPI is available only in a layout viewport.");
-    } else {
-        c.log_error("Viewport layer overrides are not supported in this version; use LAYISO to isolate layers in the whole drawing.");
-    }
-    Ok(())
-}
-
 async fn layerclose(c: Ctx, _a: Args) -> CmdResult<()> {
     c.app(|a| a.emit(Event::Palette { name: "layers".into(), show: Some(false) }));
     Ok(())
@@ -354,7 +331,5 @@ pub(super) fn register(r: &mut Registry, st: &Shared) {
     r.define(def("Layers", "LAYMRG", run(laymrg)).title("Layer Merge").icon("layers").desc("Merges selected layers into a target layer, removing the previous layers from the drawing."));
     r.define(def("Layers", "LAYTRANS", run(laytrans)).title("Layer Translator").icon("layers").desc("Changes layers to the layer names you specify and merges layers that map to the same name."));
     r.define(def("Layers", "LAYWALK", run(laywalk)).title("Layer Walk").icon("layers").desc("Displays objects on selected layers and hides objects on all other layers."));
-    r.define(def("Layers", "LAYERPALL", run(layerpall)).title("Reset All Viewport Layer Overrides").icon("layers").desc("Resets the layer property overrides in all layout viewports."));
-    r.define(def("Layers", "LAYVPI", run(layvpi)).title("Layer Viewport Isolate").icon("layiso").desc("Isolates the layer of a selected object in the current layout viewport."));
     r.define(def("Utilities", "LAYERCLOSE", run(layerclose)).title("Close Layer Manager").icon("layers").desc("Closes the Layer Properties Manager.").transparent().once());
 }

@@ -113,6 +113,7 @@ impl Editor {
         self.views.insert(key(&layout), paper_view);
         self.view = mv;
         self.doc.space = MODEL.into();
+        self.doc.set_active_vp(Some((layout.clone(), vp)));
         self.mspace = Some(MSpace { layout, vp, paper_view });
         self.clear_sel();
         Ok(())
@@ -121,6 +122,7 @@ impl Editor {
     /// Leave the active viewport and return to the sheet.
     pub fn leave_mspace(&mut self) {
         let Some(m) = self.mspace.take() else { return };
+        self.doc.set_active_vp(None);
         self.doc.space = m.layout;
         self.view.set_state(&m.paper_view);
         self.clear_sel();

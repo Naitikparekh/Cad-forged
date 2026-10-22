@@ -154,6 +154,8 @@ struct W<'a> {
     vp_id: i64,
     /// IMAGEDEF handle of each picture used, with the (reactor, IMAGE entity) handles that point at it.
     image_defs: Vec<(String, String, Vec<(String, String)>)>,
+    /// LAYER table handle of each layer (key: lower-cased name), for the frozen-layer list of viewports (group 331).
+    layer_handles: HashMap<String, String>,
 }
 
 impl<'a> W<'a> {
@@ -212,11 +214,16 @@ impl<'a> W<'a> {
 
     /// A layout VIEWPORT (`view_h` is the height of the model region shown, in model units).
     #[allow(clippy::too_many_arguments)]
-    fn viewport(&mut self, o: &mut EOut, c: Pt, w: f64, h: f64, id: i64, status: i64, view_c: Pt, view_h: f64, locked: bool, off: bool, props: &Props) {
+    fn viewport(&mut self, o: &mut EOut, c: Pt, w: f64, h: f64, id: i64, status: i64, view_c: Pt, view_h: f64, locked: bool, off: bool, frozen: &[String], props: &Props) {
         self.common(o, "VIEWPORT", props, Some("AcDbViewport"), None);
         o.out.pt(c, 0).n(40, w).n(41, h).i(68, if off { 0 } else { status }).i(69, id);
         o.out.n(12, view_c.x).n(22, view_c.y).n(13, 0.0).n(23, 0.0).n(14, 10.0).n(24, 10.0).n(15, 10.0).n(25, 10.0);
         o.out.n(16, 0.0).n(26, 0.0).n(36, 1.0).n(17, 0.0).n(27, 0.0).n(37, 0.0).n(42, 50.0).n(43, 0.0).n(44, 0.0).n(45, view_h).n(50, 0.0).n(51, 0.0).i(72, 100);
+        for name in frozen {
+            if let Some(h) = self.layer_handles.get(&name.to_lowercase()) {
+                o.out.s(331, h);
+            }
+        }
         o.out.i(90, if id == 1 { 557088 } else if locked { 16384 } else { 0 }).s(1, "").i(281, 0).i(71, 0).i(74, 0);
         o.out.n(110, 0.0).n(120, 0.0).n(130, 0.0).n(111, 1.0).n(121, 0.0).n(131, 0.0).n(112, 0.0).n(122, 1.0).n(132, 0.0).i(79, 0).n(146, 0.0).i(282, 0);
     }
@@ -457,7 +464,8 @@ impl<'a> W<'a> {
                 let id = self.vp_id;
                 self.vp_id += 1;
                 let (vc, scale) = v.model_view(self.doc);
-                self.viewport(o, v.c, v.w, v.h, id, 2, vc, v.h / scale, v.locked, v.off, &Props::of(e));
+                let frozen: Vec<String> = v.layers.iter().filter(|l| l.frozen).map(|l| l.layer.clone()).collect();
+                self.viewport(o, v.c, v.w, v.h, id, 2, vc, v.h / scale, v.locked, v.off, &frozen, &Props::of(e));
             }
         }
     }
@@ -551,7 +559,7 @@ impl<'a> W<'a> {
 
 /// Serialise a drawing to DXF text.
 pub fn write_dxf(doc: &Drawing) -> String {
-    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2, image_defs: vec![] };
+    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2, image_defs: vec![], layer_handles: HashMap::new() };
     let mut o = Out::default();
 
     // ---------- collect names
@@ -601,6 +609,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     let dict_layout = w.h();
     let model_layout = w.h();
     let layer_handle: Vec<String> = layers.iter().map(|_| w.h()).collect();
+    w.layer_handles = layers.iter().zip(&layer_handle).map(|(l, h)| (l.to_lowercase(), h.clone())).collect();
     let mut ltype_handle: HashMap<String, String> = HashMap::new();
     for n in ["ByBlock", "ByLayer"].into_iter().chain(ltype_names.iter().map(|l| l.name)) {
         let hnd = w.h();
@@ -630,7 +639,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
         let mut o = EOut { out: Out::default(), owner: sheet_h[i].rec.clone(), block_name: bn };
         // viewport id 1: the sheet itself
         let main = Props { layer: "0", ltype: None, color: None, lw: None };
-        w.viewport(&mut o, pt(paper.w / 2.0, paper.h / 2.0), paper.w, paper.h, 1, 1, pt(paper.w / 2.0, paper.h / 2.0), paper.h, false, false, &main);
+        w.viewport(&mut o, pt(paper.w / 2.0, paper.h / 2.0), paper.w, paper.h, 1, 1, pt(paper.w / 2.0, paper.h / 2.0), paper.h, false, false, &[], &main);
         for e in list {
             w.write(&mut o, e);
         }

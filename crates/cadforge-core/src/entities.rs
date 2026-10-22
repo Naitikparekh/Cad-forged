@@ -226,11 +226,74 @@ pub struct ViewportData {
     /// Non-rectangular clip polygon in paper units (VPCLIP / MVIEW Polygonal).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clip: Option<Vec<Pt>>,
+    /// Layer settings that apply in this viewport only (VPLAYER, layer manager "VP" columns).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<LayerOverride>,
+}
+
+/// What one layout viewport does differently from the drawing's layer table for one layer.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LayerOverride {
+    /// Layer name, compared case-insensitively.
+    pub layer: String,
+    /// Frozen in this viewport only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub frozen: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<crate::style::Color>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ltype: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lw: Option<i32>,
+    /// Transparency in percent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transp: Option<f64>,
+}
+
+impl LayerOverride {
+    pub fn is_empty(&self) -> bool {
+        !self.frozen && self.color.is_none() && self.ltype.is_none() && self.lw.is_none() && self.transp.is_none()
+    }
 }
 
 impl ViewportData {
     pub fn new(c: Pt, w: f64, h: f64) -> ViewportData {
-        ViewportData { c, w, h, scale: None, vc: Pt::ZERO, locked: false, off: false, clip: None }
+        ViewportData { c, w, h, scale: None, vc: Pt::ZERO, locked: false, off: false, clip: None, layers: vec![] }
+    }
+
+    /// The override for `layer` in this viewport, if any.
+    pub fn layer_override(&self, layer: &str) -> Option<&LayerOverride> {
+        self.layers.iter().find(|o| o.layer.eq_ignore_ascii_case(layer))
+    }
+
+    /// Whether `layer` is frozen in this viewport.
+    pub fn is_frozen(&self, layer: &str) -> bool {
+        self.layer_override(layer).is_some_and(|o| o.frozen)
+    }
+
+    /// Change the override for `layer` (creating it when missing); an override that no longer changes anything is dropped.
+    pub fn edit_override(&mut self, layer: &str, f: impl FnOnce(&mut LayerOverride)) {
+        let i = match self.layers.iter().position(|o| o.layer.eq_ignore_ascii_case(layer)) {
+            Some(i) => i,
+            None => {
+                self.layers.push(LayerOverride { layer: layer.to_string(), ..Default::default() });
+                self.layers.len() - 1
+            }
+        };
+        f(&mut self.layers[i]);
+        if self.layers[i].is_empty() {
+            self.layers.remove(i);
+        }
+    }
+
+    /// Freeze or thaw `layer` in this viewport.
+    pub fn set_frozen(&mut self, layer: &str, frozen: bool) {
+        self.edit_override(layer, |o| o.frozen = frozen);
+    }
+
+    /// Back to the drawing's own settings for `layer`.
+    pub fn reset_layer(&mut self, layer: &str) {
+        self.layers.retain(|o| !o.layer.eq_ignore_ascii_case(layer));
     }
 
     /// The viewport outline on the sheet (the rectangle or the clip polygon).
@@ -250,7 +313,7 @@ impl ViewportData {
         }
         let mut b: Option<Bounds> = None;
         for e in &doc.model.entities {
-            if doc.is_visible(e) {
+            if doc.is_visible_in_sheet(e) && !self.is_frozen(&doc.layer_of(e).name) {
                 b = Bounds::union_opt(b, bounds_of(e, doc));
             }
         }

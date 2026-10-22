@@ -57,7 +57,7 @@ drafting	grips	0.5	Grip editing: stretch, move, rotate, scale, mirror	crates/cad
 drafting	selection-preview	0.5	Rollover highlight and selection cycling	crates/cadforge-engine/src/select.rs::pick_all	no cycling UI
 drafting	properties	1	Properties palette and quick properties with live editing	crates/cadforge-app/src/palettes.rs::quick_props	
 drafting	matchprop	1	MATCHPROP, CHPROP and SETBYLAYER	crates/cadforge-engine/tests/ext_modify.rs::chprop_changes ; crates/cadforge-engine/tests/ext_tail.rs::setbylayer	
-drafting	layers	0.75	Layer manager, states, isolate, freeze, lock, lineweight, transparency	crates/cadforge-engine/tests/ext_system.rs::LAYISO	no layer filter groups or viewport overrides
+drafting	layers	0.75	Layer manager, states, isolate, freeze, lock, lineweight, transparency	crates/cadforge-engine/tests/commands2.rs::LAYISO ; crates/cadforge-engine/tests/vplayer.rs::freeze_thaw_and_reset_in_all_viewports	no layer filter groups; viewport overrides have no palette columns (use VPLAYER)
 drafting	inquiry	1	DIST, AREA, LIST, ID, MEASUREGEOM, MASSPROP, QUICKCALC	crates/cadforge-engine/tests/commands2.rs::AREA|area	
 drafting	draw-order	1	Draw order and DRAWORDER front / back	crates/cadforge-engine/src/commands/system.rs::draworder	
 drafting	constraints	0	Geometric and dimensional constraints		not implemented
@@ -102,7 +102,7 @@ annotation	sheet-sets	0	Sheet set manager		not implemented
 annotation	standards	0	CAD standards checking		not implemented
 output	layouts	1	Layouts with named paper sizes and orientation	crates/cadforge-engine/tests/layouts.rs::PAGESETUP|LAYOUT	
 output	viewports	1	Rectangular, polygonal and object viewports, clip, scale, lock, MSPACE	crates/cadforge-engine/tests/layouts.rs::VPCLIP|MVIEW ; crates/cadforge-render/tests/layout.rs::clipped	
-output	vp-layers	0	Per-viewport layer overrides		reported as unsupported by LAYER / VPLAYER
+output	vp-layers	0.75	Per-viewport layer overrides	crates/cadforge-engine/src/commands/ext_system/vplayer.rs::async fn vplayer ; crates/cadforge-engine/tests/vplayer.rs::freeze_thaw_and_reset_in_all_viewports ; crates/cadforge-engine/tests/vplayer.rs::inside_an_active_viewport_its_frozen_layers_cannot_be_picked ; crates/cadforge-render/tests/layout.rs::a_layer_frozen_in_the_viewport_is_not_drawn_there ; crates/cadforge-render/tests/layout.rs::plotting_a_layout_honours ; crates/cadforge-core/tests/vp_layers.rs::the_dxf_viewport_lists_its_frozen_layers	VP freeze and colour / linetype / lineweight / transparency overrides per viewport (VPLAYER, LAYVPI, LAYERPALL), drawn, plotted, saved and undoable; the layer manager palette has no VP columns, and only the freeze list (not the colour / linetype / lineweight overrides) is written to DXF
 output	plot-dialog	1	Plot with scale, area, offset, centre, lineweights, monochrome, preview	crates/cadforge-app/src/dialogs/plot.rs::PlotState ; tests/web/run.mjs::PLOT dialog	
 output	plot-formats	1	PDF, SVG and PNG output	crates/cadforge-render/tests/render.rs::plot_pdf_and_svg	
 output	publish	0.75	Batch plotting of several sheets	crates/cadforge-engine/src/commands/ext_system/files.rs::fn publish ; crates/cadforge-engine/tests/publish.rs::publish_writes_one_pdf_page_per_sheet ; crates/cadforge-render/src/pdf.rs::pub fn write_pdf_pages	one drawing at a time, PDF only: no sheet-list files, DWF or plotter output

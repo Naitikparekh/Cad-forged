@@ -62,6 +62,8 @@ pub struct Renderer<'a> {
     pub tol: f64,
     pub ops: Vec<Op>,
     layers: HashMap<String, &'a Layer>,
+    /// Layer overrides of the viewport being drawn (lower-cased layer name).
+    vp_over: HashMap<String, &'a LayerOverride>,
     fade: f64,
     ltscale: f64,
     vis: Option<Bounds>,
@@ -83,6 +85,7 @@ impl<'a> Renderer<'a> {
             tol: 0.25,
             ops: vec![],
             layers,
+            vp_over: HashMap::new(),
             fade: if prefs.lock_fade > 0.0 { prefs.lock_fade / 100.0 } else { 0.0 },
             ltscale: doc.settings.ltscale,
             vis: None,
@@ -102,25 +105,29 @@ impl<'a> Renderer<'a> {
     /// Resolve colour/linetype/lineweight/transparency with BYLAYER/BYBLOCK inheritance.
     pub fn style_of(&self, e: &Entity, parent: Option<&Style>) -> Style {
         let layer = self.layer_of(e);
+        let over = if self.vp_over.is_empty() { None } else { self.vp_over.get(&layer.name.to_lowercase()).copied() };
+        let layer_color = over.and_then(|o| o.color).unwrap_or(layer.color);
+        let layer_ltype = over.and_then(|o| o.ltype.as_deref()).unwrap_or(&layer.ltype);
+        let layer_lw = over.and_then(|o| o.lw).unwrap_or(layer.lw);
         let raw_color = match e.color {
-            None | Some(Color::ByLayer) => layer.color,
-            Some(Color::ByBlock) => parent.map_or(layer.color, |p| p.raw_color),
+            None | Some(Color::ByLayer) => layer_color,
+            Some(Color::ByBlock) => parent.map_or(layer_color, |p| p.raw_color),
             Some(c) => c,
         };
         let ltype = match e.ltype.as_deref() {
-            None | Some("BYLAYER") => layer.ltype.clone(),
-            Some("BYBLOCK") => parent.map_or_else(|| layer.ltype.clone(), |p| p.ltype.clone()),
+            None | Some("BYLAYER") => layer_ltype.to_string(),
+            Some("BYBLOCK") => parent.map_or_else(|| layer_ltype.to_string(), |p| p.ltype.clone()),
             Some(l) => l.to_string(),
         };
         let mut lw = match e.lw {
-            None | Some(-1) => layer.lw,
-            Some(-2) => parent.map_or(layer.lw, |p| p.lw),
+            None | Some(-1) => layer_lw,
+            Some(-2) => parent.map_or(layer_lw, |p| p.lw),
             Some(v) => v,
         };
         if lw == -3 {
             lw = LW_DEFAULT;
         }
-        let transp = e.transp.or(layer.transp).unwrap_or(0.0);
+        let transp = e.transp.or(over.and_then(|o| o.transp)).or(layer.transp).unwrap_or(0.0);
         let fade = if layer.locked && self.fade > 0.0 { (1.0 - self.fade).max(0.12) } else { 1.0 };
         let color = if self.mono { [0, 0, 0] } else { color_rgb(raw_color, self.theme.dark, self.theme.contrast) };
         Style {
@@ -882,11 +889,12 @@ impl<'a> Renderer<'a> {
             sub.lw_mode = self.lw_mode;
             sub.tol = self.tol;
             sub.ltscale = self.ltscale;
+            sub.vp_over = v.layers.iter().map(|o| (o.layer.to_lowercase(), o)).collect();
             let inv = mat::invert(&sub.world);
             let vis = Bounds::of_points(&outline.iter().map(|q| mat::apply(&inv, pt(q[0], q[1]))).collect::<Vec<_>>()).grow(1.0);
             let plotting = matches!(self.lw_mode, LwMode::Plot(_));
             for me in &doc.model.entities {
-                if !doc.is_visible(me) || (plotting && !doc.layer_of(me).plot) {
+                if !doc.is_visible_in_sheet(me) || (plotting && !doc.layer_of(me).plot) || v.is_frozen(&doc.layer_of(me).name) {
                     continue;
                 }
                 if let Some(b) = bounds_of(me, doc) {

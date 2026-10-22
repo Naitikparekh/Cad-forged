@@ -23,6 +23,7 @@ mod files;
 mod layers;
 mod report;
 mod view;
+mod vplayer;
 
 /// How many earlier layer tables LAYERP can step back through.
 const LAYER_HISTORY: usize = 50;
@@ -153,6 +154,7 @@ fn plural(n: usize, word: &str) -> String {
 pub fn register(r: &mut Registry) {
     let st = Shared::default();
     layers::register(r, &st);
+    vplayer::register(r);
     view::register(r);
     drafting::register(r);
     clipboard::register(r);

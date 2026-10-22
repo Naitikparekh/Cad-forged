@@ -376,21 +376,13 @@ fn laywalk_skips_frozen_layers() {
 }
 
 #[test]
-fn layerpall_and_layvpi_run_and_report_that_viewport_overrides_do_not_exist() {
+fn layerpall_and_layvpi_explain_themselves_outside_a_layout() {
     let s = Sim::new();
     s.cmd("LAYERPALL");
     assert!(s.history_has("no layout viewports"));
     s.cmd("LAYVPI");
     assert!(s.history_has("available only in a layout viewport"));
-    s.doc_mut(|d| {
-        let vp = Entity::new(Kind::Viewport(ViewportData::new(p(100., 100.), 50., 50.)));
-        d.layouts.push(Layout { name: "Layout1".into(), paper: Paper { w: 420., h: 297., name: "A3".into(), landscape: true }, entities: vec![vp], fresh: false });
-        d.space = "Layout1".into();
-    });
-    s.cmd("LAYERPALL");
-    assert!(s.history_has("nothing to reset in 1 viewport"), "{}", s.log_text());
-    s.cmd("LAYVPI");
-    assert!(s.history_has("use LAYISO"));
+    // (the viewport behaviour is tested in vplayer.rs)
 }
 
 #[test]
