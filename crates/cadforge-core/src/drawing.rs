@@ -248,6 +248,8 @@ pub struct Drawing {
     pub paper_skipped: usize,
     /// Layer on/lock states saved by LAYISO (not persisted).
     pub layer_iso: Option<Vec<(String, bool, bool)>>,
+    /// Objects hidden by HIDEOBJECTS / ISOLATEOBJECTS until UNISOLATEOBJECTS (not persisted, not part of undo).
+    pub hidden_objs: std::collections::BTreeSet<u64>,
     undo_stack: Vec<UndoStep>,
     redo_stack: Vec<UndoStep>,
     pre: Option<String>,
@@ -312,6 +314,7 @@ impl Drawing {
             skipped: Default::default(),
             paper_skipped: 0,
             layer_iso: None,
+            hidden_objs: Default::default(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             pre: None,
@@ -740,7 +743,7 @@ impl Drawing {
 
     pub fn is_visible(&self, e: &Entity) -> bool {
         let l = self.layer_of(e);
-        l.on && !l.frozen
+        l.on && !l.frozen && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&e.id))
     }
 
     pub fn is_locked(&self, e: &Entity) -> bool {
@@ -884,7 +887,7 @@ impl Drawing {
 
     pub fn solid_visible(&self, s: &Solid) -> bool {
         let l = self.layer(if s.layer.is_empty() { "0" } else { &s.layer }).unwrap_or(&self.layers[0]);
-        l.on && !l.frozen
+        l.on && !l.frozen && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&s.id))
     }
 
     // ------------------------------------------------------------ blocks

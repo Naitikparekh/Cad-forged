@@ -13,6 +13,7 @@ mod lisp_cmds;
 mod nav;
 mod props;
 mod ui;
+mod visibility;
 
 fn ps(m: &str) -> PromptSpec {
     PromptSpec::new(m)
@@ -23,6 +24,7 @@ pub fn register(r: &mut crate::registry::Registry) {
     images::register(r);
     lisp_cmds::register(r);
     props::register(r);
+    visibility::register(r);
     nav::register(r);
     ui::register(r);
     data::register(r);

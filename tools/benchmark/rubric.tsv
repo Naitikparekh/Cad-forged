@@ -61,7 +61,7 @@ drafting	layers	0.75	Layer manager, states, isolate, freeze, lock, lineweight, t
 drafting	inquiry	1	DIST, AREA, LIST, ID, MEASUREGEOM, MASSPROP, QUICKCALC	crates/cadforge-engine/tests/commands2.rs::AREA|area	
 drafting	draw-order	1	Draw order and DRAWORDER front / back	crates/cadforge-engine/src/commands/system.rs::draworder	
 drafting	constraints	0	Geometric and dimensional constraints		not implemented
-drafting	isolate-objects	0	Isolate / hide objects		not implemented
+drafting	isolate-objects	1	Isolate / hide objects	crates/cadforge-engine/src/commands/ext_tail/visibility.rs::ISOLATEOBJECTS ; crates/cadforge-engine/tests/visibility.rs::isolate_hides ; crates/cadforge-render/tests/hidden.rs::hidden_objects	
 drafting	undo-options	0.5	UNDO marks, groups, control and back	crates/cadforge-engine/src/commands/system.rs::UNDO	one step per command only
 ui	ribbon	1	Ribbon with tabs, panels, slideouts, contextual tabs and minimise states	crates/cadforge-app/src/ribbon.rs::ribbon_mode ; crates/cadforge-app/assets/ribbon.json::hatchcreate	
 ui	app-menu-qat	1	Application menu, quick access toolbar, InfoCenter search	crates/cadforge-app/src/chrome.rs::Quick Access Toolbar ; crates/cadforge-app/src/chrome.rs::search	
