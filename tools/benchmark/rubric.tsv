@@ -81,7 +81,7 @@ ui	cui	0	User interface customization		not implemented
 ui	drag-drop	0.75	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	files only: blocks cannot be dragged out of the palette into the drawing
 ui	localization	0	Interface in other languages		English only
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
-ui	hidpi	0.5	High-DPI scaling	tests/web/run.mjs::a high-DPI display (scale 2)	checked only that the canvas renders at native resolution in headless Chromium at scale 2; pointer mapping and real HiDPI hardware are untested
+ui	hidpi	0.5	High-DPI scaling	tests/web/run.mjs::a high-DPI display	checked only that the canvas renders at native resolution in headless Chromium at scale 2; pointer mapping and real HiDPI hardware are untested
 ui	touch	0	Touch and pen input		not implemented
 annotation	text-styles	0.5	Text styles with any installed font and SHX fonts	crates/cadforge-app/src/dialogs/settings.rs::TextStyleState	five built-in fonts only
 annotation	dim-styles	1	Dimension style manager	crates/cadforge-app/src/dialogs/dimstyle.rs::DimStyle ; crates/cadforge-engine/tests/ext_annotate.rs::dim_styles	
@@ -112,7 +112,7 @@ output	hidden-shaded-plot	0.5	Hidden line and shaded plots	crates/cadforge-rende
 solids3d	primitives	1	Box, cylinder, cone, sphere, wedge, torus, pyramid, polysolid	crates/cadforge-engine/tests/ext_solids.rs::TORUS ; crates/cadforge-engine/tests/ext_solids.rs::POLYSOLID	
 solids3d	sweeps	1	Extrude, revolve, sweep, loft, presspull	crates/cadforge-engine/tests/ext_solids.rs::LOFT ; crates/cadforge-engine/tests/ext_solids.rs::SWEEP	
 solids3d	booleans	1	Union, subtract, intersect	crates/cadforge-core/tests/solid.rs::boolean_volumes_of_overlapping_boxes	
-solids3d	slice-section	0.75	Slice, section planes, interference, thicken, shell	crates/cadforge-engine/tests/ext_solids.rs::SLICE ; crates/cadforge-engine/tests/ext_solids.rs::SECTIONPLANE	no SECTION command
+solids3d	slice-section	1	Slice, section planes, interference, thicken, shell	crates/cadforge-engine/tests/ext_solids.rs::SLICE ; crates/cadforge-engine/tests/ext_solids.rs::SECTIONPLANE ; crates/cadforge-engine/tests/small_commands.rs::section_makes_a_region	
 solids3d	edge-face-edit	0.5	Fillet / chamfer edges and SOLIDEDIT face editing	crates/cadforge-engine/tests/ext_solids.rs::FILLETEDGE	limited face operations on mesh solids
 solids3d	3d-modify	1	3D move, rotate, scale, align, mirror, array	crates/cadforge-engine/tests/ext_solids.rs::3DROTATE	
 solids3d	visual-styles	0.5	Visual styles	crates/cadforge-engine/src/commands/ext_system/view.rs::VSCURRENT	a few styles, no realistic / sketchy

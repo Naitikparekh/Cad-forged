@@ -884,19 +884,6 @@ fn plotstyle_reports_what_is_unsupported() {
 }
 
 #[test]
-fn etransmit_lists_external_references_and_declines_to_package() {
-    let s = Sim::new();
-    s.cmd("ETRANSMIT");
-    assert!(s.history_has("External references:") && s.history_has("none"));
-    assert!(s.history_has("Creating a transmittal package is not supported"));
-    s.doc_mut(|d| {
-        d.blocks.insert("Site".into(), Block { name: "Site".into(), base: p(0., 0.), entities: vec![], xref: Some(XrefInfo { path: "site.dwg".into(), overlay: true, loaded: false }) });
-    });
-    s.cmd("ETRANSMIT");
-    assert!(s.history_has("Site -> site.dwg (overlay)"));
-}
-
-#[test]
 fn appload_asks_the_host_for_a_lisp_or_script_file() {
     let s = with_ui();
     events(&s);

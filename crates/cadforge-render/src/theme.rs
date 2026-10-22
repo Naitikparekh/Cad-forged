@@ -38,10 +38,12 @@ pub struct Prefs {
     pub ucs_icon: bool,
     /// Draw the UCS icon at the UCS origin (when visible) instead of the lower-left corner.
     pub ucs_origin: bool,
+    /// QTEXT: draw text as boxes.
+    pub qtext: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Prefs {
-        Prefs { lw_display: false, lock_fade: 50.0, transparency: true, fill: true, grid: true, grid_unit_x: 10.0, grid_unit_y: 10.0, grid_major: 5, ucs_icon: true, ucs_origin: false }
+        Prefs { lw_display: false, lock_fade: 50.0, transparency: true, fill: true, grid: true, grid_unit_x: 10.0, grid_unit_y: 10.0, grid_major: 5, ucs_icon: true, ucs_origin: false, qtext: false }
     }
 }

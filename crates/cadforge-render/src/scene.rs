@@ -491,11 +491,31 @@ impl<'a> Renderer<'a> {
         }
         let flipped = [m[0], m[1], -m[2], -m[3], m[4], m[5]];
         let col = if hover { self.theme.hover } else { color };
-        for l in &lay.lines {
-            if l.s.is_empty() {
-                continue;
+        if self.prefs.qtext {
+            // QTEXT: one box per line of text instead of the glyphs
+            let paths: Vec<Poly> = lay
+                .lines
+                .iter()
+                .filter(|l| !l.s.is_empty())
+                .map(|l| {
+                    let (w, top, bot) = (l.w, l.y + lay.em * 0.72, l.y);
+                    let pts: Vec<[f64; 2]> = [pt(l.x, top), pt(l.x + w, top), pt(l.x + w, bot), pt(l.x, bot)].iter().map(|p| {
+                        let q = mat::apply(&m, *p);
+                        [q.x, q.y]
+                    }).collect();
+                    Poly { pts, closed: true }
+                })
+                .collect();
+            if !paths.is_empty() {
+                self.ops.push(Op::Stroke { paths, color: col, alpha, width: 1.0, dash: vec![], round: false });
             }
-            self.ops.push(Op::Text { s: l.s.clone(), x: l.x, y: -l.y, m: flipped, em: lay.em, color: col, alpha });
+        } else {
+            for l in &lay.lines {
+                if l.s.is_empty() {
+                    continue;
+                }
+                self.ops.push(Op::Text { s: l.s.clone(), x: l.x, y: -l.y, m: flipped, em: lay.em, color: col, alpha });
+            }
         }
         if selected || hover {
             let (x0, y0, x1, y1) = lay.bx;

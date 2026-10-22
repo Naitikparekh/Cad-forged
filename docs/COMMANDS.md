@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 314 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 329 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -28,6 +28,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `PRESSPULL` | `PP` | Presses or pulls bounded areas into 3D. |
 | `PYRAMID` | `PYR` | Creates a 3D solid pyramid or frustum with a regular base. |
 | `REVOLVE` | `REV` | Creates a 3D solid by sweeping a 2D outline about an axis. |
+| `SECTION` | `SEC` | Creates a region where a plane cuts 3D solids. |
 | `SECTIONPLANE` | `SPLANE` | Draws the outline where a plane cuts the solids, flat in the drawing. |
 | `SHELL` |  | Hollows a solid out, leaving openings where faces are removed. |
 | `SLICE` | `SL` | Cuts solids with a plane and keeps one or both sides. |
@@ -48,7 +49,11 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `MTEXTEDIT` |  | Edits multiline text in the in-place editor. |
+| `QTEXT` |  | Draws text as boxes (QTEXTMODE). |
 | `TABLEEXPORT` |  | Exports data from a table object in CSV file format. |
+| `TCOUNT` |  | Numbers text objects in selection order with a start and an increment. |
+| `TEXTALIGN` |  | Moves text objects onto a line, perpendicular to it. |
 | `TXT2MTXT` |  | Converts single-line text objects to multiline text. |
 
 ## Annotation
@@ -72,6 +77,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `DIMLINEAR` | `DLI` | Creates a linear dimension. |
 | `DIMORDINATE` | `DOR` | Creates ordinate dimensions. |
 | `DIMRADIUS` | `DRA` | Creates a radius dimension for a circle or an arc. |
+| `DIMROTATED` |  | Creates a linear dimension whose dimension line is at a given angle. |
 | `DIMSPACE` |  | Adjusts the spacing between parallel linear dimensions. |
 | `DIMTEDIT` | `DIMTED` | Moves and rotates dimension text. |
 | `FIELD` |  | Creates text with an evaluated field value. |
@@ -153,6 +159,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `GRADIENT` |  | Fills an enclosed area or selected objects with a gradient fill. Settings are chosen at the command line. |
 | `HATCHGENERATEBOUNDARY` |  | Creates a polyline around each loop of a hatch. |
 | `LINE` | `L` | Creates straight line segments. |
+| `LOADPAT` |  | Loads hatch patterns from a .pat file (acad.pat format) so HATCH can use them by name. |
 | `MLINE` | `ML` | Creates multiple parallel lines as a group of two polylines (STANDARD style; justification and scale are supported, styles and MLEDIT are not). |
 | `PLINE` | `PL` | Creates a 2D polyline: a single object made of connected line and arc segments. |
 | `POINT` | `PO` | Creates a point object. |
@@ -172,8 +179,11 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `ARCHIVE` |  | Packs the drawing, its pictures and a report into one ZIP file. |
 | `AUDIT` |  | Evaluates the integrity of a drawing and corrects some errors. |
 | `CLOSEALL` |  | Closes all currently open drawings. |
+| `DRAWINGRECOVERY` |  | Shows whether autosave is on and which open drawings have a recovery file. |
+| `PASTESPEC` |  | Pastes the clipboard as objects, as a block, or at its original coordinates. |
 | `RECOVER` |  | Repairs the open drawing: undefined layers, linetypes and block references. |
 
 ## Inquiry
@@ -201,6 +211,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `LAYER` | `LA` | Manages layers and layer properties. |
 | `LAYERP` |  | Undoes the last change or set of changes made to layer settings. |
 | `LAYERPALL` |  | Resets the layer property overrides in all layout viewports. |
+| `LAYERPMODE` |  | Turns the tracking of layer settings (for LAYERP) on or off. |
 | `LAYFRZ` |  | Freezes the layer of selected objects. |
 | `LAYISO` |  | Hides or locks all layers except those of the selected objects. |
 | `LAYLCK` |  | Locks the layer of a selected object. |
@@ -292,8 +303,17 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `-LINETYPE` |  | Lists, sets or loads linetypes (acad.lin format) from the command line. |
 | `CELTSCALE` |  | Sets the linetype scale for new objects drawn from now on. |
 | `SETBYLAYER` |  | Changes the properties of selected objects to ByLayer. |
+
+## Select
+
+| Command | Aliases | Description |
+|---|---|---|
+| `HIDEOBJECTS` | `OBJECTHIDE` | Hides the selected objects until UNISOLATEOBJECTS. |
+| `ISOLATEOBJECTS` | `ISOLATE` | Hides all objects except the selected ones until UNISOLATEOBJECTS. |
+| `UNISOLATEOBJECTS` | `ENDOBJECTISOLATION` `UNISOLATE` | Displays the objects hidden by ISOLATEOBJECTS or HIDEOBJECTS. |
 
 ## System
 
@@ -424,6 +444,7 @@ Type a variable name at the command line to view or change it.
 | `HIGHLIGHT` | `1` |
 | `INPUTHISTORYMODE` | `15` |
 | `INPUTSEARCHDELAY` | `300` |
+| `LAYERPMODE` | `1` |
 | `LAYLOCKFADECTL` | `50` |
 | `LWDISPLAY` | `0` |
 | `MAXHATCH` | `60000` |
@@ -442,6 +463,8 @@ Type a variable name at the command line to view or change it.
 | `POLARANG` | `90` |
 | `POLARMODE` | `0` |
 | `QPMODE` | `-1` |
+| `QTEXTMODE` | `0` |
+| `SAVETIME` | `10` |
 | `SELECTIONPREVIEW` | `3` |
 | `SHORTCUTMENU` | `11` |
 | `SNAPANG` | `0` |

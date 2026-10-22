@@ -337,9 +337,20 @@ async fn layerclose(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
+/// LAYERPMODE: remember layer-table changes for LAYERP (on) or not (off).
+async fn layerpmode(c: Ctx, _a: Args) -> CmdResult<()> {
+    let cur = c.pref("LAYERPMODE") != 0.0;
+    let r = c.keyword(ps("Enter mode [ON/OFF]").options(&["ON", "OFF"]).default_str(if cur { "ON" } else { "OFF" })).await?;
+    let on = r.kw() == Some("ON");
+    c.setvar("LAYERPMODE", if on { 1.0 } else { 0.0 })?;
+    c.log(&format!("Layer previous tracking is {}.", if on { "on" } else { "off" }));
+    Ok(())
+}
+
 pub(super) fn register(r: &mut Registry, st: &Shared) {
     let s = st.clone();
     r.define(def("Layers", "LAYERP", run(move |c, a| layerp(s.clone(), c, a))).title("Layer Previous").icon("layers").desc("Undoes the last change or set of changes made to layer settings."));
+    r.define(def("Layers", "LAYERPMODE", run(layerpmode)).title("Layer Previous Mode").icon("layers").desc("Turns the tracking of layer settings (for LAYERP) on or off.").transparent());
     r.define(def("Layers", "LAYMRG", run(laymrg)).title("Layer Merge").icon("layers").desc("Merges selected layers into a target layer, removing the previous layers from the drawing."));
     r.define(def("Layers", "LAYTRANS", run(laytrans)).title("Layer Translator").icon("layers").desc("Changes layers to the layer names you specify and merges layers that map to the same name."));
     r.define(def("Layers", "LAYWALK", run(laywalk)).title("Layer Walk").icon("layers").desc("Displays objects on selected layers and hides objects on all other layers."));

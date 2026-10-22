@@ -190,14 +190,10 @@ async fn publish(c: Ctx, a: Args) -> CmdResult<()> {
     Ok(())
 }
 
+/// ETRANSMIT: the drawing and the pictures it needs in one ZIP, with a report that lists what could not be included
+/// (referenced drawings are only taken from open drawings, so they are named in the report).
 async fn etransmit(c: Ctx, _a: Args) -> CmdResult<()> {
-    let xrefs: Vec<String> = c.doc(|d| d.blocks.values().filter_map(|b| b.xref.as_ref().map(|x| format!("  {} -> {}{}", b.name, x.path, if x.overlay { " (overlay)" } else { "" }))).collect());
-    c.log("A transmittal of this drawing would need these files:");
-    c.log("  External references:");
-    c.log(&if xrefs.is_empty() { "  none".to_string() } else { xrefs.join("\n") });
-    c.log("  Fonts: none (text uses the built-in font)");
-    c.log_error("Creating a transmittal package is not supported in this version; copy the files listed above by hand.");
-    Ok(())
+    crate::commands::ext_tail::archive::send_package(&c, "transmittal", "Transmittal").await
 }
 
 // ---------------------------------------------------------------- utilities

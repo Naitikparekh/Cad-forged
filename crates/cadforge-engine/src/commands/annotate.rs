@@ -234,7 +234,7 @@ fn nearest_seg(segs: &[Seg], p: Pt) -> Option<Seg> {
     best.map(|b| b.0)
 }
 
-async fn linear_like(c: Ctx, kind: DimType) -> CmdResult<()> {
+async fn linear_like(c: Ctx, kind: DimType, rotated: bool) -> CmdResult<()> {
     let first = c.point(ps("Specify first extension line origin or <select object>").allow_enter()).await?;
     let (p1, p2);
     if matches!(first, PointR::Enter(None)) {
@@ -260,6 +260,10 @@ async fn linear_like(c: Ctx, kind: DimType) -> CmdResult<()> {
     }
     let ds = cur_dim_style(&c);
     let mut fixed: Option<f64> = None;
+    if rotated {
+        let Some(a) = c.angle(ps("Specify angle of dimension line").default_num(0.0)).await?.value() else { return Ok(()) };
+        fixed = Some(a);
+    }
     let mut override_: Option<String> = None;
     loop {
         let (ds2, ov, fx) = (ds.clone(), override_.clone(), fixed);
@@ -499,7 +503,7 @@ async fn dim(c: Ctx, _a: Args) -> CmdResult<()> {
         Some("Angular") => return Ok(c.sub_forced("DIMANGULAR", Args::none()).await),
         Some("Baseline") => return Ok(c.sub_forced("DIMBASELINE", Args::none()).await),
         Some("Continue") => return Ok(c.sub_forced("DIMCONTINUE", Args::none()).await),
-        Some("aLign") => return linear_like(c, DimType::Ali).await,
+        Some("aLign") => return linear_like(c, DimType::Ali, false).await,
         _ => {}
     }
     let EntR::Entity { id, pt: op, .. } = o else { return Ok(()) };
@@ -721,8 +725,9 @@ pub fn register(r: &mut Registry) {
     r.define(da("TEXT", run(text)).aliases(&["DT", "DTEXT"]).title("Single Line Text").icon("text").desc("Creates a single-line text object."));
     r.define(da("MTEXT", run(mtext)).aliases(&["T", "MT"]).title("Multiline Text").icon("mtext").desc("Creates a multiline text object."));
     r.define(da("TEXTEDIT", run(textedit)).aliases(&["ED"]).title("Edit Text").icon("textedit").desc("Edits a dimensional constraint, dimension text, or text object."));
-    r.define(da("DIMLINEAR", run(|c, _a| linear_like(c, DimType::Lin))).aliases(&["DLI"]).title("Linear").icon("dimlinear").desc("Creates a linear dimension."));
-    r.define(da("DIMALIGNED", run(|c, _a| linear_like(c, DimType::Ali))).aliases(&["DAL"]).title("Aligned").icon("dimaligned").desc("Creates an aligned linear dimension."));
+    r.define(da("DIMLINEAR", run(|c, _a| linear_like(c, DimType::Lin, false))).aliases(&["DLI"]).title("Linear").icon("dimlinear").desc("Creates a linear dimension."));
+    r.define(da("DIMROTATED", run(|c, _a| linear_like(c, DimType::Lin, true))).title("Rotated").icon("dimlinear").desc("Creates a linear dimension whose dimension line is at a given angle."));
+    r.define(da("DIMALIGNED", run(|c, _a| linear_like(c, DimType::Ali, false))).aliases(&["DAL"]).title("Aligned").icon("dimaligned").desc("Creates an aligned linear dimension."));
     r.define(da("DIMRADIUS", run(|c, _a| radial(c, DimType::Rad))).aliases(&["DRA"]).title("Radius").icon("dimradius").desc("Creates a radius dimension for a circle or an arc."));
     r.define(da("DIMDIAMETER", run(|c, _a| radial(c, DimType::Dia))).aliases(&["DDI"]).title("Diameter").icon("dimdiameter").desc("Creates a diameter dimension for a circle or an arc."));
     r.define(da("DIMANGULAR", run(dimangular)).aliases(&["DAN"]).title("Angular").icon("dimangular").desc("Creates an angular dimension."));

@@ -6,6 +6,7 @@
 //! writes it next to the drawing (native).
 use crate::runtime::PromptSpec;
 
+pub(crate) mod archive;
 mod data;
 mod defs;
 mod draw;
@@ -14,6 +15,7 @@ mod lisp_cmds;
 mod nav;
 mod props;
 mod recovery;
+mod small;
 mod ui;
 mod visibility;
 
@@ -40,7 +42,9 @@ pub fn register(r: &mut crate::registry::Registry) {
     props::register(r);
     visibility::register(r);
     defs::register(r);
+    archive::register(r);
     recovery::register(r);
+    small::register(r);
     nav::register(r);
     ui::register(r);
     data::register(r);

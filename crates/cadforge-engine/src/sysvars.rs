@@ -114,6 +114,8 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("TRACEWID", 0.05),
         ("INPUTSEARCHDELAY", 300.0),
         ("SAVETIME", 10.0),
+        ("QTEXTMODE", 0.0),
+        ("LAYERPMODE", 1.0),
     ];
     let mut m: IndexMap<String, Value> = nums.iter().map(|(k, v)| (k.to_string(), n(*v))).collect();
     m.insert("THEME".into(), Value::Str("dark".into()));

@@ -57,6 +57,7 @@ fn observe(st: &Shared, c: &Ctx) {
         return;
     }
     let layers = c.doc(|d| d.layers.clone());
+    let track_layers = c.pref("LAYERPMODE") != 0.0;
     let mut t = st.borrow_mut();
     match t.docs.get_mut(&id) {
         None => {
@@ -64,7 +65,12 @@ fn observe(st: &Shared, c: &Ctx) {
         }
         Some(d) => {
             if d.layers != layers {
-                d.history.push(std::mem::replace(&mut d.layers, layers));
+                if track_layers {
+                    d.history.push(std::mem::replace(&mut d.layers, layers));
+                } else {
+                    // LAYERPMODE is off: keep no history, only follow the current table
+                    d.layers = layers;
+                }
                 if d.history.len() > LAYER_HISTORY {
                     d.history.remove(0);
                 }

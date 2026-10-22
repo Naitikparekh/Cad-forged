@@ -75,6 +75,7 @@ pub fn render_prefs(a: &App) -> Prefs {
         grid_major: sv.int("GRIDMAJOR"),
         ucs_icon: sv.int("UCSICON") != 0,
         ucs_origin: sv.int("UCSORG") != 0,
+        qtext: sv.int("QTEXTMODE") != 0,
     }
 }
 

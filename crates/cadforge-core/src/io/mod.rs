@@ -2,6 +2,7 @@
 pub mod dxf_read;
 pub mod dxf_write;
 pub mod project;
+pub mod zip;
 
 pub use dxf_read::{decode_dxf_bytes, read_dxf, read_dxf_bytes};
 pub use dxf_write::write_dxf;

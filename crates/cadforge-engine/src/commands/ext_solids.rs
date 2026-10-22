@@ -688,6 +688,31 @@ async fn sectionplane(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
+/// SECTION: regions where a plane cuts the solids, drawn flat in the plane's own coordinates (for the XY plane that is
+/// exactly where the cut is). Holes in the section stay holes.
+async fn section_cmd(c: Ctx, _a: Args) -> CmdResult<()> {
+    let ids = select_solids(&c, "Select solids to section").await?;
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let Some(pl) = pick_plane(&c, "Specify first point on section plane or define plane by").await? else { return Ok(()) };
+    let mut outlines: Vec<Vec<V3>> = vec![];
+    for s in c.solids(&ids) {
+        outlines.extend(section_loops(&s.mesh(), &pl));
+    }
+    if outlines.is_empty() {
+        c.log_error("The section plane does not cut the selected solids.");
+        return Ok(());
+    }
+    let (u, v) = pl.basis();
+    let loops: Vec<Vec<Vertex>> = outlines.iter().map(|l| l.iter().map(|p| Vertex::new(p.dot(u), p.dot(v), 0.0)).collect()).collect();
+    let layer = c.doc_mut(|d| d.ensure_layer("SECTION"));
+    let n = loops.len();
+    c.add(Entity::new(Kind::Region(RegionData { loops })).on_layer(&layer));
+    c.log(&format!("Section region created on layer {layer} from {}.", plural(n, "outline")));
+    Ok(())
+}
+
 // ---------------------------------------------------------------- 3D transforms
 
 /// Apply (or copy with) a 3D matrix. Drawing objects follow only when it keeps the drawing plane in place.
@@ -1345,6 +1370,7 @@ pub fn register(r: &mut Registry) {
     r.define(d3("PYRAMID", run(pyramid)).aliases(&["PYR"]).title("Pyramid").icon("cone").desc("Creates a 3D solid pyramid or frustum with a regular base."));
     r.define(d3("POLYSOLID", run(polysolid)).aliases(&["PSOLID"]).title("Polysolid").icon("pline").desc("Creates a 3D wall along a path, like a polyline with width and height."));
     r.define(d3("SLICE", run(slice_cmd)).aliases(&["SL"]).title("Slice").icon("subtract").desc("Cuts solids with a plane and keeps one or both sides."));
+    r.define(d3("SECTION", run(section_cmd)).aliases(&["SEC"]).title("Section").icon("view").desc("Creates a region where a plane cuts 3D solids.").once());
     r.define(d3("SECTIONPLANE", run(sectionplane)).aliases(&["SPLANE"]).title("Section Plane").icon("view").desc("Draws the outline where a plane cuts the solids, flat in the drawing."));
     r.define(d3("3DROTATE", run(rotate3d_gizmo)).title("3D Rotate").icon("rotate").desc("Rotates solids and drawing objects about the X, Y or Z axis through a base point."));
     r.define(dm("ROTATE3D", run(rotate3d)).title("Rotate 3D").icon("rotate").desc("Moves objects about a 3D axis."));
