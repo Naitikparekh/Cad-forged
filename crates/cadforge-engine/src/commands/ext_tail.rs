@@ -13,11 +13,20 @@ mod images;
 mod lisp_cmds;
 mod nav;
 mod props;
+mod recovery;
 mod ui;
 mod visibility;
 
 fn ps(m: &str) -> PromptSpec {
     PromptSpec::new(m)
+}
+
+fn trim_num(v: f64) -> String {
+    if v.fract() == 0.0 {
+        format!("{}", v as i64)
+    } else {
+        format!("{v}")
+    }
 }
 
 fn plural(n: usize, word: &str) -> String {
@@ -31,6 +40,7 @@ pub fn register(r: &mut crate::registry::Registry) {
     props::register(r);
     visibility::register(r);
     defs::register(r);
+    recovery::register(r);
     nav::register(r);
     ui::register(r);
     data::register(r);

@@ -1,6 +1,7 @@
 //! CadForge engine: input pipeline, object snaps, selection, the async command runtime and the AutoCAD-style
 //! command set. UI-agnostic: the egui front end (and the headless tests) drive it through [`app::Handle`].
 pub mod app;
+pub mod autosave;
 pub mod ctx;
 pub mod editor;
 pub mod lisp;

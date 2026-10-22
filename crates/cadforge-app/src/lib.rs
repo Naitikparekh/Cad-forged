@@ -73,6 +73,18 @@ mod web {
         })
     }
 
+    /// Write the recovery files now instead of waiting for SAVETIME (the page flushes like this when it is hidden).
+    #[wasm_bindgen]
+    pub fn autosave_now() -> usize {
+        HOOK.with(|x| {
+            let x = x.borrow();
+            let Some((h, _)) = x.as_ref() else { return 0 };
+            let plan = h.borrow_mut().autosave_tick(true);
+            crate::platform::autosave_apply(&plan);
+            plan.write.len()
+        })
+    }
+
     /// Page coordinates of a world point in the active viewport.
     #[wasm_bindgen]
     pub fn world_to_page(x: f64, y: f64) -> Vec<f64> {
@@ -93,6 +105,18 @@ mod web {
         let window = web_sys::window().ok_or("no window")?;
         let document = window.document().ok_or("no document")?;
         let canvas = document.get_element_by_id(&canvas_id).ok_or("canvas not found")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
+        // leaving or hiding the page may be the last chance to keep unsaved work
+        for event in ["pagehide", "visibilitychange"] {
+            let always = event == "pagehide";
+            let cb = Closure::<dyn FnMut()>::new(move || {
+                if always || web_sys::window().and_then(|w| w.document()).map_or(true, |d| d.hidden()) {
+                    autosave_now();
+                }
+            });
+            let target: &web_sys::EventTarget = if always { window.as_ref() } else { document.as_ref() };
+            let _ = target.add_event_listener_with_callback(event, cb.as_ref().unchecked_ref());
+            cb.forget();
+        }
         eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|cc| Ok(Box::new(CadForgeApp::new(cc))))).await
     }
 

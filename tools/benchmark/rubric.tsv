@@ -43,7 +43,7 @@ io	clipboard	1	Copy / paste with base point, between drawings	crates/cadforge-en
 io	wblock-export	1	Write objects to a new drawing file	crates/cadforge-engine/tests/ext_tail.rs::wblock_saves_a_dxf	
 io	import	1	Import other drawings and images into the current one	crates/cadforge-app/src/misc.rs::import_into_current	
 io	data-extraction	0.75	Data extraction to tables / CSV	crates/cadforge-engine/tests/ext_tail.rs::attext_and_dataextraction	one-step command, no wizard or templates
-io	autosave	0	Automatic save and crash recovery		not implemented
+io	autosave	1	Automatic save and crash recovery	crates/cadforge-engine/src/autosave.rs::pub fn autosave_tick ; crates/cadforge-engine/src/autosave.rs::a_recovery_file_reopens ; tests/web/run.mjs::autosave keeps unsaved work	
 drafting	osnaps	1	Object snaps (end, mid, centre, node, quadrant, intersection, insertion, perpendicular, tangent, nearest, apparent, extension, parallel) running and one-shot	crates/cadforge-engine/src/snap.rs::pub enum SnapKind ; crates/cadforge-engine/src/parse.rs::OS_PAR	
 drafting	snap-from-tt-m2p	1	FROM, temporary tracking point and mid between two points	crates/cadforge-engine/src/parse.rs::Override::M2p ; crates/cadforge-engine/tests/commands2.rs::from	
 drafting	polar-otrack	0.75	Polar tracking, additional angles, object snap tracking	crates/cadforge-engine/src/snap.rs::OTrack	additional polar angles are not settable
@@ -78,7 +78,7 @@ ui	shortcuts	1	Function keys and Ctrl shortcuts	crates/cadforge-app/src/keys.rs:
 ui	tooltips	1	Rollover tooltips with command help	crates/cadforge-app/src/chrome.rs::fn cmd_tip|cmd_tip	
 ui	lisp-console	0.75	Visual LISP console / editor	crates/cadforge-app/src/dialogs/simple.rs::fn ui_vlisp ; tests/web/run.mjs::AutoLISP console	console only, no editor with debugger
 ui	cui	0	User interface customization		not implemented
-ui	drag-drop	1	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	
+ui	drag-drop	0.75	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	files only: blocks cannot be dragged out of the palette into the drawing
 ui	localization	0	Interface in other languages		English only
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
 ui	hidpi	0.25	High-DPI scaling	crates/cadforge-app/src/main.rs::eframe::run_native	relies on the toolkit's automatic scaling; not tested on high-DPI displays
@@ -129,7 +129,7 @@ reliability	performance	1	Large drawings stay interactive (budgets in tests)	cra
 reliability	spatial-index	0	Indexed selection and rendering for very large drawings		linear scans over the entity list
 reliability	differential	1	Results checked against another implementation	crates/cadforge-core/tests/oracle.rs::oracle ; crates/cadforge-core/tests/corpus.rs::ezdxf	
 reliability	suite	1	A broad automated test suite	tests/web/run.mjs::pass ; crates/cadforge-engine/tests/lisp.rs::fn	
-reliability	autosave	0	Autosave, backup, recovery		not implemented
+reliability	autosave	0.75	Autosave, backup, recovery	crates/cadforge-engine/src/autosave.rs::pub fn recover_autosave ; crates/cadforge-engine/tests/autosave.rs::drawingrecovery_reports	no .bak backup copy when saving over a file
 reliability	limits	1	Hard limits on untrusted input	crates/cadforge-core/src/io/dxf_read.rs::cap	
 reliability	lint	1	No deny-level lints; headless engine	crates/cadforge-engine/src/sim.rs::pub struct Sim	
 reliability	undo-memory	0.5	Efficient undo history	crates/cadforge-core/src/drawing.rs::fn snapshot	whole-drawing JSON snapshots per step

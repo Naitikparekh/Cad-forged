@@ -372,6 +372,28 @@ await test('dropping an unsupported file changes nothing', async () => {
   assert.equal(after.editors, before.editors); assert.equal(after.entities, before.entities); assert.equal(after.busy, false);
 });
 
+await test('autosave keeps unsaved work in the browser and a reload recovers it', async () => {
+  const t2 = await launch();                    // a fresh browser context: empty localStorage
+  try {
+    await t2.cmd('CIRCLE'); await t2.cmd('12,34'); await t2.cmd('7');
+    let s = await t2.state(); assert.deepEqual(s.types, ['circle']); assert.equal(s.dirty, true);
+    const wrote = await t2.page.evaluate(() => window.cf.autosave_now());
+    assert.equal(wrote, 1);
+    const keys = await t2.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('cf.autosave.')));
+    assert.equal(keys.length, 1, JSON.stringify(keys));
+    await t2.page.reload();
+    await t2.page.waitForFunction(() => !document.getElementById('loading') || document.getElementById('loading').textContent.startsWith('Could not'), null, { timeout: 60000 });
+    await t2.page.waitForTimeout(1000);
+    s = await t2.state();
+    assert.equal(s.editors, 2, JSON.stringify(s));                 // the blank start-up drawing and the recovered one
+    assert.equal(s.name, 'Drawing1 (recovered)'); assert.deepEqual(s.types, ['circle']); assert.equal(s.dirty, true);
+    assert.ok(s.history.some(h => /Recovered 1 unsaved drawing from the last session/.test(h.text || h)), JSON.stringify(s.history));
+    // the file stays until the drawing is saved or closed
+    const keys2 = await t2.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('cf.autosave.')));
+    assert.deepEqual(keys2, keys);
+  } finally { await t2.close(); }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();

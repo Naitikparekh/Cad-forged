@@ -120,6 +120,8 @@ pub struct App {
     pub(crate) lisp_pause: Option<u64>,
     /// The interpreter shared by every Lisp command of this session.
     pub lisp: Rc<crate::lisp::Interp>,
+    /// Autosave bookkeeping (see [`crate::autosave`]).
+    pub autosave: crate::autosave::AutoSaveState,
 }
 
 impl App {
@@ -149,6 +151,7 @@ impl App {
             recording: None,
             lisp_pause: None,
             lisp: Rc::new(crate::lisp::Interp::new()),
+            autosave: Default::default(),
         }
     }
 
@@ -255,7 +258,8 @@ impl App {
         if idx >= self.editors.len() {
             return;
         }
-        self.editors.remove(idx);
+        let closed = self.editors.remove(idx);
+        self.autosave.editor_closed(closed.id);
         match self.active {
             Some(a) if a == idx => {
                 self.active = None;

@@ -102,6 +102,7 @@ impl CadForgeApp {
         let registry = Rc::new(build_registry());
         let mut app = App::new(registry);
         app.ui.dialogs = true;
+        app.autosave.salt = crate::platform::session_salt();
         let h = Handle::new(app);
         {
             let mut a = h.borrow_mut();
@@ -169,7 +170,37 @@ impl CadForgeApp {
         #[cfg(target_arch = "wasm32")]
         crate::install_hook(app.h.clone(), app.rect_hook.clone());
         app.load_user_aliases();
+        app.recover_autosaved();
         app
+    }
+
+    /// Reopen the drawings a previous session left unsaved (its recovery files), as unsaved tabs.
+    fn recover_autosaved(&mut self) {
+        let mut names = vec![];
+        for (key, json) in crate::platform::autosave_list() {
+            match self.h.borrow_mut().recover_autosave(&key, &json) {
+                Ok(name) => names.push(name),
+                Err(_) => crate::platform::autosave_remove(&key),
+            }
+        }
+        if !names.is_empty() {
+            let msg = format!("Recovered {} unsaved drawing{} from the last session: {}.", names.len(), if names.len() == 1 { "" } else { "s" }, names.join(", "));
+            self.h.borrow_mut().log(&msg, "info");
+            self.toast(&msg);
+        }
+    }
+
+    /// Run the autosave timer; called every frame, cheap until a pass is due.
+    fn autosave(&mut self, ctx: &egui::Context) {
+        let plan = self.h.borrow_mut().autosave_tick(false);
+        if !plan.write.is_empty() || !plan.remove.is_empty() {
+            let failed = crate::platform::autosave_apply(&plan);
+            if failed > 0 {
+                self.toast("Autosave could not store a recovery file (storage is full).");
+            }
+        }
+        // the timer needs a frame now and then even when nothing is happening
+        ctx.request_repaint_after(std::time::Duration::from_secs(20));
     }
 
     pub fn toast(&mut self, msg: &str) {
@@ -272,6 +303,7 @@ impl eframe::App for CadForgeApp {
         let ctx = ui.ctx().clone();
         self.time = ctx.input(|i| i.time);
         self.h.borrow_mut().now = self.time * 1000.0;
+        self.autosave(&ctx);
         if let Some(dark) = self.pending_theme.take() {
             self.set_dark(&ctx, dark);
         }

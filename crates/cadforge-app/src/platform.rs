@@ -26,7 +26,7 @@ mod imp {
         let arr = js_sys::Uint8Array::from(bytes);
         let parts = js_sys::Array::new();
         parts.push(&arr.buffer());
-        let mut opts = web_sys::BlobPropertyBag::new();
+        let opts = web_sys::BlobPropertyBag::new();
         opts.set_type(mime);
         let Ok(blob) = web_sys::Blob::new_with_buffer_source_sequence_and_options(&parts, &opts) else { return };
         let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else { return };
@@ -92,6 +92,27 @@ mod imp {
             let _ = w.navigator().clipboard().write_text(text);
         }
     }
+
+    const AUTOSAVE_PREFIX: &str = "cf.autosave.";
+    /// Store a recovery file; false when the browser refuses (storage full).
+    pub fn autosave_put(key: &str, json: &str) -> bool {
+        storage().is_some_and(|s| s.set_item(&format!("{AUTOSAVE_PREFIX}{key}"), json).is_ok())
+    }
+    pub fn autosave_remove(key: &str) {
+        if let Some(s) = storage() {
+            let _ = s.remove_item(&format!("{AUTOSAVE_PREFIX}{key}"));
+        }
+    }
+    /// Every stored recovery file as (key, project JSON).
+    pub fn autosave_list() -> Vec<(String, String)> {
+        let Some(s) = storage() else { return vec![] };
+        let keys: Vec<String> = (0..s.length().unwrap_or(0)).filter_map(|i| s.key(i).ok().flatten()).filter(|k| k.starts_with(AUTOSAVE_PREFIX)).collect();
+        keys.into_iter().filter_map(|k| Some((k[AUTOSAVE_PREFIX.len()..].to_string(), s.get_item(&k).ok()??))).collect()
+    }
+    /// Unique per session: the clock in milliseconds.
+    pub fn session_salt() -> String {
+        format!("{}", js_sys::Date::now() as u64)
+    }
 }
 
 // ---------------------------------------------------------------- native
@@ -125,6 +146,43 @@ mod imp {
     pub fn download(_name: &str, _bytes: &[u8], _mime: &str) {}
     pub fn pick_files(_accept: &str, _multiple: bool, _purpose: &'static str, _inbox: Inbox, _ctx: eframe::egui::Context) {}
     pub fn copy_to_clipboard(_text: &str) {}
+
+    fn autosave_dir() -> PathBuf {
+        config_file().parent().map(|p| p.join("autosave")).unwrap_or_else(|| PathBuf::from("autosave"))
+    }
+    /// Store a recovery file; false when it could not be written.
+    pub fn autosave_put(key: &str, json: &str) -> bool {
+        let dir = autosave_dir();
+        std::fs::create_dir_all(&dir).is_ok() && std::fs::write(dir.join(format!("{key}.json")), json).is_ok()
+    }
+    pub fn autosave_remove(key: &str) {
+        let _ = std::fs::remove_file(autosave_dir().join(format!("{key}.json")));
+    }
+    /// Every stored recovery file as (key, project JSON).
+    pub fn autosave_list() -> Vec<(String, String)> {
+        let Ok(rd) = std::fs::read_dir(autosave_dir()) else { return vec![] };
+        let mut v: Vec<(String, String)> = rd
+            .filter_map(|e| {
+                let p = e.ok()?.path();
+                (p.extension()? == "json").then_some(())?;
+                Some((p.file_stem()?.to_string_lossy().to_string(), std::fs::read_to_string(&p).ok()?))
+            })
+            .collect();
+        v.sort();
+        v
+    }
+    /// Unique per session: the clock in milliseconds.
+    pub fn session_salt() -> String {
+        format!("{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0))
+    }
 }
 
 pub use imp::*;
+
+/// Carry out an autosave plan: store the files, delete the ones no longer needed. Returns how many could not be stored.
+pub fn autosave_apply(plan: &cadforge_engine::autosave::AutoSavePlan) -> usize {
+    for key in &plan.remove {
+        autosave_remove(key);
+    }
+    plan.write.iter().filter(|f| !autosave_put(&f.key, &f.json)).count()
+}

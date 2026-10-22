@@ -113,6 +113,7 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("AUTOCOMPLETE", 1.0),
         ("TRACEWID", 0.05),
         ("INPUTSEARCHDELAY", 300.0),
+        ("SAVETIME", 10.0),
     ];
     let mut m: IndexMap<String, Value> = nums.iter().map(|(k, v)| (k.to_string(), n(*v))).collect();
     m.insert("THEME".into(), Value::Str("dark".into()));
