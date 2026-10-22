@@ -1,14 +1,21 @@
 # CadForge 2.0
 
 A CAD application with an AutoCAD-style interface and command set: 2D drafting, annotation, hatching,
-blocks, layers, 3D solid modelling, DXF import/export and plotting to PDF/SVG/PNG.
+blocks and external references, layers, paper-space layouts, raster images, AutoLISP, 3D solid modelling, DXF
+import/export and plotting to PDF/SVG/PNG.
 
 It exists in two forms that share one design:
 
-* **Rust** (`crates/`): a Cargo workspace whose UI is built with [egui](https://github.com/emilk/egui). It runs as a
-  **native desktop app** and compiles to **WebAssembly** for the browser (`dist-web/`).
+* **Rust** (`crates/`, the maintained version): a Cargo workspace whose UI is built with
+  [egui](https://github.com/emilk/egui). It runs as a **native desktop app** and compiles to **WebAssembly** for the
+  browser (`dist-web/`).
 * **JavaScript** (`src/`): the original browser version, built into **one self-contained file,
-  `CadForge.html`**. Its modules and unit tests are the specification the Rust code was ported from.
+  `CadForge.html`**. It is no longer extended; its modules and unit tests are the specification the Rust code was
+  ported from.
+
+How close is it to AutoCAD? [docs/BENCHMARK.md](docs/BENCHMARK.md) scores it against a written rubric: **66.6 / 100**
+today, with every gap listed. That is a self-assessment (AutoCAD cannot be run here), not a measurement against the
+product.
 
 ![CadForge drafting](docs/screenshot.png)
 ![CadForge 3D](docs/screenshot-3d.png)
@@ -20,7 +27,7 @@ It exists in two forms that share one design:
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **160 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **314 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).
@@ -31,6 +38,10 @@ It exists in two forms that share one design:
 * **3D solids** (triangle meshes): `BOX`, `CYLINDER`, `CONE`, `SPHERE`, `WEDGE`, `EXTRUDE` (holes, taper, start
   elevation, add/subtract with linked history), `PRESSPULL`, `UNION`, `SUBTRACT`, `INTERSECT` (computed on a worker
   thread), `3DMOVE`, `MASSPROP`, orbit and ViewCube, 2D/Wireframe/Hidden/Shaded visual styles, OBJ and STL export.
+* **Beyond 2D drafting**: paper-space layouts with viewports (`LAYOUT`, `MVIEW`, `VPCLIP`, `PAGESETUP`), tables,
+  multileaders, attributes (`ATTDEF`, `ATTEXT`, `DATAEXTRACTION`), block editing in place (`REFEDIT`, `BEDIT`), external references
+  taken from open drawings with `XCLIP`, raster images (`IMAGEATTACH`, `IMAGECLIP`, `IMAGEADJUST`), and an
+  **AutoLISP** interpreter (`APPLOAD`, the `VLISP` console, `(command ...)`, `c:` commands and `*error*`).
 * **Files**: CadForge JSON, **DXF R2000 export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by
   other tools), **plot to PDF / SVG / PNG** with paper size, scale, lineweights and monochrome options and a live preview.
 
@@ -39,6 +50,11 @@ It exists in two forms that share one design:
 ```sh
 cargo run -p cadforge-app --release --bin cadforge   # native desktop app
 cargo test --workspace                               # core / ops / engine / render / io tests (no GUI needed)
+cargo clippy --workspace --all-targets               # lints: no errors; style warnings remain
+cargo run -q -p cadforge-engine --example commands_doc > docs/COMMANDS.md   # regenerate the command reference
+cargo run -q -p cadforge-engine --example parity     # command coverage vs. the AutoCAD inventories (-- --missing, --json)
+python3 tools/benchmark/score.py --check             # verify every benchmark credit still points at real code / a test
+python3 tools/benchmark/score.py --write             # regenerate docs/BENCHMARK.md
 tools/build-web.sh                                   # WebAssembly build -> dist-web/ (serve it over http)
 tools/build-web.sh dev                               # faster, less optimised wasm build
 node tests/web/run.mjs                               # drive the wasm build in headless Chromium (Playwright)
@@ -60,7 +76,7 @@ npm test             # unit tests (Node 22+): geometry, commands, DXF, plotting,
 npm run test:browser # drives the real UI in headless Chromium (needs Playwright + Chromium)
 ```
 
-`node tools/gen-commands.mjs` regenerates the command reference. A lint configuration is in `eslint.config.mjs`.
+A lint configuration is in `eslint.config.mjs`. The command reference is generated from the Rust registry (see above).
 
 ## Layout
 
@@ -72,7 +88,10 @@ crates/cadforge-render   scene -> backend-independent draw ops; plot layout; PDF
 crates/cadforge-engine   async command runtime (no executor crate), snapping, selection, system variables, command registry, ~160 commands, test `Sim`
 crates/cadforge-app      egui front end: ribbon, viewport + ViewCube, command line, palettes, dialogs, file/platform glue (native + wasm)
 tools/build-web.sh       wasm32 build + wasm-bindgen into dist-web/
+tools/benchmark          AutoCAD command inventories, rubric and score.py (see docs/BENCHMARK.md)
+tools/extend-ui.py       adds ribbon panels / icons for newer commands to the generated app data
 tests/web                headless-Chromium tests and screenshot tours for the wasm build
+tests/dxf                ezdxf-written corpus (make-corpus.py) that the DXF reader and writer are tested against
 ```
 
 JavaScript version:
@@ -95,9 +114,14 @@ with a scripted "user" (`tests/unit/sim.js` in JS, `cadforge_engine::sim::Sim` i
 
 ## Limitations
 
-No DWG, no paper-space layouts/viewports (plotting is of model space), no B-rep solids (meshes only: no fillet or
-face editing of solids), no image/OLE/xref entities, limited DXF dimension-style import (dimensions are imported as
-their drawn geometry), and a single text font. See `HANDOFF.md`.
+No DWG (DXF only), no B-rep solids (meshes only: no fillet or face editing of solids), no surfaces or meshes, no
+rendering, no sheet sets, no dynamic blocks, no OLE objects or PDF/DGN underlays, no plot styles (CTB/STB), MTEXT
+supports paragraphs but not inline bold/colour/stacking, hatch patterns are a set of 12, and there is a single text
+font. External references are taken from drawings that are already open (no reload from a path).
+
+DXF notes: raster images are written as references to the image file (pixels are not embedded in the DXF), and
+`XCLIP` boundaries are display-only and are not written to DXF. See `HANDOFF.md` and `docs/BENCHMARK.md` for the full
+list.
 
 The egui build draws text with Liberation Sans (SIL OFL) and Inter, shipped in `crates/cadforge-app/assets/fonts`.
 
