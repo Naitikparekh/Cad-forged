@@ -124,6 +124,41 @@ impl CadForgeApp {
         }
     }
 
+    /// Files dropped on the window go where the matching command would have put them, chosen by extension: drawings
+    /// open, pictures start IMAGEATTACH, `.lsp` / `.scr` load like APPLOAD, `.lin` / `.pat` load definitions.
+    pub fn take_dropped(&mut self, ctx: &egui::Context) {
+        let (dropped, hovering) = ctx.input(|i| (i.raw.dropped_files.clone(), !i.raw.hovered_files.is_empty()));
+        if hovering {
+            let screen = ctx.content_rect();
+            let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("drop_overlay")));
+            p.rect_filled(screen, 0.0, egui::Color32::from_black_alpha(110));
+            p.text(screen.center(), egui::Align2::CENTER_CENTER, "Drop to open or attach", egui::FontId::proportional(22.0), egui::Color32::WHITE);
+        }
+        for f in dropped {
+            let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let Some(purpose) = dropped_purpose(&name) else {
+                self.toast(&format!("{name}: CadForge opens .dxf and .json drawings, .png / .jpg pictures, .lsp / .scr, .lin and .pat files."));
+                continue;
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            match f.bytes() {
+                Ok(bytes) => self.inbox.borrow_mut().push(Picked { purpose, name, bytes }),
+                Err(e) => self.toast(&format!("Could not read {name}: {e}")),
+            }
+            // browsers read files asynchronously: the bytes arrive in the inbox a moment later
+            #[cfg(target_arch = "wasm32")]
+            {
+                let (inbox, ctx2) = (self.inbox.clone(), ctx.clone());
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Ok(bytes) = f.bytes_async().await {
+                        inbox.borrow_mut().push(Picked { purpose, name, bytes });
+                        ctx2.request_repaint();
+                    }
+                });
+            }
+        }
+    }
+
     /// Files delivered by the platform (browser chooser or the native file dialog).
     pub fn process_inbox(&mut self) {
         let items: Vec<Picked> = std::mem::take(&mut *self.inbox.borrow_mut());
@@ -655,6 +690,7 @@ impl CadForgeApp {
     pub fn show_context_menu(&mut self, ctx: &egui::Context) {
         self.show_app_menu(ctx);
         self.layer_dropdown(ctx);
+        self.take_dropped(ctx);
         self.process_inbox();
         let Some((pos, shift, _ctrl)) = self.context_menu_pending.take() else { return };
         let origin = self.vp.rect.map_or(pos, |r| r.min);
@@ -890,4 +926,35 @@ fn menubar_defs() -> Vec<(&'static str, Vec<MbEntry>)> {
         ),
         ("Help", vec![cs("HELP", "Help", "F1"), c("ABOUT", "About CadForge")]),
     ]
+}
+
+/// Which command a dropped file belongs to, by its extension.
+pub fn dropped_purpose(name: &str) -> Option<&'static str> {
+    let ext = name.rsplit('.').next()?.to_lowercase();
+    Some(match ext.as_str() {
+        "dxf" | "json" | "cadforge" => "open",
+        "png" | "jpg" | "jpeg" => "image",
+        "lsp" | "scr" => "lisp",
+        "lin" => "lin",
+        "pat" => "pat",
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod drop_tests {
+    use super::dropped_purpose;
+
+    #[test]
+    fn extensions_choose_the_command() {
+        assert_eq!(dropped_purpose("plan.DXF"), Some("open"));
+        assert_eq!(dropped_purpose("a.cadforge.json"), Some("open"));
+        assert_eq!(dropped_purpose("site.JPEG"), Some("image"));
+        assert_eq!(dropped_purpose("tools.lsp"), Some("lisp"));
+        assert_eq!(dropped_purpose("setup.scr"), Some("lisp"));
+        assert_eq!(dropped_purpose("fence.lin"), Some("lin"));
+        assert_eq!(dropped_purpose("weave.pat"), Some("pat"));
+        assert_eq!(dropped_purpose("notes.docx"), None);
+        assert_eq!(dropped_purpose("noext"), None);
+    }
 }

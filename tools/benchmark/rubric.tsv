@@ -78,7 +78,7 @@ ui	shortcuts	1	Function keys and Ctrl shortcuts	crates/cadforge-app/src/keys.rs:
 ui	tooltips	1	Rollover tooltips with command help	crates/cadforge-app/src/chrome.rs::fn cmd_tip|cmd_tip	
 ui	lisp-console	0.75	Visual LISP console / editor	crates/cadforge-app/src/dialogs/simple.rs::fn ui_vlisp ; tests/web/run.mjs::AutoLISP console	console only, no editor with debugger
 ui	cui	0	User interface customization		not implemented
-ui	drag-drop	0	Dragging files and blocks into the drawing		not implemented
+ui	drag-drop	1	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	
 ui	localization	0	Interface in other languages		English only
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
 ui	hidpi	0.25	High-DPI scaling	crates/cadforge-app/src/main.rs::eframe::run_native	relies on the toolkit's automatic scaling; not tested on high-DPI displays

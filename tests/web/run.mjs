@@ -334,6 +334,44 @@ await test('LOADPAT reads a .pat file through the chooser', async () => {
   const s = await t.state(); assert.ok(s.history.some(h => /Loaded 1 hatch pattern: WEB_WEAVE/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
 });
 
+// a file dragged from the desktop onto the canvas
+const drop = async (name, mime, buf) => {
+  await page.evaluate(({ name, mime, b64 }) => {
+    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const dt = new DataTransfer(); dt.items.add(new File([bin], name, { type: mime }));
+    const canvas = document.querySelector('canvas');
+    for (const type of ['dragenter', 'dragover', 'drop']) canvas.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, { name, mime, b64: Buffer.from(buf).toString('base64') });
+  await page.waitForTimeout(600); await t.frame(4);
+};
+
+await test('dropping a DXF opens it as a new drawing', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const before = (await t.state()).editors;
+  await drop('L-Bracket.dxf', 'application/dxf', fs.readFileSync(sample('L-Bracket.dxf')));
+  const s = await t.state();
+  assert.equal(s.name, 'L-Bracket'); assert.equal(s.entities, 5); assert.equal(s.editors, before + 1);
+});
+
+await test('dropping a PNG starts IMAGEATTACH and a .lin file loads its linetypes', async () => {
+  await drop('pic.png', 'image/png', testPng());
+  let s = await t.state(); assert.equal(s.busy, true, JSON.stringify(s.history));
+  assert.ok(/insertion point/i.test(s.prompt), s.prompt);
+  await page.keyboard.press('Escape'); await t.frame(3);
+  await drop('drop.lin', 'text/plain', Buffer.from('*DROP_LT, dropped\nA,6,-3\n'));
+  s = await t.state(); assert.equal(s.busy, true, JSON.stringify(s.history));
+  await t.cmd(''); await t.frame(3);
+  s = await t.state(); assert.ok(s.history.some(h => /Loaded 1 linetype: DROP_LT/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
+});
+
+await test('dropping an unsupported file changes nothing', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const before = await t.state();
+  await drop('notes.docx', 'application/octet-stream', Buffer.from('not a drawing'));
+  const after = await t.state();
+  assert.equal(after.editors, before.editors); assert.equal(after.entities, before.entities); assert.equal(after.busy, false);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();
