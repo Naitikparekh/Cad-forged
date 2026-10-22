@@ -197,3 +197,31 @@ fn wblock_saves_a_dxf_with_the_blocks_it_uses() {
         k => panic!("{k:?}"),
     }
 }
+
+#[test]
+fn the_action_recorder_captures_a_macro_that_replays_through_script() {
+    let s = Sim::new();
+    s.cmd("ACTRECORD");
+    assert!(s.history_has("Recording"));
+    s.cmd("ACTRECORD");
+    assert!(s.history_has("already recording"));
+    // a line drawn with the mouse and a circle with typed input
+    s.cmd("LINE").click(0., 0.).click(30., 0.).enter();
+    s.cmd("CIRCLE").ty("10,10").ty("5");
+    s.cmd("ACTSTOP").ty("Parts");
+    let (name, text) = saved_file(&s).expect("a macro file");
+    assert_eq!(name, "Parts.scr");
+    let lines: Vec<&str> = text.trim_end().split("\r\n").collect();
+    assert_eq!(lines, vec!["LINE", "0,0", "30,0", "", "CIRCLE", "10,10", "5"], "{text:?}");
+    assert!(s.history_has("Recorded 6 steps"));
+    // replay on a fresh drawing
+    let t = Sim::new();
+    let script: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    t.h.borrow_mut().queue_script(script);
+    t.h.pump();
+    assert_eq!(t.n(), 2, "{}", t.log_text());
+    assert!(matches!(t.ent(0).kind, Kind::Line { .. }) && matches!(t.ent(1).kind, Kind::Circle { .. }));
+    // stopping when nothing records
+    s.cmd("ACTSTOP");
+    assert!(s.history_has("not recording"));
+}

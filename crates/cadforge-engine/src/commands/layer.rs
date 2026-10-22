@@ -295,7 +295,8 @@ fn all_layer_names(c: &Ctx) -> Vec<String> {
 }
 
 async fn pick_layer(c: &Ctx, prompt: &str) -> CmdResult<Option<String>> {
-    let Some(id) = c.pick_entity(ps(prompt)).await? else { return Ok(None) };
+    // the layer commands act on the layer of the picked object, so a locked layer must not hide it
+    let Some(id) = c.pick_entity(ps(prompt).allow_locked()).await? else { return Ok(None) };
     Ok(c.entity_by_id(id).map(|e| c.doc(|d| d.layer_of(&e).name.clone())))
 }
 

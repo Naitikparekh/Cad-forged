@@ -189,6 +189,8 @@ pub struct PromptSpec {
     pub solids: bool,
     pub single: bool,
     pub allow_off: bool,
+    /// Entity prompts: objects on locked layers can be picked too.
+    pub allow_locked: bool,
 }
 
 impl PromptSpec {
@@ -289,6 +291,10 @@ impl PromptSpec {
     }
     pub fn allow_off(mut self) -> Self {
         self.allow_off = true;
+        self
+    }
+    pub fn allow_locked(mut self) -> Self {
+        self.allow_locked = true;
         self
     }
 }
@@ -614,14 +620,40 @@ impl App {
 
     /// Resolve a prompt: store the reply and queue the task's root future to resume.
     pub(crate) fn deliver(&mut self, task: TaskId, reply: Reply) {
+        let ucs = self.ucs();
+        let recording = self.recording.is_some();
         let Some(t) = self.rt.tasks.get_mut(&task) else { return };
         let Some(p) = t.pending.take() else { return };
         let reply = if p.kind == PromptKind::Select { Reply::Selection(p.set.iter().copied().collect()) } else { reply };
+        // the Action Recorder keeps what a user would have typed to produce this answer
+        let mut recorded: Vec<String> = vec![];
+        if recording {
+            let at = |q: Pt| {
+                let u = ucs.from_wcs(q);
+                format!("{},{}", u.x, u.y)
+            };
+            match &reply {
+                Reply::Pt { pt, .. } => recorded.push(at(*pt)),
+                Reply::Num { value, pt, .. } => recorded.push(pt.map_or_else(|| format!("{value}"), at)),
+                Reply::Text(t) => recorded.push(t.clone()),
+                Reply::Kw(k) => recorded.push(k.clone()),
+                Reply::Enter { pt, value, text, kw } => recorded.push(kw.clone().or_else(|| text.clone()).or_else(|| value.map(|v| format!("{v}"))).or_else(|| pt.map(at)).unwrap_or_default()),
+                Reply::Entity { pt, .. } => recorded.push(at(*pt)),
+                Reply::Selection(ids) => {
+                    recorded.push(format!("<ID:{}>", ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")));
+                    recorded.push(String::new());
+                }
+                Reply::Solid { .. } | Reply::Dialog(_) => {}
+            }
+        }
         t.slot = Some(Ok(reply));
         let root = t.root;
         self.rt.override_ = None;
         self.rt.preview.clear();
         self.rt.ready.push_back(root);
+        if let Some(rec) = self.recording.as_mut() {
+            rec.extend(recorded);
+        }
     }
 
     pub(crate) fn deliver_err(&mut self, task: TaskId, err: CmdError) {
@@ -670,6 +702,11 @@ impl App {
     pub(crate) fn begin_task(&mut self, def: &Rc<crate::registry::CommandDef>, transparent: bool, is_top: bool, root: Option<TaskId>) -> TaskId {
         let id = self.rt.next_task;
         self.rt.next_task += 1;
+        if is_top && !def.name.starts_with('_') && !matches!(def.name.as_str(), "ACTRECORD" | "ACTSTOP") {
+            if let Some(rec) = self.recording.as_mut() {
+                rec.push(def.name.clone());
+            }
+        }
         self.rt.tasks.insert(id, TaskState { def: def.clone(), pending: None, preview_fn: None, slot: None, fut: None, transparent, is_top, root: root.unwrap_or(id) });
         self.rt.stack.push(id);
         if !transparent && is_top {
@@ -800,7 +837,8 @@ impl App {
             PromptKind::Entity => {
                 let filter = self.pending_filter(task);
                 let ap = self.aperture_world(None);
-                let hit = pick_at(&self.editor().expect("editor").doc, raw, ap, filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool), None);
+                let locked_ok = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.spec.allow_locked);
+                let hit = pick_at_locked(&self.editor().expect("editor").doc, raw, ap, filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool), None, locked_ok);
                 match hit {
                     Some(id) => self.deliver(task, Reply::Entity { id, pt: raw, shift: mods.shift }),
                     None => self.log("Nothing selected", "error"),

@@ -106,7 +106,7 @@ fn new_commands_resolve_with_their_acad_pgp_aliases() {
         "CLOSEALL",
         "SAVEALL",
         "REINIT",
-        "RECORD",
+        "ACTRECORD",
         "APPLOAD",
         "COPYBASE",
         "PASTEBLOCK",
@@ -875,12 +875,11 @@ fn preview_opens_the_plot_dialog_in_preview_mode() {
 }
 
 #[test]
-fn plotstyle_and_publish_and_record_report_what_is_unsupported() {
+fn plotstyle_and_publish_report_what_is_unsupported() {
     let s = with_ui();
     events(&s);
-    s.cmd("PLOTSTYLE").cmd("RECORD");
+    s.cmd("PLOTSTYLE");
     assert!(s.history_has("Plot styles are not supported"));
-    assert!(s.history_has("Action Recorder is not supported"));
     s.cmd("PUBLISH");
     assert!(s.history_has("Publishing several sheets in one job is not supported"));
     assert_eq!(ui_actions(&s)[0].0, "EXPORTPDF");

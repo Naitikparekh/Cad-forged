@@ -22,11 +22,16 @@ fn is_infinite(e: &Entity) -> bool {
 /// Topmost entity within `ap` world units of `p`. Nearest wins; ties go to the later (upper) entity.
 /// Filled hatches yield to line work.
 pub fn pick_at(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Option<&HashSet<u64>>) -> Option<u64> {
+    pick_at_locked(doc, p, ap, filter, exclude, false)
+}
+
+/// [`pick_at`], optionally also picking objects on locked layers (LAYULK and friends need to).
+pub fn pick_at_locked(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Option<&HashSet<u64>>, locked_ok: bool) -> Option<u64> {
     let mut best: Option<u64> = None;
     let mut best_score = f64::INFINITY;
     let win = Bounds::new(p.x - ap, p.y - ap, p.x + ap, p.y + ap);
     for e in doc.entities() {
-        if !selectable(doc, e) || !passes(filter, e) || exclude.is_some_and(|x| x.contains(&e.id)) {
+        if !(doc.is_visible(e) && (locked_ok || !doc.is_locked(e))) || !passes(filter, e) || exclude.is_some_and(|x| x.contains(&e.id)) {
             continue;
         }
         if !is_infinite(e) && !bounds_of(e, doc).is_some_and(|b| b.overlaps(&win)) {

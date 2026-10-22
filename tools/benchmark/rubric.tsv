@@ -1,0 +1,151 @@
+# Checklist items of the AutoCAD parity benchmark (see docs/BENCHMARK.md).
+# axis <TAB> id <TAB> credit (0..1) <TAB> what AutoCAD offers <TAB> evidence <TAB> what is missing
+# Credit is a self-assessment; every credit above 0 must point at code or tests (path-or-glob::regex, several separated by " ; ")
+# and `score.py --check` fails when a pointer no longer matches.  Credit 0 items list a known gap and need no evidence.
+
+objects	line-xline-ray	1	Lines, construction lines and rays	crates/cadforge-core/src/entities.rs::Xline \{ p: Pt ; crates/cadforge-engine/tests/draw.rs::(?i)xline	
+objects	circle-arc-ellipse	1	Circles, arcs, ellipses and elliptical arcs	crates/cadforge-core/src/entities.rs::Ellipse\(EllipseData\) ; crates/cadforge-engine/tests/draw.rs::(?i)ellipse|crates/cadforge-core/tests/corpus.rs::ellipse	
+objects	polyline	1	Polylines with arc segments, closed shapes, join and edit	crates/cadforge-core/src/entities.rs::Pline \{ ; crates/cadforge-engine/tests/ext_modify.rs::PEDIT	
+objects	polyline-width	0	Polylines with start / end widths		Vertex carries x, y and bulge only
+objects	spline	0.5	Splines (fit points, control vertices, weights, knots)	crates/cadforge-core/src/entities.rs::Spline \{ fit	fit-point splines only: no control vertices, weights or knots
+objects	point	1	Points with PDMODE / PDSIZE styles	crates/cadforge-core/src/style.rs::pdmode	
+objects	text	0.75	Single-line text and multiline text with width	crates/cadforge-core/src/text.rs::multi	MTEXT supports \P paragraphs only: no inline bold, colour, stacking or columns
+objects	dimensions	1	Linear, aligned, angular, radius, diameter, ordinate, arc length, jogged, baseline and continued dimensions	crates/cadforge-core/src/dim.rs::enum DimType ; crates/cadforge-engine/tests/ext_annotate.rs::DIMARC	
+objects	dim-associativity	0	Dimensions that follow the geometry they measure		dimensions keep their own definition points
+objects	leaders	1	Leaders and multileaders with styles	crates/cadforge-engine/src/commands/ext_annotate/leaders.rs::MLEADER ; crates/cadforge-engine/tests/ext_annotate.rs::MLEADERSTYLE	
+objects	tables	0.75	Tables with merged cells, styles and cell text	crates/cadforge-core/src/entities.rs::pub struct TableData ; crates/cadforge-engine/tests/ext_annotate.rs::TABLE	no formulas or data links
+objects	hatch	0.75	Pattern, solid and gradient hatches with islands	crates/cadforge-core/src/entities.rs::pub struct GradientData ; crates/cadforge-core/tests/corpus.rs::hatches_keep_islands	hatches are not associative; 12 patterns
+objects	region-wipeout-cloud	1	Regions, wipeouts, revision clouds, donuts, 2D solids and traces	crates/cadforge-core/src/entities.rs::Region\(RegionData\) ; crates/cadforge-engine/tests/ext_tail.rs::trace_draws ; crates/cadforge-engine/tests/ext_modify.rs::REVCLOUD	
+objects	blocks	1	Block references with attributes, nesting, scale and rotation	crates/cadforge-engine/tests/ext_blocks.rs::BEDIT ; crates/cadforge-core/src/entities.rs::pub struct AttribData	
+objects	xref	0.5	External references (attach, overlay, bind, clip)	crates/cadforge-engine/tests/ext_blocks.rs::XATTACH ; crates/cadforge-engine/tests/ext_refedit.rs::xclip	references are taken from open drawings; no reload from a file path
+objects	raster-image	0.75	Raster images with clip, brightness / contrast / fade, frame	crates/cadforge-core/src/picture.rs::pub struct ImageDef ; crates/cadforge-engine/tests/ext_images.rs::imageclip	PNG and JPEG only
+objects	underlays	0	PDF, DGN and DWF underlays		not implemented
+objects	ole	0	OLE objects		not implemented
+objects	wireframe-3d	0	3D polylines, 3D lines and Z coordinates on every object		entities are 2D; only solids have a third dimension
+objects	mesh-surface-cloud	0	Meshes, surfaces and point clouds		not implemented
+objects	layout-viewports	1	Layouts and viewports as drawing objects	crates/cadforge-core/src/entities.rs::pub struct ViewportData ; crates/cadforge-engine/tests/layouts.rs::MVIEW	
+objects	groups	1	Named and unnamed groups	crates/cadforge-engine/tests/ext_modify.rs::GROUP	
+io	native-project	1	A lossless native file with the whole drawing	crates/cadforge-core/tests/oracle.rs::json ; crates/cadforge-core/tests/image.rs::pictures_survive_the_project_file	
+io	dxf-read	1	Read DXF R2000 to R2018 (ASCII)	crates/cadforge-core/tests/corpus.rs::every_dxf_version_yields_the_same_geometry	
+io	dxf-write	1	Write DXF that AutoCAD-class readers accept	crates/cadforge-core/tests/corpus.rs::pass_the_ezdxf_audit	
+io	dxf-r12	0.5	Read old DXF (R12 / R13 / R14)	crates/cadforge-core/tests/dxf.rs::POLYLINE|VERTEX	only generated R2000+ files are in the corpus
+io	dxf-binary	0	Binary DXF		not implemented
+io	dwg	0	DWG read and write		not implemented: the format is proprietary
+io	dxf-text	1	Text encodings: code pages, UTF-8, \U+ and %% codes	crates/cadforge-core/tests/corpus.rs::text_is_decoded_from_ansi_and_utf8_files	
+io	dxf-layouts	1	Paper space layouts, viewports and sheet sizes in DXF	crates/cadforge-core/tests/corpus.rs::our_writer_keeps_sheet_sizes_viewports_and_gradients	
+io	dxf-objects	0.75	Newer entities in DXF: multileader, mline, wipeout, images, gradients, attributes	crates/cadforge-core/tests/corpus.rs::modern_annotation_and_misc_entities ; crates/cadforge-core/tests/image.rs::ezdxf_accepts_the_image	some are read as simpler geometry (MLINE as polylines, multileaders as leader and text)
+io	pdf-export	1	Vector PDF with text, lineweights, images and layouts	crates/cadforge-render/tests/image.rs::pdf_embeds_the_picture ; crates/cadforge-render/tests/render.rs::plot_pdf_and_svg	
+io	svg-png-export	1	SVG and PNG output	crates/cadforge-render/tests/image.rs::svg_embeds_the_picture ; crates/cadforge-render/tests/render.rs::png_raster_has_ink	
+io	plot-styles	0	Plot style tables (CTB / STB) and device drivers		not implemented
+io	mesh-export	1	STL / OBJ export of solids	crates/cadforge-engine/src/commands/solids.rs::STLOUT	
+io	cad-interchange	0	SAT, STEP, IGES, FBX, 3DS and other exchange formats		not implemented
+io	clipboard	1	Copy / paste with base point, between drawings	crates/cadforge-engine/src/commands/ext_system/clipboard.rs::COPYBASE	
+io	wblock-export	1	Write objects to a new drawing file	crates/cadforge-engine/tests/ext_tail.rs::wblock_saves_a_dxf	
+io	import	1	Import other drawings and images into the current one	crates/cadforge-app/src/misc.rs::import_into_current	
+io	data-extraction	0.75	Data extraction to tables / CSV	crates/cadforge-engine/tests/ext_tail.rs::attext_and_dataextraction	one-step command, no wizard or templates
+io	autosave	0	Automatic save and crash recovery		not implemented
+drafting	osnaps	1	Object snaps (end, mid, centre, node, quadrant, intersection, insertion, perpendicular, tangent, nearest, apparent, extension, parallel) running and one-shot	crates/cadforge-engine/src/snap.rs::pub enum SnapKind ; crates/cadforge-engine/src/parse.rs::OS_PAR	
+drafting	snap-from-tt-m2p	1	FROM, temporary tracking point and mid between two points	crates/cadforge-engine/src/parse.rs::Override::M2p ; crates/cadforge-engine/tests/commands2.rs::from	
+drafting	polar-otrack	0.75	Polar tracking, additional angles, object snap tracking	crates/cadforge-engine/src/snap.rs::OTrack	additional polar angles are not settable
+drafting	ortho-grid-snap	0.75	Ortho, grid, snap with rotation, isometric snap	crates/cadforge-engine/src/snap.rs::grid	no isometric snap style
+drafting	dynamic-input	0.75	Dynamic input at the cursor	crates/cadforge-app/src/chrome.rs::Dynamic Input	fewer fields than AutoCAD
+drafting	coordinate-entry	1	Absolute, relative, polar and direct distance entry	crates/cadforge-engine/src/parse.rs::fn parse_input	
+drafting	ucs	0.5	User coordinate systems	crates/cadforge-engine/tests/ucs.rs::UCS	2D origin and rotation only
+drafting	selection-methods	1	Pick, window, crossing, fence, polygons, ALL, Last, Previous, add / remove	crates/cadforge-engine/src/runtime.rs::WP ; crates/cadforge-engine/tests/modify.rs::left-to-right window	
+drafting	qselect-filter	1	Quick select, select similar and filters	crates/cadforge-engine/tests/lisp_cad.rs::ssget_filters ; crates/cadforge-engine/tests/lisp_cad.rs::ssget_filters	
+drafting	grips	0.5	Grip editing: stretch, move, rotate, scale, mirror	crates/cadforge-core/src/entities.rs::enum GripKind	stretch and move only
+drafting	selection-preview	0.5	Rollover highlight and selection cycling	crates/cadforge-engine/src/select.rs::pick_all	no cycling UI
+drafting	properties	1	Properties palette and quick properties with live editing	crates/cadforge-app/src/palettes.rs::quick_props	
+drafting	matchprop	1	MATCHPROP, CHPROP and SETBYLAYER	crates/cadforge-engine/tests/ext_modify.rs::chprop_changes ; crates/cadforge-engine/tests/ext_tail.rs::setbylayer	
+drafting	layers	0.75	Layer manager, states, isolate, freeze, lock, lineweight, transparency	crates/cadforge-engine/tests/ext_system.rs::LAYISO	no layer filter groups or viewport overrides
+drafting	inquiry	1	DIST, AREA, LIST, ID, MEASUREGEOM, MASSPROP, QUICKCALC	crates/cadforge-engine/tests/commands2.rs::AREA|area	
+drafting	draw-order	1	Draw order and DRAWORDER front / back	crates/cadforge-engine/src/commands/system.rs::draworder	
+drafting	constraints	0	Geometric and dimensional constraints		not implemented
+drafting	isolate-objects	0	Isolate / hide objects		not implemented
+drafting	undo-options	0.5	UNDO marks, groups, control and back	crates/cadforge-engine/src/commands/system.rs::UNDO	one step per command only
+ui	ribbon	1	Ribbon with tabs, panels, slideouts, contextual tabs and minimise states	crates/cadforge-app/src/ribbon.rs::ribbon_mode ; crates/cadforge-app/assets/ribbon.json::hatchcreate	
+ui	app-menu-qat	1	Application menu, quick access toolbar, InfoCenter search	crates/cadforge-app/src/chrome.rs::Quick Access Toolbar ; crates/cadforge-app/src/chrome.rs::search	
+ui	doc-tabs-start	1	Drawing tabs, start page, recent files	crates/cadforge-app/src/chrome.rs::fn doctabs ; crates/cadforge-app/src/misc.rs::fn start_page	
+ui	command-line	1	Command line with history, autocomplete and dynamic prompts	crates/cadforge-app/src/keys.rs::suggestions ; crates/cadforge-app/src/chrome.rs::cmd_suggestions	
+ui	status-bar	1	Status bar drawing-aid toggles	crates/cadforge-app/src/chrome.rs::StatusItem	
+ui	layout-tabs	1	Model and layout tabs with context menu	crates/cadforge-app/src/layouts_ui.rs::secondary_clicked	
+ui	palettes	1	Properties, Layer Properties Manager, Tool Palettes and Blocks palette	crates/cadforge-app/src/palettes.rs::fn block_tab ; crates/cadforge-app/src/palettes.rs::fn tool_palette	
+ui	viewcube-nav	1	ViewCube, navigation bar, wheel / MMB pan and zoom, orbit	crates/cadforge-app/src/viewport.rs::ViewCube|viewcube ; tests/web/run.mjs::ViewCube	
+ui	context-menus	1	Context menus for the drawing area, objects, tabs and ribbon	crates/cadforge-app/src/misc.rs::fn show_context_menu	
+ui	dialogs	1	Settings, options, units, styles, page setup, plot, insert, hatch and text editors, colour pickers	crates/cadforge-app/src/dialogs/mod.rs::Kind::DimStyle ; tests/web/run.mjs::MTEXT editor	
+ui	themes	1	Dark and light themes	tests/web/run.mjs::light theme	
+ui	shortcuts	1	Function keys and Ctrl shortcuts	crates/cadforge-app/src/keys.rs::Key::	
+ui	tooltips	1	Rollover tooltips with command help	crates/cadforge-app/src/chrome.rs::fn cmd_tip|cmd_tip	
+ui	lisp-console	0.75	Visual LISP console / editor	crates/cadforge-app/src/dialogs/simple.rs::fn ui_vlisp ; tests/web/run.mjs::AutoLISP console	console only, no editor with debugger
+ui	cui	0	User interface customization		not implemented
+ui	drag-drop	0	Dragging files and blocks into the drawing		not implemented
+ui	localization	0	Interface in other languages		English only
+ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
+ui	hidpi	0.25	High-DPI scaling	crates/cadforge-app/src/main.rs::eframe::run_native	relies on the toolkit's automatic scaling; not tested on high-DPI displays
+ui	touch	0	Touch and pen input		not implemented
+annotation	text-styles	0.5	Text styles with any installed font and SHX fonts	crates/cadforge-app/src/dialogs/settings.rs::TextStyleState	five built-in fonts only
+annotation	dim-styles	1	Dimension style manager	crates/cadforge-app/src/dialogs/dimstyle.rs::DimStyle ; crates/cadforge-engine/tests/ext_annotate.rs::dim_styles	
+annotation	other-styles	1	Multileader and table styles	crates/cadforge-engine/tests/ext_annotate.rs::TABLESTYLE	
+annotation	linetypes	0.5	Linetype library, scale controls, custom .lin files	crates/cadforge-core/src/style.rs::LINETYPES	40 built-in linetypes, no custom loading
+annotation	hatch-library	0.25	acad.pat library and custom patterns	crates/cadforge-core/src/hatch.rs::PATTERNS	12 patterns
+annotation	fields	0.5	Fields that update with object and drawing properties	crates/cadforge-engine/tests/ext_annotate.rs::FIELD	few field types
+annotation	attributes	1	Attribute definitions, edit, manager, sync and extraction	crates/cadforge-engine/tests/ext_blocks.rs::ATTDEF ; crates/cadforge-engine/tests/ext_tail.rs::attext	
+annotation	annotative	0	Annotative objects and scale lists		not implemented
+annotation	dynamic-blocks	0	Dynamic blocks: parameters, actions, visibility states		not implemented
+annotation	block-library	0.5	Block palettes and Design Center	crates/cadforge-app/src/palettes.rs::fn block_tab	no Design Center or content browser
+annotation	find-spell	1	Find and replace, spell check	crates/cadforge-engine/tests/ext_annotate.rs::SPELL	
+annotation	tolerances	1	Geometric tolerance frames	crates/cadforge-engine/tests/ext_annotate.rs::TOLERANCE	
+annotation	units	1	Decimal, engineering, architectural, fractional, scientific units and angle formats	crates/cadforge-app/src/dialogs/settings.rs::UnitsState ; crates/cadforge-engine/tests/lisp.rs::rtos	
+annotation	mtext-format	0.25	Inline MTEXT formatting (bold, colour, stacking, columns)	crates/cadforge-core/src/text.rs::\\P	paragraph breaks only
+annotation	table-links	0	Table formulas and data links		not implemented
+annotation	sheet-sets	0	Sheet set manager		not implemented
+annotation	standards	0	CAD standards checking		not implemented
+output	layouts	1	Layouts with named paper sizes and orientation	crates/cadforge-engine/tests/layouts.rs::PAGESETUP|LAYOUT	
+output	viewports	1	Rectangular, polygonal and object viewports, clip, scale, lock, MSPACE	crates/cadforge-engine/tests/layouts.rs::VPCLIP|MVIEW ; crates/cadforge-render/tests/layout.rs::clipped	
+output	vp-layers	0	Per-viewport layer overrides		reported as unsupported by LAYER / VPLAYER
+output	plot-dialog	1	Plot with scale, area, offset, centre, lineweights, monochrome, preview	crates/cadforge-app/src/dialogs/plot.rs::PlotState ; tests/web/run.mjs::PLOT dialog	
+output	plot-formats	1	PDF, SVG and PNG output	crates/cadforge-render/tests/render.rs::plot_pdf_and_svg	
+output	publish	0.25	Batch plotting of several sheets	crates/cadforge-engine/src/commands/ext_system/files.rs::fn publish	single sheet only
+output	plot-style-tables	0	Pen assignments and plot style tables		not implemented
+output	layout-wizard	0.5	Layout wizard and templates	crates/cadforge-engine/src/commands/layouts.rs::LAYOUTWIZARD	no DWT templates
+output	hidden-shaded-plot	0.5	Hidden line and shaded plots	crates/cadforge-render/src/solids.rs::Hidden	one hidden / shaded style
+solids3d	primitives	1	Box, cylinder, cone, sphere, wedge, torus, pyramid, polysolid	crates/cadforge-engine/tests/ext_solids.rs::TORUS ; crates/cadforge-engine/tests/ext_solids.rs::POLYSOLID	
+solids3d	sweeps	1	Extrude, revolve, sweep, loft, presspull	crates/cadforge-engine/tests/ext_solids.rs::LOFT ; crates/cadforge-engine/tests/ext_solids.rs::SWEEP	
+solids3d	booleans	1	Union, subtract, intersect	crates/cadforge-core/tests/solid.rs::boolean_volumes_of_overlapping_boxes	
+solids3d	slice-section	0.75	Slice, section planes, interference, thicken, shell	crates/cadforge-engine/tests/ext_solids.rs::SLICE ; crates/cadforge-engine/tests/ext_solids.rs::SECTIONPLANE	no SECTION command
+solids3d	edge-face-edit	0.5	Fillet / chamfer edges and SOLIDEDIT face editing	crates/cadforge-engine/tests/ext_solids.rs::FILLETEDGE	limited face operations on mesh solids
+solids3d	3d-modify	1	3D move, rotate, scale, align, mirror, array	crates/cadforge-engine/tests/ext_solids.rs::3DROTATE	
+solids3d	visual-styles	0.5	Visual styles	crates/cadforge-engine/src/commands/ext_system/view.rs::VSCURRENT	a few styles, no realistic / sketchy
+solids3d	navigation	0.5	Orbit, walk, fly, camera, perspective	crates/cadforge-engine/src/commands/view.rs::3DORBIT	parallel projection only
+solids3d	mesh-surface	0	Mesh modelling and surfaces		not implemented
+solids3d	render	0	Rendering with materials and lights		not implemented
+solids3d	ucs-3d	0	3D user coordinate systems		not implemented
+solids3d	history	0.5	Solid history / parametric features	crates/cadforge-engine/tests/ext_solids.rs::SOLIDHIST	extrusion features only
+solids3d	massprop	1	Mass properties	crates/cadforge-engine/tests/solids_cmd.rs::MASSPROP	
+solids3d	flatshot	1	FLATSHOT views	crates/cadforge-engine/tests/ext_solids.rs::FLATSHOT	
+reliability	undo	1	One undo step per command, undo / redo	crates/cadforge-engine/tests/ext_modify.rs::undo	
+reliability	fuzz	1	Untrusted files do not crash or exhaust memory	crates/cadforge-core/tests/fuzz.rs::fuzz	
+reliability	performance	1	Large drawings stay interactive (budgets in tests)	crates/cadforge-render/tests/perf.rs::fn	
+reliability	spatial-index	0	Indexed selection and rendering for very large drawings		linear scans over the entity list
+reliability	differential	1	Results checked against another implementation	crates/cadforge-core/tests/oracle.rs::oracle ; crates/cadforge-core/tests/corpus.rs::ezdxf	
+reliability	suite	1	A broad automated test suite	tests/web/run.mjs::pass ; crates/cadforge-engine/tests/lisp.rs::fn	
+reliability	autosave	0	Autosave, backup, recovery		not implemented
+reliability	limits	1	Hard limits on untrusted input	crates/cadforge-core/src/io/dxf_read.rs::cap	
+reliability	lint	1	No deny-level lints; headless engine	crates/cadforge-engine/src/sim.rs::pub struct Sim	
+reliability	undo-memory	0.5	Efficient undo history	crates/cadforge-core/src/drawing.rs::fn snapshot	whole-drawing JSON snapshots per step
+extend	autolisp	0.75	AutoLISP language, command, entity and selection functions, c: commands	crates/cadforge-engine/tests/lisp_cad.rs::defun_c_name ; crates/cadforge-engine/tests/lisp.rs::lists	a subset: no vlax-* / reactors / DCL / file I/O
+extend	scripts	1	Script files	crates/cadforge-engine/src/commands/system.rs::async fn script	
+extend	aliases	1	Command alias editing (acad.pgp)	crates/cadforge-engine/tests/ext_system.rs::ALIASEDIT|alias	
+extend	action-recorder	1	Action recorder macros	crates/cadforge-engine/tests/ext_tail.rs::the_action_recorder	
+extend	plugin-api	0	.NET / ObjectARX plugin API		not implemented
+extend	com-activex	0	COM / ActiveX / VBA automation		not implemented
+extend	cui-workspaces	0.25	UI customization and workspaces	crates/cadforge-app/src/chrome.rs::fn set_workspace	workspaces only
+extend	custom-defs	0	Custom linetypes, hatches and shapes		not implemented
+extend	library	0.5	Embeddable libraries	crates/cadforge-engine/src/sim.rs::pub struct Sim	Rust crates, no stable API promise
+platform	desktop	0.75	Native desktop application	crates/cadforge-app/src/main.rs::fn main	built and run headless on Linux only
+platform	web	1	Runs in a browser	tests/web/run.mjs::OPEN a DXF	
+platform	offline	1	No installation or account needed; works offline	crates/cadforge-app/web/index.html::cadforge_app	
+platform	installer	0	Installer, updates, licensing server		not implemented
+platform	cloud	0	Cloud storage and collaboration		not implemented
+platform	mobile	0	Mobile apps		not implemented
+platform	licence	1	Open licence	Cargo.toml::license = "MIT"	

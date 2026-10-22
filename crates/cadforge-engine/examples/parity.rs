@@ -12,6 +12,16 @@ fn main() {
         }
         return;
     }
+    if std::env::args().any(|a| a == "--aliases") {
+        for (a, c) in reg.all_aliases() {
+            println!("{a}\t{c}");
+        }
+        return;
+    }
+    let stubs: std::collections::HashMap<String, f64> = include_str!("../../../tools/benchmark/stubs.tsv").lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()).filter_map(|l| {
+        let f: Vec<&str> = l.split('\t').collect();
+        Some((f[0].to_uppercase(), f.get(1)?.parse().ok()?))
+    }).collect();
     let core = include_str!("../../../tools/benchmark/acad-commands.tsv");
     let tail = include_str!("../../../tools/benchmark/acad-longtail.tsv");
     let show_missing = std::env::args().any(|a| a == "--missing");
@@ -30,11 +40,13 @@ fn main() {
             }
             seen.push(name.to_string());
             let have = reg.find(name).is_some();
+            // a command that only reports "not supported" earns part of its weight
+            let credit = if have { stubs.get(&reg.find(name).map_or(String::new(), |d| d.name.to_uppercase())).copied().unwrap_or(1.0) } else { 0.0 };
             for e in [sets.entry(set).or_default(), cats.entry(cat.to_string()).or_default()] {
                 e.0 += w;
                 e.2 += 1;
+                e.1 += w * credit;
                 if have {
-                    e.1 += w;
                     e.3 += 1;
                 }
             }

@@ -195,11 +195,6 @@ async fn reinit(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
-async fn record(c: Ctx, _a: Args) -> CmdResult<()> {
-    c.log_error("The Action Recorder is not supported in this version: command input cannot be captured. Use SCRIPT to run a script file.");
-    Ok(())
-}
-
 pub(super) fn register(r: &mut Registry) {
     r.define(def("File", "AUDIT", run(audit)).title("Audit").desc("Evaluates the integrity of a drawing and corrects some errors.").once());
     r.define(def("File", "RECOVER", run(recover)).title("Recover").desc("Repairs the open drawing: undefined layers, linetypes and block references.").once());
@@ -211,5 +206,4 @@ pub(super) fn register(r: &mut Registry) {
     r.define(def("Output", "ETRANSMIT", run(etransmit)).title("eTransmit").desc("Lists the files needed to send a drawing to someone else.").once());
     r.define(def("Utilities", "APPLOAD", run(appload)).aliases(&["AP"]).title("Load Application").desc("Loads applications and script files.").once());
     r.define(def("Utilities", "REINIT", run(reinit)).title("Reinitialize").desc("Reinitializes the digitizer, the digitizer input/output port, and the program parameters file.").once());
-    r.define(def("Utilities", "RECORD", run(record)).title("Action Recorder").desc("Starts the Action Recorder.").once());
 }

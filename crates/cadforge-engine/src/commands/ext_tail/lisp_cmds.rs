@@ -139,8 +139,47 @@ async fn vlisp(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
+/// ACTRECORD: from now on, remember what the commands I run are given at their prompts.
+async fn actrecord(c: Ctx, _a: Args) -> CmdResult<()> {
+    if c.app(|a| a.recording.is_some()) {
+        c.log_error("The Action Recorder is already recording. Use ACTSTOP to finish.");
+        return Ok(());
+    }
+    c.app(|a| a.recording = Some(vec![]));
+    c.log("Recording. Run commands as usual, then use ACTSTOP to save the macro.");
+    Ok(())
+}
+
+/// ACTSTOP: finish recording and hand the macro over as a script (.scr) that SCRIPT can replay.
+async fn actstop(c: Ctx, a: Args) -> CmdResult<()> {
+    let Some(lines) = c.app(|app| app.recording.take()) else {
+        c.log_error("The Action Recorder is not recording. Start it with ACTRECORD.");
+        return Ok(());
+    };
+    if lines.is_empty() {
+        c.log("Nothing was recorded.");
+        return Ok(());
+    }
+    let name = match a.str("name") {
+        Some(n) => n.to_string(),
+        None => c.string(ps("Enter a name for the action macro").default_str("Macro1")).await?.text,
+    };
+    let name = name.trim().trim_end_matches(".scr").to_string();
+    let name = if name.is_empty() { "Macro1".to_string() } else { name };
+    let n = lines.iter().filter(|l| !l.is_empty()).count();
+    let mut text = lines.join("\r\n");
+    text.push_str("\r\n");
+    c.app(|app| {
+        app.emit(Event::SaveFile { name: format!("{name}.scr"), data: text.into_bytes(), mime: "text/plain".into() });
+        app.log(&format!("Recorded {n} step{} to {name}.scr. Replay it with SCRIPT.", if n == 1 { "" } else { "s" }), "info");
+    });
+    Ok(())
+}
+
 /// `(load "file")` cannot read the file system of a browser; routines are loaded with APPLOAD.
 pub(crate) fn register(r: &mut Registry) {
+    r.define(def("Utilities", "ACTRECORD", run(actrecord)).aliases(&["RECORD"]).title("Record Action Macro").icon("script").desc("Starts the Action Recorder: records the commands you run so they can be replayed.").once());
+    r.define(def("Utilities", "ACTSTOP", run(actstop)).title("Stop Recording").icon("script").desc("Stops the Action Recorder and saves the macro as a script file.").once());
     r.define(def("Utilities", "_LISP", run(eval_command)).title("Evaluate AutoLISP").desc("Evaluates AutoLISP expressions.").silent().once());
     r.define(def("Utilities", "VLISP", run(vlisp)).aliases(&["VLIDE"]).title("Visual LISP Console").icon("script").desc("Opens the AutoLISP console where routines can be typed, run and loaded.").once());
 }

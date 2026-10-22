@@ -4,3 +4,4 @@ tests/browser/out/
 target/
 dist-web/
 .claude/worktrees/
+__pycache__/

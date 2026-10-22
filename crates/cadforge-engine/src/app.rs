@@ -115,6 +115,8 @@ pub struct App {
     pub(crate) lisp_input: std::collections::VecDeque<Option<String>>,
     /// Counts prompts; a Lisp PAUSE waits for the prompt it was reached at to be answered.
     pub(crate) prompt_seq: u64,
+    /// The Action Recorder: the command line input of the commands run since ACTRECORD.
+    pub recording: Option<Vec<String>>,
     pub(crate) lisp_pause: Option<u64>,
     /// The interpreter shared by every Lisp command of this session.
     pub lisp: Rc<crate::lisp::Interp>,
@@ -144,6 +146,7 @@ impl App {
             script: Default::default(),
             lisp_input: Default::default(),
             prompt_seq: 0,
+            recording: None,
             lisp_pause: None,
             lisp: Rc::new(crate::lisp::Interp::new()),
         }
