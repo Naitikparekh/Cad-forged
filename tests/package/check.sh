@@ -7,7 +7,14 @@ shopt -s nullglob
 archives=(dist/cadforge-*.tar.gz dist/cadforge-*.zip)
 [ ${#archives[@]} -eq 1 ] || { echo "expected one archive in dist/, found ${#archives[@]}" >&2; exit 1; }
 py=$(command -v python3 || command -v python || true)
-list=$(case "${archives[0]}" in *.zip) "$py" -c 'import sys, zipfile; print("\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))' "${archives[0]}" ;; *) tar -tzf "${archives[0]}" ;; esac)
+# (a function, not a case inside $(...): the bash 3.2 that macOS ships cannot parse that)
+list_archive() {
+  case "$1" in
+    *.zip) "$py" -c 'import sys, zipfile; print("\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))' "$1" ;;
+    *) tar -tzf "$1" ;;
+  esac
+}
+list=$(list_archive "${archives[0]}")
 for f in README.md CSG-LICENSE.txt; do echo "$list" | grep -q "/$f$" || { echo "archive lacks $f" >&2; exit 1; }; done
 echo "$list" | grep -Eq "/cadforge(\.exe)?$" || { echo "archive lacks the program" >&2; exit 1; }
 echo "archive ok: ${archives[0]}"
