@@ -173,7 +173,7 @@ impl<'a> W<'a> {
         o.out.s(8, if layer.is_empty() { "0" } else { layer });
         if let Some(lt) = p.ltype {
             let lt = if lt == "BYBLOCK" { "ByBlock" } else { lt };
-            if lt == "ByBlock" || LINETYPES.iter().any(|l| l.name == lt) {
+            if lt == "ByBlock" || linetype(lt).is_some() {
                 o.out.s(6, lt);
             }
         }
@@ -572,7 +572,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
             }
         }
     }
-    let ltype_names: Vec<&'static LineType> = used.iter().filter_map(|n| LINETYPES.iter().find(|l| l.name == n)).collect();
+    let ltype_names: Vec<&'static LineType> = used.iter().filter_map(|n| linetype(n)).collect();
     let user_blocks: Vec<_> = doc.blocks.values().collect();
 
     // handles of fixed table objects
@@ -699,7 +699,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
         if let Some(tc) = tc {
             o.i(420, tc);
         }
-        let lt = if LINETYPES.iter().any(|t| t.name == l.ltype) { l.ltype.as_str() } else { "Continuous" };
+        let lt = if linetype(&l.ltype).is_some() { l.ltype.as_str() } else { "Continuous" };
         o.s(6, lt).i(290, l.plot as i64).i(370, l.lw as i64);
     }
     o.s(0, "ENDTAB");

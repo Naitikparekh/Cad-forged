@@ -66,6 +66,8 @@ impl CadForgeApp {
             "SCRIPT" => self.open_files(ctx, "script"),
             "IMAGEATTACH" => self.open_files(ctx, "image"),
             "APPLOAD" => self.open_files(ctx, "lisp"),
+            "LINETYPELOAD" => self.open_files(ctx, "lin"),
+            "LOADPAT" => self.open_files(ctx, "pat"),
             "VLISP" => self.dialog = Some(Dialog::vlisp()),
             "WORKSPACE" => {
                 if let Some(n) = args.str("name") {
@@ -109,6 +111,8 @@ impl CadForgeApp {
                 "script" => ".scr,.txt",
                 "image" => ".png,.jpg,.jpeg",
                 "lisp" => ".lsp,.scr,.txt",
+                "lin" => ".lin,.txt",
+                "pat" => ".pat,.txt",
                 _ => ".json,.cadforge,.dxf",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
@@ -153,6 +157,14 @@ impl CadForgeApp {
                         self.h.borrow_mut().log(&format!("Loading {}...", p.name), "info");
                         self.run_command("_LISP", Args::none().with("source", cadforge_engine::runtime::ArgVal::Str(text.clone())));
                     }
+                    self.h.pump();
+                }
+                "lin" => {
+                    self.run_command("-LINETYPE", Args::none().with("option", cadforge_engine::runtime::ArgVal::Str("Load".into())).with("text", cadforge_engine::runtime::ArgVal::Str(text.clone())));
+                    self.h.pump();
+                }
+                "pat" => {
+                    self.run_command("LOADPAT", Args::none().with("text", cadforge_engine::runtime::ArgVal::Str(text.clone())));
                     self.h.pump();
                 }
                 "script" => {

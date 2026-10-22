@@ -14,6 +14,8 @@ lto = "thin"
 
 [profile.dev]
 opt-level = 1
+# line tables are enough for backtraces; full debug info makes the many test binaries take tens of GB
+debug = "line-tables-only"
 
 # Faster-to-build optimized profile for iterating on the web build (`tools/build-web.sh dev`).
 [profile.web]

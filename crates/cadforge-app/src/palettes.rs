@@ -5,7 +5,7 @@ use crate::ribbon::{color_rgb_of, swatch};
 use cadforge_core::drawing::Drawing;
 use cadforge_core::entities::{Entity, Kind};
 use cadforge_core::geom::*;
-use cadforge_core::style::{describe_color, fmt_num, ltype_display, lw_display, Color, LINETYPES, LINEWEIGHTS};
+use cadforge_core::style::{describe_color, fmt_num, ltype_display, lw_display, Color, all_linetypes, LINEWEIGHTS};
 use cadforge_core::text::HJust;
 use cadforge_engine::runtime::Args;
 use eframe::egui::{self, vec2, Align2, Color32, CornerRadius, FontFamily, FontId, Margin, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
@@ -506,7 +506,7 @@ impl CadForgeApp {
                 if ui.selectable_label(false, "ByBlock").clicked() {
                     pick = Some(Some("BYBLOCK".into()));
                 }
-                for l in LINETYPES.iter() {
+                for l in all_linetypes().iter() {
                     if ui.selectable_label(false, ltype_display(l.name)).clicked() {
                         pick = Some(Some(l.name.to_string()));
                     }

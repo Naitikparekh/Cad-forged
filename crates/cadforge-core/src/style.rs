@@ -4,7 +4,8 @@ use indexmap::IndexMap;
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use crate::defs::LinetypeDef;
+use std::sync::{Mutex, OnceLock};
 
 // ---------------------------------------------------------------- colors
 
@@ -255,8 +256,48 @@ pub const LINETYPES: &[LineType] = &[
     LineType { name: "ACAD_ISO15W100", desc: "ISO double-dash triple-dot __ __ . . . __ __ . .", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
 ];
 
+/// Linetypes loaded from `.lin` files (leaked once so they stay `&'static` like the built-in table).
+static CUSTOM_LT: Mutex<Vec<(LinetypeDef, &'static LineType)>> = Mutex::new(Vec::new());
+
+fn custom_lt() -> std::sync::MutexGuard<'static, Vec<(LinetypeDef, &'static LineType)>> {
+    CUSTOM_LT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Make a linetype from a `.lin` file available by name. The standard linetypes cannot be replaced; loading a name
+/// again replaces the earlier definition.
+pub fn register_linetype(def: &LinetypeDef) -> Result<&'static LineType, String> {
+    let name = def.name.trim().to_uppercase();
+    if name.is_empty() {
+        return Err("A linetype needs a name.".into());
+    }
+    if def.pattern.is_empty() || def.pattern.iter().map(|v| v.abs()).sum::<f64>() <= 0.0 {
+        return Err(format!("Linetype {name} has no pattern."));
+    }
+    if LINETYPES.iter().any(|l| l.name.eq_ignore_ascii_case(&name)) {
+        return Err(format!("{name} is a standard linetype and cannot be replaced."));
+    }
+    let mut reg = custom_lt();
+    let def = LinetypeDef { name: name.clone(), ..def.clone() };
+    if let Some((_, l)) = reg.iter().find(|(d, _)| *d == def) {
+        return Ok(l);
+    }
+    let lt: &'static LineType = Box::leak(Box::new(LineType {
+        name: Box::leak(name.clone().into_boxed_str()),
+        desc: Box::leak(def.desc.clone().into_boxed_str()),
+        pattern: Box::leak(def.pattern.clone().into_boxed_slice()),
+    }));
+    reg.retain(|(d, _)| d.name != name);
+    reg.push((def, lt));
+    Ok(lt)
+}
+
+/// The standard linetypes followed by the ones loaded from files.
+pub fn all_linetypes() -> Vec<&'static LineType> {
+    LINETYPES.iter().chain(custom_lt().iter().map(|(_, l)| *l).collect::<Vec<_>>()).collect()
+}
+
 pub fn linetype(name: &str) -> Option<&'static LineType> {
-    LINETYPES.iter().find(|l| l.name.eq_ignore_ascii_case(name))
+    LINETYPES.iter().find(|l| l.name.eq_ignore_ascii_case(name)).or_else(|| custom_lt().iter().find(|(d, _)| d.name.eq_ignore_ascii_case(name)).map(|(_, l)| *l))
 }
 /// Canonical (upper-case) key of a linetype name.
 pub fn ltype_key(name: &str) -> Option<&'static str> {

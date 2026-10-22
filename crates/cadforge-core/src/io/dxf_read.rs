@@ -1183,9 +1183,26 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         }
     }
 
+    // ---- linetypes the file defines (simple dash / gap / dot ones; shapes and text are left out), so layers and
+    // objects that use them keep their look
+    let empty: Vec<Rec> = vec![];
+    for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LTYPE") {
+        let name = decode_text(r.first(2).unwrap_or("")).trim().to_string();
+        let upper = name.to_uppercase();
+        if name.is_empty() || matches!(upper.as_str(), "BYBLOCK" | "BYLAYER") || LINETYPES.iter().any(|l| l.name.eq_ignore_ascii_case(&name)) {
+            continue;
+        }
+        if r.all(74).iter().any(|v| v.trim() != "0") {
+            continue;
+        }
+        let pattern: Vec<f64> = r.all(49).iter().map(|v| parse_f(v)).collect();
+        if !pattern.is_empty() {
+            let _ = doc.define_linetype(crate::defs::LinetypeDef { name, desc: decode_text(r.first(3).unwrap_or("")), pattern });
+        }
+    }
+
     // ---- layers
     doc.layers.clear();
-    let empty: Vec<Rec> = vec![];
     for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYER") {
         let lname = decode_text(r.first(2).unwrap_or(""));
         if lname.is_empty() || doc.layer(&lname).is_some() {

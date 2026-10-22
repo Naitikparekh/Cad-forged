@@ -22,10 +22,12 @@ impl FileBrowserState {
             "script" => vec!["scr", "txt"],
             "image" => vec!["png", "jpg", "jpeg"],
             "lisp" => vec!["lsp", "scr", "txt"],
+            "lin" => vec!["lin", "txt"],
+            "pat" => vec!["pat", "txt"],
             _ => vec!["json", "cadforge", "dxf"],
         };
         let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
+        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), "lin" => "Load Linetypes".into(), "pat" => "Load Hatch Patterns".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
     }
 
     fn reload(&mut self) {

@@ -5,7 +5,7 @@ use crate::chrome::{chevron, BODY_H, TABS_H};
 use crate::data::{args_from_json, Item, Menu, MenuEntry, Panel, Tab};
 use crate::icons::Tint;
 use crate::menu::MItem;
-use cadforge_core::style::{aci_hex, describe_color, linetype, parse_hex, Color, LINETYPES, LINEWEIGHTS};
+use cadforge_core::style::{aci_hex, describe_color, linetype, parse_hex, Color, all_linetypes, LINEWEIGHTS};
 use cadforge_engine::runtime::Args;
 use eframe::egui::{self, vec2, Align2, Color32, CornerRadius, FontFamily, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind};
 
@@ -754,7 +754,7 @@ impl CadForgeApp {
             }
             "ltype" => {
                 let mut items = vec![MItem::item("ByLayer").on(|a| a.set_property("ltype", None, None, None)), MItem::item("ByBlock").on(|a| a.set_property("ltype", None, None, Some("BYBLOCK".into()))), MItem::Sep];
-                for l in LINETYPES.iter() {
+                for l in all_linetypes().iter() {
                     let n = l.name.to_string();
                     let disp = cadforge_core::style::ltype_display(l.name);
                     items.push(MItem::item(&disp).on(move |a| a.set_property("ltype", None, None, Some(n.clone()))));

@@ -86,8 +86,8 @@ ui	touch	0	Touch and pen input		not implemented
 annotation	text-styles	0.5	Text styles with any installed font and SHX fonts	crates/cadforge-app/src/dialogs/settings.rs::TextStyleState	five built-in fonts only
 annotation	dim-styles	1	Dimension style manager	crates/cadforge-app/src/dialogs/dimstyle.rs::DimStyle ; crates/cadforge-engine/tests/ext_annotate.rs::dim_styles	
 annotation	other-styles	1	Multileader and table styles	crates/cadforge-engine/tests/ext_annotate.rs::TABLESTYLE	
-annotation	linetypes	0.5	Linetype library, scale controls, custom .lin files	crates/cadforge-core/src/style.rs::LINETYPES	40 built-in linetypes, no custom loading
-annotation	hatch-library	0.25	acad.pat library and custom patterns	crates/cadforge-core/src/hatch.rs::PATTERNS	12 patterns
+annotation	linetypes	0.85	Linetype library, scale controls, custom .lin files	crates/cadforge-core/src/style.rs::pub fn register_linetype ; crates/cadforge-engine/tests/defs_files.rs::load_brings_linetypes ; crates/cadforge-core/tests/defs.rs::linetypes_defined_in_a_dxf_file	linetypes with embedded shapes or text are skipped
+annotation	hatch-library	0.5	acad.pat library and custom patterns	crates/cadforge-core/src/hatch.rs::pub fn register_pattern ; crates/cadforge-engine/tests/defs_files.rs::loadpat_makes_patterns_usable ; crates/cadforge-core/src/hatch.rs::PATTERNS	13 built-in patterns; any acad.pat-format file loads, but a pattern defined inside a DXF hatch is read as ANSI31
 annotation	fields	0.5	Fields that update with object and drawing properties	crates/cadforge-engine/tests/ext_annotate.rs::FIELD	few field types
 annotation	attributes	1	Attribute definitions, edit, manager, sync and extraction	crates/cadforge-engine/tests/ext_blocks.rs::ATTDEF ; crates/cadforge-engine/tests/ext_tail.rs::attext	
 annotation	annotative	0	Annotative objects and scale lists		not implemented
@@ -140,7 +140,7 @@ extend	action-recorder	1	Action recorder macros	crates/cadforge-engine/tests/ext
 extend	plugin-api	0	.NET / ObjectARX plugin API		not implemented
 extend	com-activex	0	COM / ActiveX / VBA automation		not implemented
 extend	cui-workspaces	0.25	UI customization and workspaces	crates/cadforge-app/src/chrome.rs::fn set_workspace	workspaces only
-extend	custom-defs	0	Custom linetypes, hatches and shapes		not implemented
+extend	custom-defs	0.6	Custom linetypes, hatches and shapes	crates/cadforge-engine/src/commands/ext_tail/defs.rs::fn loadpat ; crates/cadforge-engine/tests/defs_files.rs::without_text_the_host ; tests/web/run.mjs::LOADPAT reads a .pat file	linetypes and hatch patterns only: no shape (.shx) files
 extend	library	0.5	Embeddable libraries	crates/cadforge-engine/src/sim.rs::pub struct Sim	Rust crates, no stable API promise
 platform	desktop	0.75	Native desktop application	crates/cadforge-app/src/main.rs::fn main	built and run headless on Linux only
 platform	web	1	Runs in a browser	tests/web/run.mjs::OPEN a DXF	

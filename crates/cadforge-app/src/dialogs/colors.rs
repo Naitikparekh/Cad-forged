@@ -1,7 +1,7 @@
 //! Colour, linetype, lineweight, insert and hatch-settings dialogs.
 use super::{ColorTarget, Out};
 use crate::app::CadForgeApp;
-use cadforge_core::style::{aci_hex, describe_color, lw_display, parse_hex, Color, LINETYPES, LINEWEIGHTS};
+use cadforge_core::style::{aci_hex, describe_color, lw_display, parse_hex, Color, all_linetypes, LINEWEIGHTS};
 use eframe::egui::{self, vec2, Color32, CornerRadius, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 
 // ---------------------------------------------------------------- colour
@@ -137,7 +137,7 @@ impl CadForgeApp {
         self.note(ui, if s.pick { "Choose a linetype." } else { "Choose the current linetype for new objects." });
         let mut dbl = false;
         egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
-            for l in LINETYPES.iter() {
+            for l in all_linetypes().iter() {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
                 let sel = s.sel.as_deref() == Some(l.name);
                 if sel {

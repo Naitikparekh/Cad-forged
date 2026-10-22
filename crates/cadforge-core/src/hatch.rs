@@ -1,6 +1,8 @@
 //! Hatch pattern definitions (acad.pat-style line families) and line generation clipped to boundary loops
 //! (port of `src/core/hatch.js`).
+use crate::defs::PatternDef;
 use crate::geom::*;
+use std::sync::Mutex;
 
 /// One family of parallel lines: angle `a` (deg), origin, shift `dx` along the line between successive lines,
 /// perpendicular spacing `dy`, optional dash pattern (positive dash, negative gap, 0 dot).
@@ -55,17 +57,65 @@ pub const HONEY: Pattern = Pattern {
     ],
 };
 
-pub fn all_patterns() -> Vec<&'static Pattern> {
-    let mut v: Vec<&Pattern> = PATTERNS.iter().collect();
-    v.push(&HONEY);
-    v
+/// Patterns loaded from `.pat` files. A definition is leaked once so that patterns stay `&'static` like the built-in
+/// ones; reloading an identical definition reuses it.
+static CUSTOM: Mutex<Vec<(PatternDef, &'static Pattern)>> = Mutex::new(Vec::new());
+
+fn custom() -> std::sync::MutexGuard<'static, Vec<(PatternDef, &'static Pattern)>> {
+    CUSTOM.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub fn pattern(name: &str) -> Option<&'static Pattern> {
+fn builtin(name: &str) -> Option<&'static Pattern> {
     if name.eq_ignore_ascii_case("HONEY") {
         return Some(&HONEY);
     }
     PATTERNS.iter().find(|p| p.name.eq_ignore_ascii_case(name))
+}
+
+/// Make a pattern from a `.pat` file available by name. Built-in names cannot be replaced; loading a name again
+/// replaces the earlier definition.
+pub fn register_pattern(def: &PatternDef) -> Result<&'static Pattern, String> {
+    let name = def.name.trim().to_uppercase();
+    if name.is_empty() {
+        return Err("A pattern needs a name.".into());
+    }
+    if def.families.is_empty() {
+        return Err(format!("Pattern {name} has no line definitions."));
+    }
+    if builtin(&name).is_some() {
+        return Err(format!("{name} is a built-in pattern and cannot be replaced."));
+    }
+    let mut reg = custom();
+    let def = PatternDef { name: name.clone(), ..def.clone() };
+    if let Some((_, p)) = reg.iter().find(|(d, _)| *d == def) {
+        return Ok(p);
+    }
+    let families: Vec<Family> = def
+        .families
+        .iter()
+        .map(|f| Family { a: f.a, ox: f.ox, oy: f.oy, dx: f.dx, dy: f.dy, dash: if f.dash.is_empty() { None } else { Some(Box::leak(f.dash.clone().into_boxed_slice())) } })
+        .collect();
+    let p: &'static Pattern = Box::leak(Box::new(Pattern {
+        name: Box::leak(name.clone().into_boxed_str()),
+        desc: Box::leak(def.desc.clone().into_boxed_str()),
+        solid: false,
+        families: Box::leak(families.into_boxed_slice()),
+    }));
+    reg.retain(|(d, _)| d.name != name);
+    reg.push((def, p));
+    Ok(p)
+}
+
+/// Built-in patterns, then the ones loaded from files.
+pub fn all_patterns() -> Vec<&'static Pattern> {
+    let mut v: Vec<&Pattern> = PATTERNS.iter().collect();
+    v.push(&HONEY);
+    v.extend(custom().iter().map(|(_, p)| *p));
+    v
+}
+
+pub fn pattern(name: &str) -> Option<&'static Pattern> {
+    builtin(name).or_else(|| custom().iter().find(|(d, _)| d.name.eq_ignore_ascii_case(name)).map(|(_, p)| *p))
 }
 
 pub const MAX_HATCH_LINES: usize = 60000;

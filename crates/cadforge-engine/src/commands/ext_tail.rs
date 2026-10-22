@@ -7,6 +7,7 @@
 use crate::runtime::PromptSpec;
 
 mod data;
+mod defs;
 mod draw;
 mod images;
 mod lisp_cmds;
@@ -19,12 +20,17 @@ fn ps(m: &str) -> PromptSpec {
     PromptSpec::new(m)
 }
 
+fn plural(n: usize, word: &str) -> String {
+    format!("{n} {word}{}", if n == 1 { "" } else { "s" })
+}
+
 pub fn register(r: &mut crate::registry::Registry) {
     draw::register(r);
     images::register(r);
     lisp_cmds::register(r);
     props::register(r);
     visibility::register(r);
+    defs::register(r);
     nav::register(r);
     ui::register(r);
     data::register(r);

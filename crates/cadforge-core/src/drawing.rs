@@ -178,6 +178,10 @@ struct File {
     ucs_named: IndexMap<String, Ucs>,
     #[serde(default, skip_serializing_if = "at_origin")]
     base: Pt,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    custom_patterns: Vec<crate::defs::PatternDef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    custom_ltypes: Vec<crate::defs::LinetypeDef>,
 }
 
 fn at_origin(p: &Pt) -> bool {
@@ -250,6 +254,9 @@ pub struct Drawing {
     pub layer_iso: Option<Vec<(String, bool, bool)>>,
     /// Objects hidden by HIDEOBJECTS / ISOLATEOBJECTS until UNISOLATEOBJECTS (not persisted, not part of undo).
     pub hidden_objs: std::collections::BTreeSet<u64>,
+    /// Hatch patterns and linetypes loaded from `.pat` / `.lin` files; saved with the drawing and registered on load.
+    pub custom_patterns: Vec<crate::defs::PatternDef>,
+    pub custom_ltypes: Vec<crate::defs::LinetypeDef>,
     undo_stack: Vec<UndoStep>,
     redo_stack: Vec<UndoStep>,
     pre: Option<String>,
@@ -315,6 +322,8 @@ impl Drawing {
             paper_skipped: 0,
             layer_iso: None,
             hidden_objs: Default::default(),
+            custom_patterns: vec![],
+            custom_ltypes: vec![],
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             pre: None,
@@ -1049,6 +1058,8 @@ impl Drawing {
             ucs: self.ucs,
             ucs_named: self.ucs_named.clone(),
             base: self.base,
+            custom_patterns: self.custom_patterns.clone(),
+            custom_ltypes: self.custom_ltypes.clone(),
         };
         serde_json::to_value(f).expect("drawing serialises")
     }
@@ -1119,6 +1130,12 @@ impl Drawing {
         d.ucs = f.ucs;
         d.ucs_named = f.ucs_named;
         d.base = f.base;
+        for def in f.custom_ltypes {
+            let _ = d.define_linetype(def);
+        }
+        for def in f.custom_patterns {
+            let _ = d.define_pattern(def);
+        }
         d.next_id = f.next_id.max(1);
         let max_id = d.all_entities().map(|e| e.id).chain(d.solids.iter().map(|s| s.id)).max().unwrap_or(0);
         if max_id >= d.next_id {
@@ -1127,6 +1144,26 @@ impl Drawing {
         d.validate()?;
         d.dirty = false;
         Ok(d)
+    }
+
+    // ------------------------------------------------------------ loaded definitions
+
+    /// Keep a hatch pattern from a `.pat` file with the drawing and make it available by name.
+    pub fn define_pattern(&mut self, mut def: crate::defs::PatternDef) -> Result<(), String> {
+        crate::hatch::register_pattern(&def)?;
+        def.name = def.name.trim().to_uppercase();
+        self.custom_patterns.retain(|p| p.name != def.name);
+        self.custom_patterns.push(def);
+        Ok(())
+    }
+
+    /// Keep a linetype from a `.lin` file with the drawing and make it available by name.
+    pub fn define_linetype(&mut self, mut def: crate::defs::LinetypeDef) -> Result<(), String> {
+        crate::style::register_linetype(&def)?;
+        def.name = def.name.trim().to_uppercase();
+        self.custom_ltypes.retain(|p| p.name != def.name);
+        self.custom_ltypes.push(def);
+        Ok(())
     }
 
     // ------------------------------------------------------------ pictures

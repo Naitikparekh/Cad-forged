@@ -317,6 +317,23 @@ await test('DATAEXTRACTION downloads a CSV of object counts', async () => {
   assert.ok(f.data.toString().startsWith('Count,Name,Layer'), f.data.toString().slice(0, 60));
 });
 
+await test('-LINETYPE Load reads a .lin file through the chooser', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('-LINETYPE');
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('Load')]);
+  await fc.setFiles({ name: 'web.lin', mimeType: 'text/plain', buffer: Buffer.from('*WEB_FENCE, fence\nA,12,-6\n') }); await page.waitForTimeout(500); await t.frame(4);
+  let s = await t.state(); assert.equal(s.busy, true, JSON.stringify(s.history));    // "Enter linetype(s) to load <*>"
+  await t.cmd(''); await t.frame(3);
+  s = await t.state(); assert.ok(s.history.some(h => /Loaded 1 linetype: WEB_FENCE/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
+});
+
+await test('LOADPAT reads a .pat file through the chooser', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('LOADPAT')]);
+  await fc.setFiles({ name: 'web.pat', mimeType: 'text/plain', buffer: Buffer.from('*WEB_WEAVE, weave\n0, 0,0, 0,4\n90, 0,0, 0,4, 2,-2\n') }); await page.waitForTimeout(500); await t.frame(4);
+  const s = await t.state(); assert.ok(s.history.some(h => /Loaded 1 hatch pattern: WEB_WEAVE/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();
