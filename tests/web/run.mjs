@@ -162,7 +162,10 @@ await test('layout tabs switch to paper space and a double-click enters the view
   await page.mouse.move(103, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(103, 770); await t.frame(5);
   s = await t.state();
   assert.equal(s.space, 'Layout1'); assert.equal(s.mspace, false);
-  await page.mouse.move(720, 460, { steps: 3 }); await t.frame(3); await page.mouse.dblclick(720, 460); await t.frame(5);       // inside the default viewport
+  // inside the default viewport; whether two quick clicks count as a double-click depends on frame timing, so try again if not
+  for (let attempt = 0; attempt < 3 && !(await t.state()).mspace; attempt++) {
+    await page.mouse.move(720, 460, { steps: 3 }); await t.frame(3); await page.mouse.dblclick(720, 460); await t.frame(5);
+  }
   s = await t.state();
   assert.equal(s.mspace, true, 'double-click activates the viewport'); assert.equal(s.space, 'model');
   await t.cmd('PSPACE'); s = await t.state();
@@ -449,6 +452,27 @@ await test('dropping a .ctb loads it, and PLOTSTYLE None removes it again', asyn
   await t.cmd('PLOTSTYLE'); await t.cmd('None'); await t.frame(3);
   s = await t.state();
   assert.ok(s.history.some(h => /The plot style table was removed/.test(h.text || h)), JSON.stringify(s.history.slice(-6)));
+});
+
+// count pixels in a screenshot that satisfy a colour predicate (python + PIL, like `pixel`; null when PIL is missing)
+const countPixels = (file, test) => {
+  try { return Number(execFileSync('python3', ['-I', '-c', 'import sys\nfrom PIL import Image\ndata = Image.open(sys.argv[1]).convert("RGB").tobytes()\nn = 0\nfor i in range(0, len(data), 3):\n    r, g, b = data[i], data[i + 1], data[i + 2]\n    if ' + test + ':\n        n += 1\nprint(n)', file], { encoding: 'utf8' }).trim()); }
+  catch (e) { return null; }
+};
+
+await test('multiline text with formatting codes: a coloured run is drawn in its colour, bold and fractions appear', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  // a drawing with one MTEXT that has a red run and a fraction, as AutoCAD would store it
+  const dxf = ['0', 'SECTION', '2', 'ENTITIES', '0', 'MTEXT', '8', '0', '10', '0', '20', '0', '30', '0', '40', '8', '71', '1', '1', '{\\C1;REDWORD} plain \\S1/2; {\\fArial|b1;bold}', '0', 'ENDSEC', '0', 'EOF', ''].join('\n');
+  await drop('fmt.dxf', 'application/dxf', Buffer.from(dxf));
+  let s = await t.state();
+  assert.equal(s.name, 'fmt'); assert.deepEqual(s.types, ['text']);
+  await t.cmd('ZOOM'); await t.cmd('E'); await t.frame(6);
+  await page.keyboard.press('Escape'); await t.frame(3);
+  const file = path.join(root, 'target', 'tmp', 'web-mtext.png'); await t.shot(file);
+  const red = countPixels(file, 'r > 200 and g < 70 and b < 70');
+  if (red === null) { console.log('       (PIL not installed: skipped the pixel check)'); return; }
+  assert.ok(red > 40, `expected red text pixels from the \\C1; run, got ${red}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

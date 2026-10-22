@@ -64,6 +64,29 @@ pub fn decode_text(s: &str) -> String {
     out
 }
 
+/// MTEXT contents with their formatting codes kept (text layout interprets them) and `\n` for paragraph breaks.
+pub fn keep_mtext(src: &str) -> String {
+    let s: Vec<char> = decode_text(src).chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < s.len() {
+        if s[i] == '\\' && i + 1 < s.len() {
+            match s[i + 1] {
+                'P' | 'p' => out.push('\n'),
+                other => {
+                    out.push('\\');
+                    out.push(other);
+                }
+            }
+            i += 2;
+        } else {
+            out.push(s[i]);
+            i += 1;
+        }
+    }
+    out.trim_end_matches('\n').to_string()
+}
+
 /// Strip MTEXT formatting codes, returning plain text with `\n` line breaks.
 pub fn decode_mtext(src: &str) -> String {
     let s: Vec<char> = decode_text(src).chars().collect();
@@ -727,7 +750,7 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
         "MTEXT" => {
             let mut raw = r.all(3).join("");
             raw.push_str(r.first(1).unwrap_or(""));
-            let s = decode_mtext(&raw);
+            let s = keep_mtext(&raw);
             let hh = r.num(40, 2.5);
             if !s.is_empty() {
                 let (jh, jv) = attach_of(r.int(71, 1));

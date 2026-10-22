@@ -9,7 +9,7 @@ objects	polyline	1	Polylines with arc segments, closed shapes, join and edit	cra
 objects	polyline-width	1	Polylines with start / end widths	crates/cadforge-core/src/geom.rs::pub fn pline_outline ; crates/cadforge-core/tests/pline_width.rs::a_uniform_edge ; crates/cadforge-engine/tests/pline_width.rs::width_sets_the_taper ; crates/cadforge-core/tests/corpus.rs::polyline_widths_arrive	
 objects	spline	0.5	Splines (fit points, control vertices, weights, knots)	crates/cadforge-core/src/entities.rs::Spline \{ fit	fit-point splines only: no control vertices, weights or knots
 objects	point	1	Points with PDMODE / PDSIZE styles	crates/cadforge-core/src/style.rs::pdmode	
-objects	text	0.75	Single-line text and multiline text with width	crates/cadforge-core/src/text.rs::multi	MTEXT supports \P paragraphs only: no inline bold, colour, stacking or columns
+objects	text	0.9	Single-line text and multiline text with width	crates/cadforge-core/src/text.rs::multi ; crates/cadforge-core/tests/mtext_layout.rs::wrapping_flows_words_across_runs	no columns, tabs or indents; one built-in font
 objects	dimensions	1	Linear, aligned, angular, radius, diameter, ordinate, arc length, jogged, baseline and continued dimensions	crates/cadforge-core/src/dim.rs::enum DimType ; crates/cadforge-engine/tests/ext_annotate.rs::DIMARC	
 objects	dim-associativity	0	Dimensions that follow the geometry they measure		dimensions keep their own definition points
 objects	leaders	1	Leaders and multileaders with styles	crates/cadforge-engine/src/commands/ext_annotate/leaders.rs::MLEADER ; crates/cadforge-engine/tests/ext_annotate.rs::MLEADERSTYLE	
@@ -96,7 +96,7 @@ annotation	block-library	0.5	Block palettes and Design Center	crates/cadforge-ap
 annotation	find-spell	1	Find and replace, spell check	crates/cadforge-engine/tests/ext_annotate.rs::SPELL	
 annotation	tolerances	1	Geometric tolerance frames	crates/cadforge-engine/tests/ext_annotate.rs::TOLERANCE	
 annotation	units	1	Decimal, engineering, architectural, fractional, scientific units and angle formats	crates/cadforge-app/src/dialogs/settings.rs::UnitsState ; crates/cadforge-engine/tests/lisp.rs::rtos	
-annotation	mtext-format	0.25	Inline MTEXT formatting (bold, colour, stacking, columns)	crates/cadforge-core/src/text.rs::\\P	paragraph breaks only
+annotation	mtext-format	0.75	Inline MTEXT formatting (bold, colour, stacking, columns)	crates/cadforge-core/src/mtext.rs::pub fn parse ; crates/cadforge-core/tests/mtext_layout.rs::stacked_fractions_have_a_bar ; crates/cadforge-render/tests/mtext.rs::italic_leans_to_the_right ; crates/cadforge-core/tests/mtext_layout.rs::an_mtext_made_by_ezdxf_keeps ; tests/web/run.mjs::multiline text with formatting codes	bold, italic, underline / overline / strike-through, colour (index and true colour), height, stacked fractions, groups, %%u %%o %%d %%p %%c and the escapes are interpreted and kept through DXF; bold is drawn as a double strike and italic as a 12 degree shear, since there is only one built-in font; font names, width factor, tracking, oblique angle, tabs / indents / bullets and columns are read and ignored; the in-place editor shows the raw codes
 annotation	table-links	0	Table formulas and data links		not implemented
 annotation	sheet-sets	0	Sheet set manager		not implemented
 annotation	standards	0	CAD standards checking		not implemented

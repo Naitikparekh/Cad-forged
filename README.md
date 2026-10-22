@@ -42,6 +42,12 @@ product.
   multileaders, attributes (`ATTDEF`, `ATTEXT`, `DATAEXTRACTION`), block editing in place (`REFEDIT`, `BEDIT`), external references
   taken from open drawings with `XCLIP`, raster images (`IMAGEATTACH`, `IMAGECLIP`, `IMAGEADJUST`), and an
   **AutoLISP** interpreter (`APPLOAD`, the `VLISP` console, `(command ...)`, `c:` commands and `*error*`).
+* **Annotation**: multiline text interprets AutoCAD's inline codes (bold / italic, underline / overline / strike-through,
+  colour, height, stacked fractions, `%%d %%p %%c`) and keeps them through DXF; `PLOTSTYLE` loads a `.ctb` plot style table
+  that sets colour, lineweight and screening when plotting; `VPLAYER` freezes layers (and overrides their colour, linetype,
+  lineweight) per layout viewport.
+* **Large drawings**: picking, window selection, snapping and screen culling use a grid index (100 000 objects: a pick
+  takes microseconds instead of 30 ms).
 * **Working with files**: drag a file onto the window (drawings open, pictures attach, `.lsp` / `.scr` load, `.lin` /
   `.pat` add linetypes and hatch patterns); **autosave** every `SAVETIME` minutes with recovery of unsaved drawings after
   a crash (`DRAWINGRECOVERY`); `PUBLISH` writes every sheet as one multi-page PDF; `ARCHIVE` / `ETRANSMIT` pack a
@@ -126,9 +132,10 @@ with a scripted "user" (`tests/unit/sim.js` in JS, `cadforge_engine::sim::Sim` i
 ## Limitations
 
 No DWG (DXF only), no B-rep solids (meshes only: no fillet or face editing of solids), no surfaces or meshes, no
-rendering, no sheet sets, no dynamic blocks, no OLE objects or PDF/DGN underlays, no plot styles (CTB/STB), MTEXT
-supports paragraphs but not inline bold/colour/stacking, hatch patterns are a set of 12, and there is a single text
-font. External references are taken from drawings that are already open (no reload from a path).
+rendering, no sheet sets, no dynamic blocks, no OLE objects or PDF/DGN underlays, no plot style editor (named `.stb`
+tables load but cannot be applied), MTEXT has no columns, tabs or font choice, there are 13 built-in hatch patterns
+(more load from `.pat` files) and a single text font. External references are taken from drawings that are already open
+(no reload from a path).
 
 DXF notes: raster images are written as references to the image file (pixels are not embedded in the DXF), and
 `XCLIP` boundaries are display-only and are not written to DXF. See `HANDOFF.md` and `docs/BENCHMARK.md` for the full

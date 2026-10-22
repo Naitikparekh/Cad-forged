@@ -226,7 +226,9 @@ fn reads_a_dxf_produced_by_ezdxf() {
     assert_eq!(tx.jh, HJust::Center);
     near(tx.rot, PI / 6.0, 1e-9);
     let mt = d.model.entities.iter().find_map(|e| if let Kind::Text(t) = &e.kind { t.multi.then(|| t.clone()) } else { None }).unwrap();
-    assert_eq!(mt.s, "Bold line\nsecond 1/2");
+    // the formatting codes are kept (the layout interprets them); read as plain text it is what it always was
+    assert_eq!(mt.s, "{\\fArial|b1;Bold} line\nsecond \\S1/2;");
+    assert_eq!(cadforge_core::mtext::plain(&mt.s, true), "Bold line\nsecond 1/2");
     assert!(d.model.entities.iter().any(|e| e.layer == "WALLS" && e.type_name() == "line"));
     assert_eq!(d.layer("WALLS").unwrap().color, Color::Aci(5));
     assert_eq!(d.layer("WALLS").unwrap().ltype, "DASHED");

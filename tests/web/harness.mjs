@@ -31,6 +31,13 @@ export async function launch({ width = 1440, height = 900, scale = 1 } = {}) {
   // wait until the loading overlay is gone (the app started) or the failure message shows up
   await page.waitForFunction(() => !document.getElementById('loading') || document.getElementById('loading').textContent.startsWith('Could not'), null, { timeout: 60000 });
   await page.waitForTimeout(800);
+  // keys typed right after start-up are sometimes lost: prove the input path works (start LINE, cancel it) before any test runs
+  for (let i = 0; i < 20; i++) {
+    await page.keyboard.type('L', { delay: 5 }); await page.keyboard.press('Enter'); await page.waitForTimeout(150);
+    const busy = await page.evaluate(() => { try { return JSON.parse(window.cf.state_json()).busy === true; } catch { return false; } });
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+    if (busy) break;
+  }
   const t = {
     page, logs, server, browser,
     async shot(file) { await page.screenshot({ path: file }); },

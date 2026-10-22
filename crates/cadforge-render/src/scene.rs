@@ -490,6 +490,20 @@ impl<'a> Renderer<'a> {
         }
     }
 
+    /// Colour of a formatted run that sets its own colour; `None` keeps the text object's colour.
+    fn run_color(&self, c: Color) -> Option<Rgb> {
+        if matches!(c, Color::ByLayer | Color::ByBlock) {
+            return None;
+        }
+        if self.mono {
+            return Some([0, 0, 0]);
+        }
+        if let Some(col) = self.plot_styles.and_then(|t| t.style_for(c)).and_then(|ps| ps.color) {
+            return Some(col);
+        }
+        Some(color_rgb(c, self.theme.dark, self.theme.contrast))
+    }
+
     /// Draw a text entity (also used by dimensions and leaders).
     pub fn draw_text_at(&mut self, t: &TextData, color: Rgb, alpha: f32, selected: bool, hover: bool) {
         let lay = text_layout(t);
@@ -529,6 +543,58 @@ impl<'a> Renderer<'a> {
                 .collect();
             if !paths.is_empty() {
                 self.ops.push(Op::Stroke { paths, color: col, alpha, width: 1.0, dash: vec![], round: false });
+            }
+        } else if !lay.runs.is_empty() {
+            // formatted text: every run has its own size, colour and decorations
+            let k = self.k();
+            for r in &lay.runs {
+                let rc = if hover { self.theme.hover } else { r.style.color.and_then(|c| self.run_color(c)).unwrap_or(color) };
+                let em = cadforge_core::text::em_size(r.h);
+                if !r.s.trim().is_empty() {
+                    // italic: shear the text about its baseline (y is down in this space, so glyphs above it lean right)
+                    let mut mm = flipped;
+                    if r.style.italic {
+                        const LEAN: f64 = 0.2126; // tan 12 degrees
+                        let yb = -r.y;
+                        mm = [flipped[0], flipped[1], flipped[2] - LEAN * flipped[0], flipped[3] - LEAN * flipped[1], flipped[4] + LEAN * yb * flipped[0], flipped[5] + LEAN * yb * flipped[1]];
+                    }
+                    self.ops.push(Op::Text { s: r.s.clone(), x: r.x, y: -r.y, m: mm, em, color: rc, alpha });
+                    if r.style.bold {
+                        // bold: the same glyphs again, a hair to the right
+                        self.ops.push(Op::Text { s: r.s.clone(), x: r.x + 0.035 * em, y: -r.y, m: mm, em, color: rc, alpha });
+                    }
+                }
+                let mut deco = vec![];
+                if r.style.underline {
+                    deco.push(r.y - 0.18 * r.h);
+                }
+                if r.style.overline {
+                    deco.push(r.y + 1.18 * r.h);
+                }
+                if r.style.strike {
+                    deco.push(r.y + 0.4 * r.h);
+                }
+                let paths: Vec<Poly> = deco
+                    .iter()
+                    .map(|y| {
+                        let (a, b) = (mat::apply(&m, pt(r.x, *y)), mat::apply(&m, pt(r.x + r.w, *y)));
+                        Poly { pts: vec![[a.x, a.y], [b.x, b.y]], closed: false }
+                    })
+                    .collect();
+                if !paths.is_empty() {
+                    self.ops.push(Op::Stroke { paths, color: rc, alpha, width: (r.h * k * 0.08).max(1.0), dash: vec![], round: false });
+                }
+            }
+            let bars: Vec<Poly> = lay
+                .bars
+                .iter()
+                .map(|(x0, x1, y)| {
+                    let (a, b) = (mat::apply(&m, pt(*x0, *y)), mat::apply(&m, pt(*x1, *y)));
+                    Poly { pts: vec![[a.x, a.y], [b.x, b.y]], closed: false }
+                })
+                .collect();
+            if !bars.is_empty() {
+                self.ops.push(Op::Stroke { paths: bars, color: col, alpha, width: (t.h * k * 0.06).max(1.0), dash: vec![], round: false });
             }
         } else {
             for l in &lay.lines {

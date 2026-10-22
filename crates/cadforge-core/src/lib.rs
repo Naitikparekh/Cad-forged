@@ -5,6 +5,7 @@ pub mod drawing;
 pub mod entities;
 pub mod geom;
 pub mod hatch;
+pub mod mtext;
 pub mod io;
 pub mod picture;
 pub mod plotstyle;

@@ -90,6 +90,30 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
 * **Packaging and CI**: `tools/package.sh`, `tests/package/check.sh`, `.github/workflows/{ci,release}.yml`. Windows and macOS
   packages are only ever built by CI. The browser harness can start Chromium with `--force-device-scale-factor` (`launch({ scale })`);
   Playwright's `deviceScaleFactor` emulation does not change `devicePixelContentBoxSize`, so it cannot test HiDPI canvases.
+* **Viewport layer overrides** (`ViewportData.layers`, `LayerOverride`): VP freeze plus colour / linetype / lineweight /
+  transparency per layout viewport. The renderer applies them in `draw_viewport_content` (the sub-renderer gets
+  `vp_over`); plots go through the same path. While a viewport is active (MSPACE) `Drawing.active_vp` names it and
+  `touch()` recomputes `active_vp_frozen`, which `is_visible` consults, so frozen layers cannot be picked or snapped
+  and undo / redo stay in step. `is_visible_in_sheet` ignores that set (the sheet draws every viewport with its own).
+  The freeze list is written to DXF as group 331 (layer handles); the other overrides are not.
+* **Plot style tables** (`plotstyle.rs`): `.ctb` / `.stb` in AutoCAD's text layout, plain or inside the zlib container
+  (found by scanning for a zlib header after `pmzlibcodec`). Stored in `Drawing.plot_styles` as an `Rc` and carried through
+  undo by `Snapshot.plot` (it is not in the JSON snapshot). `Renderer.plot_styles` is set by `render_plot` and decides
+  colour / lineweight / screening in `style_of`; `PlotOptions.use_styles` switches it off. **Not tested against a file
+  written by AutoCAD** (none was available): lineweight index 0 is assumed to mean "use object lineweight", and the
+  container layout is taken from documentation.
+* **Spatial index** (`spatial.rs`, `Drawing::candidates`): a uniform grid over entity bounds, built per space on first use
+  after a change (`Caches` is cleared by every `touch()`), skipped below 512 entities. Callers loop over the returned
+  positions in ascending order, so results equal a full scan (`tests/spatial_equiv.rs` proves it against the linear
+  path). Used by `pick_at`, `pick_all`, `select_*`, `object_snap` and the renderer's culling; hover, grips, trim / offset
+  and boundary search still scan everything.
+* **MTEXT formatting** (`mtext.rs`, `text::layout_formatted`): the DXF reader now keeps the codes (`keep_mtext`; only
+  `\P` becomes a newline) and the layout turns them into `Layout.runs` / `bars`. Text without codes takes the old path
+  unchanged. The renderer draws bold as a double strike, italic as a shear (no new `Op` fields, so PDF / SVG / PNG
+  need nothing). `%%d %%p %%c %%u %%o` work in single-line text too. `\c` true colour is read as blue-in-the-high-byte;
+  that byte order is from memory of the format, not from a test against AutoCAD.
+* **Browser test harness**: `launch()` now proves the input path works before returning (keys typed right after start-up
+  were sometimes lost); tests that type into a fresh page should still use `startCommand` / `until` rather than fixed sleeps.
 * **Gotcha**: `python3 tools/benchmark/score.py --check` prints "EVIDENCE: ... pattern not found" *above* the score table and
   exits 1; do not pipe it through `tail`. Evidence patterns are regexes, so write `\(` for a literal parenthesis (or avoid them).
 
