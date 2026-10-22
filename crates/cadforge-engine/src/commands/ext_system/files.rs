@@ -1,6 +1,6 @@
 //! File, output and utility commands: AUDIT, RECOVER, CLOSEALL, SAVEALL, PREVIEW, PLOTSTYLE, PUBLISH, ETRANSMIT,
 //! APPLOAD, REINIT, RECORD.
-use super::{confirm, plural, ui_action};
+use super::{confirm, plural, ps, ui_action};
 use crate::app::Event;
 use crate::commands::{def, run};
 use crate::ctx::*;
@@ -157,11 +157,35 @@ async fn plotstyle(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
-async fn publish(c: Ctx, _a: Args) -> CmdResult<()> {
-    c.log_error("Publishing several sheets in one job is not supported in this version.");
-    if c.app(|a| a.ui.dialogs) {
-        c.log("Opening the PDF export for the current layout instead.");
-        ui_action(&c, "PUBLISH", "EXPORTPDF", Args::none());
+/// PUBLISH: every sheet of the drawing (model space and each layout) as one multi-page PDF, handed to the host as a file.
+async fn publish(c: Ctx, a: Args) -> CmdResult<()> {
+    let layouts = c.doc(|d| d.layout_names());
+    let which = match a.str("sheets") {
+        Some(k) => k.to_string(),
+        None if layouts.is_empty() => "Model".to_string(),
+        None => c.keyword(ps("Sheets to publish [Model/Layouts/All]").options(&["Model", "Layouts", "All"]).default_str("All")).await?.kw().unwrap_or("All").to_string(),
+    };
+    let mut sheets: Vec<Option<String>> = vec![];
+    if which == "Model" || which == "All" {
+        sheets.push(None);
+    }
+    if which == "Layouts" || which == "All" {
+        sheets.extend(layouts.iter().cloned().map(Some));
+    }
+    let (name, doc_title) = c.doc(|d| (d.name.clone(), d.name.clone()));
+    let result = c.doc(|d| {
+        let mut o = cadforge_render::default_plot_options(d);
+        o.title = doc_title.clone();
+        cadforge_render::publish_pdf(d, &o, &sheets)
+    });
+    match result {
+        Err(e) => c.log_error(&e),
+        Ok((data, pages)) => {
+            let stem: String = name.trim_end_matches(".json").trim_end_matches(".dxf").to_string();
+            let file = format!("{}.pdf", if stem.is_empty() { "drawing" } else { &stem });
+            c.log(&format!("Published {} to {file}.", plural(pages, "sheet")));
+            c.app(|app| app.emit(Event::SaveFile { name: file, data, mime: "application/pdf".into() }));
+        }
     }
     Ok(())
 }

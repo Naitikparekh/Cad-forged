@@ -1,5 +1,4 @@
 # Commands that exist but do less than the AutoCAD command: name<TAB>credit (0..1)<TAB>what is missing.
 # The parity tool gives these only the listed credit instead of a full hit.
 PLOTSTYLE	0.25	reports that plot style tables (CTB/STB) are not supported
-PUBLISH	0.5	opens the PDF export of the current layout instead of a multi-sheet job
 ETRANSMIT	0.25	lists the files a transmittal would need but does not package them

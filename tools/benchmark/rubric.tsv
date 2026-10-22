@@ -105,7 +105,7 @@ output	viewports	1	Rectangular, polygonal and object viewports, clip, scale, loc
 output	vp-layers	0	Per-viewport layer overrides		reported as unsupported by LAYER / VPLAYER
 output	plot-dialog	1	Plot with scale, area, offset, centre, lineweights, monochrome, preview	crates/cadforge-app/src/dialogs/plot.rs::PlotState ; tests/web/run.mjs::PLOT dialog	
 output	plot-formats	1	PDF, SVG and PNG output	crates/cadforge-render/tests/render.rs::plot_pdf_and_svg	
-output	publish	0.25	Batch plotting of several sheets	crates/cadforge-engine/src/commands/ext_system/files.rs::fn publish	single sheet only
+output	publish	0.75	Batch plotting of several sheets	crates/cadforge-engine/src/commands/ext_system/files.rs::fn publish ; crates/cadforge-engine/tests/publish.rs::publish_writes_one_pdf_page_per_sheet ; crates/cadforge-render/src/pdf.rs::pub fn write_pdf_pages	one drawing at a time, PDF only: no sheet-list files, DWF or plotter output
 output	plot-style-tables	0	Pen assignments and plot style tables		not implemented
 output	layout-wizard	0.5	Layout wizard and templates	crates/cadforge-engine/src/commands/layouts.rs::LAYOUTWIZARD	no DWT templates
 output	hidden-shaded-plot	0.5	Hidden line and shaded plots	crates/cadforge-render/src/solids.rs::Hidden	one hidden / shaded style

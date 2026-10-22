@@ -1,6 +1,6 @@
 //! Plotting: lays a drawing out on a sheet and renders it with the scene renderer (port of `src/io/plot.js`).
 //! The device unit is 0.1 mm.
-use crate::pdf::write_pdf;
+use crate::pdf::{write_pdf, write_pdf_pages, PdfPage};
 use crate::scene::{DrawOpts, LwMode, Renderer};
 use crate::svg::write_svg;
 use crate::theme::{Prefs, Theme};
@@ -199,4 +199,25 @@ pub fn export_vector(doc: &Drawing, o: &PlotOptions, view_bounds: Option<Bounds>
         PlotFormat::Svg => VectorPlot { data: write_svg(&ops, page, UNIT_MM, &o.title).into_bytes(), mime: "image/svg+xml", ext: "svg", layout },
         _ => VectorPlot { data: write_pdf(&ops, page, UNIT_MM, &o.title), mime: "application/pdf", ext: "pdf", layout },
     })
+}
+
+/// PUBLISH: one PDF with a page per sheet. A sheet is a layout name, or `None` for model space (laid out with the
+/// options as given). Sheets with nothing to plot are skipped; the result says how many pages were written.
+pub fn publish_pdf(doc: &Drawing, base: &PlotOptions, sheets: &[Option<String>]) -> Result<(Vec<u8>, usize), String> {
+    let mut rendered: Vec<(Vec<Op>, (f64, f64))> = vec![];
+    for sheet in sheets {
+        let mut o = base.clone();
+        o.layout = sheet.clone();
+        match plot_layout(doc, &o, None) {
+            Ok(layout) => rendered.push((render_plot(doc, &o, &layout), (layout.w, layout.h))),
+            // an empty model space is not an error when other sheets exist
+            Err(_) if sheet.is_none() => {}
+            Err(e) => return Err(e),
+        }
+    }
+    if rendered.is_empty() {
+        return Err("There is nothing to plot.".into());
+    }
+    let pages: Vec<PdfPage> = rendered.iter().map(|(ops, size)| PdfPage { ops, size: *size }).collect();
+    Ok((write_pdf_pages(&pages, UNIT_MM, &base.title), rendered.len()))
 }

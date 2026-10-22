@@ -316,6 +316,7 @@ version = "2.0.0"
 dependencies = [
  "approx",
  "cadforge-core",
+ "cadforge-render",
  "indexmap",
  "serde",
  "serde_json",

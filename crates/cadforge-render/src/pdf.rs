@@ -70,10 +70,14 @@ struct PdfImage {
     smooth: bool,
 }
 
-/// `ops` are in device units of `unit_mm` millimetres (y down, origin top-left); `page` is the size in device units.
-pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec<u8> {
-    let pt = unit_mm * 72.0 / 25.4;
-    let (w, h) = (page.0 * pt, page.1 * pt);
+/// One page of a PDF: recorded operations in device units and the page size in the same units.
+pub struct PdfPage<'a> {
+    pub ops: &'a [Op],
+    pub size: (f64, f64),
+}
+
+/// The content stream of one page with the transparency states and images it uses.
+fn page_stream(ops: &[Op], pt: f64, h: f64) -> (String, Vec<(f64, String)>, Vec<PdfImage>) {
     let mut alphas: Vec<(f64, String)> = vec![];
     let mut gs = |a: f64| -> String {
         let k = (a * 100.0).round() / 100.0;
@@ -148,39 +152,58 @@ pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec
         }
     }
     c.push("Q".into());
-    let content = c.join("\n");
-    let gs_dict = std::iter::once("/GS0 << /ca 1 /CA 1 >>".to_string()).chain(alphas.iter().map(|(a, n)| format!("/{n} << /ca {a} /CA {a} >>"))).collect::<Vec<_>>().join(" ");
-    // image XObjects follow the six fixed objects (an image, then its soft mask when it has transparency)
+    (c.join("\n"), alphas, images)
+}
+
+/// `ops` are in device units of `unit_mm` millimetres (y down, origin top-left); `page` is the size in device units.
+pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec<u8> {
+    write_pdf_pages(&[PdfPage { ops, size: page }], unit_mm, title)
+}
+
+/// A PDF with one page per entry (PUBLISH): catalog, page tree, font and info come first, then each page with its
+/// content stream and image XObjects.
+pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> {
+    let pt = unit_mm * 72.0 / 25.4;
     let latin1_str = |b: &[u8]| -> String { b.iter().map(|v| *v as char).collect() };
-    let mut image_objs: Vec<String> = vec![];
-    let mut xobjects: Vec<String> = vec![];
-    for (i, im) in images.iter().enumerate() {
-        let num = 7 + image_objs.len();
-        xobjects.push(format!("/Im{} {} 0 R", i + 1, num));
-        let smask = im.alpha.as_ref().map(|_| format!(" /SMask {} 0 R", num + 1)).unwrap_or_default();
-        image_objs.push(format!(
-            "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode{}{} /Length {} >>\nstream\n{}\nendstream",
-            im.w,
-            im.h,
-            if im.smooth { " /Interpolate true" } else { "" },
-            smask,
-            im.rgb.len(),
-            latin1_str(&im.rgb)
-        ));
-        if let Some(a) = &im.alpha {
-            image_objs.push(format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n{}\nendstream", im.w, im.h, a.len(), latin1_str(a)));
-        }
-    }
-    let xobject_dict = if xobjects.is_empty() { String::new() } else { format!(" /XObject << {} >>", xobjects.join(" ")) };
     let mut objs: Vec<String> = vec![
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ExtGState << {} >>{} >> >>", f(w), f(h), gs_dict, xobject_dict),
-        format!("<< /Length {} >>\nstream\n{}\nendstream", content.chars().count(), content),
+        String::new(), // the page tree, filled in once the pages are numbered
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
         format!("<< /Title {} /Producer (CadForge) /Creator (CadForge) >>", pdf_string(title)),
     ];
-    objs.extend(image_objs);
+    let mut kids: Vec<usize> = vec![];
+    for page in pages {
+        let (w, h) = (page.size.0 * pt, page.size.1 * pt);
+        let (content, alphas, images) = page_stream(page.ops, pt, h);
+        let gs_dict = std::iter::once("/GS0 << /ca 1 /CA 1 >>".to_string()).chain(alphas.iter().map(|(a, n)| format!("/{n} << /ca {a} /CA {a} >>"))).collect::<Vec<_>>().join(" ");
+        let page_num = objs.len() + 1;
+        // the images follow the page and its content (an image, then its soft mask when it has transparency)
+        let mut image_objs: Vec<String> = vec![];
+        let mut xobjects: Vec<String> = vec![];
+        for (i, im) in images.iter().enumerate() {
+            let num = page_num + 2 + image_objs.len();
+            xobjects.push(format!("/Im{} {} 0 R", i + 1, num));
+            let smask = im.alpha.as_ref().map(|_| format!(" /SMask {} 0 R", num + 1)).unwrap_or_default();
+            image_objs.push(format!(
+                "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode{}{} /Length {} >>\nstream\n{}\nendstream",
+                im.w,
+                im.h,
+                if im.smooth { " /Interpolate true" } else { "" },
+                smask,
+                im.rgb.len(),
+                latin1_str(&im.rgb)
+            ));
+            if let Some(a) = &im.alpha {
+                image_objs.push(format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n{}\nendstream", im.w, im.h, a.len(), latin1_str(a)));
+            }
+        }
+        let xobject_dict = if xobjects.is_empty() { String::new() } else { format!(" /XObject << {} >>", xobjects.join(" ")) };
+        kids.push(page_num);
+        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents {} 0 R /Resources << /Font << /F1 3 0 R >> /ExtGState << {} >>{} >> >>", f(w), f(h), page_num + 1, gs_dict, xobject_dict));
+        objs.push(format!("<< /Length {} >>\nstream\n{}\nendstream", content.chars().count(), content));
+        objs.extend(image_objs);
+    }
+    objs[1] = format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.iter().map(|k| format!("{k} 0 R")).collect::<Vec<_>>().join(" "), kids.len());
     // every character is <= 0xFF, so a latin-1 byte mapping preserves the offsets
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();
     let mut offsets = vec![];
@@ -194,7 +217,7 @@ pub fn write_pdf(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Vec
     for o in &offsets {
         tail.push_str(&format!("{:010} 00000 n \n", o));
     }
-    tail.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R /Info 6 0 R >>\nstartxref\n{}\n%%EOF\n", objs.len() + 1, xref));
+    tail.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R /Info 4 0 R >>\nstartxref\n{}\n%%EOF\n", objs.len() + 1, xref));
     out.extend(latin1(&tail));
     out
 }
