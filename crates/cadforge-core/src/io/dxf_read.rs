@@ -12,8 +12,43 @@ use std::collections::HashMap;
 
 // ---------------------------------------------------------------- text decoding
 
+/// DXF writes control characters as a caret and a letter (`^J` is a line feed) and a literal caret as `^ `.
+fn uncaret(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s.contains('^') {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '^' {
+            match it.peek().copied() {
+                Some(' ') => {
+                    out.push('^');
+                    it.next();
+                }
+                Some('J') => {
+                    out.push('\n');
+                    it.next();
+                }
+                Some('I') => {
+                    out.push(' ');
+                    it.next();
+                }
+                Some(n) if ('@'..='_').contains(&n) => {
+                    it.next(); // other control characters are dropped
+                }
+                _ => out.push('^'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 /// Decode `%%c`, `%%d`, `%%p` and `\U+XXXX` escapes in TEXT / names.
 pub fn decode_text(s: &str) -> String {
+    let s = &*uncaret(s);
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
     let mut i = 0;
@@ -66,6 +101,7 @@ pub fn decode_text(s: &str) -> String {
 
 /// MTEXT contents with their formatting codes kept (text layout interprets them) and `\n` for paragraph breaks.
 pub fn keep_mtext(src: &str) -> String {
+    let src = &*uncaret(src);
     let s: Vec<char> = decode_text(src).chars().collect();
     let mut out = String::new();
     let mut i = 0;
@@ -89,6 +125,7 @@ pub fn keep_mtext(src: &str) -> String {
 
 /// Strip MTEXT formatting codes, returning plain text with `\n` line breaks.
 pub fn decode_mtext(src: &str) -> String {
+    let src = &*uncaret(src);
     let s: Vec<char> = decode_text(src).chars().collect();
     let mut out = String::new();
     let mut i = 0;
@@ -173,9 +210,10 @@ fn tokenize(text: &str) -> Vec<Tok> {
     let mut out = vec![];
     let mut i = 0;
     while i + 1 < norm.len() {
-        match norm[i].trim().parse::<i32>() {
-            Ok(code) => out.push((code, norm[i + 1].trim().to_string())),
-            Err(_) => {}
+        if let Ok(code) = norm[i].trim().parse::<i32>() {
+            // text content keeps its spaces: long strings are split into 250-character chunks at any character
+            let v = if matches!(code, 1 | 3) { norm[i + 1] } else { norm[i + 1].trim() };
+            out.push((code, v.to_string()));
         }
         i += 2;
     }
@@ -192,11 +230,17 @@ struct Rec {
 
 fn records(tokens: &[Tok]) -> Vec<Rec> {
     let mut recs: Vec<Rec> = vec![];
+    // an MTEXT's "Embedded Object" (2018+ column data) repeats groups 10/11/40... with other meanings
+    let mut embedded = false;
     for t in tokens {
         if t.0 == 0 {
             recs.push(Rec { ty: t.1.clone(), g: vec![], vertices: vec![] });
+            embedded = false;
         } else if let Some(r) = recs.last_mut() {
-            r.g.push(t.clone());
+            embedded |= t.0 == 101 && r.ty == "MTEXT";
+            if !embedded {
+                r.g.push(t.clone());
+            }
         }
     }
     recs
@@ -893,46 +937,73 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             }
         }
         "MULTILEADER" => {
-            let mut line: Vec<Pt> = vec![];
+            // the context data holds the text, then one LEADER{} per leader (landing point, dogleg direction and
+            // length) holding one LEADER_LINE{} per line (its own vertices, usually just the arrow point)
+            struct Root {
+                landing: Option<Pt>,
+                dir: Option<Pt>,
+                dogleg: f64,
+                lines: Vec<Vec<Pt>>,
+            }
+            let mut roots: Vec<Root> = vec![];
             let mut text = String::new();
-            let (mut text_h, mut landing, mut dogleg_dir, mut dogleg_len) = (0.0, None, None, 0.0);
+            let mut text_h = 0.0;
             let mut in_line = false;
             let mut x: Option<f64> = None;
             let mut section = String::new();
             for (c, v) in &r.g {
-                match (*c, v.as_str()) {
-                    (300, "CONTEXT_DATA{") => section = "ctx".into(),
-                    (302, "LEADER{") => section = "leader".into(),
-                    (304, "LEADER_LINE{") => in_line = true,
-                    (305, "}") => in_line = false,
-                    (304, t) if section == "ctx" && !in_line => text = decode_mtext(t),
-                    (41, t) if section == "ctx" && text_h == 0.0 => text_h = parse_f(t),
-                    (10, t) if in_line => x = Some(parse_f(t)),
-                    (20, t) if in_line => {
-                        if let Some(px) = x.take() {
-                            line.push(pt(px, parse_f(t)));
+                let root = roots.last_mut();
+                match (*c, v.as_str(), root) {
+                    (300, "CONTEXT_DATA{", _) => section = "ctx".into(),
+                    (302, "LEADER{", _) => {
+                        section = "leader".into();
+                        roots.push(Root { landing: None, dir: None, dogleg: 0.0, lines: vec![] });
+                    }
+                    (303, "}", _) => section = "ctx".into(),
+                    (304, "LEADER_LINE{", Some(root)) => {
+                        in_line = true;
+                        root.lines.push(vec![]);
+                    }
+                    (305, "}", _) => in_line = false,
+                    (304, t, _) if section == "ctx" && !in_line => text = decode_mtext(t),
+                    (41, t, _) if section == "ctx" && text_h == 0.0 => text_h = parse_f(t),
+                    (10, t, _) if in_line || section == "leader" => x = Some(parse_f(t)),
+                    (20, t, Some(root)) if in_line => {
+                        if let (Some(px), Some(l)) = (x.take(), root.lines.last_mut()) {
+                            l.push(pt(px, parse_f(t)));
                         }
                     }
-                    (10, t) if section == "leader" && landing.is_none() => x = Some(parse_f(t)),
-                    (20, t) if section == "leader" && landing.is_none() && x.is_some() => landing = Some(pt(x.take().unwrap_or(0.0), parse_f(t))),
-                    (11, t) if section == "leader" && dogleg_dir.is_none() => x = Some(parse_f(t)),
-                    (21, t) if section == "leader" && dogleg_dir.is_none() && x.is_some() => dogleg_dir = Some(pt(x.take().unwrap_or(0.0), parse_f(t))),
-                    (40, t) if section == "leader" && dogleg_len == 0.0 => dogleg_len = parse_f(t),
+                    (20, t, Some(root)) if section == "leader" && root.landing.is_none() => root.landing = x.take().map(|px| pt(px, parse_f(t))),
+                    (11, t, _) if section == "leader" => x = Some(parse_f(t)),
+                    (21, t, Some(root)) if section == "leader" && root.dir.is_none() => root.dir = x.take().map(|px| pt(px, parse_f(t))),
+                    (40, t, Some(root)) if section == "leader" && !in_line && root.dogleg == 0.0 => root.dogleg = parse_f(t),
                     _ => {}
                 }
             }
-            if line.len() >= 2 {
-                if let Some(l) = landing {
-                    if dist(*line.last().expect("point"), l) > 1e-9 {
-                        line.push(l);
-                    }
-                    if let Some(d) = dogleg_dir {
-                        if dogleg_len > 0.0 {
-                            line.push(pt(l.x + d.x * dogleg_len, l.y + d.y * dogleg_len));
+            let mut made = 0;
+            for root in &roots {
+                for (k, line) in root.lines.iter().enumerate() {
+                    let mut line = line.clone();
+                    if let (false, Some(l)) = (line.is_empty(), root.landing) {
+                        if dist(*line.last().expect("point"), l) > 1e-9 {
+                            line.push(l);
+                        }
+                        // the dogleg is drawn once per leader
+                        if let (0, Some(d)) = (k, root.dir) {
+                            if root.dogleg > 0.0 {
+                                line.push(pt(l.x + d.x * root.dogleg, l.y + d.y * root.dogleg));
+                            }
                         }
                     }
+                    if line.len() >= 2 {
+                        let t = if made == 0 { text.as_str() } else { "" };
+                        push(Entity::leader(line, t, if text_h > 0.0 { text_h } else { 2.5 }), false, &mut out);
+                        made += 1;
+                    }
                 }
-                push(Entity::leader(line, &text, if text_h > 0.0 { text_h } else { 2.5 }), false, &mut out);
+            }
+            if made == 0 {
+                *ctx.skipped.entry("MULTILEADER".into()).or_insert(0) += 1;
             }
         }
         "WIPEOUT" => {
