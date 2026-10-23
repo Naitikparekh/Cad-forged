@@ -1,4 +1,4 @@
-//! File, output and utility commands: AUDIT, RECOVER, CLOSEALL, SAVEALL, PREVIEW, PLOTSTYLE, PUBLISH, ETRANSMIT,
+//! File, output and utility commands: AUDIT, RECOVER, CLOSEALL, SAVEALL, PREVIEW, -DXFOUT, PLOTSTYLE, PUBLISH, ETRANSMIT,
 //! APPLOAD, REINIT, RECORD.
 use super::{confirm, plural, ps, ui_action};
 use crate::app::Event;
@@ -152,6 +152,21 @@ async fn preview(c: Ctx, _a: Args) -> CmdResult<()> {
     Ok(())
 }
 
+/// -DXFOUT: write the drawing as a DXF file, as text or (Binary) packed. The decimal places AutoCAD asks about first are
+/// not offered: numbers are always written in full.
+async fn dxfout(c: Ctx, a: Args) -> CmdResult<()> {
+    let fmt = match a.str("format") {
+        Some(f) => f.to_string(),
+        None => c.keyword(ps("Enter file format [ASCII/Binary]").options(&["ASCII", "Binary"]).default_str("ASCII")).await?.kw().unwrap_or("ASCII").to_string(),
+    };
+    let binary = fmt.eq_ignore_ascii_case("binary");
+    let (name, data) = c.doc(|d| (d.name.clone(), if binary { cadforge_core::io::write_dxf_binary(d) } else { cadforge_core::io::write_dxf(d).into_bytes() }));
+    let file = format!("{name}.dxf");
+    c.log(&format!("Wrote {file} ({} DXF, {} bytes).", if binary { "binary" } else { "ASCII" }, data.len()));
+    c.app(|app| app.emit(Event::SaveFile { name: file, data, mime: "application/dxf".into() }));
+    Ok(())
+}
+
 /// PLOTSTYLE: the plot style table the drawing plots with (a `.ctb` colour dependent table decides the colour, lineweight
 /// and screening of what it covers). Named `.stb` tables can be loaded and listed but objects cannot be assigned
 /// to their styles yet, so they change nothing when plotting.
@@ -285,6 +300,7 @@ pub(super) fn register(r: &mut Registry) {
     r.define(def("File", "CLOSEALL", run(closeall)).title("Close All").icon("close").desc("Closes all currently open drawings.").once());
     r.define(def("Utilities", "SAVEALL", run(saveall)).title("Save All").icon("save").desc("Saves all open drawings.").once());
     r.define(def("Output", "PREVIEW", run(preview)).aliases(&["PRE"]).title("Plot Preview").icon("plot").desc("Displays the drawing as it will be plotted.").once());
+    r.define(def("File", "-DXFOUT", run(dxfout)).title("Export DXF (options)").icon("dxf").desc("Writes the drawing as an ASCII or binary DXF file.").once());
     r.define(def("Output", "PLOTSTYLE", run(plotstyle)).title("Plot Style Table").desc("Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting.").once());
     r.define(def("Output", "PUBLISH", run(publish)).title("Publish").icon("pdf").desc("Publishes drawings to PDF or plotters.").once());
     r.define(def("Output", "ETRANSMIT", run(etransmit)).title("eTransmit").desc("Lists the files needed to send a drawing to someone else.").once());

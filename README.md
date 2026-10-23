@@ -53,7 +53,7 @@ product.
   a crash (`DRAWINGRECOVERY`); `PUBLISH` writes every sheet as one multi-page PDF; `ARCHIVE` / `ETRANSMIT` pack a
   drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files.
 * **Files**: CadForge JSON, **DXF R2000 export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by
-  other tools), **plot to PDF / SVG / PNG** with paper size, scale, lineweights and monochrome options and a live preview.
+  other tools, and **binary DXF**, which `-DXFOUT` also writes), **plot to PDF / SVG / PNG** with paper size, scale, lineweights and monochrome options and a live preview.
 
 ## Rust app: build, run, test
 

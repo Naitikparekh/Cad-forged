@@ -557,6 +557,11 @@ impl<'a> W<'a> {
     }
 }
 
+/// Serialise a drawing to binary DXF (the same content as [`write_dxf`], packed).
+pub fn write_dxf_binary(doc: &Drawing) -> Vec<u8> {
+    super::binary_dxf::text_to_binary(&write_dxf(doc))
+}
+
 /// Serialise a drawing to DXF text.
 pub fn write_dxf(doc: &Drawing) -> String {
     let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2, image_defs: vec![], layer_handles: HashMap::new() };

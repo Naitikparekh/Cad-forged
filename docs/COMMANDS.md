@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 329 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 331 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -179,6 +179,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `-DXFOUT` |  | Writes the drawing as an ASCII or binary DXF file. |
 | `ARCHIVE` |  | Packs the drawing, its pictures and a report into one ZIP file. |
 | `AUDIT` |  | Evaluates the integrity of a drawing and corrects some errors. |
 | `CLOSEALL` |  | Closes all currently open drawings. |
@@ -224,11 +225,12 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `LAYTRANS` |  | Changes layers to the layer names you specify and merges layers that map to the same name. |
 | `LAYULK` |  | Unlocks the layer of a selected object. |
 | `LAYUNISO` |  | Restores layers hidden or locked by LAYISO. |
-| `LAYVPI` |  | Isolates the layer of a selected object in the current layout viewport. |
+| `LAYVPI` |  | Isolates the layer of a selected object in the active layout viewport. |
 | `LAYWALK` |  | Displays objects on selected layers and hides objects on all other layers. |
 | `LINETYPE` | `LT` `LTYPE` | Loads, sets, and modifies linetypes. |
 | `LTSCALE` | `LTS` | Sets the global linetype scale factor. |
 | `LWEIGHT` | `LINEWEIGHT` `LW` | Sets the current lineweight, lineweight display options, and lineweight units. |
+| `VPLAYER` |  | Freezes, thaws or resets layers in individual layout viewports, and sets defaults for new viewports. |
 
 ## Layout
 
@@ -295,7 +297,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 |---|---|---|
 | `DATAEXTRACTION` | `EATTEXT` | Extracts drawing data (block counts with attributes, or object counts) to a CSV file. |
 | `ETRANSMIT` |  | Lists the files needed to send a drawing to someone else. |
-| `PLOTSTYLE` |  | Sets the plot style for new objects. |
+| `PLOTSTYLE` |  | Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting. |
 | `PREVIEW` | `PRE` | Displays the drawing as it will be plotted. |
 | `PUBLISH` |  | Publishes drawings to PDF or plotters. |
 

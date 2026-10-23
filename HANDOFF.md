@@ -102,6 +102,12 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   colour / lineweight / screening in `style_of`; `PlotOptions.use_styles` switches it off. **Not tested against a file
   written by AutoCAD** (none was available): lineweight index 0 is assumed to mean "use object lineweight", and the
   container layout is taken from documentation.
+* **Binary DXF** (`io/binary_dxf.rs`): `binary_to_text` unpacks a binary file into ordinary DXF text and `text_to_binary`
+  packs our writer's text, so there is still one parser and one writer. `decode_dxf_bytes` / `dxf_text_from_bytes` do the
+  unpacking, which is why OPEN, IMPORT and drag-and-drop accept binary files without further code. The value type of each
+  group comes from its code (same table as ezdxf); R2000+ files use 2-byte codes, R12 1-byte codes (read only). Strings are
+  UTF-8 from AC1021 on, otherwise cp1252. Output is always AC1015. `-DXFOUT [ASCII/Binary]` is the command (File > Export >
+  Binary DXF in the app). Verified against ezdxf in both directions; never opened in AutoCAD.
 * **Spatial index** (`spatial.rs`, `Drawing::candidates`): a uniform grid over entity bounds, built per space on first use
   after a change (`Caches` is cleared by every `touch()`), skipped below 512 entities. Callers loop over the returned
   positions in ascending order, so results equal a full scan (`tests/spatial_equiv.rs` proves it against the linear

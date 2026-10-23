@@ -1143,25 +1143,38 @@ const CP1252_HIGH: [char; 32] = [
     '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}', '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{9D}', '\u{017E}', '\u{0178}',
 ];
 
-/// Decode the bytes of a DXF file: UTF-8 (AutoCAD 2007 and later, with or without BOM) or, failing that, the ANSI
-/// code page 1252 that older files and AutoCAD LT use.
-pub fn decode_dxf_bytes(bytes: &[u8]) -> String {
-    let b = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
-    match std::str::from_utf8(b) {
-        Ok(s) => s.to_string(),
-        Err(_) => b
-            .iter()
-            .map(|&c| match c {
-                0x80..=0x9F => CP1252_HIGH[(c - 0x80) as usize],
-                _ => c as char,
-            })
-            .collect(),
-    }
+/// Windows-1252 text from bytes.
+pub(crate) fn cp1252_to_string(b: &[u8]) -> String {
+    b.iter()
+        .map(|&c| match c {
+            0x80..=0x9F => CP1252_HIGH[(c - 0x80) as usize],
+            _ => c as char,
+        })
+        .collect()
 }
 
-/// Parse the bytes of a DXF file (see [`decode_dxf_bytes`]).
+/// The DXF text in the bytes of a file: binary DXF is unpacked, anything else is UTF-8 (AutoCAD 2007 and later, with or
+/// without BOM) or, failing that, the ANSI code page 1252 that older files and AutoCAD LT use.
+pub fn dxf_text_from_bytes(bytes: &[u8]) -> Result<String, String> {
+    if super::binary_dxf::is_binary_dxf(bytes) {
+        return super::binary_dxf::binary_to_text(bytes);
+    }
+    let b = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+    Ok(match std::str::from_utf8(b) {
+        Ok(s) => s.to_string(),
+        Err(_) => cp1252_to_string(b),
+    })
+}
+
+/// [`dxf_text_from_bytes`] for callers that cope with a damaged binary file by seeing no drawing in it (the reader then
+/// reports that the text is not a DXF file).
+pub fn decode_dxf_bytes(bytes: &[u8]) -> String {
+    dxf_text_from_bytes(bytes).unwrap_or_default()
+}
+
+/// Parse the bytes of a DXF file, text or binary (see [`dxf_text_from_bytes`]).
 pub fn read_dxf_bytes(bytes: &[u8], name: &str) -> Result<Drawing, String> {
-    read_dxf(&decode_dxf_bytes(bytes), name)
+    read_dxf(&dxf_text_from_bytes(bytes)?, name)
 }
 
 /// Parse DXF text into a drawing.

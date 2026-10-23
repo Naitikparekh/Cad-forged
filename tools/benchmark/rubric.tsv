@@ -28,8 +28,8 @@ objects	groups	1	Named and unnamed groups	crates/cadforge-engine/tests/ext_modif
 io	native-project	1	A lossless native file with the whole drawing	crates/cadforge-core/tests/oracle.rs::json ; crates/cadforge-core/tests/image.rs::pictures_survive_the_project_file	
 io	dxf-read	1	Read DXF R2000 to R2018 (ASCII)	crates/cadforge-core/tests/corpus.rs::every_dxf_version_yields_the_same_geometry	
 io	dxf-write	1	Write DXF that AutoCAD-class readers accept	crates/cadforge-core/tests/corpus.rs::pass_the_ezdxf_audit	
-io	dxf-r12	0.5	Read old DXF (R12 / R13 / R14)	crates/cadforge-core/tests/dxf.rs::POLYLINE|VERTEX	only generated R2000+ files are in the corpus
-io	dxf-binary	0	Binary DXF		not implemented
+io	dxf-r12	0.5	Read old DXF (R12 / R13 / R14)	crates/cadforge-core/tests/dxf.rs::POLYLINE|VERTEX	one R12 file made by ezdxf (text and binary) is read; no R12 files from AutoCAD are in the corpus
+io	dxf-binary	0.75	Binary DXF	crates/cadforge-core/src/io/binary_dxf.rs::pub fn binary_to_text ; crates/cadforge-core/tests/binary_dxf.rs::files_ezdxf_saves_as_binary_read_exactly ; crates/cadforge-core/tests/binary_dxf.rs::ezdxf_reads_the_binary_file_we_write ; crates/cadforge-core/tests/binary_dxf.rs::an_r12_binary_file ; crates/cadforge-engine/tests/dxfout.rs::binary_is_chosen ; tests/web/run.mjs::binary DXF	read and write, checked in both directions against ezdxf (all 11 corpus drawings and an R12 file saved by ezdxf as binary read like their text twins; ezdxf opens and audits ours); never opened in AutoCAD itself; written as R2000 only (no R12 / R13 binary output), and -DXFOUT has no decimal-places option
 io	dwg	0	DWG read and write		not implemented: the format is proprietary
 io	dxf-text	1	Text encodings: code pages, UTF-8, \U+ and %% codes	crates/cadforge-core/tests/corpus.rs::text_is_decoded_from_ansi_and_utf8_files	
 io	dxf-layouts	1	Paper space layouts, viewports and sheet sizes in DXF	crates/cadforge-core/tests/corpus.rs::our_writer_keeps_sheet_sizes_viewports_and_gradients	

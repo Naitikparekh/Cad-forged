@@ -167,7 +167,9 @@ await test('layout tabs switch to paper space and a double-click enters the view
     await page.mouse.move(720, 460, { steps: 3 }); await t.frame(3); await page.mouse.dblclick(720, 460); await t.frame(5);
   }
   s = await t.state();
-  assert.equal(s.mspace, true, 'double-click activates the viewport'); assert.equal(s.space, 'model');
+  if (!s.mspace) { fs.mkdirSync(path.join(root, 'target', 'tmp'), { recursive: true }); await t.shot(path.join(root, 'target', 'tmp', 'layout-dblclick-failed.png')); }
+  assert.equal(s.mspace, true, 'double-click activates the viewport: ' + JSON.stringify({ space: s.space, editors: s.editors, entities: s.entities, busy: s.busy, tab: s.tab, log: (s.history || []).slice(0, 8) }));
+  assert.equal(s.space, 'model');
   await t.cmd('PSPACE'); s = await t.state();
   assert.equal(s.mspace, false); assert.equal(s.space, 'Layout1');
   await page.mouse.move(37, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(37, 770); await t.frame(4);   // back to Model
@@ -473,6 +475,28 @@ await test('multiline text with formatting codes: a coloured run is drawn in its
   const red = countPixels(file, 'r > 200 and g < 70 and b < 70');
   if (red === null) { console.log('       (PIL not installed: skipped the pixel check)'); return; }
   assert.ok(red > 40, `expected red text pixels from the \\C1; run, got ${red}`);
+});
+
+await test('binary DXF: -DXFOUT downloads one that ezdxf reads, and a binary file from ezdxf opens', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const tmp = path.join(root, 'target', 'tmp'); fs.mkdirSync(tmp, { recursive: true });
+  // out: the active drawing as binary DXF
+  const before = await t.state();
+  const f = await download(async () => { await t.cmd('-DXFOUT'); await t.cmd('Binary'); });
+  assert.ok(f.name.endsWith('.dxf'), f.name);
+  assert.equal(f.data.subarray(0, 18).toString('latin1'), 'AutoCAD Binary DXF', 'starts with the binary sentinel');
+  const mine = path.join(tmp, 'web-binary-out.dxf'); fs.writeFileSync(mine, f.data);
+  const py = (code, ...args) => { try { return execFileSync('python3', ['-I', '-c', code, ...args], { encoding: 'utf8' }).trim(); } catch (e) { if (/No module named 'ezdxf'/.test(String(e.stderr || e.message))) return null; throw e; } };
+  const n = py('import sys, ezdxf; d = ezdxf.readfile(sys.argv[1]); print(len(d.modelspace()))', mine);
+  if (n === null) { console.log('       (ezdxf not installed: skipped the checks that need it)'); return; }
+  assert.equal(Number(n), before.entities, `ezdxf finds the ${before.entities} object(s) in the binary file`);
+  // in: a binary DXF written by ezdxf (an independent implementation), dropped on the canvas
+  const theirs = path.join(tmp, 'web-binary-in.dxf');
+  py("import sys, ezdxf\ndoc = ezdxf.new('R2018')\nm = doc.modelspace()\nm.add_line((0, 0), (40, 0))\nm.add_circle((20, 10), 5)\nm.add_text('from ezdxf', dxfattribs={'height': 3, 'insert': (2, 20)})\ndoc.saveas(sys.argv[1], fmt='bin')", theirs);
+  assert.equal(fs.readFileSync(theirs).subarray(0, 18).toString('latin1'), 'AutoCAD Binary DXF');
+  await drop('web-binary-in.dxf', 'application/dxf', fs.readFileSync(theirs));
+  const s = await t.state();
+  assert.equal(s.name, 'web-binary-in'); assert.deepEqual([...s.types].sort(), ['circle', 'line', 'text']);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

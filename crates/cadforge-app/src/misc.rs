@@ -177,7 +177,18 @@ impl CadForgeApp {
                 self.h.pump();
                 continue;
             }
-            let text = if p.name.to_lowercase().ends_with(".dxf") { cadforge_core::io::decode_dxf_bytes(&p.bytes) } else { String::from_utf8_lossy(&p.bytes).to_string() };
+            let text = if p.name.to_lowercase().ends_with(".dxf") {
+                match cadforge_core::io::dxf_text_from_bytes(&p.bytes) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        self.h.borrow_mut().log(&format!("Could not open {}: {e}", p.name), "error");
+                        self.toast(&format!("Could not open {}: {e}", p.name));
+                        continue;
+                    }
+                }
+            } else {
+                String::from_utf8_lossy(&p.bytes).to_string()
+            };
             match p.purpose {
                 "open" => match self.parse_drawing(&p.name, &text) {
                     Ok(mut doc) => {
@@ -418,6 +429,7 @@ impl CadForgeApp {
         let rect = self.vp.rect.unwrap_or(Rect::from_min_size(Pos2::new(100.0, 100.0), vec2(10.0, 10.0)));
         let items = vec![
             MItem::item("DXF (*.dxf)").icon("dxf").on(|a| a.run_command("DXFOUT", Args::none())),
+            MItem::item("Binary DXF (*.dxf)").icon("dxf").on(|a| a.run_command("-DXFOUT", Args::none().with("format", cadforge_engine::runtime::ArgVal::Str("Binary".into())))),
             MItem::item("PDF (*.pdf)").icon("pdf").on(|a| a.dialog = Some(crate::dialogs::Dialog::plot("pdf"))),
             MItem::item("SVG (*.svg)").on(|a| a.dialog = Some(crate::dialogs::Dialog::plot("svg"))),
             MItem::item("PNG image (*.png)").on(|a| a.dialog = Some(crate::dialogs::Dialog::plot("png"))),
