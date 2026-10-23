@@ -1,4 +1,6 @@
 //! Native entry point.
+// release builds on Windows are GUI programs: no console window opens next to the app
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init();
