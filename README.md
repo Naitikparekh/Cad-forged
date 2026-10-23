@@ -74,6 +74,11 @@ node tests/web/tour3.mjs out/                        # screenshot tours (tour, t
 node tools/gen-app-data.mjs                          # regenerate crates/cadforge-app/assets/{icons,ribbon}.json (ribbon model)
 ```
 
+Portable packages need nothing installed beyond what a desktop normally has: unpack and run `cadforge` (`cadforge.exe` on
+Windows). On Linux that means OpenGL and the xkbcommon libraries (`libgl1 libxkbcommon0 libxkbcommon-x11-0` on
+Debian / Ubuntu, which the .deb declares). The packages are not signed: Windows SmartScreen asks for "More info > Run
+anyway", and macOS needs right-click > Open (or `xattr -d com.apple.quarantine cadforge`) the first time.
+
 CI (`.github/workflows/ci.yml`) runs the tests, clippy, the benchmark evidence check and the wasm build on Linux and builds
 the packages on Linux, macOS and Windows; pushing a `v*` tag runs `release.yml`, which attaches the packages to a GitHub
 release. The dev profile keeps only line tables as debug info (`Cargo.toml`): full debug info made the many test

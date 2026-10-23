@@ -54,7 +54,7 @@ Section: graphics
 Priority: optional
 Architecture: $debarch
 Maintainer: CadForge maintainers <noreply@users.noreply.github.com>
-Depends: libc6, libgl1, libxkbcommon0
+Depends: libc6, libgl1, libxkbcommon0, libxkbcommon-x11-0
 Description: 2D drafting and 3D solid modelling with an AutoCAD-style interface
  CadForge has an AutoCAD-style ribbon, command line and command set, DXF
  import and export, layouts, hatching, blocks, AutoLISP and plotting to PDF.
