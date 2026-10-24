@@ -655,6 +655,10 @@ struct Ctx {
     layer_names: HashMap<String, String>,
     /// The group of each grouped entity, by the entity's handle (upper case).
     groups: HashMap<String, String>,
+    /// Converting model space (polyface meshes there become 3D solids).
+    model: bool,
+    /// Polyface meshes read as solids, with the CadForge solid id a part of a split solid carries.
+    solids: Vec<(Option<u64>, crate::solid::Solid)>,
 }
 
 struct BlockRaw {
@@ -750,6 +754,11 @@ fn convert_kind(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
         }
         "POLYLINE" => {
             let flags = r.int(70, 0);
+            if flags & 64 != 0 {
+                polyface_solid(r, ctx, &layer, color);
+            } else if flags & 16 != 0 {
+                *ctx.skipped.entry("POLYGON MESH".into()).or_insert(0) += 1;
+            }
             if flags & (16 | 64) == 0 {
                 // the header carries the default start / end widths of every vertex
                 let (dsw, dew) = (r.num(40, 0.0), r.num(41, 0.0));
@@ -827,6 +836,10 @@ fn convert_kind(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             }
         }
         "INSERT" => {
+            if let Some(k) = cadforge_wrapped(r) {
+                push(Entity::new(k), false, &mut out);
+                return out;
+            }
             let name = decode_text(r.first(2).unwrap_or(""));
             if !name.is_empty() {
                 let mut e = Entity::insert(&name, r.pt(0));
@@ -1257,6 +1270,68 @@ fn bezier_chain_fit(deg: usize, knots: &[f64], ctrl: &[Pt], weights: &[f64]) -> 
     })
 }
 
+/// A polyface mesh in model space as a 3D solid (triangles; four-sided faces are split). CadForge's own solids carry
+/// their name and id in CADFORGE extended data, so the parts of a large one are joined again. Meshes elsewhere (in
+/// blocks or layouts) are reported as skipped.
+fn polyface_solid(r: &Rec, ctx: &mut Ctx, layer: &str, color: Option<Color>) {
+    use crate::solid::{Solid, V3};
+    if !ctx.model {
+        *ctx.skipped.entry("POLYFACE MESH".into()).or_insert(0) += 1;
+        return;
+    }
+    let (mut vertices, mut faces) = (vec![], vec![]);
+    for v in &r.vertices {
+        let f = v.int(70, 0);
+        if f & 64 != 0 {
+            vertices.push(V3::new(v.num(10, 0.0), v.num(20, 0.0), v.num(30, 0.0)));
+        } else if f & 128 != 0 {
+            let idx: Vec<u32> = [71, 72, 73, 74].iter().map(|c| v.int(*c, 0).unsigned_abs() as u32).filter(|i| *i > 0).map(|i| i - 1).collect();
+            for k in 1..idx.len().saturating_sub(1) {
+                faces.push([idx[0], idx[k], idx[k + 1]]);
+            }
+        }
+    }
+    faces.retain(|f: &[u32; 3]| f.iter().all(|i| (*i as usize) < vertices.len()));
+    if faces.is_empty() {
+        return;
+    }
+    let tag: Option<serde_json::Value> = serde_json::from_str(&xdata_strings(r, super::dxf_write::CADFORGE_APP).concat()).ok();
+    let name = tag.as_ref().and_then(|t| t["solid"].as_str()).unwrap_or("Mesh").to_string();
+    let id = tag.as_ref().and_then(|t| t["id"].as_u64());
+    ctx.solids.push((id, Solid { id: 0, name, layer: layer.to_string(), color, vertices, faces, program: None }));
+}
+
+/// The solids read from polyface meshes, the parts of each CadForge solid joined again.
+fn join_solids(parts: Vec<(Option<u64>, crate::solid::Solid)>) -> Vec<crate::solid::Solid> {
+    let mut out: Vec<(Option<u64>, crate::solid::Solid)> = vec![];
+    for (id, s) in parts {
+        match out.iter_mut().find(|(k, _)| id.is_some() && *k == id) {
+            Some((_, t)) => {
+                let base = t.vertices.len() as u32;
+                t.vertices.extend(s.vertices);
+                t.faces.extend(s.faces.iter().map(|f| [f[0] + base, f[1] + base, f[2] + base]));
+            }
+            None => out.push((id, s)),
+        }
+    }
+    out.into_iter().map(|(_, s)| s).collect()
+}
+
+/// A table or region CadForge wrote as an insert of the block of its geometry: its CADFORGE extended data, when the
+/// insert is still where CadForge put it (at the origin, unscaled, unrotated). Otherwise the insert stays an insert.
+fn cadforge_wrapped(r: &Rec) -> Option<Kind> {
+    if r.ty != "INSERT" {
+        return None;
+    }
+    let json = xdata_strings(r, super::dxf_write::CADFORGE_APP).concat();
+    let p = r.pt(0);
+    if json.is_empty() || p.x != 0.0 || p.y != 0.0 || r.num(41, 1.0) != 1.0 || r.num(42, 1.0) != 1.0 || r.num(50, 0.0) != 0.0 {
+        return None;
+    }
+    let k: Kind = serde_json::from_str(&json).ok()?;
+    matches!(k, Kind::Table(_) | Kind::Region(_)).then_some(k)
+}
+
 /// The strings of an entity's extended data for one application (empty when it has none).
 fn xdata_strings<'a>(r: &'a Rec, app: &str) -> Vec<&'a str> {
     let mut mine = false;
@@ -1478,7 +1553,7 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
 
     // ---- blocks (including anonymous dimension blocks, used for DIMENSION import)
     let layer_names: HashMap<String, String> = secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYER").filter_map(|r| Some((r.first(5)?.to_uppercase(), decode_text(r.first(2)?)))).collect();
-    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default(), layer_names, groups: groups_of(secs.get("OBJECTS").unwrap_or(&empty)) };
+    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default(), layer_names, groups: groups_of(secs.get("OBJECTS").unwrap_or(&empty)), model: false, solids: vec![] };
     for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "IMAGEDEF") {
         if let Some(h) = r.first(5) {
             let px = |v: f64| if v.is_finite() && v > 0.0 { v.min(1e6) as u32 } else { 0 };
@@ -1520,7 +1595,8 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let mut todo: Vec<&Rec> = secs.get("ENTITIES").unwrap_or(&empty).iter().collect();
     todo.extend(ctx.blocks.iter().filter(|(n, _)| !n.starts_with('*') || space(n)).flat_map(|(_, b)| b.entities.iter()));
     while let Some(r) = todo.pop() {
-        let Some(n) = r.first(2).filter(|_| r.ty == "INSERT").map(decode_text) else { continue };
+        // (the blocks of CadForge's tables and regions are only their pictures for other programs)
+        let Some(n) = r.first(2).filter(|_| r.ty == "INSERT" && cadforge_wrapped(r).is_none()).map(decode_text) else { continue };
         if n.starts_with('*') && !space(&n) && referenced.insert(n.clone()) {
             if let Some(b) = ctx.blocks.get(&n) {
                 todo.extend(b.entities.iter());
@@ -1600,7 +1676,10 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             paper += 1;
             continue;
         }
-        for e in convert(&r, &mut ctx) {
+        ctx.model = true;
+        let ents = convert(&r, &mut ctx);
+        ctx.model = false;
+        for e in ents {
             doc.add_to(e, "model");
         }
     }
@@ -1645,6 +1724,12 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let cl = decode_text(header.get("$CLAYER").and_then(|v| v.iter().find(|(c, _)| *c == 8)).map(|(_, v)| v.as_str()).unwrap_or("0"));
     doc.cur.layer = doc.layer(&cl).map(|l| l.name.clone()).unwrap_or_else(|| doc.layers[0].name.clone());
 
+    for s in join_solids(std::mem::take(&mut ctx.solids)) {
+        if doc.layer(&s.layer).is_none() {
+            doc.layers.push(Layer::new(&s.layer));
+        }
+        doc.insert_solid_raw(s);
+    }
     doc.images = std::mem::take(&mut ctx.images);
     doc.skipped = ctx.skipped;
     doc.paper_skipped = 0;

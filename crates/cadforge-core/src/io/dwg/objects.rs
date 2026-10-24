@@ -94,6 +94,9 @@ fn fixed_type(t: u16) -> Option<&'static str> {
         11 => "VERTEX3D",
         15 => "POLYLINE2D",
         16 => "POLYLINE3D",
+        13 => "VERTEX_PFACE",
+        14 => "VERTEX_PFACE_FACE",
+        29 => "POLYLINE_PFACE",
         17 => "ARC",
         18 => "CIRCLE",
         19 => "LINE",
@@ -895,6 +898,32 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             p3(&mut g, 10, o.m.bd3()?);
             g.push((70, V::I(flags as i64 | 32)));
             "VERTEX"
+        }
+        // polyface meshes: the corner points, then the faces (up to four 1-based corner numbers, negative where the
+        // edge that starts there is invisible)
+        "VERTEX_PFACE" => {
+            let flags = o.m.rc()?;
+            p3(&mut g, 10, o.m.bd3()?);
+            g.push((70, V::I(flags as i64 | 192)));
+            "VERTEX"
+        }
+        "VERTEX_PFACE_FACE" => {
+            p3(&mut g, 10, [0.0; 3]);
+            g.push((70, V::I(128)));
+            for c in [71, 72, 73, 74] {
+                g.push((c, V::I(o.m.bs()? as i64)));
+            }
+            "VERTEX"
+        }
+        "POLYLINE_PFACE" => {
+            let nv = o.m.bs()?;
+            let nf = o.m.bs()?;
+            g.push((66, V::I(1)));
+            p3(&mut g, 10, [0.0; 3]);
+            g.push((70, V::I(64)));
+            g.push((71, V::I(nv as i64)));
+            g.push((72, V::I(nf as i64)));
+            "POLYLINE"
         }
         "POLYLINE2D" => {
             let flags = o.m.bs()?;

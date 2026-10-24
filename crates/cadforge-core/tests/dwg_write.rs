@@ -163,6 +163,8 @@ fn whole(d: &Drawing) -> Vec<(String, Vec<String>)> {
     for (k, b) in &d.blocks {
         out.push((format!("block {k}"), [vec![rounded(&(b.base.x, b.base.y))], ents(&b.entities, Ver::R2004)].concat()));
     }
+    // (a solid without a layer is on layer 0 in DXF and DWG)
+    out.push(("solids".into(), d.solids.iter().map(|s| rounded(&(&s.name, if s.layer.is_empty() { "0" } else { &s.layer }, &s.color, &s.vertices, &s.faces))).collect()));
     out.push(("layers".into(), d.layers.iter().map(rounded).collect()));
     out.push(("settings".into(), vec![rounded(&d.settings)]));
     out.push(("images".into(), d.images.keys().cloned().collect()));
@@ -182,11 +184,38 @@ fn assert_same(a: &Drawing, b: &Drawing, what: &str) {
     }
 }
 
+/// A drawing with 3D solids: the L-bracket project's extrusion and a mesh of more than 10000 triangles (written as
+/// several polyface meshes, joined again when read).
+fn solids_drawing() -> Drawing {
+    use cadforge_core::solid::{Solid, V3};
+    let text = std::fs::read_to_string(repo("samples/L-Bracket.cadforge.json")).unwrap();
+    let mut d = cadforge_core::io::from_json(&text, "solids").unwrap();
+    let (n, m) = (120u32, 50u32);
+    let mut s = Solid { id: 0, name: "Dome".into(), layer: "0".into(), color: Some(cadforge_core::style::Color::Aci(3)), vertices: vec![], faces: vec![], program: None };
+    for i in 0..=n {
+        for j in 0..=m {
+            let (a, b) = (i as f64 / n as f64 * std::f64::consts::TAU, j as f64 / m as f64 * std::f64::consts::FRAC_PI_2);
+            s.vertices.push(V3::new(300.0 + 40.0 * b.cos() * a.cos(), 40.0 * b.cos() * a.sin(), 40.0 * b.sin()));
+        }
+    }
+    for i in 0..n {
+        for j in 0..m {
+            let k = i * (m + 1) + j;
+            s.faces.push([k, k + m + 1, k + 1]);
+            s.faces.push([k + 1, k + m + 1, k + m + 2]);
+        }
+    }
+    assert!(s.faces.len() > 10_000);
+    d.insert_solid_raw(s);
+    d
+}
+
 /// Open, save as AutoCAD 2004 DWG, open again: the same drawing, object by object, for every AutoCAD sample, every
-/// DXF corpus drawing and CadForge's own sample (leaders with text, splines, groups, wipeouts, images, layouts).
+/// DXF corpus drawing and CadForge's own sample (leaders with text, splines, groups, wipeouts, images, layouts) and
+/// a drawing with 3D solids.
 #[test]
 fn open_save_open_gives_the_same_drawing() {
-    let mut inputs: Vec<(String, Drawing)> = vec![("sample".into(), sample_drawing())];
+    let mut inputs: Vec<(String, Drawing)> = vec![("sample".into(), sample_drawing()), ("solids".into(), solids_drawing())];
     for v in ["AC1014", "AC1015", "AC1018", "AC1021", "AC1024", "AC1027", "AC1032"] {
         inputs.push((v.into(), read_dwg(&std::fs::read(repo(&format!("tests/dwg/samples/sample_{v}.dwg"))).unwrap(), v).unwrap()));
     }
@@ -203,6 +232,12 @@ fn open_save_open_gives_the_same_drawing() {
         let first = read_dwg(&write_dwg(d).unwrap(), what).unwrap();
         let second = read_dwg(&write_dwg(&first).unwrap(), what).unwrap();
         assert_same(&first, &second, what);
+        if what == "solids" {
+            // the meshes themselves, exactly (the extrusion history that rebuilds a solid from its outline is not kept)
+            let part = |d: &Drawing| whole(d).into_iter().find(|p| p.0 == "solids").unwrap();
+            assert_eq!(part(d), part(&first));
+            assert_eq!(first.solids.len(), 2);
+        }
         if what.starts_with("AC10") {
             // what CadForge could not read from AutoCAD's file (3D solids, tables...) is not in the saved file
             assert!(first.skipped.is_empty(), "{what}");
@@ -281,6 +316,80 @@ fn cadforge_dimensions_open_again_as_dimensions() {
     assert!(back.model.entities.iter().any(|e| e.type_name() == "line"));
 }
 
+/// A solid over the 32767 faces a polyface mesh holds is written as several meshes and read back as one solid with
+/// the same triangles (its vertices are repeated where parts meet).
+#[test]
+fn a_huge_solid_is_split_and_joined_again() {
+    use cadforge_core::solid::{Solid, V3};
+    let n = 140u32;
+    let mut s = Solid { id: 0, name: "Grid".into(), layer: "0".into(), color: None, vertices: vec![], faces: vec![], program: None };
+    for i in 0..=n {
+        for j in 0..=n {
+            s.vertices.push(V3::new(i as f64, j as f64, ((i * j) % 7) as f64 * 0.25));
+        }
+    }
+    for i in 0..n {
+        for j in 0..n {
+            let k = i * (n + 1) + j;
+            s.faces.push([k, k + n + 1, k + 1]);
+            s.faces.push([k + 1, k + n + 1, k + n + 2]);
+        }
+    }
+    assert!(s.faces.len() > 32_767);
+    let mut d = Drawing::new("huge");
+    d.insert_solid_raw(s);
+    let tris = |s: &Solid| {
+        let mut t: Vec<String> = s.faces.iter().map(|f| rounded(&f.map(|i| s.vertices[i as usize]))).collect();
+        t.sort();
+        t
+    };
+    for (ver, _) in VERSIONS {
+        let back = read_dwg(&write_dwg_as(&d, ver).unwrap(), "huge").unwrap();
+        assert_eq!(back.solids.len(), 1, "{}", ver.label());
+        assert_eq!(tris(&back.solids[0]), tris(&d.solids[0]), "{}", ver.label());
+    }
+    let back = read_dxf(&write_dxf(&d), "huge").unwrap();
+    assert_eq!(back.solids.len(), 1);
+    assert_eq!(tris(&back.solids[0]), tris(&d.solids[0]));
+}
+
+/// A table (with a merged title row and a non-ASCII cell) and a region with a hole.
+fn tables_drawing() -> Drawing {
+    use cadforge_core::entities::{Kind, RegionData, TableData};
+    let mut d = Drawing::new("tables");
+    let table: TableData = serde_json::from_value(serde_json::json!({
+        "p": {"x": 10.0, "y": 50.0}, "cols": [30.0, 20.0], "rows": [8.0, 8.0, 8.0],
+        "cells": [["Part", "Qty"], ["Bolt \u{00D8}8", "4"], ["Nut", "4"]], "h": 2.5, "merges": [[0, 0, 0, 1]]
+    }))
+    .unwrap();
+    d.add(Entity::new(Kind::Table(table)).on_layer("0"));
+    let ring = |r: f64| (0..24).map(|i| { let a = i as f64 / 24.0 * std::f64::consts::TAU; Vertex::new(100.0 + r * a.cos(), 20.0 + r * a.sin(), 0.0) }).collect::<Vec<_>>();
+    d.add(Entity::new(Kind::Region(RegionData { loops: vec![ring(10.0), ring(4.0)] })));
+    d
+}
+
+/// Tables and regions open again as tables and regions (other programs see the block of their lines and texts); a
+/// table moved by another program opens as that block.
+#[test]
+fn tables_and_regions_open_again() {
+    let d = tables_drawing();
+    let kinds = |d: &Drawing| d.model.entities.iter().map(|e| e.type_name().to_string()).collect::<Vec<_>>();
+    for (ver, _) in VERSIONS {
+        let back = read_dwg(&write_dwg_as(&d, ver).unwrap(), "t").unwrap();
+        assert_eq!(kinds(&back), vec!["table", "region"], "{}", ver.label());
+        assert_eq!(ents(&back.model.entities, ver), ents(&d.model.entities, ver), "{}", ver.label());
+        assert!(back.blocks.is_empty(), "{}: the pictures for other programs are not kept as blocks", ver.label());
+    }
+    let dxf = write_dxf(&d);
+    let back = read_dxf(&dxf, "t").unwrap();
+    assert_eq!(ents(&back.model.entities, Ver::R2004), ents(&d.model.entities, Ver::R2004));
+    // another program sees (and CadForge without its data reads) the block of lines and texts
+    let plain = read_dxf(&dxf.replace("CADFORGE", "OTHERAPP"), "t").unwrap();
+    assert_eq!(kinds(&plain), vec!["insert", "insert"]);
+    let inside: Vec<String> = plain.blocks.values().flat_map(|b| b.entities.iter().map(|e| e.type_name().to_string())).collect();
+    assert!(inside.contains(&"text".to_string()) && inside.contains(&"line".to_string()) && inside.contains(&"pline".to_string()), "{inside:?}");
+}
+
 /// Objects over 32 KB (a four-byte size), more than one page of the object map, many layers and blocks.
 #[test]
 fn large_objects_and_many_handles() {
@@ -305,7 +414,7 @@ fn large_objects_and_many_handles() {
 }
 
 fn checked_files() -> Vec<(String, Vec<u8>)> {
-    let mut drawings = vec![("sample".to_string(), sample_drawing()), ("dims".to_string(), dims_drawing().0)];
+    let mut drawings = vec![("sample".to_string(), sample_drawing()), ("dims".to_string(), dims_drawing().0), ("solids".to_string(), solids_drawing()), ("tables".to_string(), tables_drawing())];
     for f in ["kitchen-R2018.dxf", "annotation-R2018.dxf", "image-R2018.dxf", "pline-widths-R2018.dxf"] {
         drawings.push((f.to_string(), read_dxf_bytes(&std::fs::read(repo(&format!("tests/dxf/corpus/{f}"))).unwrap(), f).unwrap()));
     }

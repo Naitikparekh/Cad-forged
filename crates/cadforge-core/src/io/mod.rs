@@ -23,9 +23,8 @@ pub fn not_kept_in_dxf(d: &crate::drawing::Drawing, r2000: bool) -> Vec<String> 
         }
     };
     let ents: Vec<&crate::entities::Entity> = d.all_entities().collect();
-    count(d.solids.len(), "3D solid", "3D solids", "(DXF and DWG need ACIS data CadForge cannot write)");
-    count(ents.iter().filter(|e| matches!(e.kind, Kind::Table(_))).count(), "table is", "tables are", "saved as lines and text");
-    count(ents.iter().filter(|e| matches!(e.kind, Kind::Region(_))).count(), "region is", "regions are", "saved as its outlines");
+    // 3D solids are saved as polyface meshes: their shape is kept, not the history that rebuilds them from an outline
+    count(d.solids.iter().filter(|s| s.program.is_some()).count(), "3D solid keeps its shape but not its extrusion history", "3D solids keep their shape but not their extrusion history", "");
     count(d.views.len(), "named view", "named views", "");
     count(d.ucs_named.len(), "named UCS", "named UCSs", "");
     if r2000 {

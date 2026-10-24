@@ -491,17 +491,7 @@ impl<'a> W<'a> {
                     o.out.s(0, "SEQEND").s(5, &hnd).s(330, &o.owner.clone()).s(100, "AcDbEntity").s(8, layer);
                 }
             }
-            Kind::Table(t) => {
-                let (segs, texts) = crate::entities::table_geometry(t);
-                for sg in segs {
-                    if let crate::geom::Seg::L { a, b, .. } = sg {
-                        self.line(o, a, b, &props, None);
-                    }
-                }
-                for tx in texts {
-                    self.text(o, tx.p, tx.h, &tx.s, tx.rot, tx.jh, tx.jv, &props, None);
-                }
-            }
+            Kind::Table(_) | Kind::Region(_) => self.wrapped(o, e, &props),
             Kind::Wipeout(w) if w.pts.len() >= 3 => {
                 // a one-pixel "image" spanning the outline's extents; the outline is its clip boundary in pixel space
                 // (origin at the centre, y down)
@@ -517,11 +507,6 @@ impl<'a> W<'a> {
                 }
             }
             Kind::Wipeout(_) => {}
-            Kind::Region(r) => {
-                for l in &r.loops {
-                    self.lwpoly(o, l, true, &props);
-                }
-            }
             Kind::Image(im) => self.image(o, im, &props),
             Kind::Leader { pts, s, h } => {
                 self.common(o, "LEADER", &props, Some("AcDbLeader"), None);
@@ -660,6 +645,109 @@ impl<'a> W<'a> {
         }
     }
 
+    /// A 3D solid as polyface meshes (POLYLINE flag 64: the vertices, then the triangles). Edges between two triangles
+    /// in one plane are invisible, so other programs show the solid's real edges. A mesh holds at most 32767 vertices
+    /// and faces: a solid within that is one mesh with its vertices in order (it reads back exactly); a larger one is
+    /// split into parts, and CADFORGE extended data names the solid each part belongs to.
+    fn polyface(&mut self, o: &mut EOut, s: &crate::solid::Solid) {
+        use std::collections::HashMap as Map;
+        let props = Props { layer: if s.layer.is_empty() { "0" } else { &s.layer }, ltype: None, color: s.color, lw: None };
+        let normal = |f: &[u32; 3]| {
+            let p = |k: usize| s.vertices.get(f[k] as usize).copied().unwrap_or_default();
+            p(1).sub(p(0)).cross(p(2).sub(p(0))).unit()
+        };
+        let mut edges: Map<(u32, u32), Vec<usize>> = Map::new();
+        for (i, f) in s.faces.iter().enumerate() {
+            for k in 0..3 {
+                let (a, b) = (f[k], f[(k + 1) % 3]);
+                edges.entry((a.min(b), a.max(b))).or_default().push(i);
+            }
+        }
+        let hidden = |a: u32, b: u32| edges.get(&(a.min(b), a.max(b))).is_some_and(|fs| fs.len() == 2 && normal(&s.faces[fs[0]]).dot(normal(&s.faces[fs[1]])) > 1.0 - 1e-9);
+        let tag = ascii_json(&serde_json::json!({ "solid": s.name, "id": s.id }));
+        let whole = s.vertices.len() <= 32_767 && s.faces.len() <= 32_767;
+        for part in s.faces.chunks(if whole { s.faces.len().max(1) } else { 10_000 }) {
+            // the vertices this part uses (all of them for a whole solid), numbered from 1 in their order
+            let mut verts: Vec<u32> = if whole { (0..s.vertices.len() as u32).collect() } else { part.iter().flatten().copied().collect() };
+            verts.sort_unstable();
+            verts.dedup();
+            let index: Map<u32, i64> = verts.iter().enumerate().map(|(i, v)| (*v, i as i64 + 1)).collect();
+            let pl = format!("{:X}", self.handle);
+            self.common(o, "POLYLINE", &props, Some("AcDbPolyFaceMesh"), None);
+            o.out.i(66, 1).n(10, 0.0).n(20, 0.0).n(30, 0.0).i(70, 64).i(71, verts.len() as i64).i(72, part.len() as i64);
+            o.out.s(1001, CADFORGE_APP);
+            for chunk in xdata_chunks(&tag) {
+                o.out.s(1000, chunk);
+            }
+            let owner = std::mem::replace(&mut o.owner, pl.clone());
+            for v in &verts {
+                let p = s.vertices.get(*v as usize).copied().unwrap_or_default();
+                self.common(o, "VERTEX", &props, Some("AcDbVertex"), None);
+                o.out.s(100, "AcDbPolyFaceMeshVertex").n(10, p.x).n(20, p.y).n(30, p.z).i(70, 192);
+            }
+            for f in part {
+                self.common(o, "VERTEX", &props, Some("AcDbVertex"), None);
+                o.out.s(100, "AcDbFaceRecord").n(10, 0.0).n(20, 0.0).n(30, 0.0).i(70, 128);
+                for k in 0..3 {
+                    let (a, b) = (f[k], f[(k + 1) % 3]);
+                    let i = index[&a];
+                    o.out.i(71 + k as i32, if hidden(a, b) { -i } else { i });
+                }
+            }
+            let h = self.h();
+            o.out.s(0, "SEQEND").s(5, &h).s(330, &pl).s(100, "AcDbEntity").s(8, props.layer);
+            o.owner = owner;
+        }
+    }
+
+    /// A table or region: an insert of an anonymous block holding its lines and texts (or outlines), which is what
+    /// other programs show, with CadForge's own description of it in CADFORGE extended data (left out when it would
+    /// not fit in an entity's extended data; the object then opens as the block's geometry).
+    fn wrapped(&mut self, o: &mut EOut, e: &Entity, props: &Props) {
+        let mut k = self.dim_blocks.len() + 1;
+        let name = loop {
+            let n = format!("*U{k}");
+            if !self.doc.blocks.contains_key(&n) && !self.dim_blocks.iter().any(|b| b.name == n) {
+                break n;
+            }
+            k += 1;
+        };
+        let layer = if e.layer.is_empty() { "0".to_string() } else { e.layer.clone() };
+        let rec = DimBlock { name: name.clone(), rec: self.h(), blk: self.h(), end: self.h(), layer, lines: vec![] };
+        let mut inner = EOut { out: Out::default(), owner: rec.rec.clone(), block_name: o.block_name.clone() };
+        let grp = self.cur_grp.take();
+        match &e.kind {
+            Kind::Table(t) => {
+                let (segs, texts) = crate::entities::table_geometry(t);
+                for sg in segs {
+                    if let crate::geom::Seg::L { a, b, .. } = sg {
+                        self.line(&mut inner, a, b, props, None);
+                    }
+                }
+                for tx in texts {
+                    self.text(&mut inner, tx.p, tx.h, &tx.s, tx.rot, tx.jh, tx.jv, props, None);
+                }
+            }
+            Kind::Region(r) => {
+                for l in &r.loops {
+                    self.lwpoly(&mut inner, l, true, props);
+                }
+            }
+            _ => {}
+        }
+        self.cur_grp = grp;
+        self.dim_blocks.push(DimBlock { lines: inner.out.lines, ..rec });
+        self.common(o, "INSERT", props, Some("AcDbBlockReference"), None);
+        o.out.s(2, &name).pt(pt(0.0, 0.0), 0).n(41, 1.0).n(42, 1.0).n(43, 1.0).n(50, 0.0);
+        let json = ascii_json(&e.kind);
+        if json.len() <= 15_000 {
+            o.out.s(1001, CADFORGE_APP);
+            for chunk in xdata_chunks(&json) {
+                o.out.s(1000, chunk);
+            }
+        }
+    }
+
     fn entity_out(&mut self, list: &[&Entity], owner: &str, block_name: &str) -> Vec<String> {
         let mut o = EOut { out: Out::default(), owner: owner.to_string(), block_name: block_name.to_string() };
         for e in list {
@@ -743,8 +831,15 @@ pub fn write_dxf(doc: &Drawing) -> String {
     // ---------- entities first (discovers dimension blocks; handles stay unique)
     let model_list: Vec<&Entity> = doc.model.entities.iter().collect();
     w.grouping = true;
-    let model_out = w.entity_out(&model_list, &hs["msRec"], "*Model_Space");
+    let mut model_out = w.entity_out(&model_list, &hs["msRec"], "*Model_Space");
     w.grouping = false;
+    {
+        let mut o = EOut { out: Out::default(), owner: hs["msRec"].clone(), block_name: "*Model_Space".into() };
+        for s in &doc.solids {
+            w.polyface(&mut o, s);
+        }
+        model_out.extend(o.out.lines);
+    }
     let mut block_outs = vec![];
     for b in &user_blocks {
         let rec = w.block_rec[&b.name].0.clone();

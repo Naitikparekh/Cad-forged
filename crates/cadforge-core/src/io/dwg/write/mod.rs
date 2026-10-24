@@ -954,6 +954,36 @@ impl<'a> Writer<'a> {
                 self.lwpolyline(&mut o, r, ext);
                 o
             }
+            // a polyface mesh (CadForge's 3D solids): the vertices and faces follow as its children
+            "POLYLINE" if r.i(70, 0) & 64 != 0 => {
+                let mut o = self.ent(29, r, owner, prev, next);
+                o.m.bs(r.i(71, 0) as i16);
+                o.m.bs(r.i(72, 0) as i16);
+                if self.ver >= Ver::R2004 {
+                    o.m.bl(e.kids.len() as i32);
+                    for k in &e.kids {
+                        o.h.h(3, k.handle());
+                    }
+                } else {
+                    o.h.h(4, e.kids.first().map_or(0, |k| k.handle()));
+                    o.h.h(4, e.kids.last().map_or(0, |k| k.handle()));
+                }
+                o.h.h(3, e.seqend.map_or(0, |s| s.handle()));
+                o
+            }
+            "VERTEX" if r.i(70, 0) & 192 == 128 => {
+                let mut o = self.ent(14, r, owner, prev, next);
+                for c in [71, 72, 73, 74] {
+                    o.m.bs(r.i(c, 0) as i16);
+                }
+                o
+            }
+            "VERTEX" if r.i(70, 0) & 64 != 0 => {
+                let mut o = self.ent(13, r, owner, prev, next);
+                o.m.rc(r.i(70, 192) as u8);
+                o.m.bd3(r.p(10));
+                o
+            }
             "SPLINE" => {
                 let mut o = self.ent(36, r, owner, prev, next);
                 let flags = r.i(70, 0);
