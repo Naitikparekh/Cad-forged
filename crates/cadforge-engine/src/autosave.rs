@@ -232,3 +232,24 @@ mod tests {
         assert!(b.recover_autosave("k", "not json").is_err());
     }
 }
+
+/// The backup copy kept when a drawing is saved over an existing file (ISAVEBAK): `plan.dwg` becomes `plan.bak`.
+pub fn backup_path(path: &std::path::Path) -> std::path::PathBuf {
+    path.with_extension("bak")
+}
+
+/// Write a drawing file. With `keep_backup` (ISAVEBAK 1) the file it replaces is first copied to its backup name.
+/// Returns the backup's path when one was made.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_keeping_backup(path: &std::path::Path, bytes: &[u8], keep_backup: bool) -> std::io::Result<Option<std::path::PathBuf>> {
+    let mut bak = None;
+    if keep_backup && path.is_file() {
+        let b = backup_path(path);
+        if b != path {
+            std::fs::copy(path, &b)?;
+            bak = Some(b);
+        }
+    }
+    std::fs::write(path, bytes)?;
+    Ok(bak)
+}

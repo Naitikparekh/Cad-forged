@@ -73,6 +73,7 @@ pub fn render_prefs(a: &App) -> Prefs {
         grid_unit_x: sv.real("GRIDUNIT_X"),
         grid_unit_y: sv.real("GRIDUNIT_Y"),
         grid_major: sv.int("GRIDMAJOR"),
+        grid_iso: sv.isometric(),
         ucs_icon: sv.int("UCSICON") != 0,
         ucs_origin: sv.int("UCSORG") != 0,
         qtext: sv.int("QTEXTMODE") != 0,
@@ -549,7 +550,14 @@ impl CadForgeApp {
                 let frac = (a.sysvars.real("CURSORSIZE").clamp(1.0, 100.0) / 100.0) as f32;
                 let arm = if frac >= 1.0 { 4000.0 } else { (frac * rect.width() / 2.0).min(frac * rect.height() / 2.0) };
                 let pb = a.sysvars.real("PICKBOX") as f32 * 2.0 + 1.0;
-                if kind != "select" {
+                if kind != "select" && a.sysvars.isometric() {
+                    // isometric drafting: the arms follow the two axes of the current isoplane
+                    for ang in cadforge_engine::snap::ortho_axes(Some(a.sysvars.int("ISOPLANE").clamp(0, 2) as u8)) {
+                        let ang = ang + doc.ucs.angle;
+                        let d = vec2(ang.cos() as f32, -ang.sin() as f32) * arm;
+                        painter.line_segment([Pos2::new(x, y) - d, Pos2::new(x, y) + d], Stroke::new(1.0, c));
+                    }
+                } else if kind != "select" {
                     painter.line_segment([Pos2::new(x - arm, y), Pos2::new(x + arm, y)], Stroke::new(1.0, c));
                     painter.line_segment([Pos2::new(x, y - arm), Pos2::new(x, y + arm)], Stroke::new(1.0, c));
                 }

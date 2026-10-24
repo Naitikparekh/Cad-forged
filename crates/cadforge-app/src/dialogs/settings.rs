@@ -26,8 +26,10 @@ pub struct DsState {
     pub grid_x: String,
     pub grid_y: String,
     pub major: String,
+    pub iso: bool,
     pub polar_on: bool,
     pub inc: f64,
+    pub add_angles: String,
     pub otrack: bool,
     pub os_on: bool,
     pub modes: [bool; 10],
@@ -44,7 +46,7 @@ impl DsState {
             "dyn" => 3,
             _ => 0,
         };
-        DsState { tab, ready: false, snap_on: false, snap_x: String::new(), snap_y: String::new(), grid_on: true, grid_x: String::new(), grid_y: String::new(), major: String::new(), polar_on: false, inc: 90.0, otrack: true, os_on: true, modes: [false; 10], dyn_on: true, dyn_ptr: true, dyn_dim: true }
+        DsState { tab, ready: false, snap_on: false, snap_x: String::new(), snap_y: String::new(), grid_on: true, grid_x: String::new(), grid_y: String::new(), major: String::new(), iso: false, polar_on: false, inc: 90.0, add_angles: String::new(), otrack: true, os_on: true, modes: [false; 10], dyn_on: true, dyn_ptr: true, dyn_dim: true }
     }
     pub fn load(&mut self, app: &CadForgeApp) {
         let a = app.h.borrow();
@@ -56,8 +58,10 @@ impl DsState {
         self.grid_x = fnum(sv.real("GRIDUNIT_X"));
         self.grid_y = fnum(sv.real("GRIDUNIT_Y"));
         self.major = fnum(sv.real("GRIDMAJOR"));
+        self.iso = sv.isometric();
         self.polar_on = sv.int("POLARMODE") != 0;
         self.inc = sv.real("POLARANG");
+        self.add_angles = sv.string("POLARADDANG");
         self.otrack = sv.int("OTRACKMODE") != 0;
         let os = sv.int("OSMODE") as u32;
         self.os_on = os & 16384 == 0;
@@ -82,7 +86,10 @@ impl DsState {
         app.set_sv("GRIDUNIT_X", gx);
         app.set_sv("GRIDUNIT_Y", gy);
         app.set_sv("GRIDMAJOR", self.major.trim().parse::<f64>().ok().map_or(5.0, |v| v.round().max(1.0)));
+        app.set_sv("SNAPSTYL", self.iso as i64 as f64);
         app.set_sv("POLARANG", self.inc);
+        let extra: Vec<String> = cadforge_engine::sysvars::polar_add_angles(&self.add_angles).into_iter().map(fnum).collect();
+        let _ = app.h.borrow_mut().setvar("POLARADDANG", extra.join(";"));
         app.set_sv("POLARMODE", self.polar_on as i64 as f64);
         app.set_sv("OTRACKMODE", self.otrack as i64 as f64);
         if self.polar_on {
@@ -133,6 +140,10 @@ impl CadForgeApp {
                         });
                     });
                 });
+                self.group(ui, "Snap type", |ui| {
+                    ui.radio_value(&mut s.iso, false, "Rectangular snap");
+                    ui.radio_value(&mut s.iso, true, "Isometric snap (F5 switches the isoplane)");
+                });
             }
             1 => {
                 self.group(ui, "Polar angle settings", |ui| {
@@ -144,6 +155,10 @@ impl CadForgeApp {
                                 ui.selectable_value(&mut s.inc, v, fnum(v));
                             }
                         });
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Additional angles");
+                        ui.add(egui::TextEdit::singleline(&mut s.add_angles).desired_width(140.0).hint_text("e.g. 5;35"));
                     });
                 });
                 self.group(ui, "Object snap tracking", |ui| {

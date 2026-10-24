@@ -396,7 +396,7 @@ impl CadForgeApp {
                 return;
             }
         };
-        self.deliver_file(&name, bytes, mime);
+        self.deliver_drawing(&name, bytes, mime);
         if let Some(n) = note {
             self.h.borrow_mut().log(&n, "error");
             self.toast(&n);
@@ -430,6 +430,31 @@ impl CadForgeApp {
             let path = self.save_dir.join(name);
             match std::fs::write(&path, &bytes) {
                 Ok(()) => self.h.borrow_mut().log(&format!("Wrote {}", path.display()), "info"),
+                Err(e) => self.h.borrow_mut().log(&format!("Could not write {}: {e}", path.display()), "error"),
+            }
+        }
+    }
+
+    /// Like [`Self::deliver_file`], for the drawing itself: on native, the file it replaces is kept as a .bak backup
+    /// (ISAVEBAK).
+    pub fn deliver_drawing(&mut self, name: &str, bytes: Vec<u8>, mime: &str) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.deliver_file(name, bytes, mime);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = mime;
+            let path = self.save_dir.join(name);
+            let keep = self.h.borrow().sysvars.int("ISAVEBAK") != 0;
+            match cadforge_engine::autosave::write_keeping_backup(&path, &bytes, keep) {
+                Ok(bak) => {
+                    let mut a = self.h.borrow_mut();
+                    a.log(&format!("Wrote {}", path.display()), "info");
+                    if let Some(b) = bak {
+                        a.log(&format!("The previous version is kept as {}.", b.display()), "info");
+                    }
+                }
                 Err(e) => self.h.borrow_mut().log(&format!("Could not write {}: {e}", path.display()), "error"),
             }
         }

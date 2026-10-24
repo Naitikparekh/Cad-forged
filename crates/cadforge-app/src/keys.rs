@@ -47,6 +47,10 @@ impl CadForgeApp {
                                 self.toggle_osnap();
                                 true
                             }
+                            Key::F5 => {
+                                self.next_isoplane();
+                                true
+                            }
                             Key::F7 => {
                                 self.toggle_sv("GRIDMODE");
                                 true
@@ -103,6 +107,10 @@ impl CadForgeApp {
                             Key::Num9 => Some("COMMANDLINE"),
                             _ => None,
                         };
+                        if key == Key::E && !typing {
+                            self.next_isoplane();
+                            continue;
+                        }
                         if let Some(c) = cmd {
                             // normal text editing wins while typing in a field (or when the command line has text)
                             if typing && matches!(key, Key::A | Key::C | Key::X | Key::V | Key::Z | Key::Y) {

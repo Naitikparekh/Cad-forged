@@ -90,6 +90,7 @@ ICONS = {
     "status": '<circle class="l" cx="16" cy="16" r="11"/><path class="a" d="M16 10v1M16 14v8"/>',
     "time": '<circle class="l" cx="16" cy="16" r="11"/><path class="a" d="M16 8v8l6 3"/>',
     "refedit": '<path class="l" d="M7 4h12l6 6v18H7z"/><path class="o" d="M13 24l8-8 2 2-8 8-3 1z"/>',
+    "isodraft": '<path class="l" d="M16 4l10.4 6v12L16 28 5.6 22V10z"/><path class="a" d="M16 16v12M16 16 5.6 10M16 16l10.4-6"/>',
 }
 
 # ---------------------------------------------------------------- item helpers

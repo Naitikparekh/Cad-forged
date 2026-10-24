@@ -791,10 +791,11 @@ impl App {
             ortho,
             polar: sv.polar() && base.is_some() && !ortho && !p.spec.no_ortho,
             polar_inc: rad(sv.real("POLARANG")),
-            polar_add: vec![],
+            polar_add: crate::sysvars::polar_add_angles(&sv.string("POLARADDANG")).into_iter().map(rad).collect(),
             otrack: sv.otrack() && !p.spec.no_snap,
-            grid: sv.snap_on().then(|| Grid { sx: sv.real("SNAPUNIT_X"), sy: sv.real("SNAPUNIT_Y"), base: ed.doc.ucs.origin, angle: rad(sv.real("SNAPANG")) + ed.doc.ucs.angle }),
+            grid: sv.snap_on().then(|| Grid { sx: sv.real("SNAPUNIT_X"), sy: sv.real("SNAPUNIT_Y"), base: ed.doc.ucs.origin, angle: rad(sv.real("SNAPANG")) + ed.doc.ucs.angle, iso: sv.isometric() }),
             ucs_angle: ed.doc.ucs.angle,
+            iso: sv.isometric().then(|| sv.int("ISOPLANE").clamp(0, 2) as u8),
         };
         self.rt.snapper.resolve(&ed.doc, raw, &o)
     }

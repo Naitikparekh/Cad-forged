@@ -846,6 +846,38 @@ impl<'a> Renderer<'a> {
             }
             paths
         };
+        if prefs.grid_iso {
+            // three families: x = k·h·cos 30°, and y = ±x·tan 30° + k·h (h is the vertical spacing)
+            let h = gy;
+            let (c30, t30) = (3f64.sqrt() / 2.0, 1.0 / 3f64.sqrt());
+            let iso = |me: &Renderer, every: i64, minor: bool| -> Vec<Poly> {
+                let mut paths = vec![];
+                let keep = |k: i64| if minor { k % every != 0 } else { k % every == 0 };
+                let dx = h * c30;
+                for k in (b.min_x / dx).floor() as i64..=(b.max_x / dx).ceil() as i64 {
+                    if keep(k) {
+                        paths.push(Poly { pts: vec![me.dev(ucs.to_wcs(pt(k as f64 * dx, b.min_y))), me.dev(ucs.to_wcs(pt(k as f64 * dx, b.max_y)))], closed: false });
+                    }
+                }
+                for sign in [1.0, -1.0] {
+                    let off = |x: f64, y: f64| y - sign * x * t30;
+                    let lo = off(b.min_x, b.min_y).min(off(b.max_x, b.min_y)).min(off(b.min_x, b.max_y)).min(off(b.max_x, b.max_y));
+                    let hi = off(b.min_x, b.min_y).max(off(b.max_x, b.min_y)).max(off(b.min_x, b.max_y)).max(off(b.max_x, b.max_y));
+                    for k in (lo / h).floor() as i64..=(hi / h).ceil() as i64 {
+                        if keep(k) {
+                            let y = |x: f64| sign * x * t30 + k as f64 * h;
+                            paths.push(Poly { pts: vec![me.dev(ucs.to_wcs(pt(b.min_x, y(b.min_x)))), me.dev(ucs.to_wcs(pt(b.max_x, y(b.max_x))))], closed: false });
+                        }
+                    }
+                }
+                paths
+            };
+            let minor = iso(self, major, true);
+            self.ops.push(Op::Stroke { paths: minor, color: theme.grid, alpha: theme.grid_alpha, width: 1.0, dash: vec![], round: false });
+            let majors = iso(self, major, false);
+            self.ops.push(Op::Stroke { paths: majors, color: theme.grid_major, alpha: theme.grid_major_alpha, width: 1.0, dash: vec![], round: false });
+            return;
+        }
         let minor = line(self, gx, gy, Some(major));
         self.ops.push(Op::Stroke { paths: minor, color: theme.grid, alpha: theme.grid_alpha, width: 1.0, dash: vec![], round: false });
         let majors = line(self, gx * major as f64, gy * major as f64, None);

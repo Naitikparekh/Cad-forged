@@ -15,6 +15,7 @@ mod lisp_cmds;
 mod nav;
 mod props;
 mod recovery;
+mod iso;
 mod small;
 mod ui;
 mod visibility;
@@ -45,6 +46,7 @@ pub fn register(r: &mut crate::registry::Registry) {
     archive::register(r);
     recovery::register(r);
     small::register(r);
+    iso::register(r);
     nav::register(r);
     ui::register(r);
     data::register(r);

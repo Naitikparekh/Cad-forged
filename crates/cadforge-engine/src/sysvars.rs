@@ -91,6 +91,9 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("SNAPUNIT_X", 10.0),
         ("SNAPUNIT_Y", 10.0),
         ("SNAPANG", 0.0),
+        ("SNAPSTYL", 0.0),
+        ("ISOPLANE", 0.0),
+        ("ISAVEBAK", 1.0),
         ("LWDISPLAY", 0.0),
         ("TRANSPARENCYDISPLAY", 1.0),
         ("FILLMODE", 1.0),
@@ -121,6 +124,7 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
     m.insert("THEME".into(), Value::Str("dark".into()));
     m.insert("BACKGROUND".into(), Value::Str(String::new()));
     m.insert("PLINEWID".into(), n(0.0));
+    m.insert("POLARADDANG".into(), Value::Str(String::new()));
     m
 }
 
@@ -457,6 +461,10 @@ impl Sysvars {
     pub fn snap_on(&self) -> bool {
         self.int("SNAPMODE") != 0
     }
+    /// Isometric snap and grid (SNAPSTYL 1).
+    pub fn isometric(&self) -> bool {
+        self.int("SNAPSTYL") == 1
+    }
     pub fn dyn_mode(&self) -> i64 {
         self.int("DYNMODE")
     }
@@ -466,6 +474,11 @@ impl Sysvars {
     pub fn dimension_input(&self) -> bool {
         self.int("DYNMODE") & 2 == 2
     }
+}
+
+/// The additional polar tracking angles of POLARADDANG, in degrees ("5;35.5", separated by semicolons or commas).
+pub fn polar_add_angles(s: &str) -> Vec<f64> {
+    s.split([';', ',']).filter_map(|a| a.trim().parse::<f64>().ok()).filter(|a| a.is_finite()).collect()
 }
 
 #[cfg(test)]

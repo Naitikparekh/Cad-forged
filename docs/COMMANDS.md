@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 334 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 336 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -146,6 +146,8 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `ISODRAFT` |  | Turns isometric drafting on or off and sets the current isometric plane. |
+| `ISOPLANE` |  | Specifies the current isometric plane (Left, Top or Right) that ortho and the cursor follow. |
 | `LIMITS` |  | Sets and controls the grid display limits in the current model space. |
 
 ## Draw
@@ -449,6 +451,8 @@ Type a variable name at the command line to view or change it.
 | `HIGHLIGHT` | `1` |
 | `INPUTHISTORYMODE` | `15` |
 | `INPUTSEARCHDELAY` | `300` |
+| `ISAVEBAK` | `1` |
+| `ISOPLANE` | `0` |
 | `LAYERPMODE` | `1` |
 | `LAYLOCKFADECTL` | `50` |
 | `LWDISPLAY` | `0` |
@@ -465,6 +469,7 @@ Type a variable name at the command line to view or change it.
 | `PICKDRAG` | `0` |
 | `PICKFIRST` | `1` |
 | `PLINEWID` | `0` |
+| `POLARADDANG` | `""` |
 | `POLARANG` | `90` |
 | `POLARMODE` | `0` |
 | `QPMODE` | `-1` |
@@ -474,6 +479,7 @@ Type a variable name at the command line to view or change it.
 | `SHORTCUTMENU` | `11` |
 | `SNAPANG` | `0` |
 | `SNAPMODE` | `0` |
+| `SNAPSTYL` | `0` |
 | `SNAPUNIT_X` | `10` |
 | `SNAPUNIT_Y` | `10` |
 | `THEME` | `dark` |

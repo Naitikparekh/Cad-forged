@@ -118,6 +118,8 @@ pub struct Grid {
     pub sy: f64,
     pub base: Pt,
     pub angle: f64,
+    /// Isometric snap (SNAPSTYL 1): points of the 30° / 150° lattice whose vertical spacing is `sy`.
+    pub iso: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -138,11 +140,13 @@ pub struct SnapOptions {
     pub grid: Option<Grid>,
     /// Rotation of the user coordinate system: ortho and polar directions follow its axes.
     pub ucs_angle: f64,
+    /// Isometric drafting (SNAPSTYL 1): the current isoplane (0 left, 1 top, 2 right), whose two axes ortho follows.
+    pub iso: Option<u8>,
 }
 
 impl SnapOptions {
     pub fn new(scale: f64) -> SnapOptions {
-        SnapOptions { scale, aperture_px: 12.0, osmask: 0, base: None, ortho: false, polar: false, polar_inc: PI / 2.0, polar_add: vec![], otrack: false, grid: None, ucs_angle: 0.0 }
+        SnapOptions { scale, aperture_px: 12.0, osmask: 0, base: None, ortho: false, polar: false, polar_inc: PI / 2.0, polar_add: vec![], otrack: false, grid: None, ucs_angle: 0.0, iso: None }
     }
 }
 
@@ -356,27 +360,20 @@ impl Snapper {
         let base = o.base;
         if let (Some(base), true) = (base, o.ortho) {
             let ua = o.ucs_angle;
-            let (c, sn) = (ua.cos(), ua.sin());
             let w = raw - base;
-            // offset in the user coordinate system
-            let (dx, dy) = (w.x * c + w.y * sn, -w.x * sn + w.y * c);
-            let horizontal = dx.abs() >= dy.abs();
-            let (lx, ly) = if horizontal { (dx, 0.0) } else { (0.0, dy) };
-            let p = pt(base.x + lx * c - ly * sn, base.y + lx * sn + ly * c);
-            let d = dist(base, p);
-            let a = ua
-                + if horizontal {
-                    if dx >= 0.0 {
-                        0.0
-                    } else {
-                        PI
-                    }
-                } else if dy >= 0.0 {
-                    PI / 2.0
-                } else {
-                    -PI / 2.0
-                };
-            return Some(Track { pt: p, lines: vec![], marks: vec![], label: format!("Ortho: {} < {}", fmt(d), degs(a - ua)), kind: TrackKind::Ortho, dist: Some(d), angle: Some(a) });
+            // the axis (of the user coordinate system, or of the isoplane) closest to the cursor direction
+            let along = |a: f64| w.x * (a + ua).cos() + w.y * (a + ua).sin();
+            let [a0, a1] = ortho_axes(o.iso);
+            let (mut rel, mut t) = (a0, along(a0));
+            if along(a1).abs() > t.abs() {
+                (rel, t) = (a1, along(a1));
+            }
+            if t < 0.0 {
+                (t, rel) = (-t, (rel + PI).sin().atan2((rel + PI).cos()));
+            }
+            let a = ua + rel;
+            let p = base + pt(a.cos(), a.sin()) * t;
+            return Some(Track { pt: p, lines: vec![], marks: vec![], label: format!("Ortho: {} < {}", fmt(t), degs(rel)), kind: TrackKind::Ortho, dist: Some(t), angle: Some(a) });
         }
         let angles: Vec<f64> = if o.polar { polar_angles(if o.polar_inc > 0.0 { o.polar_inc } else { PI / 2.0 }, &o.polar_add) } else { vec![0.0, PI / 2.0, PI, 3.0 * PI / 2.0] };
         let angles: Vec<f64> = angles.into_iter().map(|a| a + o.ucs_angle).collect();
@@ -448,11 +445,41 @@ pub fn polar_angles(inc: f64, extra: &[f64]) -> Vec<f64> {
     out
 }
 
+/// The directions ortho mode allows, relative to the user coordinate system: X and Y, or the two axes of an isoplane.
+pub fn ortho_axes(iso: Option<u8>) -> [f64; 2] {
+    let d = PI / 180.0;
+    match iso {
+        Some(0) => [90.0 * d, 150.0 * d],
+        Some(1) => [30.0 * d, 150.0 * d],
+        Some(2) => [30.0 * d, 90.0 * d],
+        _ => [0.0, PI / 2.0],
+    }
+}
+
 pub fn snap_to_grid(p: Pt, g: &Grid) -> Pt {
     let (c, s) = ((-g.angle).cos(), (-g.angle).sin());
     let (dx, dy) = (p.x - g.base.x, p.y - g.base.y);
     let (u, v) = (dx * c - dy * s, dx * s + dy * c);
-    let (su, sv) = ((u / g.sx).round() * g.sx, (v / g.sy).round() * g.sy);
+    let (su, sv) = if g.iso && g.sy > 0.0 {
+        // p = a·e1 + b·e2 with e1 = sy·(cos 30°, sin 30°), e2 = sy·(−cos 30°, sin 30°); the nearest lattice point is a
+        // corner of the cell around (a, b), since the cell is two equilateral triangles
+        let (h, c30) = (g.sy, 3f64.sqrt() / 2.0);
+        let (x, y) = (u / (h * c30), 2.0 * v / h);
+        let (a, b) = ((x + y) / 2.0, (y - x) / 2.0);
+        let mut best = (f64::INFINITY, 0.0, 0.0);
+        for ia in [a.floor(), a.ceil()] {
+            for ib in [b.floor(), b.ceil()] {
+                let (qx, qy) = ((ia - ib) * h * c30, (ia + ib) * h / 2.0);
+                let d = (qx - u).hypot(qy - v);
+                if d < best.0 {
+                    best = (d, qx, qy);
+                }
+            }
+        }
+        (best.1, best.2)
+    } else {
+        ((u / g.sx).round() * g.sx, (v / g.sy).round() * g.sy)
+    };
     let (c2, s2) = (g.angle.cos(), g.angle.sin());
     pt(g.base.x + su * c2 - sv * s2, g.base.y + su * s2 + sv * c2)
 }
@@ -548,9 +575,53 @@ mod tests {
         assert!(dist(r.pt, pt(10.05, 10.05)) < 0.1, "{:?}", r.pt);
         assert_eq!(r.track.unwrap().kind, TrackKind::Polar);
         o.polar = false;
-        o.grid = Some(Grid { sx: 5.0, sy: 5.0, base: pt(0.0, 0.0), angle: 0.0 });
+        o.grid = Some(Grid { sx: 5.0, sy: 5.0, base: pt(0.0, 0.0), angle: 0.0, iso: false });
         let r = s.resolve(&d, pt(7.4, 12.6), &o);
         assert_eq!(r.pt, pt(5.0, 15.0));
+    }
+
+    #[test]
+    fn isometric_snap_and_isoplane_ortho() {
+        let d = Drawing::new("t");
+        let s = Snapper::new();
+        let mut o = SnapOptions::new(10.0);
+        // the lattice of an isometric grid: steps of 10 along 30° and 150°
+        let g = Grid { sx: 10.0, sy: 10.0, base: pt(0.0, 0.0), angle: 0.0, iso: true };
+        let c30 = 3f64.sqrt() / 2.0;
+        for (raw, want) in [(pt(8.0, 4.0), pt(10.0 * c30, 5.0)), (pt(0.4, 9.0), pt(0.0, 10.0)), (pt(-9.0, 5.5), pt(-10.0 * c30, 5.0)), (pt(17.0, 0.5), pt(20.0 * c30, 0.0))] {
+            let p = snap_to_grid(raw, &g);
+            assert!(dist(p, want) < 1e-9, "{raw:?} snaps to {p:?}, not {want:?}");
+        }
+        // ortho follows the axes of the isoplane
+        o.base = Some(pt(0.0, 0.0));
+        o.ortho = true;
+        o.iso = Some(1);
+        let r = s.resolve(&d, pt(10.0, 4.0), &o);
+        let t = r.track.unwrap();
+        assert!((t.angle.unwrap() - PI / 6.0).abs() < 1e-9 && dist(r.pt, pt(c30, 0.5) * t.dist.unwrap()) < 1e-9, "{t:?}");
+        o.iso = Some(0);
+        let r = s.resolve(&d, pt(-10.0, 4.0), &o);
+        assert_eq!(r.track.unwrap().label, format!("Ortho: {} < 150°", fmt(10.0 * c30 + 2.0)));
+        let r = s.resolve(&d, pt(0.5, -10.0), &o);
+        assert!(dist(r.pt, pt(0.0, -10.0)) < 1e-9, "left plane keeps the vertical axis: {:?}", r.pt);
+        o.iso = Some(2);
+        let r = s.resolve(&d, pt(-10.0, 3.0), &o);
+        assert!((r.track.unwrap().angle.unwrap().to_degrees() + 150.0).abs() < 1e-9, "right plane: 30° and its opposite, 210°");
+    }
+
+    #[test]
+    fn additional_polar_angles_are_tracked() {
+        let d = Drawing::new("t");
+        let s = Snapper::new();
+        let mut o = SnapOptions::new(10.0);
+        o.base = Some(pt(0.0, 0.0));
+        o.polar = true;
+        let raw = pt(10.0 * 17f64.to_radians().cos(), 10.0 * 17f64.to_radians().sin());
+        assert!(s.resolve(&d, raw, &o).track.is_none(), "17° is far from every 90° increment");
+        o.polar_add = vec![17f64.to_radians()];
+        let r = s.resolve(&d, raw + pt(0.0, 0.05), &o);
+        assert_eq!(r.track.as_ref().map(|t| t.kind), Some(TrackKind::Polar), "{r:?}");
+        assert!(r.track.unwrap().label.ends_with("< 17°"));
     }
 
     #[test]

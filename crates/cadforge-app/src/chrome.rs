@@ -568,6 +568,7 @@ impl CadForgeApp {
                 menu: None,
             },
             StatusItem { id: "ortho", icon: Some("ortho"), title: "Ortho Mode", desc: "Restricts cursor movement to horizontal or vertical (F8).", key: "F8", label: None, text: None, on: |a| a.sv("ORTHOMODE") != 0, act: |a, _, _| a.toggle_ortho(), menu: None },
+            StatusItem { id: "iso", icon: Some("isodraft"), title: "Isometric Drafting", desc: "Draws in isometric planes: an isometric grid and snap, with ortho along the axes of the current plane (F5 or Ctrl+E switches the plane).", key: "F5", label: None, text: None, on: |a| a.sv("SNAPSTYL") == 1, act: |a, _, _| a.toggle_sv("SNAPSTYL"), menu: Some(|a, ctx, r| a.iso_menu(ctx, r)) },
             StatusItem { id: "polar", icon: Some("polar"), title: "Polar Tracking", desc: "Restricts cursor movement to specified angle increments (F10).", key: "F10", label: None, text: None, on: |a| a.sv("POLARMODE") != 0, act: |a, _, _| a.toggle_polar(), menu: Some(|a, ctx, r| a.polar_menu(ctx, r)) },
             StatusItem { id: "otrack", icon: Some("otrack"), title: "Object Snap Tracking", desc: "Tracks from acquired object snap points (F11).", key: "F11", label: None, text: None, on: |a| a.sv("OTRACKMODE") != 0, act: |a, _, _| a.toggle_sv("OTRACKMODE"), menu: None },
             StatusItem { id: "osnap", icon: Some("osnap"), title: "Object Snap", desc: "Snaps to geometric points on objects (F3).", key: "F3", label: None, text: None, on: |a| a.sv("OSMODE") & 16384 == 0, act: |a, _, _| a.toggle_osnap(), menu: Some(|a, ctx, r| a.osnap_menu(ctx, r)) },
@@ -634,6 +635,23 @@ impl CadForgeApp {
             }));
         }
         self.dropup(ctx, r, v, 180.0);
+    }
+    /// F5 / Ctrl+E: the next isometric plane (Left, Top, Right).
+    pub fn next_isoplane(&self) {
+        let i = (self.sv("ISOPLANE") + 1).rem_euclid(3);
+        self.set_sv("ISOPLANE", i as f64);
+        self.h.borrow_mut().log(&format!("<Isoplane {}>", ["Left", "Top", "Right"][i as usize]), "info");
+    }
+    fn iso_menu(&mut self, ctx: &egui::Context, r: Rect) {
+        let (on, cur) = (self.sv("SNAPSTYL") == 1, self.sv("ISOPLANE"));
+        let mut v = vec![MItem::item("Orthographic").checked(!on).on(|a| a.set_sv("SNAPSTYL", 0.0)), MItem::Sep];
+        for (i, name) in ["Isoplane Left", "Isoplane Top", "Isoplane Right"].into_iter().enumerate() {
+            v.push(MItem::item(name).checked(on && cur == i as i64).on(move |a| {
+                a.set_sv("SNAPSTYL", 1.0);
+                a.set_sv("ISOPLANE", i as f64);
+            }));
+        }
+        self.dropup(ctx, r, v, 170.0);
     }
     fn polar_menu(&mut self, ctx: &egui::Context, r: Rect) {
         let cur = self.h.borrow().sysvars.real("POLARANG");
