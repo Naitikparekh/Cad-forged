@@ -48,23 +48,13 @@ fn pdf_string(s: &str) -> String {
 }
 
 fn rgb(c: Rgb) -> String {
-    format!(
-        "{} {} {}",
-        f(c[0] as f64 / 255.0),
-        f(c[1] as f64 / 255.0),
-        f(c[2] as f64 / 255.0)
-    )
+    format!("{} {} {}", f(c[0] as f64 / 255.0), f(c[1] as f64 / 255.0), f(c[2] as f64 / 255.0))
 }
 
 fn path_ops(c: &mut Vec<String>, paths: &[Poly]) {
     for p in paths {
         for (i, q) in p.pts.iter().enumerate() {
-            c.push(format!(
-                "{} {} {}",
-                f(q[0]),
-                f(q[1]),
-                if i > 0 { "l" } else { "m" }
-            ));
+            c.push(format!("{} {} {}", f(q[0]), f(q[1]), if i > 0 { "l" } else { "m" }));
         }
         if p.closed {
             c.push("h".into());
@@ -104,10 +94,7 @@ fn page_stream(ops: &[Op], pt: f64, h: f64) -> (String, Vec<(f64, String)>, Vec<
     c.push("1 J 1 j".into());
     for op in ops {
         let a = match op {
-            Op::Stroke { alpha, .. }
-            | Op::Fill { alpha, .. }
-            | Op::Text { alpha, .. }
-            | Op::Image { alpha, .. } => *alpha as f64,
+            Op::Stroke { alpha, .. } | Op::Fill { alpha, .. } | Op::Text { alpha, .. } | Op::Image { alpha, .. } => *alpha as f64,
         };
         if a <= 0.0 {
             continue;
@@ -118,107 +105,40 @@ fn page_stream(ops: &[Op], pt: f64, h: f64) -> (String, Vec<(f64, String)>, Vec<
             c.push("/GS0 gs".into());
         }
         match op {
-            Op::Stroke {
-                paths,
-                color,
-                width,
-                dash,
-                round,
-                ..
-            } => {
+            Op::Stroke { paths, color, width, dash, round, .. } => {
                 let cap = if *round { 1 } else { 0 };
-                c.push(format!(
-                    "{} RG {} w {} J {} j",
-                    rgb(*color),
-                    f(width.max(0.01)),
-                    cap,
-                    cap
-                ));
-                c.push(if dash.is_empty() {
-                    "[] 0 d".into()
-                } else {
-                    format!(
-                        "[{}] 0 d",
-                        dash.iter().map(|d| f(*d)).collect::<Vec<_>>().join(" ")
-                    )
-                });
+                c.push(format!("{} RG {} w {} J {} j", rgb(*color), f(width.max(0.01)), cap, cap));
+                c.push(if dash.is_empty() { "[] 0 d".into() } else { format!("[{}] 0 d", dash.iter().map(|d| f(*d)).collect::<Vec<_>>().join(" ")) });
                 path_ops(&mut c, paths);
                 c.push("S".into());
             }
-            Op::Fill {
-                paths,
-                color,
-                evenodd,
-                ..
-            } => {
+            Op::Fill { paths, color, evenodd, .. } => {
                 c.push(format!("{} rg", rgb(*color)));
                 path_ops(&mut c, paths);
                 c.push(if *evenodd { "f*".into() } else { "f".into() });
             }
-            Op::Image {
-                pix,
-                adj,
-                bg,
-                m,
-                clip,
-                smooth,
-                ..
-            } => {
+            Op::Image { pix, adj, bg, m, clip, smooth, .. } => {
                 let rgba = pix.0.adjusted(adj[0], adj[1], adj[2], *bg);
-                let rgb: Vec<u8> = rgba
-                    .chunks_exact(4)
-                    .flat_map(|p| [p[0], p[1], p[2]])
-                    .collect();
+                let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
                 let alpha: Vec<u8> = rgba.chunks_exact(4).map(|p| p[3]).collect();
                 images.push(PdfImage {
                     w: pix.0.w,
                     h: pix.0.h,
                     rgb: miniz_oxide::deflate::compress_to_vec_zlib(&rgb, 6),
-                    alpha: alpha
-                        .iter()
-                        .any(|a| *a != 255)
-                        .then(|| miniz_oxide::deflate::compress_to_vec_zlib(&alpha, 6)),
+                    alpha: alpha.iter().any(|a| *a != 255).then(|| miniz_oxide::deflate::compress_to_vec_zlib(&alpha, 6)),
                     smooth: *smooth,
                 });
                 // the unit square of the image space (y up) onto pixel space (y down), then onto the page
                 let (iw, ih) = (pix.0.w as f64, pix.0.h as f64);
-                let cm = [
-                    m[0] * iw,
-                    m[1] * iw,
-                    -m[2] * ih,
-                    -m[3] * ih,
-                    m[4] + m[2] * ih,
-                    m[5] + m[3] * ih,
-                ];
+                let cm = [m[0] * iw, m[1] * iw, -m[2] * ih, -m[3] * ih, m[4] + m[2] * ih, m[5] + m[3] * ih];
                 c.push("q".into());
                 if clip.len() >= 3 {
-                    path_ops(
-                        &mut c,
-                        &[Poly {
-                            pts: clip.clone(),
-                            closed: true,
-                        }],
-                    );
+                    path_ops(&mut c, &[Poly { pts: clip.clone(), closed: true }]);
                     c.push("W n".into());
                 }
-                c.push(format!(
-                    "{} cm /Im{} Do Q",
-                    cm.iter()
-                        .map(|v| format!("{}", (v * 1e6).round() / 1e6))
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                    images.len()
-                ));
+                c.push(format!("{} cm /Im{} Do Q", cm.iter().map(|v| format!("{}", (v * 1e6).round() / 1e6)).collect::<Vec<_>>().join(" "), images.len()));
             }
-            Op::Text {
-                s,
-                x,
-                y,
-                m,
-                em,
-                color,
-                ..
-            } => {
+            Op::Text { s, x, y, m, em, color, .. } => {
                 c.push(format!(
                     "q {} cm 1 0 0 -1 0 0 cm BT /F1 {} Tf {} rg {} {} Td {} Tj ET Q",
                     m.iter().map(|v| f(*v)).collect::<Vec<_>>().join(" "),
@@ -248,25 +168,14 @@ pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> 
     let mut objs: Vec<String> = vec![
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         String::new(), // the page tree, filled in once the pages are numbered
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-            .to_string(),
-        format!(
-            "<< /Title {} /Producer (CadForge) /Creator (CadForge) >>",
-            pdf_string(title)
-        ),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+        format!("<< /Title {} /Producer (CadForge) /Creator (CadForge) >>", pdf_string(title)),
     ];
     let mut kids: Vec<usize> = vec![];
     for page in pages {
         let (w, h) = (page.size.0 * pt, page.size.1 * pt);
         let (content, alphas, images) = page_stream(page.ops, pt, h);
-        let gs_dict = std::iter::once("/GS0 << /ca 1 /CA 1 >>".to_string())
-            .chain(
-                alphas
-                    .iter()
-                    .map(|(a, n)| format!("/{n} << /ca {a} /CA {a} >>")),
-            )
-            .collect::<Vec<_>>()
-            .join(" ");
+        let gs_dict = std::iter::once("/GS0 << /ca 1 /CA 1 >>".to_string()).chain(alphas.iter().map(|(a, n)| format!("/{n} << /ca {a} /CA {a} >>"))).collect::<Vec<_>>().join(" ");
         let page_num = objs.len() + 1;
         // the images follow the page and its content (an image, then its soft mask when it has transparency)
         let mut image_objs: Vec<String> = vec![];
@@ -274,11 +183,7 @@ pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> 
         for (i, im) in images.iter().enumerate() {
             let num = page_num + 2 + image_objs.len();
             xobjects.push(format!("/Im{} {} 0 R", i + 1, num));
-            let smask = im
-                .alpha
-                .as_ref()
-                .map(|_| format!(" /SMask {} 0 R", num + 1))
-                .unwrap_or_default();
+            let smask = im.alpha.as_ref().map(|_| format!(" /SMask {} 0 R", num + 1)).unwrap_or_default();
             image_objs.push(format!(
                 "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode{}{} /Length {} >>\nstream\n{}\nendstream",
                 im.w,
@@ -292,28 +197,13 @@ pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> 
                 image_objs.push(format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n{}\nendstream", im.w, im.h, a.len(), latin1_str(a)));
             }
         }
-        let xobject_dict = if xobjects.is_empty() {
-            String::new()
-        } else {
-            format!(" /XObject << {} >>", xobjects.join(" "))
-        };
+        let xobject_dict = if xobjects.is_empty() { String::new() } else { format!(" /XObject << {} >>", xobjects.join(" ")) };
         kids.push(page_num);
         objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents {} 0 R /Resources << /Font << /F1 3 0 R >> /ExtGState << {} >>{} >> >>", f(w), f(h), page_num + 1, gs_dict, xobject_dict));
-        objs.push(format!(
-            "<< /Length {} >>\nstream\n{}\nendstream",
-            content.chars().count(),
-            content
-        ));
+        objs.push(format!("<< /Length {} >>\nstream\n{}\nendstream", content.chars().count(), content));
         objs.extend(image_objs);
     }
-    objs[1] = format!(
-        "<< /Type /Pages /Kids [{}] /Count {} >>",
-        kids.iter()
-            .map(|k| format!("{k} 0 R"))
-            .collect::<Vec<_>>()
-            .join(" "),
-        kids.len()
-    );
+    objs[1] = format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.iter().map(|k| format!("{k} 0 R")).collect::<Vec<_>>().join(" "), kids.len());
     // every character is <= 0xFF, so a latin-1 byte mapping preserves the offsets
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();
     let mut offsets = vec![];
@@ -327,11 +217,7 @@ pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> 
     for o in &offsets {
         tail.push_str(&format!("{:010} 00000 n \n", o));
     }
-    tail.push_str(&format!(
-        "trailer\n<< /Size {} /Root 1 0 R /Info 4 0 R >>\nstartxref\n{}\n%%EOF\n",
-        objs.len() + 1,
-        xref
-    ));
+    tail.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R /Info 4 0 R >>\nstartxref\n{}\n%%EOF\n", objs.len() + 1, xref));
     out.extend(latin1(&tail));
     out
 }

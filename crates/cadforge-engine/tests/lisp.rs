@@ -6,13 +6,7 @@ fn run(s: &Sim, src: &str) -> String {
     let before = s.h.borrow().history.len();
     s.ty(src);
     let h = s.h.borrow();
-    h.history
-        .iter()
-        .skip(before)
-        .map(|l| l.text.clone())
-        .filter(|t| !t.starts_with("Command:"))
-        .collect::<Vec<_>>()
-        .join("\n")
+    h.history.iter().skip(before).map(|l| l.text.clone()).filter(|t| !t.starts_with("Command:")).collect::<Vec<_>>().join("\n")
 }
 
 fn ev(s: &Sim, src: &str) -> String {
@@ -73,10 +67,7 @@ fn arithmetic_errors_use_autolisp_messages() {
     assert!(ev(&s, "(+ 1 \"a\")").contains("; error: bad argument type: numberp \"a\""));
     assert!(ev(&s, "(nosuchfn 1)").contains("; error: no function definition: NOSUCHFN"));
     assert!(ev(&s, "(car 5)").contains("bad argument type: listp 5"));
-    assert!(
-        ev(&s, "(+ 1").contains("1>") || s.busy(),
-        "an unfinished expression asks for more"
-    );
+    assert!(ev(&s, "(+ 1").contains("1>") || s.busy(), "an unfinished expression asks for more");
 }
 
 #[test]
@@ -134,10 +125,7 @@ fn lists() {
         ("(subst 9 2 '(1 2 3 2))", "(1 9 3 9)"),
         ("(mapcar '1+ '(1 2 3))", "(2 3 4)"),
         ("(mapcar '+ '(1 2) '(10 20))", "(11 22)"),
-        (
-            "(mapcar (function (lambda (x) (* x x))) '(1 2 3))",
-            "(1 4 9)",
-        ),
+        ("(mapcar (function (lambda (x) (* x x))) '(1 2 3))", "(1 4 9)"),
         ("(apply '+ '(1 2 3))", "6"),
         ("(vl-remove-if-not 'numberp '(1 a 2))", "(1 2)"),
         ("(vl-remove-if 'numberp '(1 a 2))", "(A)"),
@@ -159,10 +147,7 @@ fn lists() {
 #[test]
 fn control_flow_functions_and_scope() {
     let s = Sim::new();
-    assert_eq!(
-        ev(&s, "(defun fact (n) (if (<= n 1) 1 (* n (fact (1- n)))))"),
-        "FACT"
-    );
+    assert_eq!(ev(&s, "(defun fact (n) (if (<= n 1) 1 (* n (fact (1- n)))))"), "FACT");
     assert_eq!(ev(&s, "(fact 10)"), "3628800");
     ev(&s, "(setq total 0)");
     ev(&s, "(foreach i '(1 2 3 4) (setq total (+ total i)))");
@@ -171,15 +156,8 @@ fn control_flow_functions_and_scope() {
     ev(&s, "(while (< i 3) (setq acc (cons i acc) i (1+ i)))");
     assert_eq!(ev(&s, "!acc"), "(2 1 0)");
     assert_eq!(ev(&s, "(repeat 3 (setq i (1+ i)))"), "6");
-    assert_eq!(
-        ev(&s, "(cond ((= 1 2) \"a\") ((= 2 2) \"b\") (T \"c\"))"),
-        "\"b\""
-    );
-    assert_eq!(
-        ev(&s, "(cond (nil 1) (5))"),
-        "5",
-        "a clause without a body returns its test"
-    );
+    assert_eq!(ev(&s, "(cond ((= 1 2) \"a\") ((= 2 2) \"b\") (T \"c\"))"), "\"b\"");
+    assert_eq!(ev(&s, "(cond (nil 1) (5))"), "5", "a clause without a body returns its test");
     assert_eq!(ev(&s, "(and 1 2 3)"), "3");
     assert_eq!(ev(&s, "(or nil nil)"), "nil");
     // locals are restored after the call, globals are not touched
@@ -194,11 +172,7 @@ fn control_flow_functions_and_scope() {
     // lambda values and functions as arguments
     ev(&s, "(defun twice (fn v) (fn (fn v)))");
     assert_eq!(ev(&s, "(twice '1+ 5)"), "7");
-    assert_eq!(
-        ev(&s, "(foreach v (quote (1 2)) (princ v))"),
-        "12\n2",
-        "foreach prints, then the echo shows its last value"
-    );
+    assert_eq!(ev(&s, "(foreach v (quote (1 2)) (princ v))"), "12\n2", "foreach prints, then the echo shows its last value");
 }
 
 #[test]
@@ -209,10 +183,7 @@ fn error_handler_and_catch_all() {
     assert_eq!(ev(&s, "!seen"), "\"divide by zero\"");
     ev(&s, "(setq r (vl-catch-all-apply '/ '(1 0)))");
     assert_eq!(ev(&s, "(vl-catch-all-error-p r)"), "T");
-    assert_eq!(
-        ev(&s, "(vl-catch-all-error-message r)"),
-        "\"divide by zero\""
-    );
+    assert_eq!(ev(&s, "(vl-catch-all-error-message r)"), "\"divide by zero\"");
     assert_eq!(ev(&s, "(vl-catch-all-apply '+ '(1 2))"), "3");
 }
 
@@ -222,22 +193,12 @@ fn a_runaway_loop_stops_with_an_error() {
     s.h.borrow().lisp.set_step_limit(20_000);
     let out = ev(&s, "(while T (setq a 1))");
     assert!(out.contains("evaluation limit exceeded"), "{out}");
-    s.h.borrow()
-        .lisp
-        .set_step_limit(cadforge_engine::lisp::DEFAULT_STEP_LIMIT);
+    s.h.borrow().lisp.set_step_limit(cadforge_engine::lisp::DEFAULT_STEP_LIMIT);
     ev(&s, "(defun up (n) (if (> n 0) (+ 1 (up (1- n))) 0))");
     assert_eq!(ev(&s, "(up 300)"), "300");
-    assert_eq!(
-        ev(&s, "(up 20000)"),
-        "20000",
-        "deep recursion uses the heap, not the native stack"
-    );
+    assert_eq!(ev(&s, "(up 20000)"), "20000", "deep recursion uses the heap, not the native stack");
     assert!(ev(&s, "(up 1000000)").contains("stack overflow"));
-    assert_eq!(
-        ev(&s, "(up 5)"),
-        "5",
-        "the interpreter recovers after a stack overflow"
-    );
+    assert_eq!(ev(&s, "(up 5)"), "5", "the interpreter recovers after a stack overflow");
 }
 
 #[test]
@@ -249,8 +210,5 @@ fn princ_output_is_not_echoed_twice() {
     assert_eq!(out, "ab");
     let out = ev(&s, "(progn (princ \"line1\\nline2\") 5)");
     assert_eq!(out, "line1\nline2\n5");
-    assert!(
-        ev(&s, "(print \"x\")").contains("\"x\""),
-        "print writes the value quoted"
-    );
+    assert!(ev(&s, "(print \"x\")").contains("\"x\""), "print writes the value quoted");
 }

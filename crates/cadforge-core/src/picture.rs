@@ -27,10 +27,7 @@ impl Serialize for Bytes {
 impl<'de> Deserialize<'de> for Bytes {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Bytes, D::Error> {
         let s = String::deserialize(d)?;
-        base64::engine::general_purpose::STANDARD
-            .decode(s.trim())
-            .map(|v| Bytes(Rc::new(v)))
-            .map_err(serde::de::Error::custom)
+        base64::engine::general_purpose::STANDARD.decode(s.trim()).map(|v| Bytes(Rc::new(v))).map_err(serde::de::Error::custom)
     }
 }
 
@@ -51,11 +48,7 @@ impl Decoded {
         }
         let offset = (brightness.clamp(0, 100) - 50) as f32 * 2.55;
         let c = contrast.clamp(0, 100) as f32;
-        let k = if c <= 50.0 {
-            c / 50.0
-        } else {
-            1.0 + (c - 50.0) / 10.0
-        };
+        let k = if c <= 50.0 { c / 50.0 } else { 1.0 + (c - 50.0) / 10.0 };
         let f = fade.clamp(0, 100) as f32 / 100.0;
         let mut out = self.rgba.clone();
         for px in out.chunks_exact_mut(4) {
@@ -72,8 +65,7 @@ impl Decoded {
 pub fn encode_png(w: u32, h: u32, rgba: Vec<u8>) -> Option<Vec<u8>> {
     let img = image::RgbaImage::from_raw(w, h, rgba)?;
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .ok()?;
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
     Some(out)
 }
 
@@ -101,8 +93,7 @@ impl PartialEq for ImageDef {
 impl ImageDef {
     /// Read a PNG / JPEG file.
     pub fn from_file(path: &str, bytes: Vec<u8>) -> Result<ImageDef, String> {
-        let fmt =
-            image::guess_format(&bytes).map_err(|_| format!("{path}: not a PNG or JPEG image."))?;
+        let fmt = image::guess_format(&bytes).map_err(|_| format!("{path}: not a PNG or JPEG image."))?;
         if !matches!(fmt, image::ImageFormat::Png | image::ImageFormat::Jpeg) {
             return Err(format!("{path}: only PNG and JPEG images are supported."));
         }
@@ -112,24 +103,12 @@ impl ImageDef {
         if w == 0 || h == 0 {
             return Err(format!("{path}: the image is empty."));
         }
-        Ok(ImageDef {
-            path: path.to_string(),
-            w,
-            h,
-            data: Some(Bytes(Rc::new(bytes))),
-            decoded: OnceCell::new(),
-        })
+        Ok(ImageDef { path: path.to_string(), w, h, data: Some(Bytes(Rc::new(bytes))), decoded: OnceCell::new() })
     }
 
     /// A reference to a picture that cannot be loaded (its size comes from the DXF file, 0 when unknown).
     pub fn missing(path: &str, w: u32, h: u32) -> ImageDef {
-        ImageDef {
-            path: path.to_string(),
-            w,
-            h,
-            data: None,
-            decoded: OnceCell::new(),
-        }
+        ImageDef { path: path.to_string(), w, h, data: None, decoded: OnceCell::new() }
     }
 
     pub fn is_missing(&self) -> bool {
@@ -144,48 +123,27 @@ impl ImageDef {
                 let img = image::load_from_memory(bytes).ok()?;
                 let img = if img.width().max(img.height()) > MAX_SIDE {
                     let k = MAX_SIDE as f64 / img.width().max(img.height()) as f64;
-                    img.resize(
-                        ((img.width() as f64 * k).round() as u32).max(1),
-                        ((img.height() as f64 * k).round() as u32).max(1),
-                        image::imageops::FilterType::Triangle,
-                    )
+                    img.resize(((img.width() as f64 * k).round() as u32).max(1), ((img.height() as f64 * k).round() as u32).max(1), image::imageops::FilterType::Triangle)
                 } else {
                     img
                 };
                 let rgba = img.to_rgba8();
-                Some(Rc::new(Decoded {
-                    w: rgba.width(),
-                    h: rgba.height(),
-                    rgba: rgba.into_raw(),
-                }))
+                Some(Rc::new(Decoded { w: rgba.width(), h: rgba.height(), rgba: rgba.into_raw() }))
             })
             .clone()
     }
 
     /// A PNG of the picture as adjusted (for SVG and PDF output).
-    pub fn adjusted_png(
-        &self,
-        brightness: i32,
-        contrast: i32,
-        fade: i32,
-        bg: [u8; 3],
-    ) -> Option<Vec<u8>> {
+    pub fn adjusted_png(&self, brightness: i32, contrast: i32, fade: i32, bg: [u8; 3]) -> Option<Vec<u8>> {
         let d = self.decoded()?;
         encode_png(d.w, d.h, d.adjusted(brightness, contrast, fade, bg))
     }
 }
 
 /// Sutherland-Hodgman clip of `subject` against the convex polygon `clip` (either winding).
-pub fn clip_to_convex(
-    subject: &[crate::geom::Pt],
-    clip: &[crate::geom::Pt],
-) -> Vec<crate::geom::Pt> {
+pub fn clip_to_convex(subject: &[crate::geom::Pt], clip: &[crate::geom::Pt]) -> Vec<crate::geom::Pt> {
     use crate::geom::pt;
-    let area: f64 = (0..clip.len())
-        .map(|i| {
-            clip[i].x * clip[(i + 1) % clip.len()].y - clip[(i + 1) % clip.len()].x * clip[i].y
-        })
-        .sum();
+    let area: f64 = (0..clip.len()).map(|i| clip[i].x * clip[(i + 1) % clip.len()].y - clip[(i + 1) % clip.len()].x * clip[i].y).sum();
     let sign = if area >= 0.0 { 1.0 } else { -1.0 };
     let mut out: Vec<crate::geom::Pt> = subject.to_vec();
     for i in 0..clip.len() {
@@ -193,8 +151,7 @@ pub fn clip_to_convex(
             break;
         }
         let (a, b) = (clip[i], clip[(i + 1) % clip.len()]);
-        let side =
-            |p: crate::geom::Pt| sign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+        let side = |p: crate::geom::Pt| sign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
         let mut next = vec![];
         for j in 0..out.len() {
             let (p, q) = (out[j], out[(j + 1) % out.len()]);
@@ -216,26 +173,10 @@ pub fn clip_to_convex(
 pub fn unique_key(path: &str, taken: impl Fn(&str) -> bool) -> String {
     let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
     let stem = file.rsplit_once('.').map_or(file, |(s, _)| s);
-    let base: String = stem
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || matches!(c, '-' | '_' | ' ') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    let base = if base.trim().is_empty() {
-        "Image".to_string()
-    } else {
-        base
-    };
+    let base: String = stem.chars().map(|c| if c.is_alphanumeric() || matches!(c, '-' | '_' | ' ') { c } else { '_' }).collect();
+    let base = if base.trim().is_empty() { "Image".to_string() } else { base };
     if !taken(&base) {
         return base;
     }
-    (2..)
-        .map(|i| format!("{base}{i}"))
-        .find(|k| !taken(k))
-        .expect("an unused key exists")
+    (2..).map(|i| format!("{base}{i}")).find(|k| !taken(k)).expect("an unused key exists")
 }

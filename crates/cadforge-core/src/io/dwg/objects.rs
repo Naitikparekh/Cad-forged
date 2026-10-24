@@ -51,59 +51,15 @@ pub struct EntCommon {
 #[derive(Debug, Clone)]
 pub enum Info {
     None,
-    BlockRecord {
-        name: String,
-        begin: u64,
-        layout: u64,
-        base: [f64; 3],
-    },
-    Block {
-        name: String,
-    },
-    Layer {
-        name: String,
-        color: Col,
-        frozen: bool,
-        off: bool,
-        locked: bool,
-        plot: bool,
-        lw: i16,
-        lt: u64,
-    },
-    Ltype {
-        name: String,
-        desc: String,
-        dashes: Vec<f64>,
-        complex: bool,
-        total: f64,
-    },
-    Style {
-        name: String,
-        height: f64,
-        width: f64,
-        font: String,
-        bigfont: String,
-    },
+    BlockRecord { name: String, begin: u64, layout: u64, base: [f64; 3] },
+    Block { name: String },
+    Layer { name: String, color: Col, frozen: bool, off: bool, locked: bool, plot: bool, lw: i16, lt: u64 },
+    Ltype { name: String, desc: String, dashes: Vec<f64>, complex: bool, total: f64 },
+    Style { name: String, height: f64, width: f64, font: String, bigfont: String },
     /// A dimension style: its name and arrowhead size (DIMASZ x DIMSCALE, when it could be read).
-    DimStyle {
-        name: String,
-        arrow: Option<f64>,
-    },
-    Layout {
-        name: String,
-        tab: i32,
-        block: u64,
-        paper_w: f64,
-        paper_h: f64,
-        units: i16,
-        rot: i16,
-        paper: String,
-    },
-    ImageDef {
-        path: String,
-        w: f64,
-        h: f64,
-    },
+    DimStyle { name: String, arrow: Option<f64> },
+    Layout { name: String, tab: i32, block: u64, paper_w: f64, paper_h: f64, units: i16, rot: i16, paper: String },
+    ImageDef { path: String, w: f64, h: f64 },
     DbColor(Col),
     /// A dictionary's entries (name, object handle); empty when they could not be read.
     Dict(Vec<(String, u64)>),
@@ -219,11 +175,7 @@ impl O<'_> {
         self.h.pos = self.start + size;
         if self.ver == Ver::R2007 {
             let mut t = Bits::new(self.m.d, self.ver);
-            self.t = if t.set_string_stream((self.start + size) as i64 - 1)? {
-                Some(t)
-            } else {
-                None
-            };
+            self.t = if t.set_string_stream((self.start + size) as i64 - 1)? { Some(t) } else { None };
         }
         Ok(())
     }
@@ -295,11 +247,7 @@ impl O<'_> {
     fn entity(&mut self) -> R<(u64, EntCommon)> {
         self.common()?;
         if self.m.bit()? {
-            let n = if self.ver >= Ver::R2010 {
-                self.m.bll()? as usize
-            } else {
-                self.m.rl()? as usize
-            };
+            let n = if self.ver >= Ver::R2010 { self.m.bll()? as usize } else { self.m.rl()? as usize };
             self.m.skip_bytes(n)?;
         }
         if self.ver <= Ver::R14 {
@@ -354,18 +302,7 @@ impl O<'_> {
         let ltscale = self.m.bd()?;
         if self.ver < Ver::R2000 {
             let invisible = self.m.bs()? & 1 == 1;
-            return Ok((
-                owner,
-                EntCommon {
-                    mode,
-                    layer,
-                    lt,
-                    color,
-                    lw: -1,
-                    ltscale,
-                    invisible,
-                },
-            ));
+            return Ok((owner, EntCommon { mode, layer, lt, color, lw: -1, ltscale, invisible }));
         }
         layer = self.hr()?;
         lt = match self.m.bb()? {
@@ -392,18 +329,7 @@ impl O<'_> {
         }
         let invisible = self.m.bs()? & 1 == 1;
         let lw = lineweight(self.m.rc()?);
-        Ok((
-            owner,
-            EntCommon {
-                mode,
-                layer,
-                lt,
-                color,
-                lw,
-                ltscale,
-                invisible,
-            },
-        ))
+        Ok((owner, EntCommon { mode, layer, lt, color, lw, ltscale, invisible }))
     }
     fn xref_bits(&mut self) -> R<()> {
         if self.ver >= Ver::R2007 {
@@ -429,10 +355,7 @@ fn aci(i: i16) -> Col {
 
 /// Lineweight byte to hundredths of a millimetre (-1 by layer, -2 by block, -3 default).
 pub fn lineweight(b: u8) -> i16 {
-    const W: [i16; 24] = [
-        0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158,
-        200, 211,
-    ];
+    const W: [i16; 24] = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211];
     match b {
         28 | 29 => -1,
         30 => -2,
@@ -474,29 +397,17 @@ fn peek_type(d: &[u8], ver: Ver, offset: usize) -> Option<u16> {
 }
 
 /// The DXF-ish name of the object at `offset` (for reports).
-pub fn type_name(
-    d: &[u8],
-    ver: Ver,
-    offset: usize,
-    classes: &HashMap<u16, String>,
-) -> Option<String> {
+pub fn type_name(d: &[u8], ver: Ver, offset: usize, classes: &HashMap<u16, String>) -> Option<String> {
     let t = peek_type(d, ver, offset)?;
     if t < 500 {
-        fixed_type(t)
-            .map(str::to_string)
-            .or_else(|| Some(format!("type {t}")))
+        fixed_type(t).map(str::to_string).or_else(|| Some(format!("type {t}")))
     } else {
         classes.get(&t).cloned()
     }
 }
 
 /// For an object we do not read: its name if it is an entity (so the drawing can report it as skipped).
-pub fn entity_type_name(
-    d: &[u8],
-    ver: Ver,
-    offset: usize,
-    classes: &HashMap<u16, (String, bool)>,
-) -> Option<String> {
+pub fn entity_type_name(d: &[u8], ver: Ver, offset: usize, classes: &HashMap<u16, (String, bool)>) -> Option<String> {
     let t = peek_type(d, ver, offset)?;
     match t {
         33 => Some("SHAPE".into()),
@@ -507,21 +418,13 @@ pub fn entity_type_name(
         29 => Some("POLYFACE MESH".into()),
         30 => Some("POLYGON MESH".into()),
         0x1F2 => Some("ACAD_PROXY_ENTITY".into()),
-        t if t >= 500 => classes
-            .get(&t)
-            .filter(|(_, ent)| *ent)
-            .map(|(n, _)| n.clone()),
+        t if t >= 500 => classes.get(&t).filter(|(_, ent)| *ent).map(|(n, _)| n.clone()),
         _ => None,
     }
 }
 
 /// Read the object at byte `offset` of `d`. `Ok(None)` for object types CadForge has no use for.
-pub fn read_object(
-    d: &[u8],
-    ver: Ver,
-    offset: usize,
-    classes: &HashMap<u16, String>,
-) -> R<Option<Obj>> {
+pub fn read_object(d: &[u8], ver: Ver, offset: usize, classes: &HashMap<u16, String>) -> R<Option<Obj>> {
     let mut m = Bits::at(d, ver, offset * 8);
     let size = m.ms()? as usize;
     if size == 0 {
@@ -531,16 +434,10 @@ pub fn read_object(
     if ver >= Ver::R2010 {
         let hsize = m.mc()? as usize;
         start = m.pos;
-        let hoff = (start + size * 8)
-            .checked_sub(hsize)
-            .ok_or("bad object size")?;
+        let hoff = (start + size * 8).checked_sub(hsize).ok_or("bad object size")?;
         ty = m.ot()?;
         let mut tb = Bits::new(d, ver);
-        t = if tb.set_string_stream(hoff as i64 - 1)? {
-            Some(tb)
-        } else {
-            None
-        };
+        t = if tb.set_string_stream(hoff as i64 - 1)? { Some(tb) } else { None };
         h = Bits::at(d, ver, hoff);
     } else {
         start = m.pos;
@@ -559,15 +456,7 @@ pub fn read_object(
             None => return Ok(None),
         }
     };
-    let mut o = O {
-        m,
-        t,
-        h,
-        ver,
-        start,
-        handle: 0,
-        eed: vec![],
-    };
+    let mut o = O { m, t, h, ver, start, handle: 0, eed: vec![] };
     read_typed(&mut o, name).map(Some)
 }
 
@@ -627,19 +516,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             if anon && bname.is_empty() {
                 bname = "*".into();
             }
-            return Ok(Obj {
-                ty: "BLOCK_RECORD",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::BlockRecord {
-                    name: bname,
-                    begin,
-                    layout,
-                    base,
-                },
-            });
+            return Ok(Obj { ty: "BLOCK_RECORD", handle: o.handle, owner, ent: None, g, info: Info::BlockRecord { name: bname, begin, layout, base } });
         }
         "LAYER" => {
             let owner = o.non_entity()?;
@@ -652,13 +529,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
                 (frozen, off, o.m.bit()?, true, -3)
             } else {
                 let v = o.m.bs()? as u16;
-                (
-                    v & 1 != 0,
-                    v & 2 != 0,
-                    v & 8 != 0,
-                    v & 16 != 0,
-                    lineweight(((v & 0x3E0) >> 5) as u8),
-                )
+                (v & 1 != 0, v & 2 != 0, v & 8 != 0, v & 16 != 0, lineweight(((v & 0x3E0) >> 5) as u8))
             };
             let color = o.cmc()?;
             o.hr()?; // xref block
@@ -669,23 +540,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
                 o.hr()?; // material
             }
             let lt = o.hr()?;
-            return Ok(Obj {
-                ty: "LAYER",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::Layer {
-                    name: lname,
-                    color,
-                    frozen,
-                    off,
-                    locked,
-                    plot,
-                    lw,
-                    lt,
-                },
-            });
+            return Ok(Obj { ty: "LAYER", handle: o.handle, owner, ent: None, g, info: Info::Layer { name: lname, color, frozen, off, locked, plot, lw, lt } });
         }
         "LTYPE" => {
             let owner = o.non_entity()?;
@@ -719,20 +574,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             if ver >= Ver::R2007 && is_text {
                 o.m.skip_bytes(512)?;
             }
-            return Ok(Obj {
-                ty: "LTYPE",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::Ltype {
-                    name: lname,
-                    desc,
-                    dashes,
-                    complex,
-                    total,
-                },
-            });
+            return Ok(Obj { ty: "LTYPE", handle: o.handle, owner, ent: None, g, info: Info::Ltype { name: lname, desc, dashes, complex, total } });
         }
         "STYLE" => {
             let owner = o.non_entity()?;
@@ -747,33 +589,13 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             o.m.bd()?;
             let font = o.tv()?;
             let bigfont = o.tv()?;
-            return Ok(Obj {
-                ty: "STYLE",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::Style {
-                    name: sname,
-                    height,
-                    width,
-                    font,
-                    bigfont,
-                },
-            });
+            return Ok(Obj { ty: "STYLE", handle: o.handle, owner, ent: None, g, info: Info::Style { name: sname, height, width, font, bigfont } });
         }
         "DIMSTYLE" => {
             let owner = o.non_entity()?;
             let sname = o.tv()?;
             let arrow = dimstyle_arrow(o).ok();
-            return Ok(Obj {
-                ty: "DIMSTYLE",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::DimStyle { name: sname, arrow },
-            });
+            return Ok(Obj { ty: "DIMSTYLE", handle: o.handle, owner, ent: None, g, info: Info::DimStyle { name: sname, arrow } });
         }
         "LAYOUT" => {
             let owner = o.non_entity()?;
@@ -829,41 +651,14 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
                 o.m.bl()?;
             }
             let block = o.hr()?;
-            return Ok(Obj {
-                ty: "LAYOUT",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::Layout {
-                    name: lname,
-                    tab,
-                    block,
-                    paper_w,
-                    paper_h,
-                    units,
-                    rot,
-                    paper,
-                },
-            });
+            return Ok(Obj { ty: "LAYOUT", handle: o.handle, owner, ent: None, g, info: Info::Layout { name: lname, tab, block, paper_w, paper_h, units, rot, paper } });
         }
         "IMAGEDEF" => {
             let owner = o.non_entity()?;
             o.m.bl()?;
             let size = o.m.rd2()?;
             let path = o.tv()?;
-            return Ok(Obj {
-                ty: "IMAGEDEF",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::ImageDef {
-                    path,
-                    w: size[0],
-                    h: size[1],
-                },
-            });
+            return Ok(Obj { ty: "IMAGEDEF", handle: o.handle, owner, ent: None, g, info: Info::ImageDef { path, w: size[0], h: size[1] } });
         }
         "DBCOLOR" => {
             let owner = o.non_entity()?;
@@ -881,14 +676,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             } else {
                 aci(idx)
             };
-            return Ok(Obj {
-                ty: "DBCOLOR",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::DbColor(col),
-            });
+            return Ok(Obj { ty: "DBCOLOR", handle: o.handle, owner, ent: None, g, info: Info::DbColor(col) });
         }
         "DICTIONARY" => {
             let owner = o.non_entity()?;
@@ -912,26 +700,12 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
                 Ok(out)
             };
             let info = Info::Dict(entries().unwrap_or_default());
-            return Ok(Obj {
-                ty: "DICTIONARY",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info,
-            });
+            return Ok(Obj { ty: "DICTIONARY", handle: o.handle, owner, ent: None, g, info });
         }
         "APPID" => {
             let owner = o.non_entity()?;
             let name = o.tv()?;
-            return Ok(Obj {
-                ty: "APPID",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::AppId(name),
-            });
+            return Ok(Obj { ty: "APPID", handle: o.handle, owner, ent: None, g, info: Info::AppId(name) });
         }
         "GROUP" => {
             let owner = o.non_entity()?;
@@ -943,14 +717,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
                 return Err("bad group size".into());
             }
             let members = (0..n).map(|_| o.hr()).collect::<R<Vec<u64>>>()?;
-            return Ok(Obj {
-                ty: "GROUP",
-                handle: o.handle,
-                owner,
-                ent: None,
-                g,
-                info: Info::Group(members),
-            });
+            return Ok(Obj { ty: "GROUP", handle: o.handle, owner, ent: None, g, info: Info::Group(members) });
         }
         _ => {}
     }
@@ -1194,8 +961,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             read_multileader(o, &mut g)?;
             "MULTILEADER"
         }
-        "DIM_ORDINATE" | "DIM_LINEAR" | "DIM_ALIGNED" | "DIM_ANG3PT" | "DIM_ANG2LN"
-        | "DIM_RADIUS" | "DIM_DIAMETER" => {
+        "DIM_ORDINATE" | "DIM_LINEAR" | "DIM_ALIGNED" | "DIM_ANG3PT" | "DIM_ANG2LN" | "DIM_RADIUS" | "DIM_DIAMETER" => {
             read_dimension(o, &mut g, name)?;
             "DIMENSION"
         }
@@ -1204,14 +970,7 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
         _ => return Err(format!("unhandled {name}")),
     };
     eed_groups(&o.eed, o.ver, &mut g);
-    Ok(Obj {
-        ty,
-        handle: o.handle,
-        owner,
-        ent: Some(ent),
-        g,
-        info,
-    })
+    Ok(Obj { ty, handle: o.handle, owner, ent: Some(ent), g, info })
 }
 
 /// DIMSCALE x DIMASZ of a dimension style, read after its name.
@@ -1424,21 +1183,9 @@ fn read_lwpolyline(o: &mut O, g: &mut Vec<(i32, V)>) -> R<()> {
         ext(g, o.m.bd3()?);
     }
     let nv = o.m.bl()?.clamp(0, 5_000_000) as usize;
-    let nb = if flags & 0x10 != 0 {
-        o.m.bl()?.clamp(0, 5_000_000) as usize
-    } else {
-        0
-    };
-    let nid = if flags & 0x400 != 0 {
-        o.m.bl()?.clamp(0, 5_000_000) as usize
-    } else {
-        0
-    };
-    let nw = if flags & 0x20 != 0 {
-        o.m.bl()?.clamp(0, 5_000_000) as usize
-    } else {
-        0
-    };
+    let nb = if flags & 0x10 != 0 { o.m.bl()?.clamp(0, 5_000_000) as usize } else { 0 };
+    let nid = if flags & 0x400 != 0 { o.m.bl()?.clamp(0, 5_000_000) as usize } else { 0 };
+    let nw = if flags & 0x20 != 0 { o.m.bl()?.clamp(0, 5_000_000) as usize } else { 0 };
     let mut pts: Vec<[f64; 2]> = Vec::with_capacity(nv);
     if ver <= Ver::R14 {
         for _ in 0..nv {
@@ -1494,11 +1241,7 @@ fn read_spline(o: &mut O, g: &mut Vec<(i32, V)>) -> R<()> {
         if f1 & 4 != 0 {
             flags |= 1;
         }
-        scenario = if knot_param == 15 || f1 & 8 == 0 {
-            1
-        } else {
-            2
-        };
+        scenario = if knot_param == 15 || f1 & 8 == 0 { 1 } else { 2 };
     }
     let degree = o.m.bl()?;
     let (mut nfit, mut nknots, mut nctrl, mut weights) = (0usize, 0usize, 0usize, false);
@@ -1530,12 +1273,7 @@ fn read_spline(o: &mut O, g: &mut Vec<(i32, V)>) -> R<()> {
     }
     if scenario == 2 && nfit == 2 {
         // AutoCAD makes a two-point fit spline into one cubic Bezier: P0, P0 + T0/3, P1 - T1/3, P1
-        let t = |c: i32| {
-            tail.iter()
-                .filter(|(k, _)| *k == c)
-                .map(|(_, v)| if let V::F(x) = v { *x } else { 0.0 })
-                .sum::<f64>()
-        };
+        let t = |c: i32| tail.iter().filter(|(k, _)| *k == c).map(|(_, v)| if let V::F(x) = v { *x } else { 0.0 }).sum::<f64>();
         let (t0, t1) = ([t(12), t(22), t(32)], [t(13), t(23), t(33)]);
         if t0.iter().chain(t1.iter()).any(|v| *v != 0.0) {
             let p0 = o.m.bd3()?;
@@ -1548,20 +1286,7 @@ fn read_spline(o: &mut O, g: &mut Vec<(i32, V)>) -> R<()> {
             for k in [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0] {
                 g.push((40, V::F(k)));
             }
-            for q in [
-                p0,
-                [
-                    p0[0] + t0[0] / 3.0,
-                    p0[1] + t0[1] / 3.0,
-                    p0[2] + t0[2] / 3.0,
-                ],
-                [
-                    p1[0] - t1[0] / 3.0,
-                    p1[1] - t1[1] / 3.0,
-                    p1[2] - t1[2] / 3.0,
-                ],
-                p1,
-            ] {
+            for q in [p0, [p0[0] + t0[0] / 3.0, p0[1] + t0[1] / 3.0, p0[2] + t0[2] / 3.0], [p1[0] - t1[0] / 3.0, p1[1] - t1[1] / 3.0, p1[2] - t1[2] / 3.0], p1] {
                 p3(g, 10, q);
             }
             return Ok(());
@@ -1866,26 +1591,8 @@ fn mview_eed(eed: &[(u64, Vec<u8>)], ver: Ver, g: &mut Vec<(i32, V)>) {
         if !matches!(items.first(), Some((1000, EedV::S(s))) if s == "MVIEW") {
             continue;
         }
-        let reals: Vec<f64> = items
-            .iter()
-            .filter_map(|(c, v)| {
-                if let (1040, EedV::F(x)) = (c, v) {
-                    Some(*x)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let pts: Vec<[f64; 3]> = items
-            .iter()
-            .filter_map(|(c, v)| {
-                if let (1010, EedV::P(p)) = (c, v) {
-                    Some(*p)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let reals: Vec<f64> = items.iter().filter_map(|(c, v)| if let (1040, EedV::F(x)) = (c, v) { Some(*x) } else { None }).collect();
+        let pts: Vec<[f64; 3]> = items.iter().filter_map(|(c, v)| if let (1010, EedV::P(p)) = (c, v) { Some(*p) } else { None }).collect();
         if let ([t, d, ..], [_, h, cx, cy, ..]) = (pts.as_slice(), reals.as_slice()) {
             p3(g, 17, *t);
             p3(g, 16, *d);
@@ -1913,16 +1620,7 @@ enum EedV {
 /// groups; CadForge keeps its own description of some objects there.
 fn eed_groups(eed: &[(u64, Vec<u8>)], ver: Ver, g: &mut Vec<(i32, V)>) {
     for (app, b) in eed {
-        let strings: Vec<String> = eed_items(b, ver)
-            .into_iter()
-            .filter_map(|(c, v)| {
-                if let (1000, EedV::S(s)) = (c, v) {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let strings: Vec<String> = eed_items(b, ver).into_iter().filter_map(|(c, v)| if let (1000, EedV::S(s)) = (c, v) { Some(s) } else { None }).collect();
         if !strings.is_empty() {
             g.push((1001, V::Name(*app)));
             g.extend(strings.into_iter().map(|s| (1000, V::S(s))));
@@ -1946,23 +1644,13 @@ fn eed_items(b: &[u8], ver: Ver) -> Vec<(i32, EedV)> {
         let v = match code {
             0 if ver >= Ver::R2007 => {
                 // a character count and UTF-16 characters
-                let Some(n) = take(&mut i, 2).map(|s| u16::from_le_bytes([s[0], s[1]]) as usize)
-                else {
-                    break;
-                };
+                let Some(n) = take(&mut i, 2).map(|s| u16::from_le_bytes([s[0], s[1]]) as usize) else { break };
                 let Some(s) = take(&mut i, 2 * n) else { break };
-                EedV::S(
-                    char::decode_utf16(s.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])))
-                        .map(|c| c.unwrap_or('?'))
-                        .collect(),
-                )
+                EedV::S(char::decode_utf16(s.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]]))).map(|c| c.unwrap_or('?')).collect())
             }
             0 => {
                 // a two-byte length, a code page byte, the bytes
-                let Some(n) = take(&mut i, 2).map(|s| u16::from_le_bytes([s[0], s[1]]) as usize)
-                else {
-                    break;
-                };
+                let Some(n) = take(&mut i, 2).map(|s| u16::from_le_bytes([s[0], s[1]]) as usize) else { break };
                 let Some(_) = take(&mut i, 1) else { break };
                 let Some(s) = take(&mut i, n) else { break };
                 EedV::S(s.iter().map(|&c| c as char).collect())
@@ -1977,15 +1665,12 @@ fn eed_items(b: &[u8], ver: Ver) -> Vec<(i32, EedV)> {
             }
             4 => {
                 let Some(&[n]) = take(&mut i, 1) else { break };
-                let Some(_) = take(&mut i, n as usize) else {
-                    break;
-                };
+                let Some(_) = take(&mut i, n as usize) else { break };
                 EedV::Other
             }
             10..=13 => {
                 let Some(s) = take(&mut i, 24) else { break };
-                let f =
-                    |k: usize| f64::from_le_bytes(s[k * 8..k * 8 + 8].try_into().unwrap_or([0; 8]));
+                let f = |k: usize| f64::from_le_bytes(s[k * 8..k * 8 + 8].try_into().unwrap_or([0; 8]));
                 EedV::P([f(0), f(1), f(2)])
             }
             40..=42 => {

@@ -17,10 +17,7 @@ pub fn mul(a: &M3, b: &M3) -> M3 {
 
 /// Linear part only, with `t` as translation.
 fn linear(rows: [[f64; 3]; 3], t: V3) -> M3 {
-    [
-        rows[0][0], rows[0][1], rows[0][2], t.x, rows[1][0], rows[1][1], rows[1][2], t.y,
-        rows[2][0], rows[2][1], rows[2][2], t.z,
-    ]
+    [rows[0][0], rows[0][1], rows[0][2], t.x, rows[1][0], rows[1][1], rows[1][2], t.y, rows[2][0], rows[2][1], rows[2][2], t.z]
 }
 
 /// Keeps the point `o` fixed under the linear map `rows`.
@@ -37,21 +34,9 @@ pub fn rotate_axis(o: V3, axis: V3, ang: f64) -> M3 {
     let k = 1.0 - c;
     about(
         [
-            [
-                c + u.x * u.x * k,
-                u.x * u.y * k - u.z * s,
-                u.x * u.z * k + u.y * s,
-            ],
-            [
-                u.y * u.x * k + u.z * s,
-                c + u.y * u.y * k,
-                u.y * u.z * k - u.x * s,
-            ],
-            [
-                u.z * u.x * k - u.y * s,
-                u.z * u.y * k + u.x * s,
-                c + u.z * u.z * k,
-            ],
+            [c + u.x * u.x * k, u.x * u.y * k - u.z * s, u.x * u.z * k + u.y * s],
+            [u.y * u.x * k + u.z * s, c + u.y * u.y * k, u.y * u.z * k - u.x * s],
+            [u.z * u.x * k - u.y * s, u.z * u.y * k + u.x * s, c + u.z * u.z * k],
         ],
         o,
     )
@@ -65,11 +50,7 @@ pub fn scale_axes(o: V3, s: V3) -> M3 {
 /// Reflection in the plane `n · p = d` (`n` need not be a unit vector).
 pub fn reflect(n: V3, d: f64) -> M3 {
     let n = n.unit();
-    let r = [
-        [1.0 - 2.0 * n.x * n.x, -2.0 * n.x * n.y, -2.0 * n.x * n.z],
-        [-2.0 * n.y * n.x, 1.0 - 2.0 * n.y * n.y, -2.0 * n.y * n.z],
-        [-2.0 * n.z * n.x, -2.0 * n.z * n.y, 1.0 - 2.0 * n.z * n.z],
-    ];
+    let r = [[1.0 - 2.0 * n.x * n.x, -2.0 * n.x * n.y, -2.0 * n.x * n.z], [-2.0 * n.y * n.x, 1.0 - 2.0 * n.y * n.y, -2.0 * n.y * n.z], [-2.0 * n.z * n.x, -2.0 * n.z * n.y, 1.0 - 2.0 * n.z * n.z]];
     linear(r, n.scale(2.0 * d))
 }
 
@@ -87,11 +68,7 @@ fn frame(x: V3, in_plane: V3) -> Option<[V3; 3]> {
 /// rotation aligning the first edge, then the rotation aligning the plane of three points.
 pub fn align_points(src: &[V3], dst: &[V3]) -> M3 {
     let n = src.len().min(dst.len());
-    let shift = m3::translate(
-        dst[0].x - src[0].x,
-        dst[0].y - src[0].y,
-        dst[0].z - src[0].z,
-    );
+    let shift = m3::translate(dst[0].x - src[0].x, dst[0].y - src[0].y, dst[0].z - src[0].z);
     if n < 2 {
         return shift;
     }
@@ -99,11 +76,7 @@ pub fn align_points(src: &[V3], dst: &[V3]) -> M3 {
     let axis = e_s.cross(e_d);
     let turn = if axis.len() < 1e-12 {
         if e_s.dot(e_d) < 0.0 {
-            let side = if e_s.x.abs() < 0.9 {
-                V3::new(1.0, 0.0, 0.0)
-            } else {
-                V3::new(0.0, 1.0, 0.0)
-            };
+            let side = if e_s.x.abs() < 0.9 { V3::new(1.0, 0.0, 0.0) } else { V3::new(0.0, 1.0, 0.0) };
             rotate_axis(dst[0], e_s.cross(side), std::f64::consts::PI)
         } else {
             m3::identity()
@@ -116,12 +89,7 @@ pub fn align_points(src: &[V3], dst: &[V3]) -> M3 {
         return step1;
     }
     let moved: Vec<V3> = src.iter().take(3).map(|p| m3::apply(&step1, *p)).collect();
-    let (Some(fs), Some(fd)) = (
-        frame(moved[1].sub(moved[0]), moved[2].sub(moved[0])),
-        frame(dst[1].sub(dst[0]), dst[2].sub(dst[0])),
-    ) else {
-        return step1;
-    };
+    let (Some(fs), Some(fd)) = (frame(moved[1].sub(moved[0]), moved[2].sub(moved[0])), frame(dst[1].sub(dst[0]), dst[2].sub(dst[0]))) else { return step1 };
     // R = Fd · Fsᵀ, with the frames as matrix columns
     let col = |a: &[V3; 3], i: usize, j: usize| [a[j].x, a[j].y, a[j].z][i];
     let mut r = [[0.0; 3]; 3];
@@ -151,52 +119,25 @@ mod tests {
 
     #[test]
     fn rotation_about_an_offset_axis() {
-        let m = rotate_axis(
-            V3::new(1.0, 0.0, 0.0),
-            V3::new(0.0, 0.0, 1.0),
-            std::f64::consts::FRAC_PI_2,
-        );
-        assert!(close(
-            m3::apply(&m, V3::new(2.0, 0.0, 0.0)),
-            V3::new(1.0, 1.0, 0.0)
-        ));
-        assert!(close(
-            m3::apply(&m, V3::new(1.0, 0.0, 5.0)),
-            V3::new(1.0, 0.0, 5.0)
-        ));
+        let m = rotate_axis(V3::new(1.0, 0.0, 0.0), V3::new(0.0, 0.0, 1.0), std::f64::consts::FRAC_PI_2);
+        assert!(close(m3::apply(&m, V3::new(2.0, 0.0, 0.0)), V3::new(1.0, 1.0, 0.0)));
+        assert!(close(m3::apply(&m, V3::new(1.0, 0.0, 5.0)), V3::new(1.0, 0.0, 5.0)));
     }
 
     #[test]
     fn reflection_and_scaling_fix_their_reference() {
         let m = reflect(V3::new(0.0, 0.0, 1.0), 4.0);
-        assert!(close(
-            m3::apply(&m, V3::new(1.0, 2.0, 1.0)),
-            V3::new(1.0, 2.0, 7.0)
-        ));
+        assert!(close(m3::apply(&m, V3::new(1.0, 2.0, 1.0)), V3::new(1.0, 2.0, 7.0)));
         assert!(m3::det(&m) < 0.0);
         let s = scale_axes(V3::new(1.0, 1.0, 1.0), V3::new(2.0, 1.0, 3.0));
-        assert!(close(
-            m3::apply(&s, V3::new(1.0, 1.0, 1.0)),
-            V3::new(1.0, 1.0, 1.0)
-        ));
-        assert!(close(
-            m3::apply(&s, V3::new(2.0, 2.0, 2.0)),
-            V3::new(3.0, 2.0, 4.0)
-        ));
+        assert!(close(m3::apply(&s, V3::new(1.0, 1.0, 1.0)), V3::new(1.0, 1.0, 1.0)));
+        assert!(close(m3::apply(&s, V3::new(2.0, 2.0, 2.0)), V3::new(3.0, 2.0, 4.0)));
     }
 
     #[test]
     fn point_alignment_maps_sources_onto_destinations() {
-        let src = [
-            V3::new(0.0, 0.0, 0.0),
-            V3::new(1.0, 0.0, 0.0),
-            V3::new(0.0, 1.0, 0.0),
-        ];
-        let dst = [
-            V3::new(5.0, 5.0, 0.0),
-            V3::new(5.0, 6.0, 0.0),
-            V3::new(4.0, 5.0, 0.0),
-        ];
+        let src = [V3::new(0.0, 0.0, 0.0), V3::new(1.0, 0.0, 0.0), V3::new(0.0, 1.0, 0.0)];
+        let dst = [V3::new(5.0, 5.0, 0.0), V3::new(5.0, 6.0, 0.0), V3::new(4.0, 5.0, 0.0)];
         for n in 1..=3 {
             let m = align_points(&src[..n], &dst[..n]);
             assert!(close(m3::apply(&m, src[0]), dst[0]));

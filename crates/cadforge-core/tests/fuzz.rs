@@ -6,10 +6,7 @@ use cadforge_core::sample::sample_drawing;
 struct Rng(u64);
 impl Rng {
     fn next(&mut self) -> u64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         self.0 >> 33
     }
     fn below(&mut self, n: usize) -> usize {
@@ -47,10 +44,7 @@ fn mutate(src: &str, rng: &mut Rng) -> String {
 fn mutated_dxf_never_panics() {
     let base = write_dxf(&sample_drawing());
     let mut rng = Rng(0xC0FFEE);
-    let iters: usize = std::env::var("FUZZ_ITERS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(400);
+    let iters: usize = std::env::var("FUZZ_ITERS").ok().and_then(|v| v.parse().ok()).unwrap_or(400);
     for i in 0..iters {
         let m = mutate(&base, &mut rng);
         if std::env::var("FUZZ_DUMP").is_ok() {
@@ -68,8 +62,7 @@ fn garbage_and_truncated_dxf_is_rejected_cleanly() {
     assert!(read_dxf("hello world", "x").is_err());
     let base = write_dxf(&sample_drawing());
     for cut in [10, 100, 1000, base.len() / 2, base.len() - 3] {
-        let _ = std::panic::catch_unwind(|| read_dxf(&base[..cut.min(base.len())], "x"))
-            .expect("no panic on truncation");
+        let _ = std::panic::catch_unwind(|| read_dxf(&base[..cut.min(base.len())], "x")).expect("no panic on truncation");
     }
 }
 

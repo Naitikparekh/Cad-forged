@@ -81,16 +81,7 @@ fn ellipse_pts(cx: f64, cy: f64, rx: f64, ry: f64, rot_deg: f64) -> Vec<[f64; 2]
 
 /// Flatten an SVG arc (endpoint parameterisation) into points appended to `out` (excluding the start point).
 #[allow(clippy::too_many_arguments)]
-fn arc_to(
-    out: &mut Vec<[f64; 2]>,
-    from: [f64; 2],
-    mut rx: f64,
-    mut ry: f64,
-    phi_deg: f64,
-    large: bool,
-    sweep: bool,
-    to: [f64; 2],
-) {
+fn arc_to(out: &mut Vec<[f64; 2]>, from: [f64; 2], mut rx: f64, mut ry: f64, phi_deg: f64, large: bool, sweep: bool, to: [f64; 2]) {
     if rx == 0.0 || ry == 0.0 || from == to {
         out.push(to);
         return;
@@ -118,12 +109,7 @@ fn arc_to(
     let cy = sp * cxp + cp * cyp + (from[1] + to[1]) / 2.0;
     let ang = |ux: f64, uy: f64, vx: f64, vy: f64| (ux * vy - uy * vx).atan2(ux * vx + uy * vy);
     let th1 = ang(1.0, 0.0, (x1 - cxp) / rx, (y1 - cyp) / ry);
-    let mut dth = ang(
-        (x1 - cxp) / rx,
-        (y1 - cyp) / ry,
-        (-x1 - cxp) / rx,
-        (-y1 - cyp) / ry,
-    );
+    let mut dth = ang((x1 - cxp) / rx, (y1 - cyp) / ry, (-x1 - cxp) / rx, (-y1 - cyp) / ry);
     if !sweep && dth > 0.0 {
         dth -= std::f64::consts::TAU;
     } else if sweep && dth < 0.0 {
@@ -211,9 +197,7 @@ fn parse_path(d: &str) -> Vec<(Vec<[f64; 2]>, bool)> {
         let (ox, oy) = if rel { (p[0], p[1]) } else { (0.0, 0.0) };
         match cmd.to_ascii_uppercase() {
             'M' => {
-                let Some(v) = nums(&toks, &mut k, 2) else {
-                    break;
-                };
+                let Some(v) = nums(&toks, &mut k, 2) else { break };
                 if !cur.is_empty() {
                     subs.push((std::mem::take(&mut cur), false));
                 }
@@ -224,89 +208,54 @@ fn parse_path(d: &str) -> Vec<(Vec<[f64; 2]>, bool)> {
                 last_ctrl = None;
             }
             'L' => {
-                let Some(v) = nums(&toks, &mut k, 2) else {
-                    break;
-                };
+                let Some(v) = nums(&toks, &mut k, 2) else { break };
                 p = [ox + v[0], oy + v[1]];
                 cur.push(p);
                 last_ctrl = None;
             }
             'H' => {
-                let Some(v) = nums(&toks, &mut k, 1) else {
-                    break;
-                };
+                let Some(v) = nums(&toks, &mut k, 1) else { break };
                 p = [ox + v[0], p[1]];
                 cur.push(p);
                 last_ctrl = None;
             }
             'V' => {
-                let Some(v) = nums(&toks, &mut k, 1) else {
-                    break;
-                };
+                let Some(v) = nums(&toks, &mut k, 1) else { break };
                 p = [p[0], oy + v[0]];
                 cur.push(p);
                 last_ctrl = None;
             }
             'C' | 'S' => {
                 let s = cmd.to_ascii_uppercase() == 'S';
-                let Some(v) = nums(&toks, &mut k, if s { 4 } else { 6 }) else {
-                    break;
-                };
+                let Some(v) = nums(&toks, &mut k, if s { 4 } else { 6 }) else { break };
                 let (c1, c2, e) = if s {
                     let c1 = last_ctrl.map_or(p, |l| [2.0 * p[0] - l[0], 2.0 * p[1] - l[1]]);
                     (c1, [ox + v[0], oy + v[1]], [ox + v[2], oy + v[3]])
                 } else {
-                    (
-                        [ox + v[0], oy + v[1]],
-                        [ox + v[2], oy + v[3]],
-                        [ox + v[4], oy + v[5]],
-                    )
+                    ([ox + v[0], oy + v[1]], [ox + v[2], oy + v[3]], [ox + v[4], oy + v[5]])
                 };
                 for i in 1..=14 {
                     let t = i as f64 / 14.0;
                     let u = 1.0 - t;
-                    cur.push([
-                        u * u * u * p[0]
-                            + 3.0 * u * u * t * c1[0]
-                            + 3.0 * u * t * t * c2[0]
-                            + t * t * t * e[0],
-                        u * u * u * p[1]
-                            + 3.0 * u * u * t * c1[1]
-                            + 3.0 * u * t * t * c2[1]
-                            + t * t * t * e[1],
-                    ]);
+                    cur.push([u * u * u * p[0] + 3.0 * u * u * t * c1[0] + 3.0 * u * t * t * c2[0] + t * t * t * e[0], u * u * u * p[1] + 3.0 * u * u * t * c1[1] + 3.0 * u * t * t * c2[1] + t * t * t * e[1]]);
                 }
                 last_ctrl = Some(c2);
                 p = e;
             }
             'Q' | 'T' => {
                 let t_ = cmd.to_ascii_uppercase() == 'T';
-                let Some(v) = nums(&toks, &mut k, if t_ { 2 } else { 4 }) else {
-                    break;
-                };
-                let (c1, e) = if t_ {
-                    (
-                        last_ctrl.map_or(p, |l| [2.0 * p[0] - l[0], 2.0 * p[1] - l[1]]),
-                        [ox + v[0], oy + v[1]],
-                    )
-                } else {
-                    ([ox + v[0], oy + v[1]], [ox + v[2], oy + v[3]])
-                };
+                let Some(v) = nums(&toks, &mut k, if t_ { 2 } else { 4 }) else { break };
+                let (c1, e) = if t_ { (last_ctrl.map_or(p, |l| [2.0 * p[0] - l[0], 2.0 * p[1] - l[1]]), [ox + v[0], oy + v[1]]) } else { ([ox + v[0], oy + v[1]], [ox + v[2], oy + v[3]]) };
                 for i in 1..=10 {
                     let t = i as f64 / 10.0;
                     let u = 1.0 - t;
-                    cur.push([
-                        u * u * p[0] + 2.0 * u * t * c1[0] + t * t * e[0],
-                        u * u * p[1] + 2.0 * u * t * c1[1] + t * t * e[1],
-                    ]);
+                    cur.push([u * u * p[0] + 2.0 * u * t * c1[0] + t * t * e[0], u * u * p[1] + 2.0 * u * t * c1[1] + t * t * e[1]]);
                 }
                 last_ctrl = Some(c1);
                 p = e;
             }
             'A' => {
-                let Some(v) = nums(&toks, &mut k, 7) else {
-                    break;
-                };
+                let Some(v) = nums(&toks, &mut k, 7) else { break };
                 let e = [ox + v[5], oy + v[6]];
                 arc_to(&mut cur, p, v[0], v[1], v[2], v[3] != 0.0, v[4] != 0.0, e);
                 p = e;
@@ -329,55 +278,20 @@ fn parse(svg: &str) -> Vec<Prim> {
         let tag = &rest[i..i + j + 2];
         rest = &rest[i + j + 2..];
         let cls = cls_of(attr(tag, "class").unwrap_or("l"));
-        let opacity = attr(tag, "opacity")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(1.0);
+        let opacity = attr(tag, "opacity").and_then(|v| v.parse().ok()).unwrap_or(1.0);
         let subs = if tag.starts_with("<path") {
             parse_path(attr(tag, "d").unwrap_or(""))
         } else if tag.starts_with("<circle") {
-            vec![(
-                ellipse_pts(
-                    num(tag, "cx"),
-                    num(tag, "cy"),
-                    num(tag, "r"),
-                    num(tag, "r"),
-                    0.0,
-                ),
-                true,
-            )]
+            vec![(ellipse_pts(num(tag, "cx"), num(tag, "cy"), num(tag, "r"), num(tag, "r"), 0.0), true)]
         } else if tag.starts_with("<ellipse") {
-            let rot = attr(tag, "transform")
-                .and_then(|t| t.strip_prefix("rotate("))
-                .and_then(|t| t.split([' ', ',', ')']).next())
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0.0);
-            vec![(
-                ellipse_pts(
-                    num(tag, "cx"),
-                    num(tag, "cy"),
-                    num(tag, "rx"),
-                    num(tag, "ry"),
-                    rot,
-                ),
-                true,
-            )]
+            let rot = attr(tag, "transform").and_then(|t| t.strip_prefix("rotate(")).and_then(|t| t.split([' ', ',', ')']).next()).and_then(|v| v.parse().ok()).unwrap_or(0.0);
+            vec![(ellipse_pts(num(tag, "cx"), num(tag, "cy"), num(tag, "rx"), num(tag, "ry"), rot), true)]
         } else if tag.starts_with("<rect") {
-            let (x, y, w, h, r) = (
-                num(tag, "x"),
-                num(tag, "y"),
-                num(tag, "width"),
-                num(tag, "height"),
-                num(tag, "rx"),
-            );
+            let (x, y, w, h, r) = (num(tag, "x"), num(tag, "y"), num(tag, "width"), num(tag, "height"), num(tag, "rx"));
             let r = r.min(w / 2.0).min(h / 2.0);
             let pts = if r > 0.1 {
                 let mut p = vec![];
-                for (cx, cy, a0) in [
-                    (x + w - r, y + r, -90.0f64),
-                    (x + w - r, y + h - r, 0.0),
-                    (x + r, y + h - r, 90.0),
-                    (x + r, y + r, 180.0),
-                ] {
+                for (cx, cy, a0) in [(x + w - r, y + r, -90.0f64), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0), (x + r, y + r, 180.0)] {
                     for i in 0..=4 {
                         let a = (a0 + 90.0 * i as f64 / 4.0).to_radians();
                         p.push([cx + r * a.cos(), cy + r * a.sin()]);
@@ -398,11 +312,8 @@ fn parse(svg: &str) -> Vec<Prim> {
 
 impl Icons {
     pub fn load() -> Icons {
-        let raw: HashMap<String, String> =
-            serde_json::from_str(include_str!("../assets/icons.json")).expect("icons.json");
-        Icons {
-            map: raw.iter().map(|(k, v)| (k.clone(), parse(v))).collect(),
-        }
+        let raw: HashMap<String, String> = serde_json::from_str(include_str!("../assets/icons.json")).expect("icons.json");
+        Icons { map: raw.iter().map(|(k, v)| (k.clone(), parse(v))).collect() }
     }
 
     pub fn has(&self, name: &str) -> bool {
@@ -432,16 +343,7 @@ impl Icons {
                 color = color.gamma_multiply(0.25);
             }
             if is_fill(pr.cls) {
-                let loops: Vec<Vec<[f64; 2]>> = pr
-                    .subs
-                    .iter()
-                    .filter(|s| s.0.len() >= 3)
-                    .map(|s| {
-                        s.0.iter()
-                            .map(|p| [p[0] * k as f64, p[1] * k as f64])
-                            .collect()
-                    })
-                    .collect();
+                let loops: Vec<Vec<[f64; 2]>> = pr.subs.iter().filter(|s| s.0.len() >= 3).map(|s| s.0.iter().map(|p| [p[0] * k as f64, p[1] * k as f64]).collect()).collect();
                 let m = fill_mesh(&loops, color, org);
                 if !m.is_empty() {
                     painter.add(Shape::mesh(m));
@@ -453,11 +355,7 @@ impl Icons {
                         continue;
                     }
                     let v: Vec<Pos2> = pts.iter().map(map).collect();
-                    painter.add(if *closed {
-                        Shape::closed_line(v, Stroke::new(w, color))
-                    } else {
-                        Shape::line(v, Stroke::new(w, color))
-                    });
+                    painter.add(if *closed { Shape::closed_line(v, Stroke::new(w, color)) } else { Shape::line(v, Stroke::new(w, color)) });
                 }
             }
         }

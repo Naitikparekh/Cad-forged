@@ -11,29 +11,16 @@ fn big_drawing(n: usize) -> Drawing {
     let mut d = Drawing::new("big");
     let mut seed = 12345u64;
     let mut rnd = || {
-        seed = seed
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         ((seed >> 33) as f64) / (1u64 << 31) as f64
     };
     for i in 0..n {
         let (x, y) = (rnd() * 20000.0, rnd() * 12000.0);
         let e = match i % 5 {
-            0 => Entity::line(
-                pt(x, y),
-                pt(x + rnd() * 80.0 - 40.0, y + rnd() * 80.0 - 40.0),
-            ),
+            0 => Entity::line(pt(x, y), pt(x + rnd() * 80.0 - 40.0, y + rnd() * 80.0 - 40.0)),
             1 => Entity::circle(pt(x, y), 2.0 + rnd() * 30.0),
             2 => Entity::arc(pt(x, y), 5.0 + rnd() * 40.0, rnd() * 6.0, rnd() * 6.0),
-            3 => Entity::pline(
-                vec![
-                    Vertex::new(x, y, 0.3),
-                    Vertex::new(x + 30.0, y, 0.0),
-                    Vertex::new(x + 30.0, y + 20.0, -0.4),
-                    Vertex::new(x, y + 20.0, 0.0),
-                ],
-                true,
-            ),
+            3 => Entity::pline(vec![Vertex::new(x, y, 0.3), Vertex::new(x + 30.0, y, 0.0), Vertex::new(x + 30.0, y + 20.0, -0.4), Vertex::new(x, y + 20.0, 0.0)], true),
             _ => Entity::text(pt(x, y), 3.0, "Label 1234"),
         };
         d.add(e);
@@ -45,9 +32,7 @@ fn full_view(d: &Drawing) -> View {
     let mut v = View::new();
     v.w = 1600.0;
     v.h = 900.0;
-    let b = d.model.entities.iter().fold(None, |a, e| {
-        Bounds::union_opt(a, cadforge_core::entities::bounds_of(e, d))
-    });
+    let b = d.model.entities.iter().fold(None, |a, e| Bounds::union_opt(a, cadforge_core::entities::bounds_of(e, d)));
     v.fit(b, 0.02);
     v
 }
@@ -58,28 +43,10 @@ fn twenty_thousand_entities_render_pick_and_round_trip_quickly() {
     let v = full_view(&d);
     // first frame builds the segment/bounds caches, the second is the steady state
     let t0 = Instant::now();
-    let ops = render_scene(
-        &d,
-        &v,
-        v.w,
-        v.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let ops = render_scene(&d, &v, v.w, v.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     let first = t0.elapsed();
     let t1 = Instant::now();
-    let ops2 = render_scene(
-        &d,
-        &v,
-        v.w,
-        v.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let ops2 = render_scene(&d, &v, v.w, v.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     let steady = t1.elapsed();
     assert_eq!(ops.len(), ops2.len());
     assert!(ops.len() > 10_000);
@@ -87,16 +54,7 @@ fn twenty_thousand_entities_render_pick_and_round_trip_quickly() {
     let mut z = v.clone();
     z.scale *= 40.0;
     let t2 = Instant::now();
-    let zoomed = render_scene(
-        &d,
-        &z,
-        z.w,
-        z.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let zoomed = render_scene(&d, &z, z.w, z.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     let zoom_t = t2.elapsed();
     assert!(zoomed.len() < ops.len() / 5);
     // picking
@@ -127,10 +85,7 @@ fn twenty_thousand_entities_render_pick_and_round_trip_quickly() {
     assert!(steady.as_secs_f64() < 1.5, "steady frame {steady:?}");
     assert!(first.as_secs_f64() < 4.0, "first frame {first:?}");
     assert!(pick.as_secs_f64() < 0.05, "pick {pick:?}");
-    assert!(
-        write_t.as_secs_f64() < 5.0 && read_t.as_secs_f64() < 5.0,
-        "dxf {write_t:?} {read_t:?}"
-    );
+    assert!(write_t.as_secs_f64() < 5.0 && read_t.as_secs_f64() < 5.0, "dxf {write_t:?} {read_t:?}");
 }
 
 /// Nearest entity under a point, brute force like the selection code (linear scan with bounds rejection).
@@ -154,32 +109,11 @@ fn cadforge_engine_pick(d: &Drawing, p: Pt) -> Option<u64> {
 fn a_hundred_thousand_entities_still_redraw_interactively() {
     let d = big_drawing(100_000);
     let v = full_view(&d);
-    let _ = render_scene(
-        &d,
-        &v,
-        v.w,
-        v.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let _ = render_scene(&d, &v, v.w, v.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     let t = Instant::now();
-    let ops = render_scene(
-        &d,
-        &v,
-        v.w,
-        v.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let ops = render_scene(&d, &v, v.w, v.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     let steady = t.elapsed();
-    println!(
-        "PERF 100k entities: steady frame {steady:?} ({} ops)",
-        ops.len()
-    );
+    println!("PERF 100k entities: steady frame {steady:?} ({} ops)", ops.len());
     assert!(steady.as_secs_f64() < 3.0, "steady frame {steady:?}");
 }
 
@@ -187,53 +121,19 @@ fn a_hundred_thousand_entities_still_redraw_interactively() {
 fn a_zoomed_in_frame_of_a_hundred_thousand_entities_only_touches_what_is_on_screen() {
     let d = big_drawing(100_000);
     let v = full_view(&d);
-    let full = render_scene(
-        &d,
-        &v,
-        v.w,
-        v.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let full = render_scene(&d, &v, v.w, v.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     // zoom in on a small part: roughly 1/1600 of the drawing is visible
     let mut z = v.clone();
     z.scale *= 40.0;
-    let _ = render_scene(
-        &d,
-        &z,
-        z.w,
-        z.h,
-        Theme::DARK,
-        Prefs::default(),
-        &Highlight::default(),
-        None,
-    );
+    let _ = render_scene(&d, &z, z.w, z.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     let t = Instant::now();
     let n = 20;
     let mut ops = vec![];
     for _ in 0..n {
-        ops = render_scene(
-            &d,
-            &z,
-            z.w,
-            z.h,
-            Theme::DARK,
-            Prefs::default(),
-            &Highlight::default(),
-            None,
-        );
+        ops = render_scene(&d, &z, z.w, z.h, Theme::DARK, Prefs::default(), &Highlight::default(), None);
     }
     let per_frame = t.elapsed() / n;
-    println!(
-        "PERF 100k zoomed frame: {per_frame:?} ({} ops, full view {} ops)",
-        ops.len(),
-        full.len()
-    );
+    println!("PERF 100k zoomed frame: {per_frame:?} ({} ops, full view {} ops)", ops.len(), full.len());
     assert!(ops.len() < full.len() / 50, "only a small part is drawn");
-    assert!(
-        per_frame.as_secs_f64() < 0.060,
-        "zoomed frame {per_frame:?}"
-    );
+    assert!(per_frame.as_secs_f64() < 0.060, "zoomed frame {per_frame:?}");
 }

@@ -10,13 +10,7 @@ use cadforge_core::geom::*;
 use cadforge_core::solid::V3;
 
 /// The visual styles the renderer knows, with their VISUALSTYLES option names.
-const STYLES: [(&str, &str); 5] = [
-    ("2dwireframe", "2D Wireframe"),
-    ("Wireframe", "Wireframe"),
-    ("Hidden", "Hidden"),
-    ("Shaded", "Shaded"),
-    ("shaded with Edges", "Shaded with Edges"),
-];
+const STYLES: [(&str, &str); 5] = [("2dwireframe", "2D Wireframe"), ("Wireframe", "Wireframe"), ("Hidden", "Hidden"), ("Shaded", "Shaded"), ("shaded with Edges", "Shaded with Edges")];
 
 fn set_style(c: &Ctx, style: &str) {
     c.ed(|e| e.visual_style = style.to_string());
@@ -24,10 +18,7 @@ fn set_style(c: &Ctx, style: &str) {
 }
 
 fn style_label(style: &str) -> &'static str {
-    STYLES
-        .iter()
-        .find(|(_, s)| *s == style)
-        .map_or("2dwireframe", |(l, _)| *l)
+    STYLES.iter().find(|(_, s)| *s == style).map_or("2dwireframe", |(l, _)| *l)
 }
 
 async fn hide(c: Ctx, _a: Args) -> CmdResult<()> {
@@ -36,24 +27,13 @@ async fn hide(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 /// SHADEMODE options and the visual style each one selects.
-const SHADE: [(&str, &str); 5] = [
-    ("2D wireframe", "2D Wireframe"),
-    ("3D wireframe", "Wireframe"),
-    ("Hidden", "Hidden"),
-    ("Realistic", "Shaded"),
-    ("Conceptual", "Shaded with Edges"),
-];
+const SHADE: [(&str, &str); 5] = [("2D wireframe", "2D Wireframe"), ("3D wireframe", "Wireframe"), ("Hidden", "Hidden"), ("Realistic", "Shaded"), ("Conceptual", "Shaded with Edges")];
 
 async fn shademode(c: Ctx, _a: Args) -> CmdResult<()> {
     let cur = c.ed(|e| e.visual_style.clone());
-    let default = SHADE
-        .iter()
-        .find(|(_, s)| *s == cur)
-        .map_or("2D wireframe", |(l, _)| *l);
+    let default = SHADE.iter().find(|(_, s)| *s == cur).map_or("2D wireframe", |(l, _)| *l);
     let labels: Vec<&str> = SHADE.iter().map(|(l, _)| *l).collect();
-    let k = c
-        .keyword(ps("Enter option").options(&labels).default_str(default))
-        .await?;
+    let k = c.keyword(ps("Enter option").options(&labels).default_str(default)).await?;
     if let Some((label, style)) = SHADE.iter().find(|(l, _)| Some(*l) == k.kw()) {
         set_style(&c, style);
         if !label.ends_with("wireframe") && *label != "Hidden" {
@@ -67,19 +47,10 @@ async fn visualstyles(c: Ctx, _a: Args) -> CmdResult<()> {
     let cur = c.ed(|e| e.visual_style.clone());
     let mut labels = vec!["?"];
     labels.extend(STYLES.iter().map(|(l, _)| *l));
-    let k = c
-        .keyword(
-            ps("Enter a visual style option")
-                .options(&labels)
-                .default_str(style_label(&cur)),
-        )
-        .await?;
+    let k = c.keyword(ps("Enter a visual style option").options(&labels).default_str(style_label(&cur))).await?;
     match k.kw() {
         Some("?") => {
-            let lines: Vec<String> = STYLES
-                .iter()
-                .map(|(_, s)| format!("  {s}{}", if *s == cur { "  (current)" } else { "" }))
-                .collect();
+            let lines: Vec<String> = STYLES.iter().map(|(_, s)| format!("  {s}{}", if *s == cur { "  (current)" } else { "" })).collect();
             c.log(&lines.join("\n"));
         }
         Some(l) => {
@@ -110,35 +81,19 @@ async fn graphscr(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 fn report_flag(c: &Ctx, label: &str, var: &str) {
-    c.log(&format!(
-        "<{label} {}>",
-        if c.pref(var) != 0.0 { "on" } else { "off" }
-    ));
+    c.log(&format!("<{label} {}>", if c.pref(var) != 0.0 { "on" } else { "off" }));
     c.emit();
 }
 
 async fn viewcube(c: Ctx, _a: Args) -> CmdResult<()> {
-    c.setvar(
-        "NAVVCUBE",
-        if c.pref("NAVVCUBE") != 0.0 { 0.0 } else { 1.0 },
-    )?;
+    c.setvar("NAVVCUBE", if c.pref("NAVVCUBE") != 0.0 { 0.0 } else { 1.0 })?;
     report_flag(&c, "ViewCube", "NAVVCUBE");
     Ok(())
 }
 
 async fn navvcube(c: Ctx, _a: Args) -> CmdResult<()> {
-    let default = if c.pref("NAVVCUBE") != 0.0 {
-        "ON"
-    } else {
-        "OFF"
-    };
-    let k = c
-        .keyword(
-            ps("Enter an option")
-                .options(&["ON", "OFF", "Settings"])
-                .default_str(default),
-        )
-        .await?;
+    let default = if c.pref("NAVVCUBE") != 0.0 { "ON" } else { "OFF" };
+    let k = c.keyword(ps("Enter an option").options(&["ON", "OFF", "Settings"]).default_str(default)).await?;
     match k.kw() {
         Some("Settings") => ui_action(&c, "NAVVCUBE", "OPTIONS", Args::none()),
         Some(v) => {
@@ -163,19 +118,12 @@ async fn navswheel(c: Ctx, _a: Args) -> CmdResult<()> {
 /// Yaw and pitch of a camera looking at the drawing from direction `v` (the vector from the target to the viewer).
 fn view_angles(v: V3) -> (f64, f64) {
     let h = v.x.hypot(v.y);
-    (
-        if h < 1e-9 { 0.0 } else { (-v.x).atan2(-v.y) },
-        v.z.atan2(h),
-    )
+    (if h < 1e-9 { 0.0 } else { (-v.x).atan2(-v.y) }, v.z.atan2(h))
 }
 
 /// Direction from the target to the viewer for a yaw / pitch.
 fn view_dir(yaw: f64, pitch: f64) -> V3 {
-    V3::new(
-        -yaw.sin() * pitch.cos(),
-        -yaw.cos() * pitch.cos(),
-        pitch.sin(),
-    )
+    V3::new(-yaw.sin() * pitch.cos(), -yaw.cos() * pitch.cos(), pitch.sin())
 }
 
 /// "x,y[,z]" typed as a vector or point.
@@ -206,33 +154,14 @@ fn camera_angles(c: &Ctx) -> (f64, f64) {
 
 async fn vpoint(c: Ctx, _a: Args) -> CmdResult<()> {
     // a text prompt: "Rotate" is matched by hand, because option clicks only answer keyword prompts
-    let r = c
-        .string(ps("Specify a view point or [Rotate]").default_str("display compass and tripod"))
-        .await?;
+    let r = c.string(ps("Specify a view point or [Rotate]").default_str("display compass and tripod")).await?;
     let t = r.text.trim().to_lowercase();
     if r.entered {
         c.log_error("The compass and tripod are not available; enter a view point vector or use the Rotate option.");
     } else if !t.is_empty() && "rotate".starts_with(&t) {
         let (pitch0, xy0) = camera_angles(&c);
-        let Some(xy) = c
-            .number(ps("Enter angle in XY plane from X axis").default_num(xy0))
-            .await?
-            .value()
-        else {
-            return Ok(());
-        };
-        let Some(z) = c
-            .number(
-                ps("Enter angle from XY plane")
-                    .default_num(pitch0)
-                    .min(-90.0)
-                    .max(90.0),
-            )
-            .await?
-            .value()
-        else {
-            return Ok(());
-        };
+        let Some(xy) = c.number(ps("Enter angle in XY plane from X axis").default_num(xy0)).await?.value() else { return Ok(()) };
+        let Some(z) = c.number(ps("Enter angle from XY plane").default_num(pitch0).min(-90.0).max(90.0)).await?.value() else { return Ok(()) };
         let (yaw, pitch) = view_angles(view_dir_xy(xy, z));
         aim(&c, yaw, pitch);
     } else {
@@ -254,23 +183,12 @@ fn view_dir_xy(xy: f64, z: f64) -> V3 {
 }
 
 async fn plan(c: Ctx, _a: Args) -> CmdResult<()> {
-    let k = c
-        .keyword(
-            ps("Enter an option")
-                .options(&["Current ucs", "Ucs", "World"])
-                .default_str("Current ucs"),
-        )
-        .await?;
+    let k = c.keyword(ps("Enter an option").options(&["Current ucs", "Ucs", "World"]).default_str("Current ucs")).await?;
     let angle = match k.kw() {
         Some("World") => 0.0,
         Some("Ucs") => {
             let n = c.string(ps("Enter name of UCS or [?]")).await?.text;
-            match c.doc(|d| {
-                d.ucs_named
-                    .iter()
-                    .find(|(k, _)| k.eq_ignore_ascii_case(n.trim()))
-                    .map(|(_, u)| u.angle)
-            }) {
+            match c.doc(|d| d.ucs_named.iter().find(|(k, _)| k.eq_ignore_ascii_case(n.trim())).map(|(_, u)| u.angle)) {
                 Some(a) => a,
                 None => {
                     c.log_error(&format!("There is no saved UCS named \"{}\".", n.trim()));
@@ -301,64 +219,27 @@ async fn plan(c: Ctx, _a: Args) -> CmdResult<()> {
 
 // ---------------------------------------------------------------- DVIEW
 
-const DVIEW_OPTS: [&str; 12] = [
-    "CAmera", "TArget", "Distance", "POints", "PAn", "Zoom", "TWist", "CLip", "Hide", "Off",
-    "Undo", "eXit",
-];
+const DVIEW_OPTS: [&str; 12] = ["CAmera", "TArget", "Distance", "POints", "PAn", "Zoom", "TWist", "CLip", "Hide", "Off", "Undo", "eXit"];
 
 async fn dview(c: Ctx, _a: Args) -> CmdResult<()> {
     // objects are not previewed separately: the whole drawing is shown while the view changes
     let mut changes = 0;
     loop {
-        let k = c
-            .keyword(ps("Enter option").options(&DVIEW_OPTS).default_str("eXit"))
-            .await?;
+        let k = c.keyword(ps("Enter option").options(&DVIEW_OPTS).default_str("eXit")).await?;
         match k.kw() {
             Some(o @ ("CAmera" | "TArget")) => {
                 // the target direction is the camera direction reversed
                 let sign = if o == "CAmera" { 1.0 } else { -1.0 };
                 let (pitch0, xy0) = camera_angles(&c);
-                let Some(z) = c
-                    .number(
-                        ps("Enter angle from XY plane")
-                            .default_num(sign * pitch0)
-                            .min(-90.0)
-                            .max(90.0),
-                    )
-                    .await?
-                    .value()
-                else {
-                    continue;
-                };
-                let Some(xy) = c
-                    .number(
-                        ps("Enter angle in XY plane from X axis").default_num(if sign > 0.0 {
-                            xy0
-                        } else {
-                            xy0 + 180.0
-                        }),
-                    )
-                    .await?
-                    .value()
-                else {
-                    continue;
-                };
-                let (yaw, pitch) = view_angles(view_dir_xy(
-                    if sign > 0.0 { xy } else { xy + 180.0 },
-                    sign * z,
-                ));
+                let Some(z) = c.number(ps("Enter angle from XY plane").default_num(sign * pitch0).min(-90.0).max(90.0)).await?.value() else { continue };
+                let Some(xy) = c.number(ps("Enter angle in XY plane from X axis").default_num(if sign > 0.0 { xy0 } else { xy0 + 180.0 })).await?.value() else { continue };
+                let (yaw, pitch) = view_angles(view_dir_xy(if sign > 0.0 { xy } else { xy + 180.0 }, sign * z));
                 aim(&c, yaw, pitch);
                 changes += 1;
             }
             Some("POints") => {
                 let cur = c.view(|v| v.target);
-                let t = c
-                    .string(
-                        ps("Specify target point")
-                            .default_str(&format!("{},{},{}", cur.x, cur.y, cur.z)),
-                    )
-                    .await?
-                    .text;
+                let t = c.string(ps("Specify target point").default_str(&format!("{},{},{}", cur.x, cur.y, cur.z))).await?.text;
                 let cam = c.string(ps("Specify camera point")).await?.text;
                 match (parse_xyz(&t), parse_xyz(&cam)) {
                     (Some(t), Some(p)) if (p.x - t.x).hypot(p.y - t.y).hypot(p.z - t.z) > 1e-9 => {
@@ -380,13 +261,7 @@ async fn dview(c: Ctx, _a: Args) -> CmdResult<()> {
                 changes += 1;
             }
             Some("Zoom") => {
-                let Some(f) = c
-                    .number(ps("Specify zoom scale factor").default_num(1.0).min(1e-9))
-                    .await?
-                    .value()
-                else {
-                    continue;
-                };
+                let Some(f) = c.number(ps("Specify zoom scale factor").default_num(1.0).min(1e-9)).await?.value() else { continue };
                 c.view(|v| {
                     v.push();
                     v.scale *= f;
@@ -401,9 +276,7 @@ async fn dview(c: Ctx, _a: Args) -> CmdResult<()> {
                 c.emit();
             }
             Some("Undo") => c.log_error("Nothing to undo."),
-            Some("Distance") => c.log_error(
-                "Perspective views are not supported; the view is always a parallel projection.",
-            ),
+            Some("Distance") => c.log_error("Perspective views are not supported; the view is always a parallel projection."),
             Some("Off") => c.log("Perspective is off: the view is always a parallel projection."),
             Some("TWist") => c.log_error("View twist is not supported."),
             Some("CLip") => c.log_error("Clipping planes are not supported."),
@@ -413,84 +286,16 @@ async fn dview(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(
-        def("View", "HIDE", run(hide))
-            .aliases(&["HI"])
-            .title("Hide")
-            .icon("view")
-            .desc("Regenerates a three-dimensional model with hidden lines suppressed.")
-            .once(),
-    );
-    r.define(
-        def("View", "SHADEMODE", run(shademode))
-            .aliases(&["SHA"])
-            .title("Shade Mode")
-            .icon("view")
-            .desc("Starts the VSCURRENT command: sets the visual style in the current viewport."),
-    );
+    r.define(def("View", "HIDE", run(hide)).aliases(&["HI"]).title("Hide").icon("view").desc("Regenerates a three-dimensional model with hidden lines suppressed.").once());
+    r.define(def("View", "SHADEMODE", run(shademode)).aliases(&["SHA"]).title("Shade Mode").icon("view").desc("Starts the VSCURRENT command: sets the visual style in the current viewport."));
     r.define(def("View", "VISUALSTYLES", run(visualstyles)).aliases(&["VSM", "-VISUALSTYLES"]).title("Visual Styles").icon("view").desc("Creates and modifies visual styles and applies a visual style to a viewport (command-line form)."));
-    r.define(
-        def("View", "CLEANSCREENOFF", run(cleanscreenoff))
-            .title("Clean Screen Off")
-            .icon("cleanscreen")
-            .desc("Restores the display state that was in effect before CLEANSCREENON.")
-            .transparent()
-            .once(),
-    );
-    r.define(
-        def("Utilities", "TEXTSCR", run(textscr))
-            .title("Text Window")
-            .desc("Displays the text window.")
-            .transparent()
-            .once(),
-    );
-    r.define(
-        def("Utilities", "GRAPHSCR", run(graphscr))
-            .title("Graphics Screen")
-            .desc("Switches from the text window to the drawing area.")
-            .transparent()
-            .once(),
-    );
-    r.define(
-        def("View", "VIEWCUBE", run(viewcube))
-            .title("ViewCube")
-            .icon("viewcube")
-            .desc("Turns the ViewCube on or off.")
-            .transparent(),
-    );
-    r.define(
-        def("View", "NAVVCUBE", run(navvcube))
-            .title("ViewCube Display")
-            .icon("viewcube")
-            .desc("Controls the visibility and display properties of the ViewCube.")
-            .transparent(),
-    );
-    r.define(
-        def("View", "NAVSWHEEL", run(navswheel))
-            .title("SteeringWheels")
-            .icon("orbit")
-            .desc("Displays a wheel that contains a collection of view tools.")
-            .transparent()
-            .once(),
-    );
-    r.define(
-        def("View", "PLAN", run(plan))
-            .title("Plan View")
-            .icon("view")
-            .desc("Displays the plan view of a specified user coordinate system."),
-    );
-    r.define(
-        def("View", "VPOINT", run(vpoint))
-            .aliases(&["-VP"])
-            .title("Viewpoint")
-            .icon("orbit")
-            .desc("Sets the viewing direction for a 3D visualization of the drawing."),
-    );
-    r.define(
-        def("View", "DVIEW", run(dview))
-            .aliases(&["DV"])
-            .title("Dynamic View")
-            .icon("orbit")
-            .desc("Defines parallel projection or perspective views by using a camera and target."),
-    );
+    r.define(def("View", "CLEANSCREENOFF", run(cleanscreenoff)).title("Clean Screen Off").icon("cleanscreen").desc("Restores the display state that was in effect before CLEANSCREENON.").transparent().once());
+    r.define(def("Utilities", "TEXTSCR", run(textscr)).title("Text Window").desc("Displays the text window.").transparent().once());
+    r.define(def("Utilities", "GRAPHSCR", run(graphscr)).title("Graphics Screen").desc("Switches from the text window to the drawing area.").transparent().once());
+    r.define(def("View", "VIEWCUBE", run(viewcube)).title("ViewCube").icon("viewcube").desc("Turns the ViewCube on or off.").transparent());
+    r.define(def("View", "NAVVCUBE", run(navvcube)).title("ViewCube Display").icon("viewcube").desc("Controls the visibility and display properties of the ViewCube.").transparent());
+    r.define(def("View", "NAVSWHEEL", run(navswheel)).title("SteeringWheels").icon("orbit").desc("Displays a wheel that contains a collection of view tools.").transparent().once());
+    r.define(def("View", "PLAN", run(plan)).title("Plan View").icon("view").desc("Displays the plan view of a specified user coordinate system."));
+    r.define(def("View", "VPOINT", run(vpoint)).aliases(&["-VP"]).title("Viewpoint").icon("orbit").desc("Sets the viewing direction for a 3D visualization of the drawing."));
+    r.define(def("View", "DVIEW", run(dview)).aliases(&["DV"]).title("Dynamic View").icon("orbit").desc("Defines parallel projection or perspective views by using a camera and target."));
 }

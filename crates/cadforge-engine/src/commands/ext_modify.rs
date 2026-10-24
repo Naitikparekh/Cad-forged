@@ -59,11 +59,7 @@ fn point_at(segs: &[Seg], d: f64) -> (Pt, Pt) {
     for s in segs {
         let len = s.length();
         if d <= acc + len + 1e-9 {
-            let t = if len > 0.0 {
-                ((d - acc) / len).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
+            let t = if len > 0.0 { ((d - acc) / len).clamp(0.0, 1.0) } else { 0.0 };
             return (s.at(t), s.tangent(t));
         }
         acc += len;

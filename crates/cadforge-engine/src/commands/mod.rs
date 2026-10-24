@@ -17,13 +17,13 @@ pub mod ext_system;
 pub mod ext_tail;
 pub mod helpers;
 pub mod inquiry;
-pub mod layer;
 pub mod layouts;
+pub mod layer;
+pub mod view;
 pub mod modify;
 pub mod solids;
-pub mod system;
 pub mod ucs;
-pub mod view;
+pub mod system;
 
 /// Wrap an `async fn(Ctx, Args) -> CmdResult<()>` as a registry entry point.
 pub fn run<F, Fut>(f: F) -> RunFn

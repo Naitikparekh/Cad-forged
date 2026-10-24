@@ -16,11 +16,7 @@ impl W {
         let _ = write!(self.s, "{code}\n{v}\n");
     }
     fn text(&mut self, code: i32, v: &str, mtext: bool) {
-        let clean = if mtext {
-            v.replace("\r\n", "\\P").replace(['\n', '\r'], "\\P")
-        } else {
-            v.replace(['\n', '\r'], " ")
-        };
+        let clean = if mtext { v.replace("\r\n", "\\P").replace(['\n', '\r'], "\\P") } else { v.replace(['\n', '\r'], " ") };
         self.g(code, clean);
     }
 }
@@ -30,58 +26,22 @@ fn hex(h: u64) -> String {
 }
 
 pub fn emit(objs: &[Obj], hdr: &Header) -> String {
-    let mut w = W {
-        s: String::with_capacity(objs.len() * 200),
-    };
+    let mut w = W { s: String::with_capacity(objs.len() * 200) };
     // ---- names by handle
     let mut names: HashMap<u64, String> = HashMap::new();
-    let block_name: HashMap<u64, String> = objs
-        .iter()
-        .filter_map(|o| {
-            if let Info::Block { name, .. } = &o.info {
-                Some((o.handle, name.clone()))
-            } else {
-                None
-            }
-        })
-        .collect();
+    let block_name: HashMap<u64, String> = objs.iter().filter_map(|o| if let Info::Block { name, .. } = &o.info { Some((o.handle, name.clone())) } else { None }).collect();
     for o in objs {
         let n = match &o.info {
-            Info::Layer { name, .. }
-            | Info::Ltype { name, .. }
-            | Info::Style { name, .. }
-            | Info::DimStyle { name, .. }
-            | Info::AppId(name) => name.clone(),
-            Info::BlockRecord { name, begin, .. } => block_name
-                .get(begin)
-                .filter(|n| !n.is_empty())
-                .cloned()
-                .unwrap_or_else(|| name.clone()),
+            Info::Layer { name, .. } | Info::Ltype { name, .. } | Info::Style { name, .. } | Info::DimStyle { name, .. } | Info::AppId(name) => name.clone(),
+            Info::BlockRecord { name, begin, .. } => block_name.get(begin).filter(|n| !n.is_empty()).cloned().unwrap_or_else(|| name.clone()),
             _ => continue,
         };
         names.insert(o.handle, n);
     }
     let name_of = |h: u64| names.get(&h).cloned().unwrap_or_default();
-    let book: HashMap<u64, Col> = objs
-        .iter()
-        .filter_map(|o| {
-            if let Info::DbColor(c) = o.info {
-                Some((o.handle, c))
-            } else {
-                None
-            }
-        })
-        .collect();
-    let records: Vec<&Obj> = objs
-        .iter()
-        .filter(|o| matches!(o.info, Info::BlockRecord { .. }))
-        .collect();
-    let find_br = |want: &str| {
-        records
-            .iter()
-            .find(|o| name_of(o.handle).eq_ignore_ascii_case(want))
-            .map(|o| o.handle)
-    };
+    let book: HashMap<u64, Col> = objs.iter().filter_map(|o| if let Info::DbColor(c) = o.info { Some((o.handle, c)) } else { None }).collect();
+    let records: Vec<&Obj> = objs.iter().filter(|o| matches!(o.info, Info::BlockRecord { .. })).collect();
+    let find_br = |want: &str| records.iter().find(|o| name_of(o.handle).eq_ignore_ascii_case(want)).map(|o| o.handle);
     let model = find_br("*Model_Space").unwrap_or(u64::MAX);
     let paper = find_br("*Paper_Space").unwrap_or(u64::MAX - 1);
 
@@ -111,18 +71,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(2, "HEADER");
     w.g(9, "$ACADVER");
     w.g(1, "AC1015");
-    for (k, v) in [
-        ("$LTSCALE", hdr.ltscale),
-        ("$TEXTSIZE", hdr.textsize),
-        ("$PDSIZE", hdr.pdsize),
-        ("$DIMSCALE", hdr.dimscale),
-        ("$DIMASZ", hdr.dimasz),
-        ("$DIMEXO", hdr.dimexo),
-        ("$DIMEXE", hdr.dimexe),
-        ("$DIMTXT", hdr.dimtxt),
-        ("$DIMCEN", hdr.dimcen),
-        ("$DIMGAP", hdr.dimgap),
-    ] {
+    for (k, v) in [("$LTSCALE", hdr.ltscale), ("$TEXTSIZE", hdr.textsize), ("$PDSIZE", hdr.pdsize), ("$DIMSCALE", hdr.dimscale), ("$DIMASZ", hdr.dimasz), ("$DIMEXO", hdr.dimexo), ("$DIMEXE", hdr.dimexe), ("$DIMTXT", hdr.dimtxt), ("$DIMCEN", hdr.dimcen), ("$DIMGAP", hdr.dimgap)] {
         if v.is_finite() {
             w.g(9, k);
             w.g(40, v);
@@ -152,14 +101,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(0, "TABLE");
     w.g(2, "LTYPE");
     for o in objs {
-        if let Info::Ltype {
-            name,
-            desc,
-            dashes,
-            complex,
-            total,
-        } = &o.info
-        {
+        if let Info::Ltype { name, desc, dashes, complex, total } = &o.info {
             w.g(0, "LTYPE");
             w.g(5, hex(o.handle));
             w.text(2, name, false);
@@ -178,17 +120,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(0, "TABLE");
     w.g(2, "LAYER");
     for o in objs {
-        if let Info::Layer {
-            name,
-            color,
-            frozen,
-            off,
-            locked,
-            plot,
-            lw,
-            lt,
-        } = &o.info
-        {
+        if let Info::Layer { name, color, frozen, off, locked, plot, lw, lt } = &o.info {
             w.g(0, "LAYER");
             w.g(5, hex(o.handle));
             w.text(2, name, false);
@@ -205,10 +137,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
             if let Some(c) = rgb {
                 w.g(420, c);
             }
-            let ltn = names
-                .get(lt)
-                .cloned()
-                .unwrap_or_else(|| "Continuous".into());
+            let ltn = names.get(lt).cloned().unwrap_or_else(|| "Continuous".into());
             w.text(6, &ltn, false);
             w.g(370, if *lw < 0 { 25 } else { *lw as i32 });
             w.g(290, *plot as i32);
@@ -218,14 +147,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(0, "TABLE");
     w.g(2, "STYLE");
     for o in objs {
-        if let Info::Style {
-            name,
-            height,
-            width,
-            font,
-            bigfont,
-        } = &o.info
-        {
+        if let Info::Style { name, height, width, font, bigfont } = &o.info {
             w.g(0, "STYLE");
             w.g(5, hex(o.handle));
             w.text(2, name, false);
@@ -253,24 +175,11 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(0, "ENDSEC");
 
     // ---- blocks: definitions and paper-space layouts
-    let ctx = Ctx {
-        objs,
-        names: &names,
-        children: &children,
-        book: &book,
-        arrow: hdr.dimasz
-            * if hdr.dimscale > 0.0 {
-                hdr.dimscale
-            } else {
-                1.0
-            },
-    };
+    let ctx = Ctx { objs, names: &names, children: &children, book: &book, arrow: hdr.dimasz * if hdr.dimscale > 0.0 { hdr.dimscale } else { 1.0 } };
     w.g(0, "SECTION");
     w.g(2, "BLOCKS");
     for o in &records {
-        let Info::BlockRecord { base, .. } = &o.info else {
-            continue;
-        };
+        let Info::BlockRecord { base, .. } = &o.info else { continue };
         if o.handle == model {
             continue;
         }
@@ -314,16 +223,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(2, "OBJECTS");
     for o in objs {
         match &o.info {
-            Info::Layout {
-                name,
-                tab,
-                block,
-                paper_w,
-                paper_h,
-                units,
-                rot,
-                paper,
-            } => {
+            Info::Layout { name, tab, block, paper_w, paper_h, units, rot, paper } => {
                 w.g(0, "LAYOUT");
                 w.g(5, hex(o.handle));
                 w.g(100, "AcDbPlotSettings");
@@ -346,13 +246,7 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
             }
             // groups, with the dictionary entries that name them
             Info::Dict(entries) => {
-                let groups: Vec<&(String, u64)> = entries
-                    .iter()
-                    .filter(|(_, h)| {
-                        objs.binary_search_by_key(h, |x| x.handle)
-                            .is_ok_and(|k| objs[k].ty == "GROUP")
-                    })
-                    .collect();
+                let groups: Vec<&(String, u64)> = entries.iter().filter(|(_, h)| objs.binary_search_by_key(h, |x| x.handle).is_ok_and(|k| objs[k].ty == "GROUP")).collect();
                 if !groups.is_empty() {
                     w.g(0, "DICTIONARY");
                     w.g(5, hex(o.handle));
@@ -389,11 +283,7 @@ struct Ctx<'a> {
 impl Ctx<'_> {
     fn common(&self, w: &mut W, o: &Obj, e: &EntCommon) {
         w.g(5, hex(o.handle));
-        w.text(
-            8,
-            self.names.get(&e.layer).map_or("0", |s| s.as_str()),
-            false,
-        );
+        w.text(8, self.names.get(&e.layer).map_or("0", |s| s.as_str()), false);
         match e.lt {
             Lt::ByLayer => {}
             Lt::ByBlock => w.g(6, "BYBLOCK"),
@@ -413,10 +303,7 @@ impl Ctx<'_> {
             Col::ByBlock => w.g(62, 0),
             Col::Aci(i) => w.g(62, i),
             Col::Rgb(c) => {
-                w.g(
-                    62,
-                    crate::style::rgb_to_aci([(c >> 16) as u8, (c >> 8) as u8, c as u8]),
-                );
+                w.g(62, crate::style::rgb_to_aci([(c >> 16) as u8, (c >> 8) as u8, c as u8]));
                 w.g(420, c);
             }
         }
@@ -448,46 +335,15 @@ impl Ctx<'_> {
     /// the attached MTEXT, and so do we: the hook is an arrow-length horizontal segment ending at the last vertex,
     /// added when the last segment is steeper than 15 degrees.
     fn leader(&self, w: &mut W, o: &Obj) {
-        let f = |c: i32, g: &[(i32, V)]| {
-            g.iter().find_map(|(k, v)| {
-                if *k == c {
-                    if let V::F(x) = v {
-                        Some(*x)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-        };
-        let annot = o.g.iter().find_map(|(c, v)| {
-            if *c == 340 {
-                if let V::Hex(h) = v {
-                    Some(*h)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        });
-        let mtext = annot
-            .and_then(|a| self.objs.binary_search_by_key(&a, |x| x.handle).ok())
-            .map(|k| &self.objs[k])
-            .filter(|m| m.ty == "MTEXT");
+        let f = |c: i32, g: &[(i32, V)]| g.iter().find_map(|(k, v)| if *k == c { if let V::F(x) = v { Some(*x) } else { None } } else { None });
+        let annot = o.g.iter().find_map(|(c, v)| if *c == 340 { if let V::Hex(h) = v { Some(*h) } else { None } } else { None });
+        let mtext = annot.and_then(|a| self.objs.binary_search_by_key(&a, |x| x.handle).ok()).map(|k| &self.objs[k]).filter(|m| m.ty == "MTEXT");
         let mut pts = vec![];
         let mut it = o.g.iter();
         while let Some((c, v)) = it.next() {
             if let (10, V::F(x)) = (c, v) {
-                let y = it
-                    .next()
-                    .and_then(|(_, v)| if let V::F(y) = v { Some(*y) } else { None })
-                    .unwrap_or(0.0);
-                let z = it
-                    .next()
-                    .and_then(|(_, v)| if let V::F(z) = v { Some(*z) } else { None })
-                    .unwrap_or(0.0);
+                let y = it.next().and_then(|(_, v)| if let V::F(y) = v { Some(*y) } else { None }).unwrap_or(0.0);
+                let z = it.next().and_then(|(_, v)| if let V::F(z) = v { Some(*z) } else { None }).unwrap_or(0.0);
                 pts.push([*x, y, z]);
             }
         }
@@ -497,20 +353,8 @@ impl Ctx<'_> {
         let cadforge = mtext.zip(pts.last()).is_some_and(|(m, l)| {
             let close = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0);
             let h = f(40, &o.g).or_else(|| f(40, &m.g)).unwrap_or(0.0);
-            let attach = m.g.iter().find_map(|(c, v)| {
-                if *c == 71 {
-                    if let V::I(x) = v {
-                        Some(*x)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            });
-            attach == Some(4)
-                && close(f(10, &m.g).unwrap_or(f64::NAN), l[0] + 0.4 * h)
-                && close(f(20, &m.g).unwrap_or(f64::NAN), l[1])
+            let attach = m.g.iter().find_map(|(c, v)| if *c == 71 { if let V::I(x) = v { Some(*x) } else { None } } else { None });
+            attach == Some(4) && close(f(10, &m.g).unwrap_or(f64::NAN), l[0] + 0.4 * h) && close(f(20, &m.g).unwrap_or(f64::NAN), l[1])
         });
         let mut hook = false;
         if mtext.is_some() && pts.len() >= 2 && !cadforge {
@@ -519,32 +363,10 @@ impl Ctx<'_> {
             let along = dx * xd[0] + dy * xd[1];
             let across = -dx * xd[1] + dy * xd[0];
             if across.abs() > along.abs() * 15f64.to_radians().tan() {
-                let style = o.g.iter().find_map(|(c, v)| {
-                    if *c == 3 {
-                        if let V::Name(h) = v {
-                            Some(*h)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                });
-                let len = style
-                    .and_then(|h| self.objs.binary_search_by_key(&h, |x| x.handle).ok())
-                    .and_then(|k| {
-                        if let Info::DimStyle { arrow, .. } = &self.objs[k].info {
-                            *arrow
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or(self.arrow);
+                let style = o.g.iter().find_map(|(c, v)| if *c == 3 { if let V::Name(h) = v { Some(*h) } else { None } } else { None });
+                let len = style.and_then(|h| self.objs.binary_search_by_key(&h, |x| x.handle).ok()).and_then(|k| if let Info::DimStyle { arrow, .. } = &self.objs[k].info { *arrow } else { None }).unwrap_or(self.arrow);
                 let s = if along < 0.0 { -1.0 } else { 1.0 };
-                pts.insert(
-                    pts.len() - 1,
-                    [b[0] - xd[0] * len * s, b[1] - xd[1] * len * s, b[2]],
-                );
+                pts.insert(pts.len() - 1, [b[0] - xd[0] * len * s, b[1] - xd[1] * len * s, b[2]]);
                 hook = true;
             }
         }
@@ -554,9 +376,7 @@ impl Ctx<'_> {
                 (76, _) => {
                     w.g(75, hook as i32);
                     if f(40, &o.g).is_none() {
-                        if let Some(h) = mtext
-                            .and_then(|m| f(43, &m.g).filter(|h| *h > 0.0).or_else(|| f(40, &m.g)))
-                        {
+                        if let Some(h) = mtext.and_then(|m| f(43, &m.g).filter(|h| *h > 0.0).or_else(|| f(40, &m.g))) {
                             w.g(40, h);
                         }
                     }
@@ -594,11 +414,7 @@ impl Ctx<'_> {
         }
         let follows = o.g.iter().any(|(c, v)| *c == 66 && matches!(v, V::I(1)));
         if follows {
-            let want = if o.ty == "POLYLINE" {
-                "VERTEX"
-            } else {
-                "ATTRIB"
-            };
+            let want = if o.ty == "POLYLINE" { "VERTEX" } else { "ATTRIB" };
             if let Some(kids) = self.children.get(&o.handle) {
                 for &k in kids {
                     let c = &self.objs[k];
@@ -613,11 +429,7 @@ impl Ctx<'_> {
             }
             w.g(0, "SEQEND");
             w.g(5, "0");
-            w.text(
-                8,
-                self.names.get(&e.layer).map_or("0", |s| s.as_str()),
-                false,
-            );
+            w.text(8, self.names.get(&e.layer).map_or("0", |s| s.as_str()), false);
         }
     }
 }

@@ -23,26 +23,10 @@ impl Topo {
     pub fn new(m: &Mesh) -> Topo {
         let mut w = Welder::default();
         let ids: Vec<u32> = m.vertices.iter().map(|p| w.add(*p)).collect();
-        let tris: Vec<[u32; 3]> = m
-            .faces
-            .iter()
-            .map(|f| [ids[f[0] as usize], ids[f[1] as usize], ids[f[2] as usize]])
-            .collect();
+        let tris: Vec<[u32; 3]> = m.faces.iter().map(|f| [ids[f[0] as usize], ids[f[1] as usize], ids[f[2] as usize]]).collect();
         let pos = w.vertices;
-        let welded = Mesh {
-            vertices: pos.clone(),
-            faces: tris.clone(),
-        };
-        let normal: Vec<V3> = tris
-            .iter()
-            .map(|f| {
-                if f[0] == f[1] || f[1] == f[2] || f[0] == f[2] {
-                    V3::default()
-                } else {
-                    tri_normal(&welded, f)
-                }
-            })
-            .collect();
+        let welded = Mesh { vertices: pos.clone(), faces: tris.clone() };
+        let normal: Vec<V3> = tris.iter().map(|f| if f[0] == f[1] || f[1] == f[2] || f[0] == f[2] { V3::default() } else { tri_normal(&welded, f) }).collect();
         let mut edges: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
         for (i, f) in tris.iter().enumerate() {
             if normal[i].len() < 0.5 {
@@ -52,12 +36,7 @@ impl Topo {
                 edges.entry((a.min(b), a.max(b))).or_default().push(i);
             }
         }
-        Topo {
-            pos,
-            tris,
-            normal,
-            edges,
-        }
+        Topo { pos, tris, normal, edges }
     }
 
     pub fn live(&self, f: usize) -> bool {
@@ -128,10 +107,7 @@ pub fn clean(m: &Mesh) -> (Mesh, CleanReport) {
         }
         faces.push(*f);
     }
-    let mut out = Mesh {
-        vertices: t.pos,
-        faces,
-    };
+    let mut out = Mesh { vertices: t.pos, faces };
     compact(&mut out);
     rep.merged_vertices = m.vertices.len().saturating_sub(out.vertices.len());
     (out, rep)
@@ -165,11 +141,7 @@ pub fn components(m: &Mesh) -> Vec<Mesh> {
         x
     }
     for (_, f) in t.live_faces() {
-        let (a, b, c) = (
-            find(&mut parent, f[0] as usize),
-            find(&mut parent, f[1] as usize),
-            find(&mut parent, f[2] as usize),
-        );
+        let (a, b, c) = (find(&mut parent, f[0] as usize), find(&mut parent, f[1] as usize), find(&mut parent, f[2] as usize));
         parent[b] = a;
         parent[c] = a;
     }
@@ -184,10 +156,7 @@ pub fn components(m: &Mesh) -> Vec<Mesh> {
     groups
         .into_iter()
         .map(|(_, faces)| {
-            let mut mesh = Mesh {
-                vertices: t.pos.clone(),
-                faces,
-            };
+            let mut mesh = Mesh { vertices: t.pos.clone(), faces };
             compact(&mut mesh);
             mesh
         })
@@ -227,14 +196,7 @@ pub fn check(m: &Mesh) -> Check {
             _ => {}
         }
     }
-    Check {
-        open_edges: open,
-        bad_edges: bad,
-        volume: mesh_volume(&Mesh {
-            vertices: t.pos.clone(),
-            faces: t.live_faces().map(|(_, f)| *f).collect(),
-        }),
-    }
+    Check { open_edges: open, bad_edges: bad, volume: mesh_volume(&Mesh { vertices: t.pos.clone(), faces: t.live_faces().map(|(_, f)| *f).collect() }) }
 }
 
 // ---------------------------------------------------------------- shelling
@@ -261,9 +223,7 @@ fn offset_vector(normals: &[V3]) -> V3 {
         row[i] += 1e-9;
     }
     for col in 0..3 {
-        let piv = (col..3)
-            .max_by(|x, y| a[*x][col].abs().total_cmp(&a[*y][col].abs()))
-            .unwrap_or(col);
+        let piv = (col..3).max_by(|x, y| a[*x][col].abs().total_cmp(&a[*y][col].abs())).unwrap_or(col);
         a.swap(col, piv);
         let d = a[col][col];
         for j in col..4 {
@@ -303,23 +263,9 @@ pub fn shell(m: &Mesh, open: &[usize], thickness: f64) -> Result<Mesh, String> {
             around[*v as usize].push(t.normal[i]);
         }
     }
-    let moved: Vec<V3> = (0..n)
-        .map(|i| {
-            if around[i].is_empty() {
-                t.pos[i]
-            } else {
-                t.pos[i].sub(offset_vector(&around[i]).scale(thickness))
-            }
-        })
-        .collect();
-    let (hi, lo) = if thickness > 0.0 {
-        (t.pos.clone(), moved)
-    } else {
-        (moved, t.pos.clone())
-    };
-    let kept: Vec<usize> = (0..t.tris.len())
-        .filter(|f| t.live(*f) && !removed.contains(f))
-        .collect();
+    let moved: Vec<V3> = (0..n).map(|i| if around[i].is_empty() { t.pos[i] } else { t.pos[i].sub(offset_vector(&around[i]).scale(thickness)) }).collect();
+    let (hi, lo) = if thickness > 0.0 { (t.pos.clone(), moved) } else { (moved, t.pos.clone()) };
+    let kept: Vec<usize> = (0..t.tris.len()).filter(|f| t.live(*f) && !removed.contains(f)).collect();
     let off = n as u32;
     let mut faces: Vec<[u32; 3]> = kept.iter().map(|&f| t.tris[f]).collect();
     faces.extend(kept.iter().map(|&f| {
@@ -339,12 +285,7 @@ pub fn shell(m: &Mesh, open: &[usize], thickness: f64) -> Result<Mesh, String> {
     let mut vertices = hi.clone();
     vertices.extend(lo.iter().copied());
     let mut out = Mesh { vertices, faces };
-    let full = |p: &[V3]| {
-        mesh_volume(&Mesh {
-            vertices: p.to_vec(),
-            faces: t.live_faces().map(|(_, f)| *f).collect(),
-        })
-    };
+    let full = |p: &[V3]| mesh_volume(&Mesh { vertices: p.to_vec(), faces: t.live_faces().map(|(_, f)| *f).collect() });
     let (outer_vol, inner_vol) = (full(&hi), full(&lo));
     if inner_vol <= 1e-12 || inner_vol >= outer_vol {
         return Err("The shell thickness is too large for this solid.".into());
@@ -415,15 +356,7 @@ mod tests {
         let a = box_mesh(0.0, 0.0, 0.0, 1.0, 1.0, 1.0, "A").mesh();
         let b = box_mesh(5.0, 0.0, 0.0, 2.0, 2.0, 2.0, "B").mesh();
         let off = a.vertices.len() as u32;
-        let both = Mesh {
-            vertices: a.vertices.iter().chain(&b.vertices).copied().collect(),
-            faces: a
-                .faces
-                .iter()
-                .copied()
-                .chain(b.faces.iter().map(|f| [f[0] + off, f[1] + off, f[2] + off]))
-                .collect(),
-        };
+        let both = Mesh { vertices: a.vertices.iter().chain(&b.vertices).copied().collect(), faces: a.faces.iter().copied().chain(b.faces.iter().map(|f| [f[0] + off, f[1] + off, f[2] + off])).collect() };
         let parts = components(&both);
         assert_eq!(parts.len(), 2);
         let mut vols: Vec<f64> = parts.iter().map(mesh_volume).collect();
@@ -443,11 +376,7 @@ mod tests {
         let top = (0..m.faces.len()).find(|f| t.normal[*f].z > 0.99).unwrap();
         let s = shell(&m, &t.planar_region(top), 1.0).unwrap();
         // outer 1000 minus the cavity 8 x 8 x 9 (open to the top)
-        assert!(
-            (mesh_volume(&s) - (1000.0 - 8.0 * 8.0 * 9.0)).abs() < 1e-6,
-            "{}",
-            mesh_volume(&s)
-        );
+        assert!((mesh_volume(&s) - (1000.0 - 8.0 * 8.0 * 9.0)).abs() < 1e-6, "{}", mesh_volume(&s));
         assert!(is_watertight(&s));
         let sealed = shell(&m, &[], 2.0).unwrap();
         assert!((mesh_volume(&sealed) - (1000.0 - 6.0 * 6.0 * 6.0)).abs() < 1e-6);
@@ -460,21 +389,8 @@ mod tests {
         let c = cylinder_mesh(0.0, 0.0, 0.0, 10.0, 20.0, 64, "C").mesh();
         let s = shell(&c, &[], 2.0).unwrap();
         let hollow = mesh_volume(&c) - PI * 8.0 * 8.0 * 16.0;
-        assert!(
-            (mesh_volume(&s) - hollow).abs() / hollow < 0.02,
-            "{} vs {hollow}",
-            mesh_volume(&s)
-        );
-        let out = shell(
-            &box_mesh(0.0, 0.0, 0.0, 10.0, 10.0, 10.0, "B").mesh(),
-            &[],
-            -1.0,
-        )
-        .unwrap();
-        assert!(
-            (mesh_volume(&out) - (12.0f64.powi(3) - 1000.0)).abs() < 1e-6,
-            "{}",
-            mesh_volume(&out)
-        );
+        assert!((mesh_volume(&s) - hollow).abs() / hollow < 0.02, "{} vs {hollow}", mesh_volume(&s));
+        let out = shell(&box_mesh(0.0, 0.0, 0.0, 10.0, 10.0, 10.0, "B").mesh(), &[], -1.0).unwrap();
+        assert!((mesh_volume(&out) - (12.0f64.powi(3) - 1000.0)).abs() < 1e-6, "{}", mesh_volume(&out));
     }
 }

@@ -79,11 +79,7 @@ impl TextOpts {
                 self.txt = (!t.is_empty() && t != "<>").then_some(t);
             }
             "Angle" => {
-                if let Some(a) = c
-                    .angle(ps("Specify angle of dimension text"))
-                    .await?
-                    .value()
-                {
+                if let Some(a) = c.angle(ps("Specify angle of dimension text")).await?.value() {
                     self.angle = Some(a);
                 }
             }
@@ -111,30 +107,17 @@ impl TextOpts {
 /// polyline.
 fn arc_at(c: &Ctx, e: &Entity, at: Pt) -> Option<(Pt, f64, f64, f64)> {
     let segs = c.doc(|d| segs_of(e, d).to_vec());
-    let best = segs
-        .iter()
-        .min_by(|a, b| a.nearest(at).2.total_cmp(&b.nearest(at).2))?;
+    let best = segs.iter().min_by(|a, b| a.nearest(at).2.total_cmp(&b.nearest(at).2))?;
     match *best {
-        Seg::A {
-            c: ctr, r, a0, sw, ..
-        } if sw >= 0.0 => Some((ctr, r, a0, sw)),
-        Seg::A {
-            c: ctr, r, a0, sw, ..
-        } => Some((ctr, r, a0 + sw, -sw)),
+        Seg::A { c: ctr, r, a0, sw, .. } if sw >= 0.0 => Some((ctr, r, a0, sw)),
+        Seg::A { c: ctr, r, a0, sw, .. } => Some((ctr, r, a0 + sw, -sw)),
         Seg::L { .. } => None,
     }
 }
 
 async fn dimarc(c: Ctx, _a: Args) -> CmdResult<()> {
-    let sel = c
-        .entity(
-            ps("Select arc or polyline arc segment")
-                .filter(|e| matches!(e.kind, Kind::Arc { .. } | Kind::Pline { .. })),
-        )
-        .await?;
-    let EntR::Entity { id, pt: at, .. } = sel else {
-        return Ok(());
-    };
+    let sel = c.entity(ps("Select arc or polyline arc segment").filter(|e| matches!(e.kind, Kind::Arc { .. } | Kind::Pline { .. }))).await?;
+    let EntR::Entity { id, pt: at, .. } = sel else { return Ok(()) };
     let Some((ctr, r, a0, sw)) = c.entity_by_id(id).and_then(|e| arc_at(&c, &e, at)) else {
         c.log_error("Select an arc or a polyline arc segment.");
         return Ok(());
@@ -145,20 +128,11 @@ async fn dimarc(c: Ctx, _a: Args) -> CmdResult<()> {
         let (ds2, txt) = (ds.clone(), opts.txt.clone());
         let make = move |dp: Pt| {
             dim_entity(DimType::Arc, &ds2, |d| {
-                (d.c, d.p1, d.p2, d.dp, d.txt) =
-                    (Some(ctr), Some(p1), Some(p2), Some(dp), txt.clone());
+                (d.c, d.p1, d.p2, d.dp, d.txt) = (Some(ctr), Some(p1), Some(p2), Some(dp), txt.clone());
             })
         };
         let m2 = make.clone();
-        let reply = c
-            .point(
-                ps("Specify arc length dimension location, or")
-                    .options(&["Mtext", "Text", "Angle", "Partial", "Leader"])
-                    .base(ctr)
-                    .no_ortho()
-                    .preview(move |_, p| vec![pv(m2(p))]),
-            )
-            .await?;
+        let reply = c.point(ps("Specify arc length dimension location, or").options(&["Mtext", "Text", "Angle", "Partial", "Leader"]).base(ctr).no_ortho().preview(move |_, p| vec![pv(m2(p))])).await?;
         match reply.kw() {
             Some("Partial") => {
                 // parameter of a picked point along the arc, clamped to its ends
@@ -167,20 +141,8 @@ async fn dimarc(c: Ctx, _a: Args) -> CmdResult<()> {
                     s if s - sw < TAU - s => sw,
                     _ => 0.0,
                 };
-                let Some(f) = c
-                    .point(ps("Specify first point for arc length dimension").base(ctr))
-                    .await?
-                    .pt()
-                else {
-                    continue;
-                };
-                let Some(g) = c
-                    .point(ps("Specify second point for arc length dimension").base(ctr))
-                    .await?
-                    .pt()
-                else {
-                    continue;
-                };
+                let Some(f) = c.point(ps("Specify first point for arc length dimension").base(ctr)).await?.pt() else { continue };
+                let Some(g) = c.point(ps("Specify second point for arc length dimension").base(ctr)).await?.pt() else { continue };
                 let (t0, t1) = (t(f).min(t(g)), t(f).max(t(g)));
                 if t1 - t0 < 1e-9 {
                     c.log_error("The two points are the same.");
@@ -211,66 +173,26 @@ fn ray_circle(o: Pt, dir: Pt, ctr: Pt, r: f64) -> Option<Pt> {
         return None;
     }
     let (t1, t2) = (-b - disc.sqrt(), -b + disc.sqrt());
-    [t1, t2]
-        .into_iter()
-        .find(|t| *t > 1e-9)
-        .map(|t| o + dir * t)
+    [t1, t2].into_iter().find(|t| *t > 1e-9).map(|t| o + dir * t)
 }
 
 async fn dimjogged(c: Ctx, _a: Args) -> CmdResult<()> {
-    let sel = c
-        .entity(ps("Select arc or circle").filter(is_arc_or_circle))
-        .await?;
-    let EntR::Entity { id, pt: at, .. } = sel else {
-        return Ok(());
-    };
-    let Some(Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. }) =
-        c.entity_by_id(id).map(|e| e.kind)
-    else {
-        return Ok(());
-    };
-    let Some(o) = c
-        .point(ps("Specify center location override").base(ctr))
-        .await?
-        .pt()
-    else {
-        return Ok(());
-    };
+    let sel = c.entity(ps("Select arc or circle").filter(is_arc_or_circle)).await?;
+    let EntR::Entity { id, pt: at, .. } = sel else { return Ok(()) };
+    let Some(Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. }) = c.entity_by_id(id).map(|e| e.kind) else { return Ok(()) };
+    let Some(o) = c.point(ps("Specify center location override").base(ctr)).await?.pt() else { return Ok(()) };
     let (ds, mut opts) = (cur_ds(&c), TextOpts::default());
     // the dimension line runs from the centre override through the location to the arc
-    let on_arc = move |dp: Pt| {
-        ray_circle(o, unit(dp - o), ctr, r).unwrap_or_else(|| {
-            ctr + unit(if dist(ctr, dp) > 1e-9 {
-                dp - ctr
-            } else {
-                at - ctr
-            }) * r
-        })
-    };
+    let on_arc = move |dp: Pt| ray_circle(o, unit(dp - o), ctr, r).unwrap_or_else(|| ctr + unit(if dist(ctr, dp) > 1e-9 { dp - ctr } else { at - ctr }) * r);
     let make = move |ds: &str, txt: Option<String>, dp: Pt, jog: Option<Pt>| {
         let p = on_arc(dp);
         dim_entity(DimType::Jog, ds, |d| {
-            (d.c, d.p1, d.pt, d.dp, d.p2, d.txt) = (
-                Some(ctr),
-                Some(o),
-                Some(p),
-                Some(dp),
-                Some(jog.unwrap_or_else(|| mid(o, p))),
-                txt,
-            );
+            (d.c, d.p1, d.pt, d.dp, d.p2, d.txt) = (Some(ctr), Some(o), Some(p), Some(dp), Some(jog.unwrap_or_else(|| mid(o, p))), txt);
         })
     };
     let dp = loop {
         let (ds2, txt) = (ds.clone(), opts.txt.clone());
-        let reply = c
-            .point(
-                ps("Specify dimension line location, or")
-                    .options(&["Mtext", "Text", "Angle"])
-                    .base(o)
-                    .no_ortho()
-                    .preview(move |_, p| vec![pv(make(&ds2, txt.clone(), p, None))]),
-            )
-            .await?;
+        let reply = c.point(ps("Specify dimension line location, or").options(&["Mtext", "Text", "Angle"]).base(o).no_ortho().preview(move |_, p| vec![pv(make(&ds2, txt.clone(), p, None))])).await?;
         match reply.kw() {
             Some(kw) => {
                 opts.handle(&c, kw).await?;
@@ -282,14 +204,7 @@ async fn dimjogged(c: Ctx, _a: Args) -> CmdResult<()> {
         }
     };
     let (ds2, txt) = (ds.clone(), opts.txt.clone());
-    let reply = c
-        .point(
-            ps("Specify jog location")
-                .base(o)
-                .no_ortho()
-                .preview(move |_, p| vec![pv(make(&ds2, txt.clone(), dp, Some(p)))]),
-        )
-        .await?;
+    let reply = c.point(ps("Specify jog location").base(o).no_ortho().preview(move |_, p| vec![pv(make(&ds2, txt.clone(), dp, Some(p)))])).await?;
     let Some(jog) = reply.pt() else { return Ok(()) };
     c.add(opts.finish(&c, make(&ds, opts.txt.clone(), dp, Some(jog))));
     Ok(())
@@ -298,9 +213,7 @@ async fn dimjogged(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- DIMORDINATE
 
 async fn dimordinate(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(f) = c.point(ps("Specify feature location")).await?.pt() else {
-        return Ok(());
-    };
+    let Some(f) = c.point(ps("Specify feature location")).await?.pt() else { return Ok(()) };
     let (ds, mut opts) = (cur_ds(&c), TextOpts::default());
     let mut forced: Option<bool> = None;
     loop {
@@ -310,20 +223,11 @@ async fn dimordinate(c: Ctx, _a: Args) -> CmdResult<()> {
         let make = move |end: Pt| {
             let xd = forced.unwrap_or((end.y - f.y).abs() > (end.x - f.x).abs());
             dim_entity(DimType::Ord, &ds2, |d| {
-                (d.c, d.pt, d.dp, d.xd, d.txt) =
-                    (Some(pt(0.0, 0.0)), Some(f), Some(end), xd, txt.clone());
+                (d.c, d.pt, d.dp, d.xd, d.txt) = (Some(pt(0.0, 0.0)), Some(f), Some(end), xd, txt.clone());
             })
         };
         let m2 = make.clone();
-        let reply = c
-            .point(
-                ps("Specify leader endpoint or")
-                    .options(&["Xdatum", "Ydatum", "Mtext", "Text", "Angle"])
-                    .base(f)
-                    .no_ortho()
-                    .preview(move |_, p| vec![pv(m2(p))]),
-            )
-            .await?;
+        let reply = c.point(ps("Specify leader endpoint or").options(&["Xdatum", "Ydatum", "Mtext", "Text", "Angle"]).base(f).no_ortho().preview(move |_, p| vec![pv(m2(p))])).await?;
         match reply.kw() {
             Some("Xdatum") => forced = Some(true),
             Some("Ydatum") => forced = Some(false),
@@ -353,14 +257,7 @@ enum Qdim {
 
 impl Qdim {
     fn label(self) -> &'static str {
-        [
-            "Continuous",
-            "Staggered",
-            "Baseline",
-            "Ordinate",
-            "Radius",
-            "Diameter",
-        ][self as usize]
+        ["Continuous", "Staggered", "Baseline", "Ordinate", "Radius", "Diameter"][self as usize]
     }
 }
 
@@ -395,32 +292,16 @@ fn features(ents: &[Entity]) -> Features {
 }
 
 /// The dimensions QDIM creates for `kind` with the dimension line through `dp`.
-fn qdim_build(
-    kind: Qdim,
-    f: &Features,
-    dp: Pt,
-    datum: Option<Pt>,
-    ds: &str,
-    space: f64,
-) -> Vec<Entity> {
+fn qdim_build(kind: Qdim, f: &Features, dp: Pt, datum: Option<Pt>, ds: &str, space: f64) -> Vec<Entity> {
     if matches!(kind, Qdim::Radius | Qdim::Diameter) {
         return f
             .circles
             .iter()
             .map(|&(c, r)| {
                 let dir = unit(dp - c);
-                dim_entity(
-                    if kind == Qdim::Radius {
-                        DimType::Rad
-                    } else {
-                        DimType::Dia
-                    },
-                    ds,
-                    |d| {
-                        (d.c, d.pt, d.dp) =
-                            (Some(c), Some(c + dir * r), Some(c + dir * (r + space)));
-                    },
-                )
+                dim_entity(if kind == Qdim::Radius { DimType::Rad } else { DimType::Dia }, ds, |d| {
+                    (d.c, d.pt, d.dp) = (Some(c), Some(c + dir * r), Some(c + dir * (r + space)));
+                })
             })
             .collect();
     }
@@ -435,57 +316,23 @@ fn qdim_build(
     let mut pts = f.pts.clone();
     pts.sort_by(|a, b| key(a).total_cmp(&key(b)));
     pts.dedup_by(|a, b| (key(a) - key(b)).abs() < 1e-6);
-    let side = if (if horiz {
-        dp.y - bb.center().y
-    } else {
-        dp.x - bb.center().x
-    }) >= 0.0
-    {
-        1.0
-    } else {
-        -1.0
-    };
-    let at = |m: Pt, k: f64| {
-        if horiz {
-            pt(m.x, dp.y + side * k * space)
-        } else {
-            pt(dp.x + side * k * space, m.y)
-        }
-    };
+    let side = if (if horiz { dp.y - bb.center().y } else { dp.x - bb.center().x }) >= 0.0 { 1.0 } else { -1.0 };
+    let at = |m: Pt, k: f64| if horiz { pt(m.x, dp.y + side * k * space) } else { pt(dp.x + side * k * space, m.y) };
     let lin = |a: Pt, b: Pt, k: f64| {
         dim_entity(DimType::Lin, ds, |d| {
-            (d.p1, d.p2, d.ang, d.dp) = (
-                Some(a),
-                Some(b),
-                Some(if horiz { 0.0 } else { PI / 2.0 }),
-                Some(at(mid(a, b), k)),
-            );
+            (d.p1, d.p2, d.ang, d.dp) = (Some(a), Some(b), Some(if horiz { 0.0 } else { PI / 2.0 }), Some(at(mid(a, b), k)));
         })
     };
     let origin = datum.unwrap_or(pts[0]);
     match kind {
         Qdim::Continuous => pts.windows(2).map(|w| lin(w[0], w[1], 0.0)).collect(),
-        Qdim::Staggered => pts
-            .windows(2)
-            .enumerate()
-            .map(|(i, w)| lin(w[0], w[1], (i % 2) as f64))
-            .collect(),
-        Qdim::Baseline => pts
-            .iter()
-            .filter(|p| (key(p) - key(&origin)).abs() > 1e-6)
-            .enumerate()
-            .map(|(i, p)| lin(origin, *p, i as f64))
-            .collect(),
+        Qdim::Staggered => pts.windows(2).enumerate().map(|(i, w)| lin(w[0], w[1], (i % 2) as f64)).collect(),
+        Qdim::Baseline => pts.iter().filter(|p| (key(p) - key(&origin)).abs() > 1e-6).enumerate().map(|(i, p)| lin(origin, *p, i as f64)).collect(),
         _ => pts
             .iter()
             .map(|p| {
                 dim_entity(DimType::Ord, ds, |d| {
-                    (d.c, d.pt, d.dp, d.xd) = (
-                        Some(origin),
-                        Some(*p),
-                        Some(if horiz { pt(p.x, dp.y) } else { pt(dp.x, p.y) }),
-                        horiz,
-                    );
+                    (d.c, d.pt, d.dp, d.xd) = (Some(origin), Some(*p), Some(if horiz { pt(p.x, dp.y) } else { pt(dp.x, p.y) }), horiz);
                 })
             })
             .collect(),
@@ -496,14 +343,7 @@ fn qdim_build(
 async fn qdim_edit(c: &Ctx, f: &mut Features) -> CmdResult<()> {
     let tol = c.app(|a| a.aperture_world(Some(10.0)));
     loop {
-        match c
-            .point(
-                ps("Indicate dimension point to remove, or")
-                    .options(&["Add", "eXit"])
-                    .default_str("eXit"),
-            )
-            .await?
-        {
+        match c.point(ps("Indicate dimension point to remove, or").options(&["Add", "eXit"]).default_str("eXit")).await? {
             PointR::Kw(k) if k == "Add" => {
                 if let Some(p) = c.point(ps("Indicate dimension point to add")).await?.pt() {
                     f.pts.push(p);
@@ -532,47 +372,16 @@ async fn qdim(c: Ctx, _a: Args) -> CmdResult<()> {
     let (mut kind, mut datum) = (Qdim::Continuous, None);
     loop {
         let (f2, ds2) = (feat.clone(), ds.clone());
-        let opts = [
-            "Continuous",
-            "Staggered",
-            "Baseline",
-            "Ordinate",
-            "Radius",
-            "Diameter",
-            "datumPoint",
-            "Edit",
-        ];
-        let reply = c
-            .point(
-                ps("Specify dimension line position, or")
-                    .options(&opts)
-                    .default_str(kind.label())
-                    .no_ortho()
-                    .preview(move |_, p| pvs(qdim_build(kind, &f2, p, datum, &ds2, space))),
-            )
-            .await?;
+        let opts = ["Continuous", "Staggered", "Baseline", "Ordinate", "Radius", "Diameter", "datumPoint", "Edit"];
+        let reply = c.point(ps("Specify dimension line position, or").options(&opts).default_str(kind.label()).no_ortho().preview(move |_, p| pvs(qdim_build(kind, &f2, p, datum, &ds2, space)))).await?;
         let dp = match reply {
             PointR::Pt(p) => p,
             PointR::Enter(_) => c.app(|a| a.rt.cursor.pt),
             PointR::Kw(k) => {
                 match k.as_str() {
-                    "datumPoint" => {
-                        datum = c.point(ps("Select new datum point")).await?.pt().or(datum)
-                    }
+                    "datumPoint" => datum = c.point(ps("Select new datum point")).await?.pt().or(datum),
                     "Edit" => qdim_edit(&c, &mut feat).await?,
-                    other => {
-                        kind = [
-                            Qdim::Continuous,
-                            Qdim::Staggered,
-                            Qdim::Baseline,
-                            Qdim::Ordinate,
-                            Qdim::Radius,
-                            Qdim::Diameter,
-                        ]
-                        .into_iter()
-                        .find(|q| q.label() == other)
-                        .unwrap_or(kind)
-                    }
+                    other => kind = [Qdim::Continuous, Qdim::Staggered, Qdim::Baseline, Qdim::Ordinate, Qdim::Radius, Qdim::Diameter].into_iter().find(|q| q.label() == other).unwrap_or(kind),
                 }
                 continue;
             }
@@ -598,31 +407,16 @@ fn breakable(doc: &Drawing, id: u64) -> bool {
 
 /// Breaks `(segment, from, to)` where the lines of dimension `id` cross other objects (all, or only `only`).
 fn auto_breaks(doc: &Drawing, id: u64, only: Option<u64>) -> Vec<(usize, f64, f64)> {
-    let Some(Entity {
-        kind: Kind::Dim(d), ..
-    }) = doc.by_id(id)
-    else {
-        return vec![];
-    };
+    let Some(Entity { kind: Kind::Dim(d), .. }) = doc.by_id(id) else { return vec![] };
     let mut plain = d.clone();
     plain.brk.clear();
     let geo = dim_geometry(&plain, &doc.settings);
     let gap = 1.5 * geo.style.asz * geo.style.scale; // DIMBRKGAP
-    let others: Vec<Seg> = doc
-        .entities()
-        .iter()
-        .filter(|e| {
-            e.id != id && (only.is_none() || only == Some(e.id)) && (e.is_curve() || is_dim(e))
-        })
-        .flat_map(|e| segs_of(e, doc).to_vec())
-        .collect();
+    let others: Vec<Seg> = doc.entities().iter().filter(|e| e.id != id && (only.is_none() || only == Some(e.id)) && (e.is_curve() || is_dim(e))).flat_map(|e| segs_of(e, doc).to_vec()).collect();
     let mut out = vec![];
     for (i, s) in geo.segs.iter().enumerate().filter(|(_, s)| s.is_line()) {
         let l = s.length();
-        for h in others
-            .iter()
-            .flat_map(|o| seg_intersect(s, o, false, false))
-        {
+        for h in others.iter().flat_map(|o| seg_intersect(s, o, false, false)) {
             let t = h.t1 * l;
             if t > gap / 2.0 && t < l - gap / 2.0 {
                 out.push((i, t - gap / 2.0, t + gap / 2.0));
@@ -634,25 +428,12 @@ fn auto_breaks(doc: &Drawing, id: u64, only: Option<u64>) -> Vec<(usize, f64, f6
 
 /// The break between two picked points along the dimension line nearest to the first.
 fn manual_break(doc: &Drawing, id: u64, p1: Pt, p2: Pt) -> Option<(usize, f64, f64)> {
-    let Some(Entity {
-        kind: Kind::Dim(d), ..
-    }) = doc.by_id(id)
-    else {
-        return None;
-    };
+    let Some(Entity { kind: Kind::Dim(d), .. }) = doc.by_id(id) else { return None };
     let mut plain = d.clone();
     plain.brk.clear();
     let geo = dim_geometry(&plain, &doc.settings);
-    let (i, s) = geo
-        .segs
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| s.is_line())
-        .min_by(|a, b| a.1.nearest(p1).2.total_cmp(&b.1.nearest(p1).2))?;
-    let (t1, t2) = (
-        s.project(p1).clamp(0.0, 1.0) * s.length(),
-        s.project(p2).clamp(0.0, 1.0) * s.length(),
-    );
+    let (i, s) = geo.segs.iter().enumerate().filter(|(_, s)| s.is_line()).min_by(|a, b| a.1.nearest(p1).2.total_cmp(&b.1.nearest(p1).2))?;
+    let (t1, t2) = (s.project(p1).clamp(0.0, 1.0) * s.length(), s.project(p2).clamp(0.0, 1.0) * s.length());
     (t1 != t2).then_some((i, t1.min(t2), t1.max(t2)))
 }
 
@@ -664,24 +445,10 @@ enum BreakMode {
 }
 
 async fn dimbreak(c: Ctx, _a: Args) -> CmdResult<()> {
-    let first = c
-        .entity(
-            ps("Select dimension to add/remove break or")
-                .options(&["Multiple"])
-                .filter(is_dim),
-        )
-        .await?;
+    let first = c.entity(ps("Select dimension to add/remove break or").options(&["Multiple"]).filter(is_dim)).await?;
     let (ids, mode, only) = match first {
         EntR::Entity { id, .. } => {
-            let (mode, only) = match c
-                .entity(
-                    ps("Select object to break dimension or")
-                        .options(&["Auto", "Manual", "Remove"])
-                        .allow_enter()
-                        .default_str("Auto"),
-                )
-                .await?
-            {
+            let (mode, only) = match c.entity(ps("Select object to break dimension or").options(&["Auto", "Manual", "Remove"]).allow_enter().default_str("Auto")).await? {
                 EntR::Kw(k) if k == "Manual" => (BreakMode::Manual, None),
                 EntR::Kw(k) if k == "Remove" => (BreakMode::Remove, None),
                 EntR::Entity { id: other, .. } => (BreakMode::Auto, Some(other)),
@@ -691,35 +458,14 @@ async fn dimbreak(c: Ctx, _a: Args) -> CmdResult<()> {
         }
         EntR::Kw(_) => {
             let ids = c.select(ps("Select dimensions").filter(is_dim)).await?.ents;
-            let mode = if c
-                .keyword(
-                    ps("Enter an option")
-                        .options(&["Break", "Remove"])
-                        .default_str("Break"),
-                )
-                .await?
-                .kw()
-                == Some("Remove")
-            {
-                BreakMode::Remove
-            } else {
-                BreakMode::Auto
-            };
+            let mode = if c.keyword(ps("Enter an option").options(&["Break", "Remove"]).default_str("Break")).await?.kw() == Some("Remove") { BreakMode::Remove } else { BreakMode::Auto };
             (ids, mode, None)
         }
         EntR::Enter => return Ok(()),
     };
     let manual = if mode == BreakMode::Manual {
-        let Some(p1) = c.point(ps("Specify first break point")).await?.pt() else {
-            return Ok(());
-        };
-        let Some(p2) = c
-            .point(ps("Specify second break point").base(p1))
-            .await?
-            .pt()
-        else {
-            return Ok(());
-        };
+        let Some(p1) = c.point(ps("Specify first break point")).await?.pt() else { return Ok(()) };
+        let Some(p2) = c.point(ps("Specify second break point").base(p1)).await?.pt() else { return Ok(()) };
         Some((p1, p2))
     } else {
         None
@@ -737,20 +483,12 @@ async fn dimbreak(c: Ctx, _a: Args) -> CmdResult<()> {
             });
             added += new.len();
             edit_dims(&c, &[id], |d| {
-                d.brk.extend(
-                    new.iter()
-                        .filter(|n| !d.brk.iter().any(|o| o.0 == n.0 && (o.1 - n.1).abs() < 1e-6))
-                        .copied()
-                        .collect::<Vec<_>>(),
-                );
+                d.brk.extend(new.iter().filter(|n| !d.brk.iter().any(|o| o.0 == n.0 && (o.1 - n.1).abs() < 1e-6)).copied().collect::<Vec<_>>());
             });
         }
     }
     if mode != BreakMode::Remove {
-        c.log(&format!(
-            "{added} dimension break{} added.",
-            if added == 1 { "" } else { "s" }
-        ));
+        c.log(&format!("{added} dimension break{} added.", if added == 1 { "" } else { "s" }));
     }
     Ok(())
 }
@@ -758,14 +496,8 @@ async fn dimbreak(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- DIMCENTER
 
 async fn dimcenter(c: Ctx, _a: Args) -> CmdResult<()> {
-    let sel = c
-        .entity(ps("Select arc or circle").filter(is_arc_or_circle))
-        .await?;
-    let Some(Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. }) =
-        sel.id().and_then(|i| c.entity_by_id(i)).map(|e| e.kind)
-    else {
-        return Ok(());
-    };
+    let sel = c.entity(ps("Select arc or circle").filter(is_arc_or_circle)).await?;
+    let Some(Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. }) = sel.id().and_then(|i| c.entity_by_id(i)).map(|e| e.kind) else { return Ok(()) };
     // DIMCEN: positive = centre mark, negative = centre lines
     let size = c.doc(|d| d.settings.cur_dim().cen * d.settings.cur_dim().scale);
     if size == 0.0 {
@@ -806,43 +538,22 @@ fn dim_dir(d: &DimData) -> Option<Pt> {
 
 async fn dimspace(c: Ctx, _a: Args) -> CmdResult<()> {
     let linear = |e: &Entity| matches!(&e.kind, Kind::Dim(d) if dim_dir(d).is_some());
-    let Some(base_id) = c
-        .entity(ps("Select base dimension").filter(linear))
-        .await?
-        .id()
-    else {
-        return Ok(());
-    };
-    let sel = c
-        .select(ps("Select dimensions to space").filter(linear))
-        .await?;
+    let Some(base_id) = c.entity(ps("Select base dimension").filter(linear)).await?.id() else { return Ok(()) };
+    let sel = c.select(ps("Select dimensions to space").filter(linear)).await?;
     let ids: Vec<u64> = sel.ents.into_iter().filter(|i| *i != base_id).collect();
     if ids.is_empty() {
         return Ok(());
     }
-    let Some(Kind::Dim(base)) = c.entity_by_id(base_id).map(|e| e.kind) else {
-        return Ok(());
-    };
+    let Some(Kind::Dim(base)) = c.entity_by_id(base_id).map(|e| e.kind) else { return Ok(()) };
     let auto = c.doc(|d| {
         let st = dim_style_of(&base, &d.settings);
         2.0 * st.txt * st.scale // Auto: twice the dimension text height
     });
-    let space = match c
-        .number(
-            ps("Enter value or")
-                .options(&["Auto"])
-                .default_str("Auto")
-                .min(0.0),
-        )
-        .await?
-    {
+    let space = match c.number(ps("Enter value or").options(&["Auto"]).default_str("Auto").min(0.0)).await? {
         NumR::Value(v) => v,
         _ => auto,
     };
-    let (dir, base_dp) = (
-        dim_dir(&base).unwrap_or(pt(1.0, 0.0)),
-        base.dp.unwrap_or(Pt::ZERO),
-    );
+    let (dir, base_dp) = (dim_dir(&base).unwrap_or(pt(1.0, 0.0)), base.dp.unwrap_or(Pt::ZERO));
     let n = perp(dir);
     let offset = |d: &DimData| dot(d.dp.unwrap_or(Pt::ZERO) - base_dp, n);
     // parallel dimensions keep their side of the base dimension and their order, and move to multiples of the spacing
@@ -870,10 +581,7 @@ async fn dimspace(c: Ctx, _a: Args) -> CmdResult<()> {
         });
     }
     if shifts.len() < ids.len() {
-        c.log(&format!(
-            "{} dimension(s) skipped: not parallel to the base dimension.",
-            ids.len() - shifts.len()
-        ));
+        c.log(&format!("{} dimension(s) skipped: not parallel to the base dimension.", ids.len() - shifts.len()));
     }
     Ok(())
 }
@@ -881,34 +589,14 @@ async fn dimspace(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- DIMEDIT / DIMTEDIT
 
 async fn dimedit(c: Ctx, _a: Args) -> CmdResult<()> {
-    let kind = c
-        .keyword(
-            ps("Enter type of dimension editing")
-                .options(&["Home", "New", "Rotate", "Oblique"])
-                .default_str("Home"),
-        )
-        .await?;
-    let Some(kind) = kind.kw().map(str::to_string) else {
-        return Ok(());
-    };
+    let kind = c.keyword(ps("Enter type of dimension editing").options(&["Home", "New", "Rotate", "Oblique"]).default_str("Home")).await?;
+    let Some(kind) = kind.kw().map(str::to_string) else { return Ok(()) };
     let mut text = None;
     let mut angle = None;
     match kind.as_str() {
-        "New" => {
-            text = Some(
-                c.string(ps("Enter new dimension text <>").raw())
-                    .await?
-                    .text,
-            )
-        }
+        "New" => text = Some(c.string(ps("Enter new dimension text <>").raw()).await?.text),
         "Rotate" => {
-            let Some(a) = c
-                .angle(ps("Specify angle for dimension text"))
-                .await?
-                .value()
-            else {
-                return Ok(());
-            };
+            let Some(a) = c.angle(ps("Specify angle for dimension text")).await?.value() else { return Ok(()) };
             angle = Some(a);
         }
         _ => {}
@@ -919,16 +607,11 @@ async fn dimedit(c: Ctx, _a: Args) -> CmdResult<()> {
     }
     match kind.as_str() {
         "Home" => edit_dims(&c, &ids, |d| (d.tp, d.tr) = (None, None)),
-        "New" => edit_dims(&c, &ids, |d| {
-            d.txt = text.clone().filter(|t| !t.is_empty() && t != "<>")
-        }),
+        "New" => edit_dims(&c, &ids, |d| d.txt = text.clone().filter(|t| !t.is_empty() && t != "<>")),
         "Rotate" => edit_dims(&c, &ids, |d| set_text_angle(&c, d, angle)),
         _ => {
             // Oblique: extension lines at the given angle (Enter restores perpendicular ones)
-            let theta = c
-                .angle(ps("Enter obliquing angle (press ENTER for none)").allow_enter())
-                .await?
-                .value();
+            let theta = c.angle(ps("Enter obliquing angle (press ENTER for none)").allow_enter()).await?.value();
             edit_dims(&c, &ids, |d| {
                 let Some(dir) = dim_dir(d) else { return };
                 d.obl = theta.map(|t| {
@@ -949,52 +632,22 @@ async fn dimedit(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn dimtedit(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(id) = c.entity(ps("Select dimension").filter(is_dim)).await?.id() else {
-        return Ok(());
-    };
-    let Some(Kind::Dim(dim)) = c.entity_by_id(id).map(|e| e.kind) else {
-        return Ok(());
-    };
+    let Some(id) = c.entity(ps("Select dimension").filter(is_dim)).await?.id() else { return Ok(()) };
+    let Some(Kind::Dim(dim)) = c.entity_by_id(id).map(|e| e.kind) else { return Ok(()) };
     let moved = dim.clone();
-    let reply = c
-        .point(
-            ps("Specify new location for dimension text or")
-                .options(&["Left", "Right", "Center", "Home", "Angle"])
-                .no_ortho()
-                .preview(move |_, p| {
-                    vec![pv(Entity::dim(DimData {
-                        tp: Some(p),
-                        ..moved.clone()
-                    }))]
-                }),
-        )
-        .await?;
+    let reply = c.point(ps("Specify new location for dimension text or").options(&["Left", "Right", "Center", "Home", "Angle"]).no_ortho().preview(move |_, p| vec![pv(Entity::dim(DimData { tp: Some(p), ..moved.clone() }))])).await?;
     match reply.kw() {
         Some(side @ ("Left" | "Right")) => {
             // text beside the first / last arrow, on the side of the dimension line it normally sits
-            let geo = c.doc(|d| {
-                dim_geometry(
-                    &DimData {
-                        tp: None,
-                        tr: None,
-                        ..dim
-                    },
-                    &d.settings,
-                )
-            });
+            let geo = c.doc(|d| dim_geometry(&DimData { tp: None, tr: None, ..dim }, &d.settings));
             let Some(line) = geo.dim_line.as_ref() else {
                 c.log_error("Left and Right apply to linear dimensions only.");
                 return Ok(());
             };
             let k = geo.style.scale;
-            let shift = dist(line.a, line.b) / 2.0
-                - geo.style.asz * k
-                - geo.style.gap * k
-                - measure_text(&geo.text.s, geo.text.h) / 2.0;
+            let shift = dist(line.a, line.b) / 2.0 - geo.style.asz * k - geo.style.gap * k - measure_text(&geo.text.s, geo.text.h) / 2.0;
             let sgn = if side == "Left" { -1.0 } else { 1.0 };
-            edit_dims(&c, &[id], |d| {
-                d.tp = Some(geo.text.p + line.dir * (sgn * shift.max(0.0)))
-            });
+            edit_dims(&c, &[id], |d| d.tp = Some(geo.text.p + line.dir * (sgn * shift.max(0.0))));
         }
         Some("Center") => {
             edit_dims(&c, &[id], |d| d.tp = None);
@@ -1003,11 +656,7 @@ async fn dimtedit(c: Ctx, _a: Args) -> CmdResult<()> {
             edit_dims(&c, &[id], |d| (d.tp, d.tr) = (None, None));
         }
         Some("Angle") => {
-            if let Some(a) = c
-                .angle(ps("Specify angle for dimension text"))
-                .await?
-                .value()
-            {
+            if let Some(a) = c.angle(ps("Specify angle for dimension text")).await?.value() {
                 edit_dims(&c, &[id], |d| set_text_angle(&c, d, Some(a)));
             }
         }
@@ -1023,128 +672,35 @@ async fn dimtedit(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- DIMINSPECT
 
 async fn diminspect(c: Ctx, _a: Args) -> CmdResult<()> {
-    let ids = c
-        .select(ps("Select dimensions to inspect").filter(is_dim))
-        .await?
-        .ents;
+    let ids = c.select(ps("Select dimensions to inspect").filter(is_dim)).await?.ents;
     if ids.is_empty() {
         return Ok(());
     }
-    let remove = c
-        .keyword(
-            ps("Enter an option")
-                .options(&["Add", "Remove"])
-                .default_str("Add"),
-        )
-        .await?
-        .kw()
-        == Some("Remove");
+    let remove = c.keyword(ps("Enter an option").options(&["Add", "Remove"]).default_str("Add")).await?.kw() == Some("Remove");
     if remove {
         edit_dims(&c, &ids, |d| d.insp = None);
         return Ok(());
     }
-    let shape = match c
-        .keyword(
-            ps("Enter inspection shape")
-                .options(&["Round", "Angular", "None"])
-                .default_str("Round"),
-        )
-        .await?
-        .kw()
-    {
+    let shape = match c.keyword(ps("Enter inspection shape").options(&["Round", "Angular", "None"]).default_str("Round")).await?.kw() {
         Some("Angular") => InspShape::Angular,
         Some("None") => InspShape::None,
         _ => InspShape::Round,
     };
-    let label = c
-        .string(ps("Enter label text (Enter for none)").raw())
-        .await?
-        .text;
-    let rate = c
-        .number(
-            ps("Enter inspection rate in percent (0 for none)")
-                .default_num(100.0)
-                .integer()
-                .min(0.0)
-                .max(100.0),
-        )
-        .await?
-        .value()
-        .unwrap_or(100.0) as u32;
-    edit_dims(&c, &ids, |d| {
-        d.insp = Some(DimInspect {
-            label: label.clone(),
-            rate: (rate > 0).then_some(rate),
-            shape,
-        })
-    });
+    let label = c.string(ps("Enter label text (Enter for none)").raw()).await?.text;
+    let rate = c.number(ps("Enter inspection rate in percent (0 for none)").default_num(100.0).integer().min(0.0).max(100.0)).await?.value().unwrap_or(100.0) as u32;
+    edit_dims(&c, &ids, |d| d.insp = Some(DimInspect { label: label.clone(), rate: (rate > 0).then_some(rate), shape }));
     Ok(())
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(
-        def("Annotation", "DIMARC", run(dimarc))
-            .aliases(&["DAR"])
-            .no_pickfirst()
-            .title("Arc Length")
-            .desc("Creates an arc length dimension."),
-    );
-    r.define(
-        def("Annotation", "DIMJOGGED", run(dimjogged))
-            .aliases(&["DJO"])
-            .no_pickfirst()
-            .title("Jogged")
-            .desc("Creates jogged dimensions for circles and arcs."),
-    );
-    r.define(
-        def("Annotation", "DIMORDINATE", run(dimordinate))
-            .aliases(&["DOR"])
-            .no_pickfirst()
-            .title("Ordinate")
-            .desc("Creates ordinate dimensions."),
-    );
-    r.define(
-        def("Annotation", "QDIM", run(qdim))
-            .title("Quick Dimension")
-            .desc("Quickly creates a series of dimensions from selected objects."),
-    );
-    r.define(
-        def("Annotation", "DIMBREAK", run(dimbreak))
-            .no_pickfirst()
-            .title("Break")
-            .desc(
-                "Breaks or restores dimension and extension lines where they cross other objects.",
-            ),
-    );
-    r.define(
-        def("Annotation", "DIMCENTER", run(dimcenter))
-            .aliases(&["DCE"])
-            .no_pickfirst()
-            .title("Center Mark")
-            .desc("Creates the center mark or the centerlines of circles and arcs."),
-    );
-    r.define(
-        def("Annotation", "DIMSPACE", run(dimspace))
-            .no_pickfirst()
-            .title("Adjust Space")
-            .desc("Adjusts the spacing between parallel linear dimensions."),
-    );
-    r.define(
-        def("Annotation", "DIMEDIT", run(dimedit))
-            .aliases(&["DED"])
-            .title("Edit Dimension")
-            .desc("Edits dimension text and extension lines."),
-    );
-    r.define(
-        def("Annotation", "DIMTEDIT", run(dimtedit))
-            .aliases(&["DIMTED"])
-            .no_pickfirst()
-            .title("Dimension Text Edit")
-            .desc("Moves and rotates dimension text."),
-    );
-    r.define(
-        def("Annotation", "DIMINSPECT", run(diminspect))
-            .title("Inspection")
-            .desc("Adds or removes inspection information for a selected dimension."),
-    );
+    r.define(def("Annotation", "DIMARC", run(dimarc)).aliases(&["DAR"]).no_pickfirst().title("Arc Length").desc("Creates an arc length dimension."));
+    r.define(def("Annotation", "DIMJOGGED", run(dimjogged)).aliases(&["DJO"]).no_pickfirst().title("Jogged").desc("Creates jogged dimensions for circles and arcs."));
+    r.define(def("Annotation", "DIMORDINATE", run(dimordinate)).aliases(&["DOR"]).no_pickfirst().title("Ordinate").desc("Creates ordinate dimensions."));
+    r.define(def("Annotation", "QDIM", run(qdim)).title("Quick Dimension").desc("Quickly creates a series of dimensions from selected objects."));
+    r.define(def("Annotation", "DIMBREAK", run(dimbreak)).no_pickfirst().title("Break").desc("Breaks or restores dimension and extension lines where they cross other objects."));
+    r.define(def("Annotation", "DIMCENTER", run(dimcenter)).aliases(&["DCE"]).no_pickfirst().title("Center Mark").desc("Creates the center mark or the centerlines of circles and arcs."));
+    r.define(def("Annotation", "DIMSPACE", run(dimspace)).no_pickfirst().title("Adjust Space").desc("Adjusts the spacing between parallel linear dimensions."));
+    r.define(def("Annotation", "DIMEDIT", run(dimedit)).aliases(&["DED"]).title("Edit Dimension").desc("Edits dimension text and extension lines."));
+    r.define(def("Annotation", "DIMTEDIT", run(dimtedit)).aliases(&["DIMTED"]).no_pickfirst().title("Dimension Text Edit").desc("Moves and rotates dimension text."));
+    r.define(def("Annotation", "DIMINSPECT", run(diminspect)).title("Inspection").desc("Adds or removes inspection information for a selected dimension."));
 }

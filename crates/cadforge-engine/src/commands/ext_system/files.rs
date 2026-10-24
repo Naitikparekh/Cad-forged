@@ -38,10 +38,7 @@ fn scan(d: &Drawing) -> Findings {
     let mut missing: BTreeMap<String, (String, usize)> = BTreeMap::new();
     let mut note_layer = |layer: &str| {
         if !layer.is_empty() && d.layer(layer).is_none() {
-            missing
-                .entry(layer.to_lowercase())
-                .or_insert_with(|| (layer.to_string(), 0))
-                .1 += 1;
+            missing.entry(layer.to_lowercase()).or_insert_with(|| (layer.to_string(), 0)).1 += 1;
         }
     };
     for e in d.all_entities() {
@@ -58,12 +55,7 @@ fn scan(d: &Drawing) -> Findings {
         note_layer(&s.layer);
     }
     f.layers = missing.into_values().collect();
-    f.ltypes = d
-        .layers
-        .iter()
-        .filter(|l| ltype_key(&l.ltype).is_none())
-        .map(|l| (l.name.clone(), l.ltype.clone()))
-        .collect();
+    f.ltypes = d.layers.iter().filter(|l| ltype_key(&l.ltype).is_none()).map(|l| (l.name.clone(), l.ltype.clone())).collect();
     f.cur_layer = d.layer(&d.cur.layer).is_none();
     f
 }
@@ -74,11 +66,7 @@ fn repair(d: &mut Drawing, f: &Findings) {
         for (name, _) in &f.layers {
             d.ensure_layer(name);
         }
-        for l in d
-            .layers
-            .iter_mut()
-            .filter(|l| ltype_key(&l.ltype).is_none())
-        {
+        for l in d.layers.iter_mut().filter(|l| ltype_key(&l.ltype).is_none()) {
             l.ltype = "Continuous".into();
         }
         if f.cur_layer {
@@ -101,10 +89,7 @@ fn run_audit(c: &Ctx, fix: bool) {
     let f = c.doc(scan);
     c.log("Auditing Layers");
     for (l, n) in &f.layers {
-        c.log(&format!(
-            "  {} on undefined layer \"{l}\"",
-            plural(*n, "object")
-        ));
+        c.log(&format!("  {} on undefined layer \"{l}\"", plural(*n, "object")));
     }
     for (l, t) in &f.ltypes {
         c.log(&format!("  Layer \"{l}\" uses undefined linetype \"{t}\""));
@@ -114,9 +99,7 @@ fn run_audit(c: &Ctx, fix: bool) {
     }
     c.log("Auditing Entities");
     for (id, name) in &f.inserts {
-        c.log(&format!(
-            "  Block reference {id:X} refers to undefined block \"{name}\""
-        ));
+        c.log(&format!("  Block reference {id:X} refers to undefined block \"{name}\""));
     }
     let errors = f.errors();
     c.log(&format!("{} audited", plural(f.audited, "object")));
@@ -124,10 +107,7 @@ fn run_audit(c: &Ctx, fix: bool) {
         c.doc_mut(|d| repair(d, &f));
         c.ed(|e| e.prune());
     }
-    c.log(&format!(
-        "Total errors found {errors} fixed {}",
-        if fix { errors } else { 0 }
-    ));
+    c.log(&format!("Total errors found {errors} fixed {}", if fix { errors } else { 0 }));
 }
 
 async fn audit(c: Ctx, _a: Args) -> CmdResult<()> {
@@ -150,17 +130,7 @@ async fn closeall(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn saveall(c: Ctx, _a: Args) -> CmdResult<()> {
-    let (active_dirty, others): (bool, Vec<String>) = c.app(|a| {
-        (
-            a.doc().is_some_and(|d| d.dirty),
-            a.editors
-                .iter()
-                .enumerate()
-                .filter(|(i, e)| Some(*i) != a.active && e.doc.dirty)
-                .map(|(_, e)| e.doc.name.clone())
-                .collect(),
-        )
-    });
+    let (active_dirty, others): (bool, Vec<String>) = c.app(|a| (a.doc().is_some_and(|d| d.dirty), a.editors.iter().enumerate().filter(|(i, e)| Some(*i) != a.active && e.doc.dirty).map(|(_, e)| e.doc.name.clone()).collect()));
     if !active_dirty && others.is_empty() {
         c.log("All drawings are saved.");
         return Ok(());
@@ -178,12 +148,7 @@ async fn saveall(c: Ctx, _a: Args) -> CmdResult<()> {
 
 async fn preview(c: Ctx, _a: Args) -> CmdResult<()> {
     // the Plot dialog shows the sheet preview
-    ui_action(
-        &c,
-        "PREVIEW",
-        "PLOT",
-        Args::none().with("preview", ArgVal::Bool(true)),
-    );
+    ui_action(&c, "PREVIEW", "PLOT", Args::none().with("preview", ArgVal::Bool(true)));
     Ok(())
 }
 
@@ -192,44 +157,16 @@ async fn preview(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn dxfout(c: Ctx, a: Args) -> CmdResult<()> {
     let fmt = match a.str("format") {
         Some(f) => f.to_string(),
-        None => c
-            .keyword(
-                ps("Enter file format [ASCII/Binary]")
-                    .options(&["ASCII", "Binary"])
-                    .default_str("ASCII"),
-            )
-            .await?
-            .kw()
-            .unwrap_or("ASCII")
-            .to_string(),
+        None => c.keyword(ps("Enter file format [ASCII/Binary]").options(&["ASCII", "Binary"]).default_str("ASCII")).await?.kw().unwrap_or("ASCII").to_string(),
     };
     let binary = fmt.eq_ignore_ascii_case("binary");
-    let (name, data) = c.doc(|d| {
-        (
-            d.name.clone(),
-            if binary {
-                cadforge_core::io::write_dxf_binary(d)
-            } else {
-                cadforge_core::io::write_dxf(d).into_bytes()
-            },
-        )
-    });
+    let (name, data) = c.doc(|d| (d.name.clone(), if binary { cadforge_core::io::write_dxf_binary(d) } else { cadforge_core::io::write_dxf(d).into_bytes() }));
     let file = format!("{name}.dxf");
-    c.log(&format!(
-        "Wrote {file} ({} DXF, {} bytes).",
-        if binary { "binary" } else { "ASCII" },
-        data.len()
-    ));
+    c.log(&format!("Wrote {file} ({} DXF, {} bytes).", if binary { "binary" } else { "ASCII" }, data.len()));
     if let Some(n) = c.doc(|d| SaveFormat::Dxf.not_kept_note(d)) {
         c.log_error(&n);
     }
-    c.app(|app| {
-        app.emit(Event::SaveFile {
-            name: file,
-            data,
-            mime: "application/dxf".into(),
-        })
-    });
+    c.app(|app| app.emit(Event::SaveFile { name: file, data, mime: "application/dxf".into() }));
     Ok(())
 }
 
@@ -276,12 +213,7 @@ impl SaveFormat {
         }
     }
 
-    pub const ALL: [SaveFormat; 4] = [
-        SaveFormat::Dwg2004,
-        SaveFormat::Dwg2000,
-        SaveFormat::Dxf,
-        SaveFormat::CadForge,
-    ];
+    pub const ALL: [SaveFormat; 4] = [SaveFormat::Dwg2004, SaveFormat::Dwg2000, SaveFormat::Dxf, SaveFormat::CadForge];
 
     /// What a file of this format cannot hold of the drawing (nothing for a CadForge project).
     pub fn not_kept(self, d: &Drawing) -> Vec<String> {
@@ -294,13 +226,7 @@ impl SaveFormat {
     /// One line for the command line, or None when the file holds everything.
     pub fn not_kept_note(self, d: &Drawing) -> Option<String> {
         let n = self.not_kept(d);
-        (!n.is_empty()).then(|| {
-            format!(
-                "Not kept in {}: {}. Save a CadForge project (*.json) to keep everything.",
-                self.short(),
-                n.join("; ")
-            )
-        })
+        (!n.is_empty()).then(|| format!("Not kept in {}: {}. Save a CadForge project (*.json) to keep everything.", self.short(), n.join("; ")))
     }
 
     fn short(self) -> &'static str {
@@ -316,23 +242,13 @@ impl SaveFormat {
         use cadforge_core::io::dwg::{write_dwg_as, Ver};
         Ok(match self {
             SaveFormat::Dwg2004 | SaveFormat::Dwg2000 => {
-                let ver = if self == SaveFormat::Dwg2000 {
-                    Ver::R2000
-                } else {
-                    Ver::R2004
-                };
+                let ver = if self == SaveFormat::Dwg2000 { Ver::R2000 } else { Ver::R2004 };
                 let bytes = write_dwg_as(d, ver)?;
                 d.dwg_version = (ver == Ver::R2000).then_some(ver);
                 (bytes, "image/vnd.dwg")
             }
-            SaveFormat::Dxf => (
-                cadforge_core::io::write_dxf(d).into_bytes(),
-                "application/dxf",
-            ),
-            SaveFormat::CadForge => (
-                cadforge_core::io::to_json(d).into_bytes(),
-                "application/json",
-            ),
+            SaveFormat::Dxf => (cadforge_core::io::write_dxf(d).into_bytes(), "application/dxf"),
+            SaveFormat::CadForge => (cadforge_core::io::to_json(d).into_bytes(), "application/json"),
         })
     }
 }
@@ -345,14 +261,7 @@ pub fn with_ext(name: &str, fmt: SaveFormat) -> String {
 /// -SAVEAS: save the drawing under a new name in a chosen format, from the command line (AutoCAD's command-line
 /// form). DWG files are written for AutoCAD 2004 or 2000.
 async fn saveas_cli(c: Ctx, a: Args) -> CmdResult<()> {
-    let (name, cur) = c.doc(|d| {
-        (
-            d.file_name
-                .clone()
-                .unwrap_or_else(|| format!("{}.dwg", d.name)),
-            SaveFormat::of(&d.file_name.clone().unwrap_or_else(|| "x.dwg".into()), d),
-        )
-    });
+    let (name, cur) = c.doc(|d| (d.file_name.clone().unwrap_or_else(|| format!("{}.dwg", d.name)), SaveFormat::of(&d.file_name.clone().unwrap_or_else(|| "x.dwg".into()), d)));
     let key = |f: SaveFormat| match f {
         SaveFormat::Dwg2004 => "2004",
         SaveFormat::Dwg2000 => "2000",
@@ -362,16 +271,7 @@ async fn saveas_cli(c: Ctx, a: Args) -> CmdResult<()> {
     c.log(&format!("Current file format: {}", cur.label()));
     let fmt_kw = match a.str("format") {
         Some(f) => f.to_string(),
-        None => c
-            .keyword(
-                ps("Enter file format [2000/2004/DXF/CadForge]")
-                    .options(&["2000", "2004", "DXF", "CadForge"])
-                    .default_str(key(cur)),
-            )
-            .await?
-            .kw()
-            .unwrap_or(key(cur))
-            .to_string(),
+        None => c.keyword(ps("Enter file format [2000/2004/DXF/CadForge]").options(&["2000", "2004", "DXF", "CadForge"]).default_str(key(cur))).await?.kw().unwrap_or(key(cur)).to_string(),
     };
     let fmt = match fmt_kw.to_lowercase().as_str() {
         "2000" => SaveFormat::Dwg2000,
@@ -383,14 +283,8 @@ async fn saveas_cli(c: Ctx, a: Args) -> CmdResult<()> {
     let typed = match a.str("name") {
         Some(n) => n.to_string(),
         None => {
-            let r = c
-                .string(ps(&format!("Save drawing as <{default}>")).default_str(&default))
-                .await?;
-            if r.text.trim().is_empty() {
-                default.clone()
-            } else {
-                r.text
-            }
+            let r = c.string(ps(&format!("Save drawing as <{default}>")).default_str(&default)).await?;
+            if r.text.trim().is_empty() { default.clone() } else { r.text }
         }
     };
     let file = with_ext(&typed, fmt);
@@ -406,20 +300,12 @@ async fn saveas_cli(c: Ctx, a: Args) -> CmdResult<()> {
     });
     match out {
         Ok((data, mime)) => {
-            c.log(&format!(
-                "Saved {file} ({}, {} bytes).",
-                fmt.label(),
-                data.len()
-            ));
+            c.log(&format!("Saved {file} ({}, {} bytes).", fmt.label(), data.len()));
             if let Some(n) = note {
                 c.log_error(&n);
             }
             c.app(|app| {
-                app.emit(Event::SaveFile {
-                    name: file,
-                    data,
-                    mime: mime.into(),
-                });
+                app.emit(Event::SaveFile { name: file, data, mime: mime.into() });
                 app.emit(Event::Change);
             });
         }
@@ -435,16 +321,7 @@ async fn plotstyle(c: Ctx, a: Args) -> CmdResult<()> {
     use cadforge_core::plotstyle::{describe, parse_base64, PlotStyleTable};
     let opt = match a.str("option") {
         Some(o) => o.to_string(),
-        None => c
-            .keyword(
-                ps("Enter an option [?/Load/Monochrome/None]")
-                    .options(&["?", "Load", "Monochrome", "None"])
-                    .default_str("?"),
-            )
-            .await?
-            .kw()
-            .unwrap_or("?")
-            .to_string(),
+        None => c.keyword(ps("Enter an option [?/Load/Monochrome/None]").options(&["?", "Load", "Monochrome", "None"]).default_str("?")).await?.kw().unwrap_or("?").to_string(),
     };
     match opt.as_str() {
         "Load" => {
@@ -512,16 +389,7 @@ async fn publish(c: Ctx, a: Args) -> CmdResult<()> {
     let which = match a.str("sheets") {
         Some(k) => k.to_string(),
         None if layouts.is_empty() => "Model".to_string(),
-        None => c
-            .keyword(
-                ps("Sheets to publish [Model/Layouts/All]")
-                    .options(&["Model", "Layouts", "All"])
-                    .default_str("All"),
-            )
-            .await?
-            .kw()
-            .unwrap_or("All")
-            .to_string(),
+        None => c.keyword(ps("Sheets to publish [Model/Layouts/All]").options(&["Model", "Layouts", "All"]).default_str("All")).await?.kw().unwrap_or("All").to_string(),
     };
     let mut sheets: Vec<Option<String>> = vec![];
     if which == "Model" || which == "All" {
@@ -539,19 +407,10 @@ async fn publish(c: Ctx, a: Args) -> CmdResult<()> {
     match result {
         Err(e) => c.log_error(&e),
         Ok((data, pages)) => {
-            let stem: String = name
-                .trim_end_matches(".json")
-                .trim_end_matches(".dxf")
-                .to_string();
+            let stem: String = name.trim_end_matches(".json").trim_end_matches(".dxf").to_string();
             let file = format!("{}.pdf", if stem.is_empty() { "drawing" } else { &stem });
             c.log(&format!("Published {} to {file}.", plural(pages, "sheet")));
-            c.app(|app| {
-                app.emit(Event::SaveFile {
-                    name: file,
-                    data,
-                    mime: "application/pdf".into(),
-                })
-            });
+            c.app(|app| app.emit(Event::SaveFile { name: file, data, mime: "application/pdf".into() }));
         }
     }
     Ok(())
@@ -568,12 +427,7 @@ async fn etransmit(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn appload(c: Ctx, _a: Args) -> CmdResult<()> {
     if c.app(|a| a.ui.dialogs) {
         c.log("Choose an AutoLISP (.lsp) or script (.scr) file to load.");
-        c.app(|a| {
-            a.emit(Event::UiAction {
-                name: "APPLOAD".into(),
-                args: Args::none(),
-            })
-        });
+        c.app(|a| a.emit(Event::UiAction { name: "APPLOAD".into(), args: Args::none() }));
     } else {
         c.log_error("APPLOAD needs a file chooser; type AutoLISP expressions at the command line instead, or run a script with SCRIPT.");
     }
@@ -581,76 +435,23 @@ async fn appload(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn reinit(c: Ctx, _a: Args) -> CmdResult<()> {
-    let aliases =
-        c.app(|a| a.registry.all_aliases().len() + a.registry.user_aliases.borrow().len());
+    let aliases = c.app(|a| a.registry.all_aliases().len() + a.registry.user_aliases.borrow().len());
     c.log("There are no digitizer or I/O ports to reinitialize.");
     c.log(&format!("Command aliases (the PGP file) are always current: {aliases} are in effect; edit them with ALIASEDIT."));
     Ok(())
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(
-        def("File", "AUDIT", run(audit))
-            .title("Audit")
-            .desc("Evaluates the integrity of a drawing and corrects some errors.")
-            .once(),
-    );
-    r.define(
-        def("File", "RECOVER", run(recover))
-            .title("Recover")
-            .desc("Repairs the open drawing: undefined layers, linetypes and block references.")
-            .once(),
-    );
-    r.define(
-        def("File", "CLOSEALL", run(closeall))
-            .title("Close All")
-            .icon("close")
-            .desc("Closes all currently open drawings.")
-            .once(),
-    );
-    r.define(
-        def("Utilities", "SAVEALL", run(saveall))
-            .title("Save All")
-            .icon("save")
-            .desc("Saves all open drawings.")
-            .once(),
-    );
-    r.define(
-        def("Output", "PREVIEW", run(preview))
-            .aliases(&["PRE"])
-            .title("Plot Preview")
-            .icon("plot")
-            .desc("Displays the drawing as it will be plotted.")
-            .once(),
-    );
-    r.define(
-        def("File", "-DXFOUT", run(dxfout))
-            .title("Export DXF (options)")
-            .icon("dxf")
-            .desc("Writes the drawing as an ASCII or binary DXF file.")
-            .once(),
-    );
+    r.define(def("File", "AUDIT", run(audit)).title("Audit").desc("Evaluates the integrity of a drawing and corrects some errors.").once());
+    r.define(def("File", "RECOVER", run(recover)).title("Recover").desc("Repairs the open drawing: undefined layers, linetypes and block references.").once());
+    r.define(def("File", "CLOSEALL", run(closeall)).title("Close All").icon("close").desc("Closes all currently open drawings.").once());
+    r.define(def("Utilities", "SAVEALL", run(saveall)).title("Save All").icon("save").desc("Saves all open drawings.").once());
+    r.define(def("Output", "PREVIEW", run(preview)).aliases(&["PRE"]).title("Plot Preview").icon("plot").desc("Displays the drawing as it will be plotted.").once());
+    r.define(def("File", "-DXFOUT", run(dxfout)).title("Export DXF (options)").icon("dxf").desc("Writes the drawing as an ASCII or binary DXF file.").once());
     r.define(def("File", "-SAVEAS", run(saveas_cli)).title("Save As (command line)").icon("saveas").desc("Saves the drawing under a new name as an AutoCAD 2004 or 2000 DWG, a DXF or a CadForge file.").once());
     r.define(def("Output", "PLOTSTYLE", run(plotstyle)).title("Plot Style Table").desc("Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting.").once());
-    r.define(
-        def("Output", "PUBLISH", run(publish))
-            .title("Publish")
-            .icon("pdf")
-            .desc("Publishes drawings to PDF or plotters.")
-            .once(),
-    );
-    r.define(
-        def("Output", "ETRANSMIT", run(etransmit))
-            .title("eTransmit")
-            .desc("Lists the files needed to send a drawing to someone else.")
-            .once(),
-    );
-    r.define(
-        def("Utilities", "APPLOAD", run(appload))
-            .aliases(&["AP"])
-            .title("Load Application")
-            .desc("Loads applications and script files.")
-            .once(),
-    );
+    r.define(def("Output", "PUBLISH", run(publish)).title("Publish").icon("pdf").desc("Publishes drawings to PDF or plotters.").once());
+    r.define(def("Output", "ETRANSMIT", run(etransmit)).title("eTransmit").desc("Lists the files needed to send a drawing to someone else.").once());
+    r.define(def("Utilities", "APPLOAD", run(appload)).aliases(&["AP"]).title("Load Application").desc("Loads applications and script files.").once());
     r.define(def("Utilities", "REINIT", run(reinit)).title("Reinitialize").desc("Reinitializes the digitizer, the digitizer input/output port, and the program parameters file.").once());
 }

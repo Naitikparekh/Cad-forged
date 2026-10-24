@@ -54,9 +54,7 @@ type Shared = Rc<RefCell<Tracker>>;
 
 /// Look at the active drawing before a command starts; remember its layer table whenever the drawing has changed.
 fn observe(st: &Shared, c: &Ctx) {
-    let Some((id, rev, now)) = c.app(|a| a.editor().map(|e| (e.id, e.doc.rev, a.now))) else {
-        return;
-    };
+    let Some((id, rev, now)) = c.app(|a| a.editor().map(|e| (e.id, e.doc.rev, a.now))) else { return };
     if st.borrow().docs.get(&id).is_some_and(|d| d.rev == rev) {
         return;
     }
@@ -65,19 +63,7 @@ fn observe(st: &Shared, c: &Ctx) {
     let mut t = st.borrow_mut();
     match t.docs.get_mut(&id) {
         None => {
-            t.docs.insert(
-                id,
-                DocTrack {
-                    rev,
-                    layers,
-                    history: vec![],
-                    opened: now,
-                    updated: None,
-                    timer_on: true,
-                    timer_ms: 0.0,
-                    timer_since: now,
-                },
-            );
+            t.docs.insert(id, DocTrack { rev, layers, history: vec![], opened: now, updated: None, timer_on: true, timer_ms: 0.0, timer_since: now });
         }
         Some(d) => {
             if d.layers != layers {
@@ -104,12 +90,7 @@ fn apply_celtscale(c: &Ctx, first_new_id: u64) {
         return;
     }
     c.doc_mut(|d| {
-        let ids: Vec<u64> = d
-            .entities()
-            .iter()
-            .filter(|e| e.id >= first_new_id && e.lts.is_none())
-            .map(|e| e.id)
-            .collect();
+        let ids: Vec<u64> = d.entities().iter().filter(|e| e.id >= first_new_id && e.lts.is_none()).map(|e| e.id).collect();
         if !ids.is_empty() {
             d.change(|d| {
                 for id in ids {
@@ -155,12 +136,7 @@ fn ps(m: &str) -> PromptSpec {
 /// Hand a command over to the host UI; headless runs report that it is unavailable.
 fn ui_action(c: &Ctx, command: &str, action: &str, args: Args) {
     if c.app(|a| a.ui.dialogs) {
-        c.app(|a| {
-            a.emit(Event::UiAction {
-                name: action.to_string(),
-                args,
-            })
-        });
+        c.app(|a| a.emit(Event::UiAction { name: action.to_string(), args }));
     } else {
         c.log_error(&format!("{command} is not available in this environment."));
     }
@@ -168,9 +144,7 @@ fn ui_action(c: &Ctx, command: &str, action: &str, args: Args) {
 
 /// A Yes/No question in AutoCAD's wording (`Question? [Yes/No] <No>:`); anything starting with Y is a yes.
 async fn confirm(c: &Ctx, question: &str) -> CmdResult<bool> {
-    let r = c
-        .string(ps(&format!("{question} [Yes/No]")).default_str("No"))
-        .await?;
+    let r = c.string(ps(&format!("{question} [Yes/No]")).default_str("No")).await?;
     Ok(r.text.to_lowercase().starts_with('y'))
 }
 

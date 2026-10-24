@@ -9,12 +9,7 @@ fn sample_text() -> String {
     let mut t = String::new();
     t.push_str("description=\"Test table\"\naci_table_available=TRUE\nscale_factor=1.000000\napply_factor=FALSE\ncustom_lineweight_display_units=0\n");
     t.push_str("lineweight_table{\n");
-    for (i, w) in [
-        0.0, 0.05, 0.09, 0.10, 0.13, 0.15, 0.18, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50,
-    ]
-    .iter()
-    .enumerate()
-    {
+    for (i, w) in [0.0, 0.05, 0.09, 0.10, 0.13, 0.15, 0.18, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50].iter().enumerate() {
         t.push_str(&format!("\t{i}={w:.6}\n"));
     }
     t.push_str("}\naci_table{\n");
@@ -38,10 +33,7 @@ fn sample_text() -> String {
 fn container(text: &str, header_ints: &[u8], trailer: &[u8]) -> Vec<u8> {
     let mut out = b"PIAFILEVERSION_2.0,CTBVER1,compress\r\npmzlibcodec".to_vec();
     out.extend_from_slice(header_ints);
-    out.extend(miniz_oxide::deflate::compress_to_vec_zlib(
-        text.as_bytes(),
-        6,
-    ));
+    out.extend(miniz_oxide::deflate::compress_to_vec_zlib(text.as_bytes(), 6));
     out.extend_from_slice(trailer);
     out
 }
@@ -61,18 +53,12 @@ fn the_text_layout_gives_one_style_per_colour() {
     assert_eq!(red.screen, 100);
     // colour 2: keeps the object's colour and lineweight but is screened to 50 %
     let screened = t.style_for(Color::Aci(2)).unwrap();
-    assert_eq!(
-        (screened.color, screened.lineweight, screened.screen),
-        (None, None, 50)
-    );
+    assert_eq!((screened.color, screened.lineweight, screened.screen), (None, None, 50));
     // colour 3: black
     assert_eq!(t.style_for(Color::Aci(3)).unwrap().color, Some([0, 0, 0]));
     // everything else changes nothing
     let plain = t.style_for(Color::Aci(40)).unwrap();
-    assert_eq!(
-        (plain.color, plain.lineweight, plain.screen),
-        (None, None, 100)
-    );
+    assert_eq!((plain.color, plain.lineweight, plain.screen), (None, None, 100));
 }
 
 #[test]
@@ -81,10 +67,7 @@ fn objects_are_matched_to_a_style_through_their_aci_colour() {
     // a true colour object uses the style of the nearest ACI colour
     assert_eq!(t.style_for(Color::Rgb(250, 5, 5)).unwrap().name, "Color_1");
     assert_eq!(t.style_for(Color::Aci(255)).unwrap().name, "Color_255");
-    assert!(
-        t.style_for(Color::ByLayer).is_none(),
-        "colours are resolved before the lookup"
-    );
+    assert!(t.style_for(Color::ByLayer).is_none(), "colours are resolved before the lookup");
     assert!(t.named("color_2").is_some());
 }
 
@@ -92,14 +75,7 @@ fn objects_are_matched_to_a_style_through_their_aci_colour() {
 fn the_compressed_container_gives_the_same_table() {
     let plain = parse_text("t", &sample_text()).unwrap();
     // the bytes between the marker and the zlib stream are not interpreted: any header, any trailer
-    for (head, tail) in [
-        (&[][..], &[][..]),
-        (
-            &[0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11][..],
-            &[1u8, 2, 3, 4][..],
-        ),
-        (&[0x0A][..], &[0u8; 16][..]),
-    ] {
+    for (head, tail) in [(&[][..], &[][..]), (&[0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11][..], &[1u8, 2, 3, 4][..]), (&[0x0A][..], &[0u8; 16][..])] {
         let bytes = container(&sample_text(), head, tail);
         let t = parse_bytes("t", &bytes).unwrap_or_else(|e| panic!("{e} (head {head:?})"));
         assert_eq!(t, plain);
@@ -117,22 +93,12 @@ fn plain_text_files_and_base64_work_too() {
 
 #[test]
 fn damaged_files_are_refused_with_a_reason() {
-    assert!(parse_bytes("t", b"")
-        .unwrap_err()
-        .contains("no plot styles"));
-    assert!(parse_bytes("t", b"not a plot style table at all")
-        .unwrap_err()
-        .contains("no plot styles"));
+    assert!(parse_bytes("t", b"").unwrap_err().contains("no plot styles"));
+    assert!(parse_bytes("t", b"not a plot style table at all").unwrap_err().contains("no plot styles"));
     let mut cut = container(&sample_text(), &[], &[]);
     cut.truncate(cut.len() - 40);
-    assert!(parse_bytes("t", &cut)
-        .unwrap_err()
-        .contains("could not be read"));
-    assert!(
-        parse_bytes("t", b"PIAFILEVERSION_2.0,CTBVER1,compress\r\nsomething")
-            .unwrap_err()
-            .contains("no data section")
-    );
+    assert!(parse_bytes("t", &cut).unwrap_err().contains("could not be read"));
+    assert!(parse_bytes("t", b"PIAFILEVERSION_2.0,CTBVER1,compress\r\nsomething").unwrap_err().contains("no data section"));
     assert!(parse_base64("t", "!!!").unwrap_err().contains("base64"));
 }
 
@@ -150,9 +116,7 @@ fn a_named_table_has_no_colour_lookup() {
 #[test]
 fn the_table_is_saved_with_the_drawing() {
     let mut d = Drawing::new("t");
-    d.plot_styles = Some(std::rc::Rc::new(
-        parse_text("mine", &sample_text()).unwrap(),
-    ));
+    d.plot_styles = Some(std::rc::Rc::new(parse_text("mine", &sample_text()).unwrap()));
     let text = d.to_json_string();
     let back = Drawing::from_json_str(&text, None).unwrap();
     assert_eq!(back.plot_styles, d.plot_styles);

@@ -7,20 +7,7 @@ fn near(a: f64, b: f64, t: f64) {
 }
 
 fn viewports(s: &Sim, layout: &str) -> Vec<ViewportData> {
-    s.doc(|d| {
-        d.layout(layout)
-            .unwrap()
-            .entities
-            .iter()
-            .filter_map(|e| {
-                if let Kind::Viewport(v) = &e.kind {
-                    Some(v.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    })
+    s.doc(|d| d.layout(layout).unwrap().entities.iter().filter_map(|e| if let Kind::Viewport(v) = &e.kind { Some(v.clone()) } else { None }).collect())
 }
 
 fn space(s: &Sim) -> String {
@@ -31,10 +18,7 @@ fn space(s: &Sim) -> String {
 fn new_drawings_have_two_layouts_and_the_first_gets_its_viewport_when_shown() {
     let s = Sim::new();
     assert_eq!(s.doc(|d| d.layout_names()), vec!["Layout1", "Layout2"]);
-    assert!(
-        viewports(&s, "Layout1").is_empty(),
-        "not realised until first shown"
-    );
+    assert!(viewports(&s, "Layout1").is_empty(), "not realised until first shown");
     s.cmd("LAYOUT").ty("Set").ty("Layout1");
     assert_eq!(space(&s), "Layout1");
     assert_eq!(viewports(&s, "Layout1").len(), 1);
@@ -48,10 +32,7 @@ fn new_drawings_have_two_layouts_and_the_first_gets_its_viewport_when_shown() {
 fn layout_new_copy_rename_delete_and_list() {
     let s = Sim::new();
     s.cmd("LAYOUT").ty("New").ty("Plan");
-    assert_eq!(
-        s.doc(|d| d.layout_names()),
-        vec!["Layout1", "Layout2", "Plan"]
-    );
+    assert_eq!(s.doc(|d| d.layout_names()), vec!["Layout1", "Layout2", "Plan"]);
     s.cmd("LAYOUT").ty("Copy").ty("Plan").ty("Plan copy");
     assert!(s.doc(|d| d.layout("Plan copy").is_some()));
     s.cmd("LAYOUT").ty("Rename").ty("Plan copy").ty("Detail");
@@ -76,16 +57,8 @@ fn model_space_content_shows_in_a_viewport_and_mspace_edits_model_space() {
     assert_eq!(space(&s), "model", "MSPACE edits model space");
     assert!(s.h.borrow().editor().unwrap().mspace.is_some());
     s.cmd("LINE").click(10.0, 10.0).click(20.0, 20.0).enter();
-    assert_eq!(
-        s.doc(|d| d.model.entities.len()),
-        2,
-        "the new line lives in model space"
-    );
-    assert_eq!(
-        s.doc(|d| d.layout("Layout1").unwrap().entities.len()),
-        1,
-        "and not on the sheet"
-    );
+    assert_eq!(s.doc(|d| d.model.entities.len()), 2, "the new line lives in model space");
+    assert_eq!(s.doc(|d| d.layout("Layout1").unwrap().entities.len()), 1, "and not on the sheet");
     s.cmd("PSPACE");
     assert_eq!(space(&s), "Layout1");
     assert!(s.h.borrow().editor().unwrap().mspace.is_none());
@@ -121,20 +94,11 @@ fn mview_creates_rectangular_polygonal_object_and_array_viewports() {
     assert_eq!(vps.len(), 2);
     near(vps[1].w, 100.0, 1e-9);
     near(vps[1].h, 80.0, 1e-9);
-    s.cmd("MVIEW")
-        .ty("Polygonal")
-        .click(150.0, 20.0)
-        .click(250.0, 20.0)
-        .click(200.0, 100.0)
-        .ty("C");
+    s.cmd("MVIEW").ty("Polygonal").click(150.0, 20.0).click(250.0, 20.0).click(200.0, 100.0).ty("C");
     let vps = viewports(&s, "Layout2");
     assert_eq!(vps.len(), 3);
     assert_eq!(vps[2].clip.as_ref().unwrap().len(), 3);
-    s.cmd("MVIEW")
-        .ty("2")
-        .ty("Horizontal")
-        .click(10.0, 110.0)
-        .click(110.0, 190.0);
+    s.cmd("MVIEW").ty("2").ty("Horizontal").click(10.0, 110.0).click(110.0, 190.0);
     assert_eq!(viewports(&s, "Layout2").len(), 5);
     s.cmd("MVIEW").ty("4").ty("Fit");
     assert_eq!(viewports(&s, "Layout2").len(), 9);
@@ -155,11 +119,7 @@ fn viewport_lock_and_off_and_clip() {
     let s = Sim::new();
     s.cmd("LAYOUT").ty("Set").ty("Layout1");
     let id = s.doc(|d| d.layout("Layout1").unwrap().entities[0].id);
-    s.cmd("MVIEW")
-        .ty("Lock")
-        .ty("ON")
-        .click(150.0, 10.0)
-        .enter(); // the viewport border is at y=10
+    s.cmd("MVIEW").ty("Lock").ty("ON").click(150.0, 10.0).enter(); // the viewport border is at y=10
     assert!(viewports(&s, "Layout1")[0].locked);
     s.cmd("MVIEW").ty("OFF").click(150.0, 10.0).enter();
     assert!(viewports(&s, "Layout1")[0].off);
@@ -176,19 +136,13 @@ fn pagesetup_changes_the_paper_without_a_dialog() {
     near(p.w, 297.0, 1e-9);
     near(p.h, 420.0, 1e-9);
     s.undo();
-    assert_eq!(
-        s.doc(|d| d.layout("Layout1").unwrap().paper.name.clone()),
-        "A4"
-    );
+    assert_eq!(s.doc(|d| d.layout("Layout1").unwrap().paper.name.clone()), "A4");
 }
 
 #[test]
 fn layout_wizard_builds_a_layout_with_a_viewport() {
     let s = Sim::new();
-    s.cmd("LAYOUTWIZARD")
-        .ty("Elevation")
-        .ty("A2")
-        .ty("Landscape");
+    s.cmd("LAYOUTWIZARD").ty("Elevation").ty("A2").ty("Landscape");
     assert_eq!(space(&s), "Elevation");
     let v = &viewports(&s, "Elevation");
     assert_eq!(v.len(), 1);
@@ -212,21 +166,10 @@ fn switching_tabs_remembers_each_view() {
     s.with_view(|v| v.scale = 77.0);
     s.cmd("LAYOUT").ty("Set").ty("Layout1");
     let paper_scale = s.view_scale();
-    assert!(
-        (paper_scale - 77.0).abs() > 1e-6,
-        "the sheet is fitted, not the model view"
-    );
-    s.h.borrow_mut()
-        .editor_mut()
-        .unwrap()
-        .switch_space("model")
-        .unwrap();
+    assert!((paper_scale - 77.0).abs() > 1e-6, "the sheet is fitted, not the model view");
+    s.h.borrow_mut().editor_mut().unwrap().switch_space("model").unwrap();
     near(s.view_scale(), 77.0, 1e-9);
-    s.h.borrow_mut()
-        .editor_mut()
-        .unwrap()
-        .switch_space("Layout1")
-        .unwrap();
+    s.h.borrow_mut().editor_mut().unwrap().switch_space("Layout1").unwrap();
     near(s.view_scale(), paper_scale, 1e-9);
 }
 

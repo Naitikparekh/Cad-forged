@@ -1,9 +1,7 @@
 //! OFFSET: parallel copies of lines, arcs, circles, polylines (with extended corners), ellipses and splines.
 use super::path::*;
 use crate::drawing::Drawing;
-use crate::entities::{
-    ellipse_is_full, ellipse_point, ellipse_sweep, segs_of, spline_points, Entity, Kind,
-};
+use crate::entities::{ellipse_is_full, ellipse_point, ellipse_sweep, segs_of, spline_points, Entity, Kind};
 use crate::geom::*;
 
 /// Which side of a path (left = +1, right = -1) is the point on?
@@ -17,11 +15,7 @@ pub fn side_of(segs: &[Seg], p: Pt) -> f64 {
             if let Seg::A { c, r, sw, .. } = *s {
                 if d > 0.0 {
                     // inside a CCW arc is its left
-                    side = if (dist(p, c) < r) == (sw > 0.0) {
-                        1.0
-                    } else {
-                        -1.0
-                    };
+                    side = if (dist(p, c) < r) == (sw > 0.0) { 1.0 } else { -1.0 };
                 }
             }
             best = (d, side);
@@ -35,11 +29,7 @@ pub fn offset_segs(segs: &[Seg], d: f64, closed: bool) -> Option<Vec<Seg>> {
     let mut offs: Vec<Option<Seg>> = segs.iter().map(|s| s.offset(d)).collect();
     // iterative removal of collapsed / reversed segments
     for _pass in 0..4 {
-        let alive: Vec<(Seg, usize)> = offs
-            .iter()
-            .enumerate()
-            .filter_map(|(i, o)| o.map(|s| (s, i)))
-            .collect();
+        let alive: Vec<(Seg, usize)> = offs.iter().enumerate().filter_map(|(i, o)| o.map(|s| (s, i))).collect();
         if alive.is_empty() {
             return None;
         }
@@ -69,11 +59,7 @@ pub fn offset_segs(segs: &[Seg], d: f64, closed: bool) -> Option<Vec<Seg>> {
             }
             pts.push(best.unwrap_or(m));
         }
-        let last_pt = if closed {
-            None
-        } else {
-            Some(alive[n - 1].0.end())
-        };
+        let last_pt = if closed { None } else { Some(alive[n - 1].0.end()) };
         // rebuild each segment between its joints; detect reversal
         let mut rebuilt = vec![];
         let mut bad = vec![];
@@ -97,11 +83,7 @@ pub fn offset_segs(segs: &[Seg], d: f64, closed: bool) -> Option<Vec<Seg>> {
                 Seg::A { c, r, sw: osw, .. } => {
                     let a0 = angle_of(c, p0);
                     let a1 = angle_of(c, p1);
-                    let mut sw = if osw >= 0.0 {
-                        sweep_ccw(a0, a1)
-                    } else {
-                        -sweep_ccw(a1, a0)
-                    };
+                    let mut sw = if osw >= 0.0 { sweep_ccw(a0, a1) } else { -sweep_ccw(a1, a0) };
                     if sw.abs() > osw.abs() + 1e-6 && osw.abs() < TAU - 1e-6 {
                         bad.push(oi);
                     }
@@ -130,18 +112,8 @@ pub struct OffsetResult {
 }
 
 /// Offset any supported entity by `dist` towards `side_point`.
-pub fn offset_entity(
-    e: &Entity,
-    dist_: f64,
-    side_point: Pt,
-    doc: &Drawing,
-) -> Result<OffsetResult, String> {
-    let ok = |entity: Entity| {
-        Ok(OffsetResult {
-            entity,
-            approximated: false,
-        })
-    };
+pub fn offset_entity(e: &Entity, dist_: f64, side_point: Pt, doc: &Drawing) -> Result<OffsetResult, String> {
+    let ok = |entity: Entity| Ok(OffsetResult { entity, approximated: false });
     match &e.kind {
         Kind::Line { .. } => {
             let segs = segs_of(e, doc);
@@ -168,43 +140,27 @@ pub fn offset_entity(
         Kind::Pline { .. } => {
             let path = path_of(e, doc).ok_or("That object cannot be offset.")?;
             let d = dist_ * side_of(&path.segs, side_point);
-            let segs = offset_segs(&path.segs, d, path.closed)
-                .ok_or("The offset distance is too large for this polyline.")?;
-            let entity = entity_from_segs(&segs, e, path.closed)
-                .ok_or("The offset distance is too large for this polyline.")?;
+            let segs = offset_segs(&path.segs, d, path.closed).ok_or("The offset distance is too large for this polyline.")?;
+            let entity = entity_from_segs(&segs, e, path.closed).ok_or("The offset distance is too large for this polyline.")?;
             ok(entity)
         }
         Kind::Ellipse(_) | Kind::Spline { .. } => {
             let (pts, closed) = match &e.kind {
                 Kind::Ellipse(el) => {
                     let sw = ellipse_sweep(el);
-                    (
-                        (0..=128)
-                            .map(|i| ellipse_point(el, el.t0 + sw * i as f64 / 128.0))
-                            .collect::<Vec<_>>(),
-                        ellipse_is_full(el),
-                    )
+                    ((0..=128).map(|i| ellipse_point(el, el.t0 + sw * i as f64 / 128.0)).collect::<Vec<_>>(), ellipse_is_full(el))
                 }
                 Kind::Spline { fit, closed } => (spline_points(fit, *closed, 14), *closed),
                 _ => unreachable!(),
             };
             let lines: Vec<Seg> = pts.windows(2).map(|w| Seg::line(w[0], w[1])).collect();
-            let segs = offset_segs(&lines, dist_ * side_of(&lines, side_point), closed)
-                .ok_or("The offset distance is too large.")?;
-            let entity =
-                entity_from_segs(&segs, e, closed).ok_or("The offset distance is too large.")?;
-            Ok(OffsetResult {
-                entity,
-                approximated: true,
-            })
+            let segs = offset_segs(&lines, dist_ * side_of(&lines, side_point), closed).ok_or("The offset distance is too large.")?;
+            let entity = entity_from_segs(&segs, e, closed).ok_or("The offset distance is too large.")?;
+            Ok(OffsetResult { entity, approximated: true })
         }
         Kind::Xline { p, d } => {
             let n = perp(*d);
-            let s = if dot(side_point - *p, n) >= 0.0 {
-                1.0
-            } else {
-                -1.0
-            };
+            let s = if dot(side_point - *p, n) >= 0.0 { 1.0 } else { -1.0 };
             ok(inherit_props(e, Entity::xline(*p + n * (dist_ * s), *d)))
         }
         _ => Err("That object cannot be offset.".into()),

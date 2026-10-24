@@ -23,42 +23,17 @@ fn main() {
     };
     let count = |d: &Drawing| {
         let mut m: BTreeMap<String, usize> = BTreeMap::new();
-        for e in d
-            .model
-            .entities
-            .iter()
-            .map(|e| format!("model {}", e.type_name()))
-            .chain(d.layouts.iter().flat_map(|l| {
-                l.entities
-                    .iter()
-                    .map(move |e| format!("layout {} {}", l.name, e.type_name()))
-            }))
-        {
+        for e in d.model.entities.iter().map(|e| format!("model {}", e.type_name())).chain(d.layouts.iter().flat_map(|l| l.entities.iter().map(move |e| format!("layout {} {}", l.name, e.type_name())))) {
             *m.entry(e).or_default() += 1;
         }
-        m.insert(format!("solids"), d.solids.len());
-        m.insert(format!("blocks"), d.blocks.len());
-        m.insert(
-            format!("groups"),
-            d.model
-                .entities
-                .iter()
-                .filter_map(|e| e.grp.clone())
-                .collect::<std::collections::BTreeSet<_>>()
-                .len(),
-        );
+        m.insert("solids".to_string(), d.solids.len());
+        m.insert("blocks".to_string(), d.blocks.len());
+        m.insert("groups".to_string(), d.model.entities.iter().filter_map(|e| e.grp.clone()).collect::<std::collections::BTreeSet<_>>().len());
         m
     };
     let (a, b) = (count(&d), count(&back));
-    for k in a
-        .keys()
-        .chain(b.keys())
-        .collect::<std::collections::BTreeSet<_>>()
-    {
-        let (x, y) = (
-            a.get(k).copied().unwrap_or(0),
-            b.get(k).copied().unwrap_or(0),
-        );
+    for k in a.keys().chain(b.keys()).collect::<std::collections::BTreeSet<_>>() {
+        let (x, y) = (a.get(k).copied().unwrap_or(0), b.get(k).copied().unwrap_or(0));
         if x != y {
             println!("{k}: {x} -> {y}");
         }

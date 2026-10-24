@@ -81,23 +81,7 @@ pub enum InspShape {
 
 impl DimData {
     pub fn new(kind: DimType) -> DimData {
-        DimData {
-            kind,
-            p1: None,
-            p2: None,
-            dp: None,
-            c: None,
-            pt: None,
-            tp: None,
-            ang: None,
-            txt: None,
-            ds: None,
-            xd: false,
-            tr: None,
-            obl: None,
-            brk: vec![],
-            insp: None,
-        }
+        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None }
     }
     /// Names of the defining-point fields of this dimension.
     pub fn point_mut(&mut self, key: &str) -> Option<&mut Option<Pt>> {
@@ -168,9 +152,7 @@ fn readable(a: f64) -> f64 {
 }
 
 pub fn dim_style_of<'a>(e: &DimData, settings: &'a Settings) -> &'a DimStyle {
-    e.ds.as_ref()
-        .and_then(|n| settings.dim_styles.get(n))
-        .unwrap_or_else(|| settings.cur_dim())
+    e.ds.as_ref().and_then(|n| settings.dim_styles.get(n)).unwrap_or_else(|| settings.cur_dim())
 }
 
 fn measure_label(value: f64, st: &DimStyle) -> String {
@@ -220,20 +202,10 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
     }
     macro_rules! arrow {
         ($tip:expr, $dir:expr) => {
-            arrows.push(Arrow {
-                tip: $tip,
-                dir: $dir,
-                size: asz,
-                style: st.blk.clone(),
-            })
+            arrows.push(Arrow { tip: $tip, dir: $dir, size: asz, style: st.blk.clone() })
         };
     }
-    let mk = |mut segs: Vec<Seg>,
-              arrows: Vec<Arrow>,
-              mut text: TextData,
-              measured: f64,
-              dim_line: Option<DimLine>,
-              arc: Option<usize>| {
+    let mk = |mut segs: Vec<Seg>, arrows: Vec<Arrow>, mut text: TextData, measured: f64, dim_line: Option<DimLine>, arc: Option<usize>| {
         if let Some(r) = e.tr {
             text.rot = norm_angle(text.rot + r);
         }
@@ -246,35 +218,19 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
         if let Some(i) = &e.insp {
             inspection_frame(i, &mut text, &mut segs, gap);
         }
-        DimGeo {
-            segs,
-            arrows,
-            text,
-            measured,
-            kind: e.kind,
-            style: st.clone(),
-            dim_line,
-            arc,
-        }
+        DimGeo { segs, arrows, text, measured, kind: e.kind, style: st.clone(), dim_line, arc }
     };
 
     match e.kind {
         DimType::Lin | DimType::Ali => {
             let (p1, p2, dp) = (e.p1.unwrap_or(z), e.p2.unwrap_or(z), e.dp.unwrap_or(z));
-            let ang = if e.kind == DimType::Ali {
-                angle_of(p1, p2)
-            } else {
-                e.ang.unwrap_or(0.0)
-            };
+            let ang = if e.kind == DimType::Ali { angle_of(p1, p2) } else { e.ang.unwrap_or(0.0) };
             let d = pt(ang.cos(), ang.sin());
             let n = perp(d);
             let side = if dot(dp - p1, n) >= 0.0 { 1.0 } else { -1.0 };
             // extension lines run along `ev`: perpendicular to the dimension line unless obliqued
             let obl = e.obl.unwrap_or(0.0);
-            let ev = pt(
-                n.x * obl.cos() - n.y * obl.sin(),
-                n.x * obl.sin() + n.y * obl.cos(),
-            );
+            let ev = pt(n.x * obl.cos() - n.y * obl.sin(), n.x * obl.sin() + n.y * obl.cos());
             let cos_obl = dot(ev, n).max(0.05);
             let foot = |p: Pt| p + ev * (dot(dp - p, n) / cos_obl);
             let (a, b) = (foot(p1), foot(p2));
@@ -320,23 +276,8 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
                     t
                 }
             };
-            let text = TextData::new(tp, h, &label)
-                .with_rot(text_ang)
-                .with_just(HJust::Center, jv);
-            mk(
-                segs,
-                arrows,
-                text,
-                measured,
-                Some(DimLine {
-                    a,
-                    b,
-                    dir: line_dir,
-                    normal: n,
-                    side,
-                }),
-                None,
-            )
+            let text = TextData::new(tp, h, &label).with_rot(text_ang).with_just(HJust::Center, jv);
+            mk(segs, arrows, text, measured, Some(DimLine { a, b, dir: line_dir, normal: n, side }), None)
         }
         DimType::Rad | DimType::Dia => {
             let (c, p) = (e.c.unwrap_or(z), e.pt.unwrap_or(z));
@@ -352,21 +293,13 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             arrow!(p, u * -1.0);
             line!(far, p);
             let text = if dist(c, dp) < r {
-                TextData::new(e.tp.unwrap_or_else(|| mid(c, p)), h, &label)
-                    .with_rot(readable(angle_of(c, p)))
-                    .with_just(
-                        HJust::Center,
-                        if st.tad { VJust::Bottom } else { VJust::Middle },
-                    )
+                TextData::new(e.tp.unwrap_or_else(|| mid(c, p)), h, &label).with_rot(readable(angle_of(c, p))).with_just(HJust::Center, if st.tad { VJust::Bottom } else { VJust::Middle })
             } else {
                 line!(p, dp);
                 let right = dp.x >= p.x;
                 let sgn = if right { 1.0 } else { -1.0 };
                 line!(dp, dp + pt(sgn * asz, 0.0));
-                TextData::new(dp + pt(sgn * (asz + gap), 0.0), h, &label).with_just(
-                    if right { HJust::Left } else { HJust::Right },
-                    VJust::Middle,
-                )
+                TextData::new(dp + pt(sgn * (asz + gap), 0.0), h, &label).with_just(if right { HJust::Left } else { HJust::Right }, VJust::Middle)
             };
             if st.cen > 0.0 {
                 let cm = st.cen * k / 2.0;
@@ -376,12 +309,7 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             mk(segs, arrows, text, measured, None, None)
         }
         DimType::Ang => {
-            let (c, p1, p2, dp) = (
-                e.c.unwrap_or(z),
-                e.p1.unwrap_or(z),
-                e.p2.unwrap_or(z),
-                e.dp.unwrap_or(z),
-            );
+            let (c, p1, p2, dp) = (e.c.unwrap_or(z), e.p1.unwrap_or(z), e.p2.unwrap_or(z), e.dp.unwrap_or(z));
             let (a1, a2) = (angle_of(c, p1), angle_of(c, p2));
             let rr = dist(c, dp);
             let (mut a0, mut sw) = (a1, sweep_ccw(a1, a2));
@@ -404,18 +332,11 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             arrow!(polar(c, a0 + sw, rr), pt(-(a0 + sw).sin(), (a0 + sw).cos()));
             let am = a0 + sw / 2.0;
             let label = label_for(e, &st, sw, DimType::Ang);
-            let text = TextData::new(e.tp.unwrap_or_else(|| polar(c, am, rr + gap)), h, &label)
-                .with_rot(readable(am + PI / 2.0))
-                .with_just(HJust::Center, VJust::Bottom);
+            let text = TextData::new(e.tp.unwrap_or_else(|| polar(c, am, rr + gap)), h, &label).with_rot(readable(am + PI / 2.0)).with_just(HJust::Center, VJust::Bottom);
             mk(segs, arrows, text, sw, None, Some(arc_idx))
         }
         DimType::Arc => {
-            let (c, p1, p2, dp) = (
-                e.c.unwrap_or(z),
-                e.p1.unwrap_or(z),
-                e.p2.unwrap_or(z),
-                e.dp.unwrap_or(z),
-            );
+            let (c, p1, p2, dp) = (e.c.unwrap_or(z), e.p1.unwrap_or(z), e.p2.unwrap_or(z), e.dp.unwrap_or(z));
             let (a0, r) = (angle_of(c, p1), dist(c, p1));
             let sw = match sweep_ccw(a0, angle_of(c, p2)) {
                 s if s < 1e-12 => TAU,
@@ -426,18 +347,13 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             let arc_idx = segs.len() - 1;
             let outward = if rr >= r { 1.0 } else { -1.0 };
             for ang in [a0, a0 + sw] {
-                line!(
-                    polar(c, ang, r + outward * exo),
-                    polar(c, ang, rr + outward * exe)
-                );
+                line!(polar(c, ang, r + outward * exo), polar(c, ang, rr + outward * exe));
             }
             arrow!(polar(c, a0, rr), pt(a0.sin(), -a0.cos()));
             arrow!(polar(c, a0 + sw, rr), pt(-(a0 + sw).sin(), (a0 + sw).cos()));
             let am = a0 + sw / 2.0;
             let label = label_for(e, &st, r * sw, DimType::Arc);
-            let text = TextData::new(e.tp.unwrap_or_else(|| polar(c, am, rr + gap)), h, &label)
-                .with_rot(readable(am + PI / 2.0))
-                .with_just(HJust::Center, VJust::Bottom);
+            let text = TextData::new(e.tp.unwrap_or_else(|| polar(c, am, rr + gap)), h, &label).with_rot(readable(am + PI / 2.0)).with_just(HJust::Center, VJust::Bottom);
             mk(segs, arrows, text, r * sw, None, Some(arc_idx))
         }
         DimType::Jog => {
@@ -451,14 +367,7 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             // the dimension line from the arc point to the centre override carries a zig-zag at the jog location
             let s = asz * 1.5;
             let jc = p + w * clamp(dot(e.p2.unwrap_or(mid(o, p)) - p, w), l * 0.2, l * 0.8);
-            let zig = [
-                p,
-                jc - w * (s / 2.0),
-                jc - w * (s / 6.0) + n * (s / 2.0),
-                jc + w * (s / 6.0) - n * (s / 2.0),
-                jc + w * (s / 2.0),
-                o,
-            ];
+            let zig = [p, jc - w * (s / 2.0), jc - w * (s / 6.0) + n * (s / 2.0), jc + w * (s / 6.0) - n * (s / 2.0), jc + w * (s / 2.0), o];
             for pair in zig.windows(2) {
                 line!(pair[0], pair[1]);
             }
@@ -469,54 +378,22 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
                 let right = dp.x >= p.x;
                 let sgn = if right { 1.0 } else { -1.0 };
                 line!(dp, dp + pt(sgn * asz, 0.0));
-                TextData::new(dp + pt(sgn * (asz + gap), 0.0), h, &label).with_just(
-                    if right { HJust::Left } else { HJust::Right },
-                    VJust::Middle,
-                )
+                TextData::new(dp + pt(sgn * (asz + gap), 0.0), h, &label).with_just(if right { HJust::Left } else { HJust::Right }, VJust::Middle)
             } else {
-                TextData::new(e.tp.unwrap_or(dp), h, &label)
-                    .with_rot(readable(angle_of(o, p)))
-                    .with_just(
-                        HJust::Center,
-                        if st.tad { VJust::Bottom } else { VJust::Middle },
-                    )
+                TextData::new(e.tp.unwrap_or(dp), h, &label).with_rot(readable(angle_of(o, p))).with_just(HJust::Center, if st.tad { VJust::Bottom } else { VJust::Middle })
             };
             mk(segs, arrows, text, measured, None, None)
         }
         DimType::Ord => {
             let (o, f, end) = (e.c.unwrap_or(z), e.pt.unwrap_or(z), e.dp.unwrap_or(z));
             let sgn = |v: f64| if v < 0.0 { -1.0 } else { 1.0 };
-            let (measured, tip, dir) = if e.xd {
-                (f.x - o.x, pt(f.x, end.y), pt(0.0, sgn(end.y - f.y)))
-            } else {
-                (f.y - o.y, pt(end.x, f.y), pt(sgn(end.x - f.x), 0.0))
-            };
+            let (measured, tip, dir) = if e.xd { (f.x - o.x, pt(f.x, end.y), pt(0.0, sgn(end.y - f.y))) } else { (f.y - o.y, pt(end.x, f.y), pt(sgn(end.x - f.x), 0.0)) };
             let label = label_for(e, &st, measured, DimType::Ord);
             if dist(f, tip) > exo {
                 line!(f + dir * exo, tip);
             }
-            let (rot, jh) = if e.xd {
-                (
-                    PI / 2.0,
-                    if dir.y > 0.0 {
-                        HJust::Left
-                    } else {
-                        HJust::Right
-                    },
-                )
-            } else {
-                (
-                    0.0,
-                    if dir.x > 0.0 {
-                        HJust::Left
-                    } else {
-                        HJust::Right
-                    },
-                )
-            };
-            let text = TextData::new(e.tp.unwrap_or(tip + dir * gap), h, &label)
-                .with_rot(rot)
-                .with_just(jh, VJust::Middle);
+            let (rot, jh) = if e.xd { (PI / 2.0, if dir.y > 0.0 { HJust::Left } else { HJust::Right }) } else { (0.0, if dir.x > 0.0 { HJust::Left } else { HJust::Right }) };
+            let text = TextData::new(e.tp.unwrap_or(tip + dir * gap), h, &label).with_rot(rot).with_just(jh, VJust::Middle);
             mk(segs, arrows, text, measured, None, None)
         }
     }
@@ -526,11 +403,7 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
 fn apply_breaks(segs: Vec<Seg>, brk: &[(usize, f64, f64)]) -> Vec<Seg> {
     let mut out = Vec::with_capacity(segs.len() + brk.len());
     for (i, s) in segs.into_iter().enumerate() {
-        let mut cuts: Vec<(f64, f64)> = brk
-            .iter()
-            .filter(|b| b.0 == i)
-            .map(|b| (b.1.min(b.2), b.1.max(b.2)))
-            .collect();
+        let mut cuts: Vec<(f64, f64)> = brk.iter().filter(|b| b.0 == i).map(|b| (b.1.min(b.2), b.1.max(b.2))).collect();
         let Seg::L { a, b, .. } = s else {
             out.push(s);
             continue;
@@ -559,12 +432,7 @@ fn arc_symbol(text: &TextData, gap: f64) -> Seg {
     let s = (chord / 4.0).min(text.h / 2.0);
     let r = (chord * chord / 4.0 + s * s) / (2.0 * s);
     let phi = (chord / 2.0 / r).asin();
-    Seg::arc(
-        top + up * (gap / 2.0 + s - r),
-        r,
-        angle_of(Pt::ZERO, up) - phi,
-        2.0 * phi,
-    )
+    Seg::arc(top + up * (gap / 2.0 + s - r), r, angle_of(Pt::ZERO, up) - phi, 2.0 * phi)
 }
 
 /// DIMINSPECT: "label | value | rate%" text inside a round or angular frame.
@@ -584,23 +452,10 @@ fn inspection_frame(i: &DimInspect, text: &mut TextData, segs: &mut Vec<Seg>, ga
     let k = text_corners(text);
     let (u, v) = (unit(k[1] - k[0]), unit(k[3] - k[0]));
     let (ctr, hh) = (mid(k[0], k[2]), dist(k[0], k[3]) / 2.0 + gap / 2.0);
-    let hw = dist(k[0], k[1]) / 2.0
-        + gap
-        + if i.shape == InspShape::Round {
-            hh / 2.0
-        } else {
-            0.0
-        };
-    let straight = if i.shape == InspShape::Round {
-        hw - hh
-    } else {
-        hw
-    };
+    let hw = dist(k[0], k[1]) / 2.0 + gap + if i.shape == InspShape::Round { hh / 2.0 } else { 0.0 };
+    let straight = if i.shape == InspShape::Round { hw - hh } else { hw };
     for s in [-1.0, 1.0] {
-        segs.push(Seg::line(
-            ctr - u * straight + v * (s * hh),
-            ctr + u * straight + v * (s * hh),
-        ));
+        segs.push(Seg::line(ctr - u * straight + v * (s * hh), ctr + u * straight + v * (s * hh)));
     }
     if i.shape == InspShape::Round {
         let rot = angle_of(Pt::ZERO, u);
@@ -608,10 +463,7 @@ fn inspection_frame(i: &DimInspect, text: &mut TextData, segs: &mut Vec<Seg>, ga
         segs.push(Seg::arc(ctr - u * straight, hh, rot + PI / 2.0, PI));
     } else {
         for s in [-1.0, 1.0] {
-            segs.push(Seg::line(
-                ctr + u * (s * hw) - v * hh,
-                ctr + u * (s * hw) + v * hh,
-            ));
+            segs.push(Seg::line(ctr + u * (s * hw) - v * hh, ctr + u * (s * hw) + v * hh));
         }
     }
 }
@@ -632,10 +484,7 @@ pub fn arrow_lines(a: &Arrow) -> Vec<(Pt, Pt)> {
     match a.style.as_str() {
         "open" => {
             let base = a.tip + a.dir * a.size;
-            vec![
-                (a.tip, base + n * (a.size / 4.0)),
-                (a.tip, base + n * (-a.size / 4.0)),
-            ]
+            vec![(a.tip, base + n * (a.size / 4.0)), (a.tip, base + n * (-a.size / 4.0))]
         }
         "tick" => {
             let q = unit(a.dir + n) * (a.size / 2.0);
@@ -665,17 +514,11 @@ mod tests {
         assert!((g.measured - 120.0).abs() < 1e-12);
         assert_eq!(g.text.s, "120.00");
         assert_eq!(g.arrows.len(), 2);
-        assert_eq!(g.segs.len(), 3); // two extension lines + dimension line
+        assert_eq!(g.segs.len(), 3);                       // two extension lines + dimension line
         let dl = g.dim_line.unwrap();
         assert!((dl.a.y + 16.0).abs() < 1e-12 && (dl.b.x - 120.0).abs() < 1e-12 && dl.side < 0.0);
-        assert!(
-            (g.text.p.x - 60.0).abs() < 1e-9,
-            "text centred on the dimension line"
-        );
-        assert!(
-            (g.text.p.y + 15.375).abs() < 1e-9 && g.text.jv == VJust::Bottom,
-            "text sits above the dimension line (DIMTAD)"
-        );
+        assert!((g.text.p.x - 60.0).abs() < 1e-9, "text centred on the dimension line");
+        assert!((g.text.p.y + 15.375).abs() < 1e-9 && g.text.jv == VJust::Bottom, "text sits above the dimension line (DIMTAD)");
         // extension lines start at the offset from the origin and extend beyond the line
         match g.segs[0] {
             Seg::L { a, b, .. } => {
@@ -711,10 +554,7 @@ mod tests {
         let s = Settings::default();
         let mut r = DimData::new(DimType::Dia);
         r.c = Some(pt(75.0, 15.0));
-        r.pt = Some(pt(
-            75.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2,
-            15.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2,
-        ));
+        r.pt = Some(pt(75.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2, 15.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2));
         r.dp = Some(pt(94.0, 29.0));
         let g = dim_geometry(&r, &s);
         assert_eq!(g.text.s, "\u{2300}10.00");
@@ -755,23 +595,12 @@ mod tests {
         assert_eq!(g.arrows.len(), 2);
         // two extension lines, the dimension arc and the arc symbol above the text
         assert_eq!(g.segs.len(), 4);
-        let Seg::A {
-            c, r: sr, a0, sw, ..
-        } = g.segs[3]
-        else {
-            panic!("arc symbol")
-        };
+        let Seg::A { c, r: sr, a0, sw, .. } = g.segs[3] else { panic!("arc symbol") };
         let up = polar(Pt::ZERO, g.text.rot + PI / 2.0, 1.0);
         let top = g.text.p + up * g.text.h;
-        assert!(
-            dot(polar(c, a0 + sw / 2.0, sr) - top, up) > 0.0,
-            "the symbol sits above the text"
-        );
+        assert!(dot(polar(c, a0 + sw / 2.0, sr) - top, up) > 0.0, "the symbol sits above the text");
         let width = dist(polar(c, a0, sr), polar(c, a0 + sw, sr));
-        assert!(
-            (width - measure_text(&g.text.s, g.text.h)).abs() < 1e-9,
-            "as wide as the text"
-        );
+        assert!((width - measure_text(&g.text.s, g.text.h)).abs() < 1e-9, "as wide as the text");
     }
 
     #[test]
@@ -809,30 +638,19 @@ mod tests {
         d.brk = vec![(2, 40.0, 45.0)];
         let g = dim_geometry(&d, &s);
         assert_eq!(g.segs.len(), 4, "the dimension line is cut in two");
-        assert!(
-            (g.segs[2].length() - 40.0).abs() < 1e-9 && (g.segs[3].length() - 55.0).abs() < 1e-9
-        );
+        assert!((g.segs[2].length() - 40.0).abs() < 1e-9 && (g.segs[3].length() - 55.0).abs() < 1e-9);
         d.brk.clear();
         d.tr = Some(PI / 2.0);
         assert!((dim_geometry(&d, &s).text.rot - PI / 2.0).abs() < 1e-9);
         d.tr = None;
         d.obl = Some(PI / 4.0);
         let g = dim_geometry(&d, &s);
-        let Seg::L { a, b, .. } = g.segs[0] else {
-            panic!()
-        };
+        let Seg::L { a, b, .. } = g.segs[0] else { panic!() };
         let r = 0.5f64.sqrt();
-        assert!(
-            (a.x - 0.625 * r).abs() < 1e-9 && (b.x - (10.0 + 1.25 * r)).abs() < 1e-9,
-            "the extension line leans: {a:?} {b:?}"
-        );
+        assert!((a.x - 0.625 * r).abs() < 1e-9 && (b.x - (10.0 + 1.25 * r)).abs() < 1e-9, "the extension line leans: {a:?} {b:?}");
         // the dimension line moves along the leaning extension line; the measurement is unchanged
         let dl = g.dim_line.unwrap();
-        assert!(
-            (dl.a.x - 10.0).abs() < 1e-9
-                && (dl.a.y + 10.0).abs() < 1e-9
-                && (g.measured - 100.0).abs() < 1e-9
-        );
+        assert!((dl.a.x - 10.0).abs() < 1e-9 && (dl.a.y + 10.0).abs() < 1e-9 && (g.measured - 100.0).abs() < 1e-9);
     }
 
     #[test]
@@ -840,19 +658,11 @@ mod tests {
         let s = Settings::default();
         let mut d = lin(pt(0.0, 0.0), pt(100.0, 0.0), pt(50.0, -10.0), 0.0);
         let base = dim_geometry(&d, &s).segs.len();
-        d.insp = Some(DimInspect {
-            label: "A1".into(),
-            rate: Some(50),
-            shape: InspShape::Round,
-        });
+        d.insp = Some(DimInspect { label: "A1".into(), rate: Some(50), shape: InspShape::Round });
         let g = dim_geometry(&d, &s);
         assert_eq!(g.text.s, "A1 | 100.00 | 50%");
         assert_eq!(g.segs.len(), base + 4, "two lines and two end arcs");
-        d.insp = Some(DimInspect {
-            label: String::new(),
-            rate: None,
-            shape: InspShape::Angular,
-        });
+        d.insp = Some(DimInspect { label: String::new(), rate: None, shape: InspShape::Angular });
         assert_eq!(dim_geometry(&d, &s).segs.len(), base + 4);
     }
 
@@ -866,26 +676,11 @@ mod tests {
         let back: DimData = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
         let mut broken = d.clone();
-        (broken.brk, broken.tr, broken.obl, broken.insp) = (
-            vec![(2, 40.0, 45.0)],
-            Some(0.5),
-            Some(-0.2),
-            Some(DimInspect {
-                label: "A".into(),
-                rate: Some(50),
-                shape: InspShape::Angular,
-            }),
-        );
+        (broken.brk, broken.tr, broken.obl, broken.insp) = (vec![(2, 40.0, 45.0)], Some(0.5), Some(-0.2), Some(DimInspect { label: "A".into(), rate: Some(50), shape: InspShape::Angular }));
         let json = serde_json::to_string(&broken).unwrap();
-        assert!(
-            json.contains(r#""brk":[[2,40.0,45.0]]"#) && json.contains(r#""shape":"angular""#),
-            "{json}"
-        );
+        assert!(json.contains(r#""brk":[[2,40.0,45.0]]"#) && json.contains(r#""shape":"angular""#), "{json}");
         assert_eq!(serde_json::from_str::<DimData>(&json).unwrap(), broken);
-        let o: DimData = serde_json::from_str(
-            r#"{"kind":"ord","c":{"x":0,"y":0},"pt":{"x":3,"y":4},"dp":{"x":3,"y":9},"xd":true}"#,
-        )
-        .unwrap();
+        let o: DimData = serde_json::from_str(r#"{"kind":"ord","c":{"x":0,"y":0},"pt":{"x":3,"y":4},"dp":{"x":3,"y":9},"xd":true}"#).unwrap();
         assert!(o.xd && o.kind == DimType::Ord);
     }
 

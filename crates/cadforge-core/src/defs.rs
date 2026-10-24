@@ -55,29 +55,18 @@ fn header(line: &str) -> Option<(String, String)> {
 }
 
 fn numbers(line: &str) -> Result<Vec<f64>, String> {
-    line.split(',')
-        .map(|t| {
-            t.trim()
-                .parse::<f64>()
-                .map_err(|_| format!("\"{}\" is not a number", t.trim()))
-        })
-        .collect()
+    line.split(',').map(|t| t.trim().parse::<f64>().map_err(|_| format!("\"{}\" is not a number", t.trim()))).collect()
 }
 
 /// Parse the text of a `.pat` file.
 pub fn parse_pat(text: &str) -> Parsed<PatternDef> {
-    let mut out = Parsed {
-        defs: vec![],
-        skipped: vec![],
-    };
+    let mut out = Parsed { defs: vec![], skipped: vec![] };
     let mut cur: Option<(PatternDef, Option<String>)> = None;
     let finish = |cur: &mut Option<(PatternDef, Option<String>)>, out: &mut Parsed<PatternDef>| {
         if let Some((def, err)) = cur.take() {
             match err {
                 Some(e) => out.skipped.push(format!("{}: {e}", def.name)),
-                None if def.families.is_empty() => out
-                    .skipped
-                    .push(format!("{}: no line definitions", def.name)),
+                None if def.families.is_empty() => out.skipped.push(format!("{}: no line definitions", def.name)),
                 None => out.defs.push(def),
             }
         }
@@ -89,14 +78,7 @@ pub fn parse_pat(text: &str) -> Parsed<PatternDef> {
         }
         if let Some((name, desc)) = header(line) {
             finish(&mut cur, &mut out);
-            cur = Some((
-                PatternDef {
-                    name,
-                    desc,
-                    families: vec![],
-                },
-                None,
-            ));
+            cur = Some((PatternDef { name, desc, families: vec![] }, None));
         } else if let Some((def, err)) = cur.as_mut() {
             if err.is_some() {
                 continue;
@@ -107,19 +89,10 @@ pub fn parse_pat(text: &str) -> Parsed<PatternDef> {
                     if dy == 0.0 && dx == 0.0 {
                         *err = Some("a line family needs a spacing".into());
                     } else {
-                        def.families.push(FamilyDef {
-                            a,
-                            ox,
-                            oy,
-                            dx,
-                            dy,
-                            dash: n[5..].to_vec(),
-                        });
+                        def.families.push(FamilyDef { a, ox, oy, dx, dy, dash: n[5..].to_vec() });
                     }
                 }
-                Ok(_) => {
-                    *err = Some("a line family needs angle, origin, delta-x and delta-y".into())
-                }
+                Ok(_) => *err = Some("a line family needs angle, origin, delta-x and delta-y".into()),
                 Err(e) => *err = Some(e),
             }
         }
@@ -130,43 +103,25 @@ pub fn parse_pat(text: &str) -> Parsed<PatternDef> {
 
 /// Parse the text of a `.lin` file. Linetypes with embedded shapes or text are skipped.
 pub fn parse_lin(text: &str) -> Parsed<LinetypeDef> {
-    let mut out = Parsed {
-        defs: vec![],
-        skipped: vec![],
-    };
+    let mut out = Parsed { defs: vec![], skipped: vec![] };
     let mut lines = text.lines().map(clean).filter(|l| !l.is_empty()).peekable();
     while let Some(line) = lines.next() {
-        let Some((name, desc)) = header(line) else {
-            continue;
-        };
+        let Some((name, desc)) = header(line) else { continue };
         let Some(spec) = lines.next_if(|l| !l.starts_with('*')) else {
             out.skipped.push(format!("{name}: no pattern line"));
             continue;
         };
         let Some(body) = spec.strip_prefix(['A', 'a']) else {
-            out.skipped
-                .push(format!("{name}: the pattern line must start with A"));
+            out.skipped.push(format!("{name}: the pattern line must start with A"));
             continue;
         };
         if body.contains('[') {
-            out.skipped.push(format!(
-                "{name}: shapes and text in linetypes are not supported"
-            ));
+            out.skipped.push(format!("{name}: shapes and text in linetypes are not supported"));
             continue;
         }
         match numbers(body.trim_start_matches(',')) {
-            Ok(n)
-                if n.iter().any(|v| *v != 0.0) && n.iter().map(|v| v.abs()).sum::<f64>() > 0.0 =>
-            {
-                out.defs.push(LinetypeDef {
-                    name,
-                    desc,
-                    pattern: n,
-                })
-            }
-            Ok(_) => out
-                .skipped
-                .push(format!("{name}: the pattern has no length")),
+            Ok(n) if n.iter().any(|v| *v != 0.0) && n.iter().map(|v| v.abs()).sum::<f64>() > 0.0 => out.defs.push(LinetypeDef { name, desc, pattern: n }),
+            Ok(_) => out.skipped.push(format!("{name}: the pattern has no length")),
             Err(e) => out.skipped.push(format!("{name}: {e}")),
         }
     }
@@ -191,14 +146,7 @@ mod tests {
     #[test]
     fn a_lin_file_gives_simple_linetypes_and_skips_complex_ones() {
         let l = parse_lin("*FENCE, fence line\nA,12,-6,0,-6\n*GAS_LINE, Gas ----GAS----\nA,12.7,-5.08,[\"GAS\",STANDARD,S=2.5,U=0.0,X=-2.54,Y=-1.27],-5.08\n*BAD\nA,x\n");
-        assert_eq!(
-            l.defs,
-            vec![LinetypeDef {
-                name: "FENCE".into(),
-                desc: "fence line".into(),
-                pattern: vec![12.0, -6.0, 0.0, -6.0]
-            }]
-        );
+        assert_eq!(l.defs, vec![LinetypeDef { name: "FENCE".into(), desc: "fence line".into(), pattern: vec![12.0, -6.0, 0.0, -6.0] }]);
         assert_eq!(l.skipped.len(), 2, "{:?}", l.skipped);
         assert!(l.skipped[0].contains("GAS_LINE"));
     }

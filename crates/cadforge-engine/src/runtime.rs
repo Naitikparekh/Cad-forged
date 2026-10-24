@@ -195,10 +195,7 @@ pub struct PromptSpec {
 
 impl PromptSpec {
     pub fn new(message: &str) -> PromptSpec {
-        PromptSpec {
-            message: message.to_string(),
-            ..PromptSpec::default()
-        }
+        PromptSpec { message: message.to_string(), ..PromptSpec::default() }
     }
     pub fn options(mut self, o: &[&str]) -> Self {
         self.options = o.iter().map(|s| s.to_string()).collect();
@@ -311,63 +308,32 @@ pub enum NumRel {
 /// Raw result of a prompt before it is converted to a typed reply by [`crate::ctx::Ctx`].
 #[derive(Clone, Debug)]
 pub enum Reply {
-    Pt {
-        pt: Pt,
-        typed: bool,
-    },
-    Num {
-        value: f64,
-        pt: Option<Pt>,
-        rel: Option<NumRel>,
-    },
+    Pt { pt: Pt, typed: bool },
+    Num { value: f64, pt: Option<Pt>, rel: Option<NumRel> },
     Text(String),
     Kw(String),
-    Enter {
-        pt: Option<Pt>,
-        value: Option<f64>,
-        text: Option<String>,
-        kw: Option<String>,
-    },
-    Entity {
-        id: u64,
-        pt: Pt,
-        shift: bool,
-    },
-    Solid {
-        id: u64,
-        pt: Pt,
-    },
+    Enter { pt: Option<Pt>, value: Option<f64>, text: Option<String>, kw: Option<String> },
+    Entity { id: u64, pt: Pt, shift: bool },
+    Solid { id: u64, pt: Pt },
     Selection(Vec<u64>),
     Dialog(DialogReply),
 }
 
 impl Reply {
     pub fn enter() -> Reply {
-        Reply::Enter {
-            pt: None,
-            value: None,
-            text: None,
-            kw: None,
-        }
+        Reply::Enter { pt: None, value: None, text: None, kw: None }
     }
 }
 
 /// Modal UI requests a command can make (resolved by the front end; headless runs answer `None`).
 #[derive(Clone, Debug)]
 pub enum DialogReq {
-    Insert {
-        names: Vec<String>,
-    },
-    Color {
-        value: Option<cadforge_core::style::Color>,
-        allow_by_layer: bool,
-    },
+    Insert { names: Vec<String> },
+    Color { value: Option<cadforge_core::style::Color>, allow_by_layer: bool },
     Linetype,
     Lweight,
     Hatch,
-    DSettings {
-        tab: String,
-    },
+    DSettings { tab: String },
     /// In-place text editor.
     EditText(TextEditSpec),
     /// Contextual hatch editor bound to the active hatch session; resolves when the user closes it.
@@ -449,21 +415,7 @@ impl Pending {
     pub fn new(kind: PromptKind, spec: PromptSpec) -> Pending {
         let single = spec.single;
         let allow_off = spec.allow_off;
-        Pending {
-            kind,
-            spec,
-            dialog: None,
-            from_stage: FromStage::None,
-            from_base: None,
-            m2p: None,
-            first_point: None,
-            window: None,
-            polygon: None,
-            remove: false,
-            single,
-            allow_off,
-            set: IndexSet::new(),
-        }
+        Pending { kind, spec, dialog: None, from_stage: FromStage::None, from_base: None, m2p: None, first_point: None, window: None, polygon: None, remove: false, single, allow_off, set: IndexSet::new() }
     }
     pub fn base(&self) -> Option<Pt> {
         self.spec.base.or(self.first_point)
@@ -533,12 +485,7 @@ impl Default for Runtime {
             next_task: 1,
             ready: VecDeque::new(),
             snapper: Snapper::new(),
-            cursor: Cursor {
-                raw: pt(0.0, 0.0),
-                pt: pt(0.0, 0.0),
-                snap: None,
-                track: None,
-            },
+            cursor: Cursor { raw: pt(0.0, 0.0), pt: pt(0.0, 0.0), snap: None, track: None },
             override_: None,
             last_command: None,
             recent_commands: vec![],
@@ -566,8 +513,7 @@ pub fn fmt_pt(p: Pt, prec: i32) -> String {
 }
 
 fn has_word_or(msg: &str) -> bool {
-    msg.split(|c: char| !c.is_alphanumeric() && c != '_')
-        .any(|w| w == "or")
+    msg.split(|c: char| !c.is_alphanumeric() && c != '_').any(|w| w == "or")
 }
 
 /// What the command line shows for a prompt, e.g. `Specify next point or [Close/Undo]:`.
@@ -577,11 +523,7 @@ pub fn prompt_text(p: Option<&Pending>) -> String {
     // a message that already lists its options in brackets is shown as written
     let lists_options = msg.contains('[') && msg.contains(']');
     if !p.spec.options.is_empty() && !lists_options {
-        msg += if has_word_or(&msg) || msg.is_empty() {
-            ""
-        } else {
-            " or"
-        };
+        msg += if has_word_or(&msg) || msg.is_empty() { "" } else { " or" };
         msg += " ";
         msg += options_text(&p.spec.options).trim();
     }
@@ -589,14 +531,7 @@ pub fn prompt_text(p: Option<&Pending>) -> String {
         Some(d) if p.kind != PromptKind::Keyword => {
             let text = match d {
                 PromptDefault::Pt(pt) => fmt_pt(*pt, 4),
-                PromptDefault::Num(n) => fmt(
-                    if p.kind == PromptKind::Angle {
-                        deg(*n)
-                    } else {
-                        *n
-                    },
-                    4,
-                ),
+                PromptDefault::Num(n) => fmt(if p.kind == PromptKind::Angle { deg(*n) } else { *n }, 4),
                 PromptDefault::Str(s) => s.clone(),
             };
             msg += &format!(" <{text}>");
@@ -620,9 +555,7 @@ impl App {
     }
 
     pub fn pending(&self) -> Option<&Pending> {
-        self.top_task()
-            .and_then(|t| self.rt.tasks.get(&t))
-            .and_then(|t| t.pending.as_ref())
+        self.top_task().and_then(|t| self.rt.tasks.get(&t)).and_then(|t| t.pending.as_ref())
     }
 
     pub fn prompt_line(&self) -> String {
@@ -631,20 +564,13 @@ impl App {
 
     /// The modal dialog a command is waiting for, if any (the UI shows it and calls [`App::answer_dialog`]).
     pub fn pending_dialog(&self) -> Option<DialogReq> {
-        self.pending()
-            .filter(|p| p.kind == PromptKind::Dialog)
-            .and_then(|p| p.dialog.clone())
+        self.pending().filter(|p| p.kind == PromptKind::Dialog).and_then(|p| p.dialog.clone())
     }
 
     /// UI → command: answer the pending dialog request.
     pub fn answer_dialog(&mut self, reply: DialogReply) {
         let Some(task) = self.top_task() else { return };
-        let is_dialog = self
-            .rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .is_some_and(|p| p.kind == PromptKind::Dialog);
+        let is_dialog = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.kind == PromptKind::Dialog);
         if is_dialog {
             self.deliver(task, Reply::Dialog(reply));
         }
@@ -681,43 +607,24 @@ impl App {
     pub fn refresh_preview(&mut self, overlay_only: bool) {
         self.rt.preview.clear();
         let Some(task) = self.top_task() else {
-            self.emit(if overlay_only {
-                Event::Overlay
-            } else {
-                Event::Change
-            });
+            self.emit(if overlay_only { Event::Overlay } else { Event::Change });
             return;
         };
-        let f = self.rt.tasks.get(&task).and_then(|t| {
-            t.pending
-                .as_ref()
-                .and_then(|p| p.spec.preview.clone())
-                .or_else(|| t.preview_fn.clone())
-        });
+        let f = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref().and_then(|p| p.spec.preview.clone()).or_else(|| t.preview_fn.clone()));
         if let (Some(f), Some(ed)) = (f, self.editor()) {
             let items = f(&ed.doc, self.rt.cursor.pt);
             self.rt.preview = items;
         }
-        self.emit(if overlay_only {
-            Event::Overlay
-        } else {
-            Event::Change
-        });
+        self.emit(if overlay_only { Event::Overlay } else { Event::Change });
     }
 
     /// Resolve a prompt: store the reply and queue the task's root future to resume.
     pub(crate) fn deliver(&mut self, task: TaskId, reply: Reply) {
         let ucs = self.ucs();
         let recording = self.recording.is_some();
-        let Some(t) = self.rt.tasks.get_mut(&task) else {
-            return;
-        };
+        let Some(t) = self.rt.tasks.get_mut(&task) else { return };
         let Some(p) = t.pending.take() else { return };
-        let reply = if p.kind == PromptKind::Select {
-            Reply::Selection(p.set.iter().copied().collect())
-        } else {
-            reply
-        };
+        let reply = if p.kind == PromptKind::Select { Reply::Selection(p.set.iter().copied().collect()) } else { reply };
         // the Action Recorder keeps what a user would have typed to produce this answer
         let mut recorded: Vec<String> = vec![];
         if recording {
@@ -727,29 +634,13 @@ impl App {
             };
             match &reply {
                 Reply::Pt { pt, .. } => recorded.push(at(*pt)),
-                Reply::Num { value, pt, .. } => {
-                    recorded.push(pt.map_or_else(|| format!("{value}"), at))
-                }
+                Reply::Num { value, pt, .. } => recorded.push(pt.map_or_else(|| format!("{value}"), at)),
                 Reply::Text(t) => recorded.push(t.clone()),
                 Reply::Kw(k) => recorded.push(k.clone()),
-                Reply::Enter {
-                    pt,
-                    value,
-                    text,
-                    kw,
-                } => recorded.push(
-                    kw.clone()
-                        .or_else(|| text.clone())
-                        .or_else(|| value.map(|v| format!("{v}")))
-                        .or_else(|| pt.map(at))
-                        .unwrap_or_default(),
-                ),
+                Reply::Enter { pt, value, text, kw } => recorded.push(kw.clone().or_else(|| text.clone()).or_else(|| value.map(|v| format!("{v}"))).or_else(|| pt.map(at)).unwrap_or_default()),
                 Reply::Entity { pt, .. } => recorded.push(at(*pt)),
                 Reply::Selection(ids) => {
-                    recorded.push(format!(
-                        "<ID:{}>",
-                        ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")
-                    ));
+                    recorded.push(format!("<ID:{}>", ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")));
                     recorded.push(String::new());
                 }
                 Reply::Solid { .. } | Reply::Dialog(_) => {}
@@ -766,9 +657,7 @@ impl App {
     }
 
     pub(crate) fn deliver_err(&mut self, task: TaskId, err: CmdError) {
-        let Some(t) = self.rt.tasks.get_mut(&task) else {
-            return;
-        };
+        let Some(t) = self.rt.tasks.get_mut(&task) else { return };
         if t.pending.take().is_none() {
             return;
         }
@@ -785,22 +674,14 @@ impl App {
         match self.registry.find(text) {
             Some(def) => self.run_def(def, args, transparent),
             None => {
-                self.log(
-                    &format!("Unknown command \"{text}\".  Press F1 for help."),
-                    "error",
-                );
+                self.log(&format!("Unknown command \"{text}\".  Press F1 for help."), "error");
                 self.emit(Event::Change);
                 None
             }
         }
     }
 
-    pub fn run_def(
-        &mut self,
-        def: Rc<crate::registry::CommandDef>,
-        args: Args,
-        transparent: bool,
-    ) -> Option<TaskId> {
+    pub fn run_def(&mut self, def: Rc<crate::registry::CommandDef>, args: Args, transparent: bool) -> Option<TaskId> {
         self.editor()?;
         let is_top = self.rt.stack.is_empty();
         if !is_top && !transparent && !def.transparent {
@@ -818,36 +699,15 @@ impl App {
     }
 
     /// Register a task and push it on the command stack (shared by top-level commands and inline sub-commands).
-    pub(crate) fn begin_task(
-        &mut self,
-        def: &Rc<crate::registry::CommandDef>,
-        transparent: bool,
-        is_top: bool,
-        root: Option<TaskId>,
-    ) -> TaskId {
+    pub(crate) fn begin_task(&mut self, def: &Rc<crate::registry::CommandDef>, transparent: bool, is_top: bool, root: Option<TaskId>) -> TaskId {
         let id = self.rt.next_task;
         self.rt.next_task += 1;
-        if is_top
-            && !def.name.starts_with('_')
-            && !matches!(def.name.as_str(), "ACTRECORD" | "ACTSTOP")
-        {
+        if is_top && !def.name.starts_with('_') && !matches!(def.name.as_str(), "ACTRECORD" | "ACTSTOP") {
             if let Some(rec) = self.recording.as_mut() {
                 rec.push(def.name.clone());
             }
         }
-        self.rt.tasks.insert(
-            id,
-            TaskState {
-                def: def.clone(),
-                pending: None,
-                preview_fn: None,
-                slot: None,
-                fut: None,
-                transparent,
-                is_top,
-                root: root.unwrap_or(id),
-            },
-        );
+        self.rt.tasks.insert(id, TaskState { def: def.clone(), pending: None, preview_fn: None, slot: None, fut: None, transparent, is_top, root: root.unwrap_or(id) });
         self.rt.stack.push(id);
         if !transparent && is_top {
             if let Some(ed) = self.editor_mut() {
@@ -868,9 +728,7 @@ impl App {
             Err(CmdError::Msg(m)) => self.log(&m, "error"),
             Ok(()) => {}
         }
-        let Some(t) = self.rt.tasks.remove(&id) else {
-            return;
-        };
+        let Some(t) = self.rt.tasks.remove(&id) else { return };
         self.rt.stack.retain(|x| *x != id);
         self.rt.preview.clear();
         self.rt.override_ = None;
@@ -917,26 +775,13 @@ impl App {
 
     pub fn resolve(&self, raw: Pt, p: Option<&Pending>) -> Resolved {
         let (sv, ed) = (&self.sysvars, self.editor().expect("active editor"));
-        let pointy = p.is_some_and(|p| {
-            matches!(
-                p.kind,
-                PromptKind::Point | PromptKind::Distance | PromptKind::Angle
-            )
-        });
+        let pointy = p.is_some_and(|p| matches!(p.kind, PromptKind::Point | PromptKind::Distance | PromptKind::Angle));
         if !pointy {
-            return Resolved {
-                pt: raw,
-                snap: None,
-                track: None,
-            };
+            return Resolved { pt: raw, snap: None, track: None };
         }
         let p = p.expect("pointy implies pending");
         let base = p.base();
-        let osmask = if p.spec.no_snap {
-            0
-        } else {
-            active_mask(sv.int("OSMODE"), self.rt.override_)
-        };
+        let osmask = if p.spec.no_snap { 0 } else { active_mask(sv.int("OSMODE"), self.rt.override_) };
         let ortho = (sv.ortho() != self.rt.shift_ortho) && base.is_some() && !p.spec.no_ortho;
         let o = SnapOptions {
             scale: ed.view.scale,
@@ -948,12 +793,7 @@ impl App {
             polar_inc: rad(sv.real("POLARANG")),
             polar_add: vec![],
             otrack: sv.otrack() && !p.spec.no_snap,
-            grid: sv.snap_on().then(|| Grid {
-                sx: sv.real("SNAPUNIT_X"),
-                sy: sv.real("SNAPUNIT_Y"),
-                base: ed.doc.ucs.origin,
-                angle: rad(sv.real("SNAPANG")) + ed.doc.ucs.angle,
-            }),
+            grid: sv.snap_on().then(|| Grid { sx: sv.real("SNAPUNIT_X"), sy: sv.real("SNAPUNIT_Y"), base: ed.doc.ucs.origin, angle: rad(sv.real("SNAPANG")) + ed.doc.ucs.angle }),
             ucs_angle: ed.doc.ucs.angle,
         };
         self.rt.snapper.resolve(&ed.doc, raw, &o)
@@ -988,51 +828,19 @@ impl App {
             self.idle_click(raw, mods);
             return;
         };
-        let Some((kind, snapshot)) = self
-            .rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .map(|p| (p.kind, self.resolve(raw, Some(p))))
-        else {
-            return;
-        };
+        let Some((kind, snapshot)) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).map(|p| (p.kind, self.resolve(raw, Some(p)))) else { return };
         let r = snapshot;
-        self.rt.cursor = Cursor {
-            raw,
-            pt: r.pt,
-            snap: r.snap,
-            track: r.track,
-        };
+        self.rt.cursor = Cursor { raw, pt: r.pt, snap: r.snap, track: r.track };
         match kind {
             PromptKind::Point => self.point_picked(task, r.pt),
             PromptKind::Distance | PromptKind::Angle => self.measure_picked(task, r.pt),
             PromptKind::Entity => {
                 let filter = self.pending_filter(task);
                 let ap = self.aperture_world(None);
-                let locked_ok = self
-                    .rt
-                    .tasks
-                    .get(&task)
-                    .and_then(|t| t.pending.as_ref())
-                    .is_some_and(|p| p.spec.allow_locked);
-                let hit = pick_at_locked(
-                    &self.editor().expect("editor").doc,
-                    raw,
-                    ap,
-                    filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool),
-                    None,
-                    locked_ok,
-                );
+                let locked_ok = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.spec.allow_locked);
+                let hit = pick_at_locked(&self.editor().expect("editor").doc, raw, ap, filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool), None, locked_ok);
                 match hit {
-                    Some(id) => self.deliver(
-                        task,
-                        Reply::Entity {
-                            id,
-                            pt: raw,
-                            shift: mods.shift,
-                        },
-                    ),
+                    Some(id) => self.deliver(task, Reply::Entity { id, pt: raw, shift: mods.shift }),
                     None => self.log("Nothing selected", "error"),
                 }
             }
@@ -1046,11 +854,7 @@ impl App {
     }
 
     fn pending_filter(&self, task: TaskId) -> Option<EntFilter> {
-        self.rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .and_then(|p| p.spec.filter.clone())
+        self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).and_then(|p| p.spec.filter.clone())
     }
 
     /// Solid under the pointer (screen position from the event, or projected from the world point).
@@ -1063,47 +867,22 @@ impl App {
         let sp = mods.screen.unwrap_or_else(|| ed.view.to_screen(raw));
         let wire = ed.visual_style == "2D Wireframe" || ed.visual_style == "Wireframe";
         let aperture = self.sysvars.real("PICKBOX") + 4.0;
-        pick_solid(&doc.solids, &ed.view, sp, aperture, !wire, &|s| {
-            doc.solid_visible(s)
-                && !doc
-                    .layer(if s.layer.is_empty() { "0" } else { &s.layer })
-                    .is_some_and(|l| l.locked)
-        })
-        .map(|h| h.0)
+        pick_solid(&doc.solids, &ed.view, sp, aperture, !wire, &|s| doc.solid_visible(s) && !doc.layer(if s.layer.is_empty() { "0" } else { &s.layer }).is_some_and(|l| l.locked)).map(|h| h.0)
     }
 
     pub fn solids_in_rect(&self, a: Pt, b: Pt, crossing: bool) -> Vec<u64> {
-        let Some(ed) = self.editor() else {
-            return vec![];
-        };
+        let Some(ed) = self.editor() else { return vec![] };
         let doc = &ed.doc;
         if doc.solids.is_empty() {
             return vec![];
         }
         let (sa, sb) = (ed.view.to_screen(a), ed.view.to_screen(b));
-        let rect = Bounds::new(
-            sa.x.min(sb.x),
-            sa.y.min(sb.y),
-            sa.x.max(sb.x),
-            sa.y.max(sb.y),
-        );
-        solids_in_screen_rect(&doc.solids, &ed.view, &rect, crossing, &|s| {
-            doc.solid_visible(s)
-                && !doc
-                    .layer(if s.layer.is_empty() { "0" } else { &s.layer })
-                    .is_some_and(|l| l.locked)
-        })
+        let rect = Bounds::new(sa.x.min(sb.x), sa.y.min(sb.y), sa.x.max(sb.x), sa.y.max(sb.y));
+        solids_in_screen_rect(&doc.solids, &ed.view, &rect, crossing, &|s| doc.solid_visible(s) && !doc.layer(if s.layer.is_empty() { "0" } else { &s.layer }).is_some_and(|l| l.locked))
     }
 
     fn point_picked(&mut self, task: TaskId, p: Pt) {
-        let Some(pend) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        else {
-            return;
-        };
+        let Some(pend) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) else { return };
         match pend.from_stage {
             FromStage::Base => {
                 pend.from_base = Some(p);
@@ -1132,43 +911,19 @@ impl App {
 
     fn finish_point(&mut self, task: TaskId, p: Pt) {
         self.rt.last_point = Some(p);
-        self.deliver(
-            task,
-            Reply::Pt {
-                pt: p,
-                typed: false,
-            },
-        );
+        self.deliver(task, Reply::Pt { pt: p, typed: false });
     }
 
     fn measure_picked(&mut self, task: TaskId, p: Pt) {
-        let Some(pend) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        else {
-            return;
-        };
+        let Some(pend) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) else { return };
         let Some(base) = pend.base() else {
             pend.first_point = Some(p);
             self.log("Specify second point:", "prompt");
             self.refresh_preview(false);
             return;
         };
-        let value = if pend.kind == PromptKind::Distance {
-            dist(base, p)
-        } else {
-            angle_of(base, p)
-        };
-        self.deliver(
-            task,
-            Reply::Num {
-                value,
-                pt: Some(p),
-                rel: None,
-            },
-        );
+        let value = if pend.kind == PromptKind::Distance { dist(base, p) } else { angle_of(base, p) };
+        self.deliver(task, Reply::Num { value, pt: Some(p), rel: None });
     }
 
     fn idle_click(&mut self, raw: Pt, mods: Mods) {
@@ -1178,11 +933,7 @@ impl App {
         }
         if !mods.shift {
             if let Some(grip) = self.grip_at(raw) {
-                self.run(
-                    "_GRIPEDIT",
-                    Args::none().with("grip", ArgVal::Grip(grip)),
-                    false,
-                );
+                self.run("_GRIPEDIT", Args::none().with("grip", ArgVal::Grip(grip)), false);
                 return;
             }
         }
@@ -1222,18 +973,10 @@ impl App {
 
     /// Ids of the entities sharing a group with `id` (GROUP selection), including `id` itself.
     pub fn group_ids(&self, id: u64) -> Vec<u64> {
-        let Some(ed) = self.editor() else {
-            return vec![id];
-        };
+        let Some(ed) = self.editor() else { return vec![id] };
         match ed.entity_by_id(id).and_then(|e| e.grp.clone()) {
             None => vec![id],
-            Some(g) => ed
-                .doc
-                .entities()
-                .iter()
-                .filter(|x| x.grp.as_ref() == Some(&g))
-                .map(|x| x.id)
-                .collect(),
+            Some(g) => ed.doc.entities().iter().filter(|x| x.grp.as_ref() == Some(&g)).map(|x| x.id).collect(),
         }
     }
 
@@ -1266,13 +1009,7 @@ impl App {
             self.window_select(a, b, mods);
             return;
         };
-        if self
-            .rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .is_some_and(|p| p.kind == PromptKind::Select)
-        {
+        if self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.kind == PromptKind::Select) {
             self.select_rect_prompt(task, a, b, mods, None);
         }
     }
@@ -1314,10 +1051,7 @@ impl App {
 
     pub fn grip_at(&self, raw: Pt) -> Option<GripRef> {
         let ed = self.editor()?;
-        if ed.sel.is_empty()
-            || self.sysvars.int("GRIPS") == 0
-            || ed.sel.len() as i64 > self.sysvars.int("GRIPOBJLIMIT")
-        {
+        if ed.sel.is_empty() || self.sysvars.int("GRIPS") == 0 || ed.sel.len() as i64 > self.sysvars.int("GRIPOBJLIMIT") {
             return None;
         }
         let tol = 7.0 / ed.view.scale;
@@ -1327,12 +1061,7 @@ impl App {
             }
             for g in grips_of(e, &ed.doc) {
                 if dist(g.pt, raw) <= tol {
-                    return Some(GripRef {
-                        entity: e.id,
-                        id: g.id,
-                        pt: g.pt,
-                        kind: g.kind,
-                    });
+                    return Some(GripRef { entity: e.id, id: g.id, pt: g.pt, kind: g.kind });
                 }
             }
         }
@@ -1343,52 +1072,30 @@ impl App {
 
     /// May the entity be picked by this selection prompt (visible, unlocked, passes the filter)?
     pub fn selectable_by(&self, e: &Entity, allow_off: bool, filter: Option<&EntFilter>) -> bool {
-        let Some(ed) = self.editor() else {
-            return false;
-        };
+        let Some(ed) = self.editor() else { return false };
         let d = &ed.doc;
         let l = d.layer_of(e);
-        (if allow_off {
-            !l.frozen
-        } else {
-            d.is_visible(e)
-        }) && !l.locked
-            && filter.map_or(true, |f| f(e))
+        (if allow_off { !l.frozen } else { d.is_visible(e) }) && !l.locked && filter.map_or(true, |f| f(e))
     }
 
     fn sel_add(&mut self, task: TaskId, list: &[u64]) {
-        let (remove, filter, allow_off) =
-            match self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) {
-                Some(p) => (p.remove, p.spec.filter.clone(), p.allow_off),
-                None => return,
-            };
+        let (remove, filter, allow_off) = match self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) {
+            Some(p) => (p.remove, p.spec.filter.clone(), p.allow_off),
+            None => return,
+        };
         let mut candidates: Vec<u64> = vec![];
         for &id in list {
-            let ok = self
-                .editor()
-                .and_then(|ed| ed.entity_by_id(id))
-                .is_some_and(|e| self.selectable_by(e, allow_off, filter.as_ref()));
+            let ok = self.editor().and_then(|ed| ed.entity_by_id(id)).is_some_and(|e| self.selectable_by(e, allow_off, filter.as_ref()));
             if !ok {
                 continue;
             }
             for gid in self.group_ids(id) {
-                if self
-                    .editor()
-                    .and_then(|ed| ed.entity_by_id(gid))
-                    .is_some_and(|m| self.selectable_by(m, allow_off, filter.as_ref()))
-                {
+                if self.editor().and_then(|ed| ed.entity_by_id(gid)).is_some_and(|m| self.selectable_by(m, allow_off, filter.as_ref())) {
                     candidates.push(gid);
                 }
             }
         }
-        let Some(p) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) else { return };
         let mut added = 0;
         for gid in candidates {
             if remove {
@@ -1399,20 +1106,8 @@ impl App {
                 added += 1;
             }
         }
-        let (total, single, keys): (usize, bool, Vec<u64>) =
-            (p.set.len(), p.single, p.set.iter().copied().collect());
-        let msg = if remove {
-            format!("{added} removed, {total} total")
-        } else {
-            format!(
-                "{added} found{}",
-                if total != added {
-                    format!(", {total} total")
-                } else {
-                    String::new()
-                }
-            )
-        };
+        let (total, single, keys): (usize, bool, Vec<u64>) = (p.set.len(), p.single, p.set.iter().copied().collect());
+        let msg = if remove { format!("{added} removed, {total} total") } else { format!("{added} found{}", if total != added { format!(", {total} total") } else { String::new() }) };
         self.editor_mut().expect("editor").temp_sel = keys.iter().copied().collect();
         self.log(&msg, "info");
         self.emit(Event::Change);
@@ -1423,14 +1118,7 @@ impl App {
     }
 
     fn sel_add_solids(&mut self, task: TaskId, solids: &[u64], remove: bool) {
-        let Some(p) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) else { return };
         let mut n = 0;
         for &s in solids {
             if remove || p.remove {
@@ -1441,20 +1129,9 @@ impl App {
                 n += 1;
             }
         }
-        let (total, single, keys): (usize, bool, Vec<u64>) =
-            (p.set.len(), p.single, p.set.iter().copied().collect());
+        let (total, single, keys): (usize, bool, Vec<u64>) = (p.set.len(), p.single, p.set.iter().copied().collect());
         self.editor_mut().expect("editor").temp_sel = keys.into_iter().collect();
-        self.log(
-            &format!(
-                "{n} found{}",
-                if total != n {
-                    format!(", {total} total")
-                } else {
-                    String::new()
-                }
-            ),
-            "info",
-        );
+        self.log(&format!("{n} found{}", if total != n { format!(", {total} total") } else { String::new() }), "info");
         self.emit(Event::Change);
         if single && total > 0 {
             self.deliver(task, Reply::enter());
@@ -1462,14 +1139,7 @@ impl App {
     }
 
     fn select_click(&mut self, task: TaskId, raw: Pt, mods: Mods) {
-        let Some(p) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) else { return };
         if let Some(w) = p.window.as_mut() {
             if w.a.is_none() {
                 w.a = Some(raw);
@@ -1484,40 +1154,19 @@ impl App {
         }
         if let Some(poly) = p.polygon.as_mut() {
             poly.pts.push(raw);
-            let what = if poly.kind == PolyKind::Fence {
-                "line"
-            } else {
-                "polygon"
-            };
+            let what = if poly.kind == PolyKind::Fence { "line" } else { "polygon" };
             self.log(&format!("Specify endpoint of {what} or [Undo]:"), "prompt");
             self.emit(Event::Change);
             return;
         }
         let (filter, solids, single) = (p.spec.filter.clone(), p.spec.solids, p.single);
         let ap = self.aperture_world(Some(self.sysvars.real("PICKBOX") + 4.0));
-        let hit = pick_at(
-            &self.editor().expect("editor").doc,
-            raw,
-            ap,
-            filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool),
-            None,
-        );
+        let hit = pick_at(&self.editor().expect("editor").doc, raw, ap, filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool), None);
         if let Some(id) = hit {
             if mods.shift {
-                let prev = self
-                    .rt
-                    .tasks
-                    .get_mut(&task)
-                    .and_then(|t| t.pending.as_mut())
-                    .map(|p| std::mem::replace(&mut p.remove, true));
+                let prev = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()).map(|p| std::mem::replace(&mut p.remove, true));
                 self.sel_add(task, &[id]);
-                if let (Some(pr), Some(p)) = (
-                    prev,
-                    self.rt
-                        .tasks
-                        .get_mut(&task)
-                        .and_then(|t| t.pending.as_mut()),
-                ) {
+                if let (Some(pr), Some(p)) = (prev, self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut())) {
                     p.remove = pr;
                 }
             } else {
@@ -1535,17 +1184,8 @@ impl App {
             self.log("Nothing selected", "error");
             return;
         }
-        if let Some(p) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        {
-            p.window = Some(WindowSel {
-                a: Some(raw),
-                mode: None,
-                pending: false,
-            });
+        if let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) {
+            p.window = Some(WindowSel { a: Some(raw), mode: None, pending: false });
         }
         self.log("Specify opposite corner:", "prompt");
         self.emit(Event::Change);
@@ -1556,41 +1196,18 @@ impl App {
             Some(m) => m == 'C',
             None => b.x < a.x,
         };
-        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else { return };
         let (filter, solids) = (p.spec.filter.clone(), p.spec.solids);
-        let list = select_rect(
-            &self.editor().expect("editor").doc,
-            &rect_of(a, b),
-            crossing,
-            filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool),
-        );
+        let list = select_rect(&self.editor().expect("editor").doc, &rect_of(a, b), crossing, filter.as_deref().map(|f| f as &dyn Fn(&Entity) -> bool));
         self.rt.last_window = Some((rect_of(a, b), crossing));
-        let prev = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-            .map(|p| p.remove);
+        let prev = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()).map(|p| p.remove);
         if mods.shift {
-            if let Some(p) = self
-                .rt
-                .tasks
-                .get_mut(&task)
-                .and_then(|t| t.pending.as_mut())
-            {
+            if let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) {
                 p.remove = true;
             }
         }
         self.sel_add(task, &list);
-        if let (Some(pr), Some(p)) = (
-            prev,
-            self.rt
-                .tasks
-                .get_mut(&task)
-                .and_then(|t| t.pending.as_mut()),
-        ) {
+        if let (Some(pr), Some(p)) = (prev, self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut())) {
             p.remove = pr;
         }
         if solids {
@@ -1603,64 +1220,27 @@ impl App {
         let t = text.trim().to_uppercase();
         // `<ID:12,13>`: objects passed by a Lisp routine (an entity name or a selection set given to `command`)
         if let Some(ids) = parse_id_token(&t) {
-            let ids: Vec<u64> = self
-                .editor()
-                .map(|e| {
-                    ids.into_iter()
-                        .filter(|i| e.doc.by_id(*i).is_some())
-                        .collect()
-                })
-                .unwrap_or_default();
+            let ids: Vec<u64> = self.editor().map(|e| ids.into_iter().filter(|i| e.doc.by_id(*i).is_some()).collect()).unwrap_or_default();
             self.sel_add(task, &ids);
             return;
         }
         // polygon / fence point entry
-        let in_polygon = self
-            .rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .is_some_and(|p| p.polygon.is_some());
+        let in_polygon = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.polygon.is_some());
         if in_polygon {
             if t.is_empty() {
                 self.poly_done(task);
                 return;
             }
             if t == "U" || t == "UNDO" {
-                if let Some(poly) = self
-                    .rt
-                    .tasks
-                    .get_mut(&task)
-                    .and_then(|t| t.pending.as_mut())
-                    .and_then(|p| p.polygon.as_mut())
-                {
+                if let Some(poly) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()).and_then(|p| p.polygon.as_mut()) {
                     poly.pts.pop();
                 }
                 return;
             }
-            let base = self
-                .rt
-                .tasks
-                .get(&task)
-                .and_then(|t| t.pending.as_ref())
-                .and_then(|p| p.polygon.as_ref())
-                .and_then(|g| g.pts.last().copied());
-            match parse_input(
-                text,
-                InputOpts {
-                    base,
-                    relative_default: false,
-                    ucs: self.ucs(),
-                },
-            ) {
+            let base = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).and_then(|p| p.polygon.as_ref()).and_then(|g| g.pts.last().copied());
+            match parse_input(text, InputOpts { base, relative_default: false, ucs: self.ucs() }) {
                 Some(Input::Point { pt: p, .. }) => {
-                    if let Some(poly) = self
-                        .rt
-                        .tasks
-                        .get_mut(&task)
-                        .and_then(|t| t.pending.as_mut())
-                        .and_then(|p| p.polygon.as_mut())
-                    {
+                    if let Some(poly) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()).and_then(|p| p.polygon.as_mut()) {
                         poly.pts.push(p);
                     }
                     self.emit(Event::Change);
@@ -1669,13 +1249,7 @@ impl App {
             }
             return;
         }
-        if let Some(Input::Point { pt: p, .. }) = parse_input(
-            text,
-            InputOpts {
-                ucs: self.ucs(),
-                ..InputOpts::default()
-            },
-        ) {
+        if let Some(Input::Point { pt: p, .. }) = parse_input(text, InputOpts { ucs: self.ucs(), ..InputOpts::default() }) {
             self.select_click(task, p, Mods::default());
             return;
         }
@@ -1748,25 +1322,13 @@ impl App {
     }
 
     fn set_pending_flag(&mut self, task: TaskId, f: impl FnOnce(&mut Pending)) {
-        if let Some(p) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        {
+        if let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) {
             f(p);
         }
     }
 
     fn poly_done(&mut self, task: TaskId) {
-        let Some(p) = self
-            .rt
-            .tasks
-            .get_mut(&task)
-            .and_then(|t| t.pending.as_mut())
-        else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get_mut(&task).and_then(|t| t.pending.as_mut()) else { return };
         let Some(pg) = p.polygon.take() else { return };
         let filter = p.spec.filter.clone();
         let need = if pg.kind == PolyKind::Fence { 2 } else { 3 };
@@ -1792,15 +1354,7 @@ impl App {
             self.idle_text(raw);
             return;
         };
-        let Some((kind, options)) = self
-            .rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .map(|p| (p.kind, p.spec.options.clone()))
-        else {
-            return;
-        };
+        let Some((kind, options)) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).map(|p| (p.kind, p.spec.options.clone())) else { return };
         if raw.trim().is_empty() && kind != PromptKind::String {
             self.enter();
             return;
@@ -1820,20 +1374,9 @@ impl App {
         match kind {
             PromptKind::Select => self.select_text(task, raw),
             PromptKind::String => {
-                let (default, rawflag) = self
-                    .rt
-                    .tasks
-                    .get(&task)
-                    .and_then(|t| t.pending.as_ref())
-                    .map(|p| (p.spec.default.clone(), p.spec.raw))
-                    .unwrap_or((None, false));
+                let (default, rawflag) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).map(|p| (p.spec.default.clone(), p.spec.raw)).unwrap_or((None, false));
                 let reply = match (raw.is_empty(), default) {
-                    (true, Some(PromptDefault::Str(d))) => Reply::Enter {
-                        pt: None,
-                        value: None,
-                        text: Some(d),
-                        kw: None,
-                    },
+                    (true, Some(PromptDefault::Str(d))) => Reply::Enter { pt: None, value: None, text: Some(d), kw: None },
                     _ => Reply::Text(if rawflag { raw.to_string() } else { t.clone() }),
                 };
                 self.deliver(task, reply);
@@ -1852,24 +1395,8 @@ impl App {
                     let kw = kw.clone();
                     self.deliver(task, Reply::Kw(kw))
                 }
-                None => match parse_id_token(&t.to_uppercase())
-                    .and_then(|v| v.first().copied())
-                    .and_then(|id| {
-                        self.editor().and_then(|e| {
-                            e.doc
-                                .by_id(id)
-                                .and_then(|en| cadforge_core::entities::bounds_of(en, &e.doc))
-                                .map(|b| (id, b.center()))
-                        })
-                    }) {
-                    Some((id, pt)) => self.deliver(
-                        task,
-                        Reply::Entity {
-                            id,
-                            pt,
-                            shift: false,
-                        },
-                    ),
+                None => match parse_id_token(&t.to_uppercase()).and_then(|v| v.first().copied()).and_then(|id| self.editor().and_then(|e| e.doc.by_id(id).and_then(|en| cadforge_core::entities::bounds_of(en, &e.doc)).map(|b| (id, b.center())))) {
+                    Some((id, pt)) => self.deliver(task, Reply::Entity { id, pt, shift: false }),
                     None => self.log("Select an object or option keyword.", "error"),
                 },
             },
@@ -1879,9 +1406,7 @@ impl App {
     }
 
     fn point_text(&mut self, task: TaskId, t: &str) {
-        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else { return };
         if let Some(kw) = match_option(t, &p.spec.options) {
             let kw = kw.clone();
             return self.deliver(task, Reply::Kw(kw));
@@ -1904,55 +1429,20 @@ impl App {
                     self.set_pending_flag(task, |p| p.m2p = Some(vec![]));
                     self.log("First point of mid between 2 points:", "prompt");
                 }
-                Override::Tt => self.log(
-                    "Temporary tracking is not supported; use object snap tracking.",
-                    "error",
-                ),
+                Override::Tt => self.log("Temporary tracking is not supported; use object snap tracking.", "error"),
             }
             return;
         }
-        let p = self
-            .rt
-            .tasks
-            .get(&task)
-            .and_then(|t| t.pending.as_ref())
-            .expect("pending");
-        let (from_stage, from_base, base, accept_number, has_base) = (
-            p.from_stage,
-            p.from_base,
-            p.spec.base,
-            p.spec.accept_number,
-            p.spec.base.is_some(),
-        );
-        let rel = self.rt.dynamic_typing
-            && self.sysvars.pointer_input()
-            && has_base
-            && from_stage != FromStage::Offset;
+        let p = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).expect("pending");
+        let (from_stage, from_base, base, accept_number, has_base) = (p.from_stage, p.from_base, p.spec.base, p.spec.accept_number, p.spec.base.is_some());
+        let rel = self.rt.dynamic_typing && self.sysvars.pointer_input() && has_base && from_stage != FromStage::Offset;
         if accept_number {
             if let Some((v, r)) = scale_suffix(t) {
-                return self.deliver(
-                    task,
-                    Reply::Num {
-                        value: v,
-                        pt: None,
-                        rel: Some(r),
-                    },
-                );
+                return self.deliver(task, Reply::Num { value: v, pt: None, rel: Some(r) });
             }
         }
-        let origin = if from_stage == FromStage::Offset {
-            from_base
-        } else {
-            base
-        };
-        let input = parse_input(
-            t,
-            InputOpts {
-                base: origin,
-                relative_default: rel || from_stage == FromStage::Offset,
-                ucs: self.ucs(),
-            },
-        );
+        let origin = if from_stage == FromStage::Offset { from_base } else { base };
+        let input = parse_input(t, InputOpts { base: origin, relative_default: rel || from_stage == FromStage::Offset, ucs: self.ucs() });
         let Some(input) = input else {
             self.log("Point or option keyword required.", "error");
             return;
@@ -1978,25 +1468,14 @@ impl App {
             Input::Number(v) => {
                 // bare number: scale factors (ZOOM), or direct distance entry along the current cursor direction
                 if accept_number {
-                    return self.deliver(
-                        task,
-                        Reply::Num {
-                            value: v,
-                            pt: None,
-                            rel: None,
-                        },
-                    );
+                    return self.deliver(task, Reply::Num { value: v, pt: None, rel: None });
                 }
                 let Some(b) = base else {
                     self.log("Point or option keyword required.", "error");
                     return;
                 };
                 let cur = self.rt.cursor.pt;
-                let dir = if dist(b, cur) < 1e-12 {
-                    pt(1.0, 0.0)
-                } else {
-                    unit(cur - b)
-                };
+                let dir = if dist(b, cur) < 1e-12 { pt(1.0, 0.0) } else { unit(cur - b) };
                 let p = b + dir * v;
                 self.rt.last_point = Some(p);
                 self.deliver(task, Reply::Pt { pt: p, typed: true });
@@ -2005,9 +1484,7 @@ impl App {
     }
 
     fn number_text(&mut self, task: TaskId, t: &str) {
-        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else { return };
         if let Some(kw) = match_option(t, &p.spec.options) {
             let kw = kw.clone();
             return self.deliver(task, Reply::Kw(kw));
@@ -2022,46 +1499,21 @@ impl App {
             return;
         }
         if s.min.is_some_and(|m| v < m) || s.max.is_some_and(|m| v > m) || (s.nonzero && v == 0.0) {
-            let m = s
-                .range_message
-                .clone()
-                .unwrap_or_else(|| "*Invalid* Value out of range.".into());
+            let m = s.range_message.clone().unwrap_or_else(|| "*Invalid* Value out of range.".into());
             self.log(&m, "error");
             return;
         }
-        self.deliver(
-            task,
-            Reply::Num {
-                value: v,
-                pt: None,
-                rel: None,
-            },
-        );
+        self.deliver(task, Reply::Num { value: v, pt: None, rel: None });
     }
 
     fn measure_text(&mut self, task: TaskId, t: &str) {
-        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else { return };
         if let Some(kw) = match_option(t, &p.spec.options) {
             let kw = kw.clone();
             return self.deliver(task, Reply::Kw(kw));
         }
-        let (kind, min, nonzero, base, first) = (
-            p.kind,
-            p.spec.min,
-            p.spec.nonzero,
-            p.spec.base,
-            p.first_point,
-        );
-        match parse_input(
-            t,
-            InputOpts {
-                base,
-                relative_default: false,
-                ucs: self.ucs(),
-            },
-        ) {
+        let (kind, min, nonzero, base, first) = (p.kind, p.spec.min, p.spec.nonzero, p.spec.base, p.first_point);
+        match parse_input(t, InputOpts { base, relative_default: false, ucs: self.ucs() }) {
             Some(Input::Number(v)) => {
                 if min.is_some_and(|m| v < m) {
                     self.log("Requires a positive value.", "error");
@@ -2071,14 +1523,7 @@ impl App {
                     self.log("Requires a nonzero value.", "error");
                     return;
                 }
-                self.deliver(
-                    task,
-                    Reply::Num {
-                        value: if kind == PromptKind::Angle { rad(v) } else { v },
-                        pt: None,
-                        rel: None,
-                    },
-                );
+                self.deliver(task, Reply::Num { value: if kind == PromptKind::Angle { rad(v) } else { v }, pt: None, rel: None });
             }
             Some(Input::Point { pt: q, .. }) => {
                 // a typed point sets the base, then measure to the next
@@ -2088,30 +1533,12 @@ impl App {
                         self.log("Specify second point:", "prompt");
                     }
                     Some(b) => {
-                        let value = if kind == PromptKind::Distance {
-                            dist(b, q)
-                        } else {
-                            angle_of(b, q)
-                        };
-                        self.deliver(
-                            task,
-                            Reply::Num {
-                                value,
-                                pt: Some(q),
-                                rel: None,
-                            },
-                        );
+                        let value = if kind == PromptKind::Distance { dist(b, q) } else { angle_of(b, q) };
+                        self.deliver(task, Reply::Num { value, pt: Some(q), rel: None });
                     }
                 }
             }
-            None => self.log(
-                if kind == PromptKind::Angle {
-                    "Requires numeric angle or second point."
-                } else {
-                    "Requires numeric distance or second point."
-                },
-                "error",
-            ),
+            None => self.log(if kind == PromptKind::Angle { "Requires numeric angle or second point." } else { "Requires numeric distance or second point." }, "error"),
         }
     }
 
@@ -2122,37 +1549,19 @@ impl App {
             self.repeat();
             return;
         };
-        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else { return };
         let kind = p.kind;
-        let (default, allow_enter, no_enter_ends) = (
-            p.spec.default.clone(),
-            p.spec.allow_enter,
-            p.spec.no_enter_ends,
-        );
+        let (default, allow_enter, no_enter_ends) = (p.spec.default.clone(), p.spec.allow_enter, p.spec.no_enter_ends);
         match kind {
             PromptKind::Select => {
                 if p.window.as_ref().is_some_and(|w| w.pending) {
                     self.set_pending_flag(task, |p| p.window = None);
                 }
-                if self
-                    .rt
-                    .tasks
-                    .get(&task)
-                    .and_then(|t| t.pending.as_ref())
-                    .is_some_and(|p| p.polygon.is_some())
-                {
+                if self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).is_some_and(|p| p.polygon.is_some()) {
                     self.poly_done(task);
                     return;
                 }
-                let keys: Vec<u64> = self
-                    .rt
-                    .tasks
-                    .get(&task)
-                    .and_then(|t| t.pending.as_ref())
-                    .map(|p| p.set.iter().copied().collect())
-                    .unwrap_or_default();
+                let keys: Vec<u64> = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()).map(|p| p.set.iter().copied().collect()).unwrap_or_default();
                 if !keys.is_empty() {
                     self.rt.previous_selection = keys;
                 }
@@ -2163,31 +1572,13 @@ impl App {
                     Some(PromptDefault::Str(s)) => s,
                     _ => String::new(),
                 };
-                self.deliver(
-                    task,
-                    Reply::Enter {
-                        pt: None,
-                        value: None,
-                        text: Some(text),
-                        kw: None,
-                    },
-                )
+                self.deliver(task, Reply::Enter { pt: None, value: None, text: Some(text), kw: None })
             }
             PromptKind::Dialog => {}
             _ if default.is_some() && kind != PromptKind::Keyword => {
                 let reply = match default.expect("default") {
-                    PromptDefault::Pt(p) if kind == PromptKind::Point => Reply::Enter {
-                        pt: Some(p),
-                        value: None,
-                        text: None,
-                        kw: None,
-                    },
-                    PromptDefault::Num(n) => Reply::Enter {
-                        pt: None,
-                        value: Some(n),
-                        text: None,
-                        kw: None,
-                    },
+                    PromptDefault::Pt(p) if kind == PromptKind::Point => Reply::Enter { pt: Some(p), value: None, text: None, kw: None },
+                    PromptDefault::Num(n) => Reply::Enter { pt: None, value: Some(n), text: None, kw: None },
                     PromptDefault::Pt(_) | PromptDefault::Str(_) => Reply::enter(),
                 };
                 self.deliver(task, reply)
@@ -2197,36 +1588,17 @@ impl App {
                     Some(PromptDefault::Str(s)) if !s.is_empty() => Some(s),
                     _ => None,
                 };
-                self.deliver(
-                    task,
-                    Reply::Enter {
-                        pt: None,
-                        value: None,
-                        text: None,
-                        kw,
-                    },
-                )
+                self.deliver(task, Reply::Enter { pt: None, value: None, text: None, kw })
             }
-            _ if allow_enter || kind == PromptKind::Entity || no_enter_ends => {
-                self.deliver(task, Reply::enter())
-            }
-            _ => self.log(
-                if kind == PromptKind::Point {
-                    "Point or option keyword required."
-                } else {
-                    "Invalid input."
-                },
-                "error",
-            ),
+            _ if allow_enter || kind == PromptKind::Entity || no_enter_ends => self.deliver(task, Reply::enter()),
+            _ => self.log(if kind == PromptKind::Point { "Point or option keyword required." } else { "Invalid input." }, "error"),
         }
     }
 
     /// A keyword chosen from a menu / clicked in the command line.
     pub fn keyword(&mut self, label: &str) {
         let Some(task) = self.top_task() else { return };
-        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else {
-            return;
-        };
+        let Some(p) = self.rt.tasks.get(&task).and_then(|t| t.pending.as_ref()) else { return };
         if p.kind == PromptKind::Select {
             self.select_text(task, label);
             return;
@@ -2274,11 +1646,7 @@ impl App {
         self.log(&format!("Command: {t}"), "input");
         // a Lisp expression typed at the command line: `(+ 1 2)`, or `!var` to show a variable
         if t.starts_with('(') || (t.starts_with('!') && t.len() > 1) {
-            self.run(
-                "_LISP",
-                Args::none().with("source", ArgVal::Str(t.to_string())),
-                false,
-            );
+            self.run("_LISP", Args::none().with("source", ArgVal::Str(t.to_string())), false);
             return;
         }
         let name = t.trim_start_matches('\'');
@@ -2287,17 +1655,10 @@ impl App {
             return;
         }
         if self.sysvars.has(name) {
-            self.run(
-                "SETVAR",
-                Args::none().with("name", ArgVal::Str(name.to_uppercase())),
-                false,
-            );
+            self.run("SETVAR", Args::none().with("name", ArgVal::Str(name.to_uppercase())), false);
             return;
         }
-        self.log(
-            &format!("Unknown command \"{t}\".  Press F1 for help."),
-            "error",
-        );
+        self.log(&format!("Unknown command \"{t}\".  Press F1 for help."), "error");
         self.emit(Event::Change);
     }
 }
@@ -2305,12 +1666,7 @@ impl App {
 /// `<ID:1,2,3>`: entity ids handed over by `(command ...)` of the Lisp interpreter.
 fn parse_id_token(t: &str) -> Option<Vec<u64>> {
     let inner = t.strip_prefix("<ID:")?.strip_suffix('>')?;
-    Some(
-        inner
-            .split(',')
-            .filter_map(|n| n.trim().parse().ok())
-            .collect(),
-    )
+    Some(inner.split(',').filter_map(|n| n.trim().parse().ok()).collect())
 }
 
 /// `2x` / `0.5xp` scale-factor typed at a point prompt that accepts numbers (ZOOM).

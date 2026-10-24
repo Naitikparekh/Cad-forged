@@ -46,18 +46,10 @@ pub enum Item {
         #[serde(default)]
         menu: Option<Menu>,
     },
-    Stack {
-        items: Vec<Item>,
-    },
-    Col {
-        items: Vec<Item>,
-    },
-    Row {
-        items: Vec<Item>,
-    },
-    Combo {
-        kind: String,
-    },
+    Stack { items: Vec<Item> },
+    Col { items: Vec<Item> },
+    Row { items: Vec<Item> },
+    Combo { kind: String },
     HatchPick,
     Patterns,
     HatchProps,

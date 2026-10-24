@@ -9,24 +9,11 @@ use cadforge_render::*;
 /// Colour 1 (red) prints blue at 0.50 mm; colour 2 (yellow) keeps its colour but is screened to 40 %; colour 3 (green) is
 /// untouched.
 fn table() -> PlotStyleTable {
-    let mut styles: Vec<PlotStyle> = (1..=255)
-        .map(|i| PlotStyle {
-            name: format!("Color_{i}"),
-            color: None,
-            lineweight: None,
-            screen: 100,
-            pen: 0,
-        })
-        .collect();
+    let mut styles: Vec<PlotStyle> = (1..=255).map(|i| PlotStyle { name: format!("Color_{i}"), color: None, lineweight: None, screen: 100, pen: 0 }).collect();
     styles[0].color = Some([0, 0, 255]);
     styles[0].lineweight = Some(50);
     styles[1].screen = 40;
-    PlotStyleTable {
-        name: "t".into(),
-        description: String::new(),
-        color_based: true,
-        styles,
-    }
+    PlotStyleTable { name: "t".into(), description: String::new(), color_based: true, styles }
 }
 
 fn doc() -> Drawing {
@@ -44,29 +31,7 @@ fn strokes(d: &Drawing, f: impl FnOnce(&mut PlotOptions)) -> Vec<([u8; 3], f64, 
     let mut o = default_plot_options(d);
     f(&mut o);
     let layout = plot_layout(d, &o, None).unwrap();
-    let mut out: Vec<([u8; 3], f64, f32)> = render_plot(d, &o, &layout)
-        .iter()
-        .filter_map(|op| {
-            if let Op::Stroke {
-                color,
-                width,
-                alpha,
-                paths,
-                ..
-            } = op
-            {
-                Some(
-                    paths
-                        .iter()
-                        .map(|_| (*color, *width, *alpha))
-                        .collect::<Vec<_>>(),
-                )
-            } else {
-                None
-            }
-        })
-        .flatten()
-        .collect();
+    let mut out: Vec<([u8; 3], f64, f32)> = render_plot(d, &o, &layout).iter().filter_map(|op| if let Op::Stroke { color, width, alpha, paths, .. } = op { Some(paths.iter().map(|_| (*color, *width, *alpha)).collect::<Vec<_>>()) } else { None }).flatten().collect();
     // plot order is drawing order; keep it
     out.truncate(3);
     out
@@ -76,10 +41,7 @@ fn strokes(d: &Drawing, f: impl FnOnce(&mut PlotOptions)) -> Vec<([u8; 3], f64, 
 fn without_a_table_the_monochrome_option_decides() {
     let d = doc();
     let s = strokes(&d, |_| {});
-    assert!(
-        s.iter().all(|(c, _, a)| *c == [0, 0, 0] && *a == 1.0),
-        "{s:?}"
-    );
+    assert!(s.iter().all(|(c, _, a)| *c == [0, 0, 0] && *a == 1.0), "{s:?}");
 }
 
 #[test]
@@ -98,11 +60,7 @@ fn a_table_changes_colour_lineweight_and_screening_of_what_it_covers() {
     // colour 3 is untouched: its own colour, normal strength
     assert_ne!(s[2].0, [0, 0, 0]);
     assert_eq!(s[2].2, 1.0);
-    assert!(
-        s[2].1 < 5.0,
-        "the default lineweight is thinner than 0.50 mm: {:?}",
-        s[2]
-    );
+    assert!(s[2].1 < 5.0, "the default lineweight is thinner than 0.50 mm: {:?}", s[2]);
 }
 
 #[test]
@@ -110,16 +68,9 @@ fn the_table_replaces_the_monochrome_option_and_can_be_switched_off_per_plot() {
     let mut d = doc();
     d.plot_styles = Some(std::rc::Rc::new(table()));
     let with = strokes(&d, |o| o.mono = true);
-    assert_ne!(
-        with[2].0,
-        [0, 0, 0],
-        "mono = true, but the table is in charge of colour"
-    );
+    assert_ne!(with[2].0, [0, 0, 0], "mono = true, but the table is in charge of colour");
     let without = strokes(&d, |o| o.use_styles = false);
-    assert!(
-        without.iter().all(|(c, _, a)| *c == [0, 0, 0] && *a == 1.0),
-        "use_styles = false plots as if there was no table: {without:?}"
-    );
+    assert!(without.iter().all(|(c, _, a)| *c == [0, 0, 0] && *a == 1.0), "use_styles = false plots as if there was no table: {without:?}");
 }
 
 #[test]

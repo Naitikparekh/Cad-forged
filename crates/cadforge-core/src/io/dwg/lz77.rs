@@ -111,16 +111,7 @@ pub fn decompress18(src: &[u8], limit: usize) -> R<Vec<u8>> {
 
 /// R2007-style decompression of `src[start..start + len]` into exactly `out_len` bytes.
 pub fn decompress21(src: &[u8], start: usize, len: usize, out_len: usize) -> R<Vec<u8>> {
-    let mut d = Dec21 {
-        src,
-        i: start,
-        end: start.checked_add(len).ok_or(BAD)?.min(src.len()),
-        op: 0,
-        length: 0,
-        offset: 0,
-        out: vec![0u8; out_len],
-        o: 0,
-    };
+    let mut d = Dec21 { src, i: start, end: start.checked_add(len).ok_or(BAD)?.min(src.len()), op: 0, length: 0, offset: 0, out: vec![0u8; out_len], o: 0 };
     d.run()?;
     Ok(d.out)
 }
@@ -347,13 +338,6 @@ fn remainder_pattern(n: usize) -> Vec<(usize, usize, usize)> {
         28 => vec![(24, 0, 4), (16, 4, 8), (8, 12, 8), (0, 20, 8)],
         29 => vec![(28, 0, 1), (24, 1, 4), (16, 5, 8), (8, 13, 8), (0, 21, 8)],
         30 => vec![(28, 0, 2), (24, 2, 4), (16, 6, 8), (8, 14, 8), (0, 22, 8)],
-        _ => vec![
-            (30, 0, 1),
-            (26, 1, 4),
-            (18, 5, 8),
-            (10, 13, 8),
-            (2, 21, 8),
-            (0, 29, 2),
-        ],
+        _ => vec![(30, 0, 1), (26, 1, 4), (18, 5, 8), (10, 13, 8), (2, 21, 8), (0, 29, 2)],
     }
 }

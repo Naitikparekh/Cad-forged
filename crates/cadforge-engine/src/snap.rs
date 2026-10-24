@@ -142,19 +142,7 @@ pub struct SnapOptions {
 
 impl SnapOptions {
     pub fn new(scale: f64) -> SnapOptions {
-        SnapOptions {
-            scale,
-            aperture_px: 12.0,
-            osmask: 0,
-            base: None,
-            ortho: false,
-            polar: false,
-            polar_inc: PI / 2.0,
-            polar_add: vec![],
-            otrack: false,
-            grid: None,
-            ucs_angle: 0.0,
-        }
+        SnapOptions { scale, aperture_px: 12.0, osmask: 0, base: None, ortho: false, polar: false, polar_inc: PI / 2.0, polar_add: vec![], otrack: false, grid: None, ucs_angle: 0.0 }
     }
 }
 
@@ -192,19 +180,11 @@ fn fmt(n: f64) -> String {
 }
 
 fn degs(a: f64) -> String {
-    format!(
-        "{}°",
-        crate::sysvars::fmt_num((deg(norm_angle(a)) * 100.0).round() / 100.0)
-    )
+    format!("{}°", crate::sysvars::fmt_num((deg(norm_angle(a)) * 100.0).round() / 100.0))
 }
 
 fn mk_line(v: &TrackVec, to: Pt) -> TrackLine {
-    TrackLine {
-        a: v.origin,
-        b: to + v.dir * 1e6,
-        through: to,
-        kind: v.kind,
-    }
+    TrackLine { a: v.origin, b: to + v.dir * 1e6, through: to, kind: v.kind }
 }
 
 impl Snapper {
@@ -229,11 +209,7 @@ impl Snapper {
                     return false;
                 }
                 self.dwell = Some(Dwell { done: true, ..d });
-                if let Some(i) = self
-                    .acquired
-                    .iter()
-                    .position(|a| same_pt(*a, snap.pt, 1e-7))
-                {
+                if let Some(i) = self.acquired.iter().position(|a| same_pt(*a, snap.pt, 1e-7)) {
                     self.acquired.remove(i);
                 } else {
                     self.acquired.push(snap.pt);
@@ -244,11 +220,7 @@ impl Snapper {
                 true
             }
             _ => {
-                self.dwell = Some(Dwell {
-                    pt: snap.pt,
-                    since: now,
-                    done: false,
-                });
+                self.dwell = Some(Dwell { pt: snap.pt, since: now, done: false });
                 false
             }
         }
@@ -257,11 +229,7 @@ impl Snapper {
     /// Resolve a raw world point into the point to use.
     pub fn resolve(&self, doc: &Drawing, raw: Pt, o: &SnapOptions) -> Resolved {
         let ap = o.aperture_px / o.scale;
-        let mut out = Resolved {
-            pt: raw,
-            snap: None,
-            track: None,
-        };
+        let mut out = Resolved { pt: raw, snap: None, track: None };
 
         // 1. object snaps
         if o.osmask != 0 {
@@ -304,11 +272,7 @@ impl Snapper {
         let mut cands: Vec<Cand> = vec![];
         let mut add = |kind: SnapKind, pt: Pt, trigger: f64| {
             if trigger <= ap {
-                cands.push(Cand {
-                    kind,
-                    pt,
-                    d: trigger,
-                });
+                cands.push(Cand { kind, pt, d: trigger });
             }
         };
         for e in &near {
@@ -347,26 +311,15 @@ impl Snapper {
                         if mask & OS_PER != 0 {
                             for (fp, t) in perp_feet(s, base) {
                                 if (-1e-9..=1.0 + 1e-9).contains(&t) {
-                                    cands.push(Cand {
-                                        kind: SnapKind::Per,
-                                        pt: fp,
-                                        d: nd,
-                                    });
+                                    cands.push(Cand { kind: SnapKind::Per, pt: fp, d: nd });
                                 }
                             }
                         }
                         if mask & OS_TAN != 0 && !s.is_line() {
-                            let mut tp: Vec<(Pt, f64)> = tangent_points(s, base)
-                                .into_iter()
-                                .filter(|q| (-1e-9..=1.0 + 1e-9).contains(&q.1))
-                                .collect();
+                            let mut tp: Vec<(Pt, f64)> = tangent_points(s, base).into_iter().filter(|q| (-1e-9..=1.0 + 1e-9).contains(&q.1)).collect();
                             tp.sort_by(|p, q| dist(p.0, raw).total_cmp(&dist(q.0, raw)));
                             if let Some(first) = tp.first() {
-                                cands.push(Cand {
-                                    kind: SnapKind::Tan,
-                                    pt: first.0,
-                                    d: nd,
-                                });
+                                cands.push(Cand { kind: SnapKind::Tan, pt: first.0, d: nd });
                             }
                         }
                     }
@@ -378,11 +331,7 @@ impl Snapper {
                 for s in segs.iter() {
                     let (q, _, d) = s.nearest(raw);
                     if d <= ap {
-                        cands.push(Cand {
-                            kind: SnapKind::Nea,
-                            pt: q,
-                            d,
-                        });
+                        cands.push(Cand { kind: SnapKind::Nea, pt: q, d });
                     }
                 }
             }
@@ -399,14 +348,8 @@ impl Snapper {
             }
         });
         // NEA is a fallback: take it only if nothing else qualifies
-        let best = cands
-            .iter()
-            .find(|c| c.kind != SnapKind::Nea)
-            .unwrap_or(&cands[0]);
-        Some(SnapHit {
-            kind: best.kind,
-            pt: best.pt,
-        })
+        let best = cands.iter().find(|c| c.kind != SnapKind::Nea).unwrap_or(&cands[0]);
+        Some(SnapHit { kind: best.kind, pt: best.pt })
     }
 
     pub fn tracking(&self, raw: Pt, ap: f64, o: &SnapOptions) -> Option<Track> {
@@ -433,49 +376,20 @@ impl Snapper {
                 } else {
                     -PI / 2.0
                 };
-            return Some(Track {
-                pt: p,
-                lines: vec![],
-                marks: vec![],
-                label: format!("Ortho: {} < {}", fmt(d), degs(a - ua)),
-                kind: TrackKind::Ortho,
-                dist: Some(d),
-                angle: Some(a),
-            });
+            return Some(Track { pt: p, lines: vec![], marks: vec![], label: format!("Ortho: {} < {}", fmt(d), degs(a - ua)), kind: TrackKind::Ortho, dist: Some(d), angle: Some(a) });
         }
-        let angles: Vec<f64> = if o.polar {
-            polar_angles(
-                if o.polar_inc > 0.0 {
-                    o.polar_inc
-                } else {
-                    PI / 2.0
-                },
-                &o.polar_add,
-            )
-        } else {
-            vec![0.0, PI / 2.0, PI, 3.0 * PI / 2.0]
-        };
+        let angles: Vec<f64> = if o.polar { polar_angles(if o.polar_inc > 0.0 { o.polar_inc } else { PI / 2.0 }, &o.polar_add) } else { vec![0.0, PI / 2.0, PI, 3.0 * PI / 2.0] };
         let angles: Vec<f64> = angles.into_iter().map(|a| a + o.ucs_angle).collect();
         let mut vectors: Vec<TrackVec> = vec![];
         if let (Some(base), true) = (base, o.polar) {
             for &a in &angles {
-                vectors.push(TrackVec {
-                    origin: base,
-                    dir: pt(a.cos(), a.sin()),
-                    kind: TrackKind::Polar,
-                    angle: a,
-                });
+                vectors.push(TrackVec { origin: base, dir: pt(a.cos(), a.sin()), kind: TrackKind::Polar, angle: a });
             }
         }
         if o.otrack {
             for acq in &self.acquired {
                 for &a in &angles {
-                    vectors.push(TrackVec {
-                        origin: *acq,
-                        dir: pt(a.cos(), a.sin()),
-                        kind: TrackKind::OTrack,
-                        angle: a,
-                    });
+                    vectors.push(TrackVec { origin: *acq, dir: pt(a.cos(), a.sin()), kind: TrackKind::OTrack, angle: a });
                 }
             }
         }
@@ -502,9 +416,7 @@ impl Snapper {
         let first = &hits[0];
         // intersection of two tracking vectors from different origins
         for h2 in &hits[1..] {
-            if same_pt(h2.v.origin, first.v.origin, 1e-9)
-                || cross(first.v.dir, h2.v.dir).abs() < 1e-6
-            {
+            if same_pt(h2.v.origin, first.v.origin, 1e-9) || cross(first.v.dir, h2.v.dir).abs() < 1e-6 {
                 continue;
             }
             let a = Seg::line(first.v.origin, first.v.origin + first.v.dir * 1e7);
@@ -524,28 +436,8 @@ impl Snapper {
             }
         }
         let p = first.v.origin + first.v.dir * first.t;
-        let label = if first.v.kind == TrackKind::Polar {
-            format!(
-                "Polar: {} < {}",
-                fmt(first.t),
-                degs(first.v.angle - o.ucs_angle)
-            )
-        } else {
-            format!(
-                "Track: {} < {}",
-                fmt(first.t),
-                degs(first.v.angle - o.ucs_angle)
-            )
-        };
-        Some(Track {
-            pt: p,
-            lines: vec![mk_line(&first.v, p)],
-            marks: self.acquired.clone(),
-            label,
-            kind: first.v.kind,
-            dist: Some(first.t),
-            angle: Some(first.v.angle),
-        })
+        let label = if first.v.kind == TrackKind::Polar { format!("Polar: {} < {}", fmt(first.t), degs(first.v.angle - o.ucs_angle)) } else { format!("Track: {} < {}", fmt(first.t), degs(first.v.angle - o.ucs_angle)) };
+        Some(Track { pt: p, lines: vec![mk_line(&first.v, p)], marks: self.acquired.clone(), label, kind: first.v.kind, dist: Some(first.t), angle: Some(first.v.angle) })
     }
 }
 
@@ -615,11 +507,7 @@ mod tests {
         assert_eq!(r.snap.unwrap().kind, SnapKind::End);
         assert_eq!(r.pt, pt(0.0, 0.0));
         let r = s.resolve(&d, pt(5.05, 0.05), &opts(OS_END | OS_MID | OS_INT));
-        assert_eq!(
-            r.snap.unwrap().kind,
-            SnapKind::Int,
-            "intersection outranks the midpoint when equally close"
-        );
+        assert_eq!(r.snap.unwrap().kind, SnapKind::Int, "intersection outranks the midpoint when equally close");
         assert!(dist(r.pt, pt(5.0, 0.0)) < 1e-9);
         let r = s.resolve(&d, pt(20.1, 0.1), &opts(OS_CEN));
         assert_eq!(r.snap.unwrap().kind, SnapKind::Cen);
@@ -660,12 +548,7 @@ mod tests {
         assert!(dist(r.pt, pt(10.05, 10.05)) < 0.1, "{:?}", r.pt);
         assert_eq!(r.track.unwrap().kind, TrackKind::Polar);
         o.polar = false;
-        o.grid = Some(Grid {
-            sx: 5.0,
-            sy: 5.0,
-            base: pt(0.0, 0.0),
-            angle: 0.0,
-        });
+        o.grid = Some(Grid { sx: 5.0, sy: 5.0, base: pt(0.0, 0.0), angle: 0.0 });
         let r = s.resolve(&d, pt(7.4, 12.6), &o);
         assert_eq!(r.pt, pt(5.0, 15.0));
     }
@@ -673,18 +556,12 @@ mod tests {
     #[test]
     fn acquisition_requires_a_dwell() {
         let mut s = Snapper::new();
-        let h = SnapHit {
-            kind: SnapKind::End,
-            pt: pt(1.0, 1.0),
-        };
+        let h = SnapHit { kind: SnapKind::End, pt: pt(1.0, 1.0) };
         assert!(!s.note_hover(Some(&h), 0.0));
         assert!(!s.note_hover(Some(&h), 100.0));
         assert!(s.note_hover(Some(&h), 400.0));
         assert_eq!(s.acquired.len(), 1);
-        assert!(
-            !s.note_hover(Some(&h), 900.0),
-            "only acquires once per dwell"
-        );
+        assert!(!s.note_hover(Some(&h), 900.0), "only acquires once per dwell");
         s.note_hover(None, 1000.0);
         s.note_hover(Some(&h), 1100.0);
         assert!(s.note_hover(Some(&h), 1500.0));

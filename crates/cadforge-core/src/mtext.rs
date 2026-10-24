@@ -20,15 +20,7 @@ pub struct Style {
 
 impl Default for Style {
     fn default() -> Style {
-        Style {
-            bold: false,
-            italic: false,
-            underline: false,
-            overline: false,
-            strike: false,
-            color: None,
-            scale: 1.0,
-        }
+        Style { bold: false, italic: false, underline: false, overline: false, strike: false, color: None, scale: 1.0 }
     }
 }
 
@@ -36,11 +28,7 @@ impl Default for Style {
 pub enum Piece {
     Text(String),
     /// A stacked fraction: `bar` is false for the tolerance form (`\Sa^b;`).
-    Stack {
-        num: String,
-        den: String,
-        bar: bool,
-    },
+    Stack { num: String, den: String, bar: bool },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -65,10 +53,7 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
     let mut paras: Vec<Vec<Run>> = vec![];
     let flush = |cur: &mut String, st: &Style, runs: &mut Vec<Run>| {
         if !cur.is_empty() {
-            runs.push(Run {
-                style: st.clone(),
-                piece: Piece::Text(std::mem::take(cur)),
-            });
+            runs.push(Run { style: st.clone(), piece: Piece::Text(std::mem::take(cur)) });
         }
     };
     // text up to the next ';' (the code's argument) and the index after it
@@ -136,13 +121,7 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
                         i = next;
                         flush(&mut cur, &st, &mut runs);
                         if let Ok(v) = a.trim().parse::<u32>() {
-                            st.color = Some(if v == 0 {
-                                Color::ByBlock
-                            } else if v == 256 {
-                                Color::ByLayer
-                            } else {
-                                Color::Aci(v.min(255) as u8)
-                            });
+                            st.color = Some(if v == 0 { Color::ByBlock } else if v == 256 { Color::ByLayer } else { Color::Aci(v.min(255) as u8) });
                         }
                     }
                     'c' => {
@@ -151,11 +130,7 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
                         flush(&mut cur, &st, &mut runs);
                         if let Ok(v) = a.trim().parse::<u32>() {
                             // the integer holds blue in the high byte: 0xBBGGRR
-                            st.color = Some(Color::Rgb(
-                                (v & 0xFF) as u8,
-                                ((v >> 8) & 0xFF) as u8,
-                                ((v >> 16) & 0xFF) as u8,
-                            ));
+                            st.color = Some(Color::Rgb((v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, ((v >> 16) & 0xFF) as u8));
                         }
                     }
                     'W' | 'w' | 'T' | 't' | 'Q' | 'q' | 'A' | 'a' | 'X' | 'x' => {
@@ -190,14 +165,7 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
                         }
                         let den: String = bc[k..].iter().collect();
                         match sep {
-                            Some(sep) => runs.push(Run {
-                                style: st.clone(),
-                                piece: Piece::Stack {
-                                    num,
-                                    den,
-                                    bar: sep != '^',
-                                },
-                            }),
+                            Some(sep) => runs.push(Run { style: st.clone(), piece: Piece::Stack { num, den, bar: sep != '^' } }),
                             None => cur.push_str(&num),
                         }
                     }
@@ -287,19 +255,7 @@ mod tests {
     use super::*;
 
     fn texts(p: &[Vec<Run>]) -> Vec<Vec<String>> {
-        p.iter()
-            .map(|para| {
-                para.iter()
-                    .map(|r| {
-                        if let Piece::Text(t) = &r.piece {
-                            t.clone()
-                        } else {
-                            "<stack>".into()
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
+        p.iter().map(|para| para.iter().map(|r| if let Piece::Text(t) = &r.piece { t.clone() } else { "<stack>".into() }).collect()).collect()
     }
 
     #[test]
@@ -318,38 +274,20 @@ mod tests {
         assert_eq!(p.len(), 2);
         assert_eq!(texts(&p)[0], vec!["one"]);
         assert_eq!(texts(&p)[1], vec!["two ", "under", " done\\ {x}"]);
-        assert!(
-            p[1][1].style.underline && !p[1][0].style.underline && !p[1][2].style.underline,
-            "the group ends at its brace"
-        );
-        assert_eq!(
-            parse("a\nb", 1.0, false).len(),
-            2,
-            "a plain newline is a paragraph break too"
-        );
+        assert!(p[1][1].style.underline && !p[1][0].style.underline && !p[1][2].style.underline, "the group ends at its brace");
+        assert_eq!(parse("a\nb", 1.0, false).len(), 2, "a plain newline is a paragraph break too");
     }
 
     #[test]
     fn font_flags_colour_and_height() {
-        let p = parse(
-            "\\fArial|b1|i1|c0;bold italic{\\C1;red}\\C3;green\\H2x;big\\H5;abs",
-            2.5,
-            true,
-        );
+        let p = parse("\\fArial|b1|i1|c0;bold italic{\\C1;red}\\C3;green\\H2x;big\\H5;abs", 2.5, true);
         let r = &p[0];
         assert!(r[0].style.bold && r[0].style.italic);
         assert_eq!(r[1].style.color, Some(Color::Aci(1)));
         assert!(r[1].style.bold, "a group inherits what is set outside");
-        assert_eq!(
-            r[2].style.color,
-            Some(Color::Aci(3)),
-            "after the group the colour set inside it is gone, the new one applies"
-        );
+        assert_eq!(r[2].style.color, Some(Color::Aci(3)), "after the group the colour set inside it is gone, the new one applies");
         assert!((r[3].style.scale - 2.0).abs() < 1e-12, "\\H2x; doubles");
-        assert!(
-            (r[4].style.scale - 2.0).abs() < 1e-12,
-            "\\H5; on 2.5 high text is 2x"
-        );
+        assert!((r[4].style.scale - 2.0).abs() < 1e-12, "\\H5; on 2.5 high text is 2x");
         let off = parse("\\fArial|b1;x\\fArial|b0;y", 1.0, true);
         assert!(off[0][0].style.bold && !off[0][1].style.bold);
         // true colour: blue in the high byte
@@ -361,54 +299,22 @@ mod tests {
     #[test]
     fn line_decorations_toggle() {
         let p = parse("\\Lu\\lx\\Oo\\ok\\Kstrike\\k.", 1.0, true);
-        let flags: Vec<(bool, bool, bool)> = p[0]
-            .iter()
-            .map(|r| (r.style.underline, r.style.overline, r.style.strike))
-            .collect();
-        assert_eq!(
-            flags,
-            vec![
-                (true, false, false),
-                (false, false, false),
-                (false, true, false),
-                (false, false, false),
-                (false, false, true),
-                (false, false, false)
-            ]
-        );
+        let flags: Vec<(bool, bool, bool)> = p[0].iter().map(|r| (r.style.underline, r.style.overline, r.style.strike)).collect();
+        assert_eq!(flags, vec![(true, false, false), (false, false, false), (false, true, false), (false, false, false), (false, false, true), (false, false, false)]);
     }
 
     #[test]
     fn stacked_fractions() {
         let p = parse("a \\S1/2; b \\S+0.1^-0.2; c \\S3#4;", 1.0, true);
-        let stacks: Vec<(String, String, bool)> = p[0]
-            .iter()
-            .filter_map(|r| {
-                if let Piece::Stack { num, den, bar } = &r.piece {
-                    Some((num.clone(), den.clone(), *bar))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        assert_eq!(
-            stacks,
-            vec![
-                ("1".into(), "2".into(), true),
-                ("+0.1".into(), "-0.2".into(), false),
-                ("3".into(), "4".into(), true)
-            ]
-        );
+        let stacks: Vec<(String, String, bool)> = p[0].iter().filter_map(|r| if let Piece::Stack { num, den, bar } = &r.piece { Some((num.clone(), den.clone(), *bar)) } else { None }).collect();
+        assert_eq!(stacks, vec![("1".into(), "2".into(), true), ("+0.1".into(), "-0.2".into(), false), ("3".into(), "4".into(), true)]);
         assert_eq!(plain("a \\S1/2; b", true), "a 1/2 b");
     }
 
     #[test]
     fn percent_codes_work_in_every_text() {
         for mtext in [false, true] {
-            assert_eq!(
-                plain("45%%d  10%%c  %%p0.1  100%%%", mtext),
-                "45°  10Ø  ±0.1  100%"
-            );
+            assert_eq!(plain("45%%d  10%%c  %%p0.1  100%%%", mtext), "45°  10Ø  ±0.1  100%");
         }
         let p = parse("%%uunder%%u plain %%oover", 1.0, false);
         assert!(p[0][0].style.underline && !p[0][1].style.underline && p[0][2].style.overline);
@@ -417,31 +323,11 @@ mod tests {
 
     #[test]
     fn unknown_and_broken_codes_do_not_panic_or_lose_text() {
-        for s in [
-            "\\",
-            "{",
-            "}}",
-            "\\f",
-            "\\H;",
-            "\\S",
-            "\\Sno separator;",
-            "\\U+12",
-            "\\U+zzzz;",
-            "\\C;x",
-            "%",
-            "%%",
-            "tail\\",
-            "\\M+1A2B3c",
-            "\\q",
-        ] {
+        for s in ["\\", "{", "}}", "\\f", "\\H;", "\\S", "\\Sno separator;", "\\U+12", "\\U+zzzz;", "\\C;x", "%", "%%", "tail\\", "\\M+1A2B3c", "\\q"] {
             let _ = parse(s, 2.5, true);
         }
         assert_eq!(plain("\\Sno separator;!", true), "no separator!");
         assert_eq!(plain("a\\U+00B0b", true), "a°b");
-        assert_eq!(
-            plain("\\W2;\\T3;\\Q15;\\A1;text", true),
-            "text",
-            "width, tracking, oblique and alignment codes are read and dropped"
-        );
+        assert_eq!(plain("\\W2;\\T3;\\Q15;\\A1;text", true), "text", "width, tracking, oblique and alignment codes are read and dropped");
     }
 }

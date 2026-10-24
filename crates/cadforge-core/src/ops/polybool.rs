@@ -26,20 +26,13 @@ pub fn area_of(a: &Area) -> f64 {
 /// Loops of an operand as directed segments with the interior on the left: loops nested an even number of times
 /// run counter-clockwise, odd ones clockwise (even-odd interior).
 fn oriented(loops: &[Loop], tol: f64) -> Vec<Vec<Seg>> {
-    let polys: Vec<Vec<Pt>> = loops
-        .iter()
-        .map(|l| tess_segs(&pline_segs(l, true), tol))
-        .collect();
+    let polys: Vec<Vec<Pt>> = loops.iter().map(|l| tess_segs(&pline_segs(l, true), tol)).collect();
     loops
         .iter()
         .enumerate()
         .filter(|(_, l)| l.len() >= 2)
         .map(|(i, l)| {
-            let depth = (0..loops.len())
-                .filter(|&j| {
-                    j != i && polys[j].len() >= 3 && point_in_polygon(l[0].pt(), &polys[j])
-                })
-                .count();
+            let depth = (0..loops.len()).filter(|&j| j != i && polys[j].len() >= 3 && point_in_polygon(l[0].pt(), &polys[j])).count();
             let segs = pline_segs(l, true);
             let ccw = pline_area(l) > 0.0;
             if ccw == (depth % 2 == 0) {
@@ -59,11 +52,7 @@ fn contains(segs: &[Seg], p: Pt, reach: f64) -> bool {
         .iter()
         .filter(|a| {
             let ray = Seg::line(p, polar(p, **a, reach));
-            segs.iter()
-                .map(|s| seg_intersect(&ray, s, false, false).len())
-                .sum::<usize>()
-                % 2
-                == 1
+            segs.iter().map(|s| seg_intersect(&ray, s, false, false).len()).sum::<usize>() % 2 == 1
         })
         .count();
     odd >= 2
@@ -71,10 +60,7 @@ fn contains(segs: &[Seg], p: Pt, reach: f64) -> bool {
 
 /// Pieces of `own` after cutting at every intersection with `own` and `other`.
 fn split_pieces(own: &[Seg], other: &[Seg], eps: f64) -> Vec<Seg> {
-    let (ob, xb): (Vec<Bounds>, Vec<Bounds>) = (
-        own.iter().map(|s| s.bounds().grow(eps)).collect(),
-        other.iter().map(|s| s.bounds()).collect(),
-    );
+    let (ob, xb): (Vec<Bounds>, Vec<Bounds>) = (own.iter().map(|s| s.bounds().grow(eps)).collect(), other.iter().map(|s| s.bounds()).collect());
     let mut out = vec![];
     for (i, s) in own.iter().enumerate() {
         let mut ts: Vec<f64> = vec![];
@@ -121,29 +107,10 @@ fn merge(a: &Seg, b: &Seg, eps: f64) -> Option<Seg> {
     match (a, b) {
         (Seg::L { a: a0, b: a1, .. }, Seg::L { b: b1, .. }) => {
             let (d1, d2) = (*a1 - *a0, b.end() - b.start());
-            (cross(d1, d2).abs() <= 1e-9 * len(d1) * len(d2) && dot(d1, d2) > 0.0)
-                .then(|| Seg::line(*a0, *b1))
+            (cross(d1, d2).abs() <= 1e-9 * len(d1) * len(d2) && dot(d1, d2) > 0.0).then(|| Seg::line(*a0, *b1))
         }
-        (
-            Seg::A {
-                c: c1,
-                r: r1,
-                a0,
-                sw: s1,
-                ..
-            },
-            Seg::A {
-                c: c2,
-                r: r2,
-                sw: s2,
-                ..
-            },
-        ) => {
-            let joined = dist(*c1, *c2) <= eps
-                && (r1 - r2).abs() <= eps
-                && s1.signum() == s2.signum()
-                && dist(a.end(), b.start()) <= eps
-                && s1.abs() + s2.abs() < TAU - 1e-6;
+        (Seg::A { c: c1, r: r1, a0, sw: s1, .. }, Seg::A { c: c2, r: r2, sw: s2, .. }) => {
+            let joined = dist(*c1, *c2) <= eps && (r1 - r2).abs() <= eps && s1.signum() == s2.signum() && dist(a.end(), b.start()) <= eps && s1.abs() + s2.abs() < TAU - 1e-6;
             joined.then(|| Seg::arc(*c1, *r1, *a0, s1 + s2))
         }
         _ => None,
@@ -182,10 +149,7 @@ fn chain(pieces: &[Seg], eps: f64) -> Vec<Vec<Seg>> {
             nodes.len() - 1
         }
     };
-    let ends: Vec<(usize, usize)> = pieces
-        .iter()
-        .map(|s| (node(s.start()), node(s.end())))
-        .collect();
+    let ends: Vec<(usize, usize)> = pieces.iter().map(|s| (node(s.start()), node(s.end()))).collect();
     let mut used = vec![false; pieces.len()];
     let mut loops = vec![];
     for start in 0..pieces.len() {
@@ -234,11 +198,7 @@ pub fn boolean(a: &[Loop], b: &[Loop], op: Op) -> Vec<Area> {
         let bb = Bounds::of_points(&all);
         bb.width().hypot(bb.height())
     };
-    let (eps, tol, reach) = (
-        1e-9 * diag.max(1.0) * 100.0,
-        diag.max(1.0) * 1e-4,
-        diag * 4.0 + 1.0,
-    );
+    let (eps, tol, reach) = (1e-9 * diag.max(1.0) * 100.0, diag.max(1.0) * 1e-4, diag * 4.0 + 1.0);
     let (la, lb) = (oriented(a, tol), oriented(b, tol));
     let (sa, sb): (Vec<Seg>, Vec<Seg>) = (la.concat(), lb.concat());
     let mut kept: Vec<Seg> = vec![];
@@ -278,25 +238,13 @@ pub fn boolean(a: &[Loop], b: &[Loop], op: Op) -> Vec<Area> {
             _ => {}
         }
     }
-    let loops: Vec<Loop> = chain(&kept, eps)
-        .into_iter()
-        .map(|r| tidy(r, eps))
-        .filter(|r| !r.is_empty())
-        .map(|r| segs_to_verts(&r, true))
-        .filter(|l| l.len() >= 2 && pline_area(l).abs() > eps * diag.max(1.0))
-        .collect();
-    let (outer, holes): (Vec<Loop>, Vec<Loop>) =
-        loops.into_iter().partition(|l| pline_area(l) > 0.0);
+    let loops: Vec<Loop> = chain(&kept, eps).into_iter().map(|r| tidy(r, eps)).filter(|r| !r.is_empty()).map(|r| segs_to_verts(&r, true)).filter(|l| l.len() >= 2 && pline_area(l).abs() > eps * diag.max(1.0)).collect();
+    let (outer, holes): (Vec<Loop>, Vec<Loop>) = loops.into_iter().partition(|l| pline_area(l) > 0.0);
     let polys = |l: &Loop| tess_segs(&pline_segs(l, true), tol);
     let mut areas: Vec<Area> = outer.into_iter().map(|o| vec![o]).collect();
     for h in holes {
         let probe = h[0].pt();
-        let owner = areas
-            .iter()
-            .enumerate()
-            .filter(|(_, ar)| point_in_polygon(probe, &polys(&ar[0])))
-            .min_by(|x, y| pline_area(&x.1[0]).total_cmp(&pline_area(&y.1[0])))
-            .map(|(i, _)| i);
+        let owner = areas.iter().enumerate().filter(|(_, ar)| point_in_polygon(probe, &polys(&ar[0]))).min_by(|x, y| pline_area(&x.1[0]).total_cmp(&pline_area(&y.1[0]))).map(|(i, _)| i);
         if let Some(i) = owner {
             areas[i].push(h);
         }
@@ -310,12 +258,7 @@ mod tests {
     use std::f64::consts::PI;
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Loop {
-        vec![
-            Vertex::new(x0, y0, 0.0),
-            Vertex::new(x1, y0, 0.0),
-            Vertex::new(x1, y1, 0.0),
-            Vertex::new(x0, y1, 0.0),
-        ]
+        vec![Vertex::new(x0, y0, 0.0), Vertex::new(x1, y0, 0.0), Vertex::new(x1, y1, 0.0), Vertex::new(x0, y1, 0.0)]
     }
     fn circle(cx: f64, cy: f64, r: f64) -> Loop {
         vec![Vertex::new(cx + r, cy, 1.0), Vertex::new(cx - r, cy, 1.0)]
@@ -360,11 +303,7 @@ mod tests {
         let (a, b) = (rect(0.0, 0.0, 10.0, 10.0), rect(10.0, 0.0, 20.0, 10.0));
         let u = run(&a, &b, Op::Union);
         assert_eq!(u.len(), 1);
-        assert_eq!(
-            u[0][0].len(),
-            4,
-            "collinear pieces merge back into single edges"
-        );
+        assert_eq!(u[0][0].len(), 4, "collinear pieces merge back into single edges");
         near(total(&u), 200.0);
         assert!(run(&a, &b, Op::Intersect).is_empty());
         near(total(&run(&a, &b, Op::Subtract)), 100.0);
@@ -392,10 +331,7 @@ mod tests {
         assert_eq!(r.len(), 1);
         assert!(r[0][0].iter().any(|v| v.b != 0.0), "the bite is a true arc");
         near(total(&r), 100.0 - PI * 9.0 / 2.0);
-        near(
-            total(&run(&plate, &bite, Op::Union)),
-            100.0 + PI * 9.0 / 2.0,
-        );
+        near(total(&run(&plate, &bite, Op::Union)), 100.0 + PI * 9.0 / 2.0);
         near(total(&run(&plate, &bite, Op::Intersect)), PI * 9.0 / 2.0);
     }
 
@@ -411,11 +347,7 @@ mod tests {
 
     #[test]
     fn touching_at_a_corner_stays_two_areas() {
-        let u = run(
-            &rect(0.0, 0.0, 10.0, 10.0),
-            &rect(10.0, 10.0, 20.0, 20.0),
-            Op::Union,
-        );
+        let u = run(&rect(0.0, 0.0, 10.0, 10.0), &rect(10.0, 10.0, 20.0, 20.0), Op::Union);
         assert_eq!(u.len(), 2);
         near(total(&u), 200.0);
     }
@@ -440,9 +372,7 @@ mod tests {
     fn inclusion_exclusion_holds_on_degenerate_grids() {
         let mut seed = 0x2545f491u64;
         let mut next = |n: u64| {
-            seed = seed
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             (seed >> 33) % n
         };
         let shape = |next: &mut dyn FnMut(u64) -> u64| -> Loop {
@@ -453,32 +383,17 @@ mod tests {
                 _ => {
                     // a D shape: a rectangle with a semicircular right end
                     let (w, h) = (2.0 + next(4) as f64, 2.0 * (1.0 + next(2) as f64));
-                    vec![
-                        Vertex::new(x, y, 0.0),
-                        Vertex::new(x + w, y, 1.0),
-                        Vertex::new(x + w, y + h, 0.0),
-                        Vertex::new(x, y + h, 0.0),
-                    ]
+                    vec![Vertex::new(x, y, 0.0), Vertex::new(x + w, y, 1.0), Vertex::new(x + w, y + h, 0.0), Vertex::new(x, y + h, 0.0)]
                 }
             }
         };
         for case in 0..400 {
             let (a, b) = (shape(&mut next), shape(&mut next));
             let (aa, ab) = (pline_area(&a).abs(), pline_area(&b).abs());
-            let (u, i, d) = (
-                total(&run(&a, &b, Op::Union)),
-                total(&run(&a, &b, Op::Intersect)),
-                total(&run(&a, &b, Op::Subtract)),
-            );
+            let (u, i, d) = (total(&run(&a, &b, Op::Union)), total(&run(&a, &b, Op::Intersect)), total(&run(&a, &b, Op::Subtract)));
             let msg = format!("case {case}: {a:?} vs {b:?}");
-            assert!(
-                (u + i - aa - ab).abs() < 1e-6,
-                "union + intersection != sum of areas ({u} + {i} vs {aa} + {ab}); {msg}"
-            );
-            assert!(
-                (d - (aa - i)).abs() < 1e-6,
-                "difference {d} != {aa} - {i}; {msg}"
-            );
+            assert!((u + i - aa - ab).abs() < 1e-6, "union + intersection != sum of areas ({u} + {i} vs {aa} + {ab}); {msg}");
+            assert!((d - (aa - i)).abs() < 1e-6, "difference {d} != {aa} - {i}; {msg}");
         }
     }
 }

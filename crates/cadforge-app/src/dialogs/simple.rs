@@ -1,37 +1,26 @@
 //! Small dialogs: save as, about, help, QuickCalc, purge, layer states, alias editor.
 use super::Out;
-use crate::app::CadForgeApp;
 use cadforge_engine::commands::ext_system::{with_ext, SaveFormat};
+use crate::app::CadForgeApp;
 use eframe::egui::{self, vec2, Color32, RichText};
 use std::collections::BTreeSet;
 
 impl CadForgeApp {
-    pub(super) fn ui_save_as(
-        &mut self,
-        ui: &mut egui::Ui,
-        name: &mut String,
-        fmt: &mut SaveFormat,
-    ) -> Out {
+    pub(super) fn ui_save_as(&mut self, ui: &mut egui::Ui, name: &mut String, fmt: &mut SaveFormat) -> Out {
         ui.label(RichText::new("File name").color(self.t.text2));
         let r = ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
         ui.add_space(6.0);
         ui.label(RichText::new("Files of type").color(self.t.text2));
         let before = *fmt;
-        egui::ComboBox::from_id_salt("saveas-type")
-            .width(ui.available_width())
-            .selected_text(fmt.label())
-            .show_ui(ui, |ui| {
-                for f in SaveFormat::ALL {
-                    ui.selectable_value(fmt, f, f.label());
-                }
-            });
+        egui::ComboBox::from_id_salt("saveas-type").width(ui.available_width()).selected_text(fmt.label()).show_ui(ui, |ui| {
+            for f in SaveFormat::ALL {
+                ui.selectable_value(fmt, f, f.label());
+            }
+        });
         if *fmt != before && !name.trim().is_empty() {
             *name = with_ext(name, *fmt);
         }
-        if r.lost_focus()
-            && ui.input(|i| i.key_pressed(egui::Key::Enter))
-            && !name.trim().is_empty()
-        {
+        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !name.trim().is_empty() {
             return Out::Ok;
         }
         if !r.has_focus() && !self.save_as_focused {
@@ -73,11 +62,7 @@ impl CadForgeApp {
             0 => {
                 ui.horizontal(|ui| {
                     ui.label("Search");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut s.query)
-                            .hint_text("Search commands")
-                            .desired_width(280.0),
-                    );
+                    ui.add(egui::TextEdit::singleline(&mut s.query).hint_text("Search commands").desired_width(280.0));
                 });
                 let q = s.query.trim().to_lowercase();
                 let defs: Vec<(String, String, String, String, String)> = {
@@ -85,89 +70,30 @@ impl CadForgeApp {
                     let mut v: Vec<_> = a
                         .registry
                         .defs()
-                        .filter(|d| {
-                            !d.name.starts_with('_')
-                                && !d.name.starts_with("OSNAP_")
-                                && !d.title.is_empty()
-                                && (q.is_empty()
-                                    || d.name.to_lowercase().contains(&q)
-                                    || d.title.to_lowercase().contains(&q)
-                                    || d.desc.to_lowercase().contains(&q)
-                                    || a.registry
-                                        .alias_of(&d.name)
-                                        .is_some_and(|al| al.to_lowercase() == q))
-                        })
-                        .map(|d| {
-                            (
-                                d.name.clone(),
-                                if d.icon.is_empty() {
-                                    d.name.to_lowercase()
-                                } else {
-                                    d.icon.clone()
-                                },
-                                a.registry.alias_of(&d.name).unwrap_or_default(),
-                                if d.desc.is_empty() {
-                                    d.title.clone()
-                                } else {
-                                    d.desc.clone()
-                                },
-                                d.title.clone(),
-                            )
-                        })
+                        .filter(|d| !d.name.starts_with('_') && !d.name.starts_with("OSNAP_") && !d.title.is_empty() && (q.is_empty() || d.name.to_lowercase().contains(&q) || d.title.to_lowercase().contains(&q) || d.desc.to_lowercase().contains(&q) || a.registry.alias_of(&d.name).is_some_and(|al| al.to_lowercase() == q)))
+                        .map(|d| (d.name.clone(), if d.icon.is_empty() { d.name.to_lowercase() } else { d.icon.clone() }, a.registry.alias_of(&d.name).unwrap_or_default(), if d.desc.is_empty() { d.title.clone() } else { d.desc.clone() }, d.title.clone()))
                         .collect();
                     v.sort();
                     v.truncate(80);
                     v
                 };
                 let mut run: Option<String> = None;
-                egui::ScrollArea::vertical()
-                    .max_height(320.0)
-                    .show(ui, |ui| {
-                        for (name, icon, alias, desc, _) in &defs {
-                            let (r, resp) = ui.allocate_exact_size(
-                                vec2(ui.available_width(), 26.0),
-                                egui::Sense::click(),
-                            );
-                            if resp.hovered() {
-                                ui.painter().rect_filled(r, 2.0, t.hover);
-                            }
-                            self.icons.paint(
-                                ui.painter(),
-                                icon,
-                                egui::Rect::from_center_size(
-                                    r.left_center() + vec2(14.0, 0.0),
-                                    vec2(18.0, 18.0),
-                                ),
-                                &t,
-                                crate::icons::Tint::Normal,
-                            );
-                            ui.painter().text(
-                                r.left_center() + vec2(32.0, 0.0),
-                                egui::Align2::LEFT_CENTER,
-                                name,
-                                egui::FontId::new(12.0, egui::FontFamily::Name("bold".into())),
-                                t.text,
-                            );
-                            ui.painter().text(
-                                r.left_center() + vec2(150.0, 0.0),
-                                egui::Align2::LEFT_CENTER,
-                                alias,
-                                egui::FontId::monospace(11.5),
-                                t.accent2,
-                            );
-                            let d: String = desc.chars().take(70).collect();
-                            ui.painter().text(
-                                r.left_center() + vec2(210.0, 0.0),
-                                egui::Align2::LEFT_CENTER,
-                                d,
-                                egui::FontId::proportional(11.5),
-                                t.text3,
-                            );
-                            if resp.clicked() {
-                                run = Some(name.clone());
-                            }
+                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                    for (name, icon, alias, desc, _) in &defs {
+                        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(r, 2.0, t.hover);
                         }
-                    });
+                        self.icons.paint(ui.painter(), icon, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(18.0, 18.0)), &t, crate::icons::Tint::Normal);
+                        ui.painter().text(r.left_center() + vec2(32.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::new(12.0, egui::FontFamily::Name("bold".into())), t.text);
+                        ui.painter().text(r.left_center() + vec2(150.0, 0.0), egui::Align2::LEFT_CENTER, alias, egui::FontId::monospace(11.5), t.accent2);
+                        let d: String = desc.chars().take(70).collect();
+                        ui.painter().text(r.left_center() + vec2(210.0, 0.0), egui::Align2::LEFT_CENTER, d, egui::FontId::proportional(11.5), t.text3);
+                        if resp.clicked() {
+                            run = Some(name.clone());
+                        }
+                    }
+                });
                 if let Some(n) = run {
                     self.dialogs.clear();
                     self.run_command(&n, cadforge_engine::runtime::Args::none());
@@ -199,20 +125,15 @@ impl CadForgeApp {
                     ("Wheel / MMB drag", "Zoom / pan"),
                     ("Shift+MMB drag", "Orbit (3D)"),
                 ];
-                egui::ScrollArea::vertical()
-                    .max_height(340.0)
-                    .show(ui, |ui| {
-                        egui::Grid::new("help-keys")
-                            .num_columns(2)
-                            .spacing([20.0, 5.0])
-                            .show(ui, |ui| {
-                                for (k, d) in keys {
-                                    ui.label(RichText::new(k).monospace().color(t.accent2));
-                                    ui.label(d);
-                                    ui.end_row();
-                                }
-                            });
+                egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+                    egui::Grid::new("help-keys").num_columns(2).spacing([20.0, 5.0]).show(ui, |ui| {
+                        for (k, d) in keys {
+                            ui.label(RichText::new(k).monospace().color(t.accent2));
+                            ui.label(d);
+                            ui.end_row();
+                        }
                     });
+                });
             }
             _ => {
                 ui.label("Type a command name or alias (for example L for LINE or TR for TRIM) and press Enter or Space.");
@@ -229,33 +150,25 @@ impl CadForgeApp {
 
     pub(super) fn ui_calc(&mut self, ui: &mut egui::Ui, s: &mut CalcState) -> Out {
         let t = self.t;
-        egui::ScrollArea::vertical()
-            .max_height(180.0)
-            .stick_to_bottom(true)
-            .show(ui, |ui| {
-                if s.lines.is_empty() {
-                    ui.label(RichText::new("Type an expression and press Enter.").color(t.text3));
-                }
-                for (inp, res, err) in &s.lines {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(inp).monospace().color(t.text2));
-                        if *err {
-                            ui.label(RichText::new(res).color(t.err));
-                        } else {
-                            ui.label(RichText::new("=").color(t.text3));
-                            ui.label(RichText::new(res).strong());
-                        }
-                    });
-                }
-            });
+        egui::ScrollArea::vertical().max_height(180.0).stick_to_bottom(true).show(ui, |ui| {
+            if s.lines.is_empty() {
+                ui.label(RichText::new("Type an expression and press Enter.").color(t.text3));
+            }
+            for (inp, res, err) in &s.lines {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(inp).monospace().color(t.text2));
+                    if *err {
+                        ui.label(RichText::new(res).color(t.err));
+                    } else {
+                        ui.label(RichText::new("=").color(t.text3));
+                        ui.label(RichText::new(res).strong());
+                    }
+                });
+            }
+        });
         let mut run = false;
         ui.horizontal(|ui| {
-            let r = ui.add(
-                egui::TextEdit::singleline(&mut s.input)
-                    .hint_text("e.g. 2*(3+4)/sqrt(2)")
-                    .desired_width(340.0)
-                    .font(egui::FontId::monospace(12.0)),
-            );
+            let r = ui.add(egui::TextEdit::singleline(&mut s.input).hint_text("e.g. 2*(3+4)/sqrt(2)").desired_width(340.0).font(egui::FontId::monospace(12.0)));
             if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 run = true;
                 r.request_focus();
@@ -271,9 +184,7 @@ impl CadForgeApp {
                     s.lines.push((s.input.trim().to_string(), txt, false));
                     s.last = Some(v);
                 }
-                Err(e) => s
-                    .lines
-                    .push((s.input.trim().to_string(), format!("→ {e}"), true)),
+                Err(e) => s.lines.push((s.input.trim().to_string(), format!("→ {e}"), true)),
             }
             s.input.clear();
         }
@@ -292,15 +203,8 @@ impl CadForgeApp {
     pub(super) fn ui_vlisp(&mut self, ui: &mut egui::Ui, s: &mut VLispState) -> Out {
         let t = self.t;
         self.note(ui, "Write AutoLISP and press Run (Ctrl+Enter). Results appear below and in the command line history.");
-        let edit = ui.add(
-            egui::TextEdit::multiline(&mut s.src)
-                .code_editor()
-                .desired_rows(9)
-                .desired_width(f32::INFINITY)
-                .hint_text("(defun c:hello () (princ \"Hello\") (princ))"),
-        );
-        let mut run = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter))
-            && edit.has_focus();
+        let edit = ui.add(egui::TextEdit::multiline(&mut s.src).code_editor().desired_rows(9).desired_width(f32::INFINITY).hint_text("(defun c:hello () (princ \"Hello\") (princ))"));
+        let mut run = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter)) && edit.has_focus();
         let mut out = Out::Open;
         ui.horizontal(|ui| {
             if self.btn(ui, "Run", true).clicked() {
@@ -320,40 +224,20 @@ impl CadForgeApp {
         });
         if run && !s.src.trim().is_empty() {
             let src = s.src.clone();
-            self.run_command(
-                "_LISP",
-                cadforge_engine::runtime::Args::none()
-                    .with("source", cadforge_engine::runtime::ArgVal::Str(src))
-                    .with("echo", cadforge_engine::runtime::ArgVal::Bool(true)),
-            );
+            self.run_command("_LISP", cadforge_engine::runtime::Args::none().with("source", cadforge_engine::runtime::ArgVal::Str(src)).with("echo", cadforge_engine::runtime::ArgVal::Bool(true)));
         }
-        let lines: Vec<(String, cadforge_engine::app::LogKind)> = self
-            .h
-            .borrow()
-            .history
-            .iter()
-            .rev()
-            .take(14)
-            .map(|l| (l.text.clone(), l.kind))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect();
-        egui::ScrollArea::vertical()
-            .max_height(170.0)
-            .stick_to_bottom(true)
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                for (text, kind) in &lines {
-                    use cadforge_engine::app::LogKind;
-                    let colour = match kind {
-                        LogKind::Error => t.err,
-                        LogKind::Input | LogKind::Cmd => t.text2,
-                        _ => t.text,
-                    };
-                    ui.label(RichText::new(text).monospace().size(12.0).color(colour));
-                }
-            });
+        let lines: Vec<(String, cadforge_engine::app::LogKind)> = self.h.borrow().history.iter().rev().take(14).map(|l| (l.text.clone(), l.kind)).collect::<Vec<_>>().into_iter().rev().collect();
+        egui::ScrollArea::vertical().max_height(170.0).stick_to_bottom(true).auto_shrink([false, true]).show(ui, |ui| {
+            for (text, kind) in &lines {
+                use cadforge_engine::app::LogKind;
+                let colour = match kind {
+                    LogKind::Error => t.err,
+                    LogKind::Input | LogKind::Cmd => t.text2,
+                    _ => t.text,
+                };
+                ui.label(RichText::new(text).monospace().size(12.0).color(colour));
+            }
+        });
         out
     }
 
@@ -376,78 +260,39 @@ impl CadForgeApp {
             }
         });
         let has = !s.blocks.is_empty() || !s.layers.is_empty();
-        self.ok_cancel(
-            ui,
-            if has { Some("Purge All") } else { None },
-            Some("Close"),
-            &[],
-        )
+        self.ok_cancel(ui, if has { Some("Purge All") } else { None }, Some("Close"), &[])
     }
 
     pub(super) fn ui_layerstates(&mut self, ui: &mut egui::Ui, s: &mut LayerStatesState) -> Out {
         let t = self.t;
-        let states: Vec<(String, usize)> = self
-            .h
-            .borrow()
-            .doc()
-            .and_then(|d| {
-                d.settings
-                    .layer_states
-                    .as_ref()
-                    .map(|m| m.iter().map(|(k, v)| (k.clone(), v.len())).collect())
-            })
-            .unwrap_or_default();
+        let states: Vec<(String, usize)> = self.h.borrow().doc().and_then(|d| d.settings.layer_states.as_ref().map(|m| m.iter().map(|(k, v)| (k.clone(), v.len())).collect())).unwrap_or_default();
         if s.sel.is_none() {
             s.sel = states.first().map(|x| x.0.clone());
         }
-        egui::ScrollArea::vertical()
-            .max_height(180.0)
-            .show(ui, |ui| {
-                for (name, n) in &states {
-                    let sel = s.sel.as_deref() == Some(name.as_str());
-                    let (r, resp) = ui.allocate_exact_size(
-                        vec2(ui.available_width(), 24.0),
-                        egui::Sense::click(),
-                    );
-                    if sel {
-                        ui.painter().rect_filled(r, 2.0, t.accent_soft);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, 2.0, t.hover);
-                    }
-                    ui.painter().text(
-                        r.left_center() + vec2(8.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        name,
-                        egui::FontId::proportional(12.5),
-                        t.text,
-                    );
-                    ui.painter().text(
-                        r.right_center() - vec2(8.0, 0.0),
-                        egui::Align2::RIGHT_CENTER,
-                        format!("{n} layers"),
-                        egui::FontId::proportional(11.5),
-                        t.text3,
-                    );
-                    if resp.clicked() {
-                        s.sel = Some(name.clone());
-                    }
+        egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
+            for (name, n) in &states {
+                let sel = s.sel.as_deref() == Some(name.as_str());
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), egui::Sense::click());
+                if sel {
+                    ui.painter().rect_filled(r, 2.0, t.accent_soft);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, 2.0, t.hover);
                 }
-            });
+                ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
+                ui.painter().text(r.right_center() - vec2(8.0, 0.0), egui::Align2::RIGHT_CENTER, format!("{n} layers"), egui::FontId::proportional(11.5), t.text3);
+                if resp.clicked() {
+                    s.sel = Some(name.clone());
+                }
+            }
+        });
         ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut s.name)
-                    .hint_text("New layer state name")
-                    .desired_width(200.0),
-            );
+            ui.add(egui::TextEdit::singleline(&mut s.name).hint_text("New layer state name").desired_width(200.0));
             if self.btn(ui, "Save", false).clicked() && !s.name.trim().is_empty() {
                 let n = s.name.trim().to_string();
                 self.edit_doc("Layer state", |d| {
                     d.will_change();
                     let layers = d.layers.clone();
-                    d.settings
-                        .layer_states
-                        .get_or_insert_with(Default::default)
-                        .insert(n.clone(), layers);
+                    d.settings.layer_states.get_or_insert_with(Default::default).insert(n.clone(), layers);
                     d.touch();
                 });
                 s.sel = Some(s.name.trim().to_string());
@@ -473,17 +318,10 @@ impl CadForgeApp {
 
     pub(super) fn ui_aliasedit(&mut self, ui: &mut egui::Ui, s: &mut AliasState) -> Out {
         let t = self.t;
-        self.note(
-            ui,
-            "Aliases you add override the defaults and are remembered.",
-        );
+        self.note(ui, "Aliases you add override the defaults and are remembered.");
         ui.horizontal(|ui| {
             ui.label("Find");
-            ui.add(
-                egui::TextEdit::singleline(&mut s.filter)
-                    .hint_text("Filter")
-                    .desired_width(160.0),
-            );
+            ui.add(egui::TextEdit::singleline(&mut s.filter).hint_text("Filter").desired_width(160.0));
         });
         let f = s.filter.trim().to_uppercase();
         let rows: Vec<(String, String, bool)> = {
@@ -495,88 +333,45 @@ impl CadForgeApp {
             for (al, c) in a.registry.user_aliases.borrow().iter() {
                 map.insert(al.clone(), (c.clone(), true));
             }
-            map.into_iter()
-                .filter(|(k, (c, _))| f.is_empty() || k.contains(&f) || c.contains(&f))
-                .map(|(k, (c, u))| (k, c, u))
-                .collect()
+            map.into_iter().filter(|(k, (c, _))| f.is_empty() || k.contains(&f) || c.contains(&f)).map(|(k, (c, u))| (k, c, u)).collect()
         };
         let mut remove: Option<String> = None;
-        egui::ScrollArea::vertical()
-            .max_height(260.0)
-            .show(ui, |ui| {
-                for (al, c, user) in &rows {
-                    ui.horizontal(|ui| {
-                        ui.add_sized(
-                            [90.0, 18.0],
-                            egui::Label::new(RichText::new(al).monospace().color(if *user {
-                                t.accent2
-                            } else {
-                                t.text
-                            })),
-                        );
-                        ui.add_sized(
-                            [180.0, 18.0],
-                            egui::Label::new(RichText::new(c).monospace().color(t.text2)),
-                        );
-                        if *user && ui.small_button("Remove").clicked() {
-                            remove = Some(al.clone());
-                        }
-                    });
-                }
-            });
+        egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+            for (al, c, user) in &rows {
+                ui.horizontal(|ui| {
+                    ui.add_sized([90.0, 18.0], egui::Label::new(RichText::new(al).monospace().color(if *user { t.accent2 } else { t.text })));
+                    ui.add_sized([180.0, 18.0], egui::Label::new(RichText::new(c).monospace().color(t.text2)));
+                    if *user && ui.small_button("Remove").clicked() {
+                        remove = Some(al.clone());
+                    }
+                });
+            }
+        });
         if let Some(a) = remove {
-            self.h
-                .borrow()
-                .registry
-                .user_aliases
-                .borrow_mut()
-                .remove(&a);
+            self.h.borrow().registry.user_aliases.borrow_mut().remove(&a);
             self.save_user_aliases();
         }
         ui.separator();
         ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut s.new_alias)
-                    .hint_text("Alias")
-                    .desired_width(70.0),
-            );
-            let names: Vec<String> = self
-                .h
-                .borrow()
-                .registry
-                .names()
-                .into_iter()
-                .filter(|n| !n.starts_with('_') && !n.starts_with("OSNAP_"))
-                .collect();
+            ui.add(egui::TextEdit::singleline(&mut s.new_alias).hint_text("Alias").desired_width(70.0));
+            let names: Vec<String> = self.h.borrow().registry.names().into_iter().filter(|n| !n.starts_with('_') && !n.starts_with("OSNAP_")).collect();
             if s.new_cmd.is_empty() {
                 s.new_cmd = "LINE".into();
             }
-            egui::ComboBox::from_id_salt("alias-cmd")
-                .selected_text(&s.new_cmd)
-                .width(160.0)
-                .height(260.0)
-                .show_ui(ui, |ui| {
-                    for n in &names {
-                        ui.selectable_value(&mut s.new_cmd, n.clone(), n);
-                    }
-                });
+            egui::ComboBox::from_id_salt("alias-cmd").selected_text(&s.new_cmd).width(160.0).height(260.0).show_ui(ui, |ui| {
+                for n in &names {
+                    ui.selectable_value(&mut s.new_cmd, n.clone(), n);
+                }
+            });
             if self.btn(ui, "Add", false).clicked() {
                 let a = s.new_alias.trim().to_uppercase();
-                let ok = !a.is_empty()
-                    && a.len() <= 12
-                    && a.chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+                let ok = !a.is_empty() && a.len() <= 12 && a.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
                 if !ok {
                     self.toast("An alias is 1 to 12 letters or digits.");
                 } else if self.h.borrow().registry.has_command(&a) {
                     self.toast(&format!("{a} is already a command name."));
                 } else {
-                    self.h
-                        .borrow()
-                        .registry
-                        .user_aliases
-                        .borrow_mut()
-                        .insert(a, s.new_cmd.clone());
+                    self.h.borrow().registry.user_aliases.borrow_mut().insert(a, s.new_cmd.clone());
                     self.save_user_aliases();
                     s.new_alias.clear();
                 }
@@ -586,15 +381,7 @@ impl CadForgeApp {
     }
 
     pub fn save_user_aliases(&self) {
-        let list: Vec<(String, String)> = self
-            .h
-            .borrow()
-            .registry
-            .user_aliases
-            .borrow()
-            .iter()
-            .map(|(a, c)| (a.clone(), c.clone()))
-            .collect();
+        let list: Vec<(String, String)> = self.h.borrow().registry.user_aliases.borrow().iter().map(|(a, c)| (a.clone(), c.clone())).collect();
         crate::platform::store_set("aliases", &serde_json::to_string(&list).unwrap_or_default());
     }
 
@@ -604,10 +391,7 @@ impl CadForgeApp {
                 let a = self.h.borrow();
                 for (al, c) in list {
                     if a.registry.has_command(&c) {
-                        a.registry
-                            .user_aliases
-                            .borrow_mut()
-                            .insert(al.to_uppercase(), c);
+                        a.registry.user_aliases.borrow_mut().insert(al.to_uppercase(), c);
                     }
                 }
             }
@@ -641,18 +425,9 @@ pub struct PurgeState {
 impl PurgeState {
     pub fn new(app: &CadForgeApp) -> PurgeState {
         let a = app.h.borrow();
-        let Some(doc) = a.doc() else {
-            return PurgeState {
-                blocks: vec![],
-                layers: vec![],
-            };
-        };
+        let Some(doc) = a.doc() else { return PurgeState { blocks: vec![], layers: vec![] } };
         let mut used: BTreeSet<String> = BTreeSet::new();
-        fn walk(
-            list: &[cadforge_core::entities::Entity],
-            doc: &cadforge_core::drawing::Drawing,
-            used: &mut BTreeSet<String>,
-        ) {
+        fn walk(list: &[cadforge_core::entities::Entity], doc: &cadforge_core::drawing::Drawing, used: &mut BTreeSet<String>) {
             for e in list {
                 if let cadforge_core::entities::Kind::Insert(i) = &e.kind {
                     if used.insert(i.name.clone()) {
@@ -667,18 +442,8 @@ impl PurgeState {
         for l in &doc.layouts {
             walk(&l.entities, doc, &mut used);
         }
-        let blocks = doc
-            .blocks
-            .keys()
-            .filter(|n| !used.contains(*n))
-            .cloned()
-            .collect();
-        let layers = doc
-            .layers
-            .iter()
-            .filter(|l| l.name != "0" && l.name != doc.cur.layer && !doc.layer_usage(&l.name))
-            .map(|l| l.name.clone())
-            .collect();
+        let blocks = doc.blocks.keys().filter(|n| !used.contains(*n)).cloned().collect();
+        let layers = doc.layers.iter().filter(|l| l.name != "0" && l.name != doc.cur.layer && !doc.layer_usage(&l.name)).map(|l| l.name.clone()).collect();
         PurgeState { blocks, layers }
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
@@ -697,13 +462,7 @@ impl LayerStatesState {
         let Some(sel) = self.sel.clone() else { return };
         app.edit_doc("Restore layer state", |d| {
             d.will_change();
-            let st = d
-                .settings
-                .layer_states
-                .as_ref()
-                .and_then(|m| m.get(&sel))
-                .cloned()
-                .unwrap_or_default();
+            let st = d.settings.layer_states.as_ref().and_then(|m| m.get(&sel)).cloned().unwrap_or_default();
             for s in st {
                 if let Some(l) = d.layer_mut(&s.name) {
                     *l = s;
@@ -724,16 +483,11 @@ pub struct AliasState {
 // ---------------------------------------------------------------- QuickCalc expression evaluator
 
 pub fn eval_expr(src: &str) -> Result<f64, String> {
-    let t: Vec<char> = src
-        .to_lowercase()
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .map(|c| match c {
-            '×' => '*',
-            '÷' => '/',
-            c => c,
-        })
-        .collect();
+    let t: Vec<char> = src.to_lowercase().chars().filter(|c| !c.is_whitespace()).map(|c| match c {
+        '×' => '*',
+        '÷' => '/',
+        c => c,
+    }).collect();
     struct P {
         t: Vec<char>,
         i: usize,
@@ -801,12 +555,7 @@ pub fn eval_expr(src: &str) -> Result<f64, String> {
                 while self.peek().is_some_and(|c| c.is_ascii_digit() || c == '.') {
                     self.i += 1;
                 }
-                if self.peek() == Some('e')
-                    && self
-                        .t
-                        .get(self.i + 1)
-                        .is_some_and(|c| c.is_ascii_digit() || *c == '-' || *c == '+')
-                {
+                if self.peek() == Some('e') && self.t.get(self.i + 1).is_some_and(|c| c.is_ascii_digit() || *c == '-' || *c == '+') {
                     self.i += 2;
                     while self.peek().is_some_and(|c| c.is_ascii_digit()) {
                         self.i += 1;

@@ -6,12 +6,7 @@ use eframe::egui::epaint::{Mesh, PathShape, PathStroke, TextShape, Vertex};
 use eframe::egui::{self, Align2, Color32, FontFamily, FontId, Painter, Pos2, Rect, Shape, Stroke};
 
 pub fn col(rgb: [u8; 3], alpha: f32) -> Color32 {
-    Color32::from_rgba_unmultiplied(
-        rgb[0],
-        rgb[1],
-        rgb[2],
-        (alpha.clamp(0.0, 1.0) * 255.0).round() as u8,
-    )
+    Color32::from_rgba_unmultiplied(rgb[0], rgb[1], rgb[2], (alpha.clamp(0.0, 1.0) * 255.0).round() as u8)
 }
 
 pub fn cad_font(size: f32) -> FontId {
@@ -105,9 +100,7 @@ fn contains(poly: &[[f64; 2]], q: [f64; 2]) -> bool {
     let mut j = poly.len() - 1;
     for i in 0..poly.len() {
         let (pi, pj) = (poly[i], poly[j]);
-        if (pi[1] > q[1]) != (pj[1] > q[1])
-            && q[0] < (pj[0] - pi[0]) * (q[1] - pi[1]) / (pj[1] - pi[1]) + pi[0]
-        {
+        if (pi[1] > q[1]) != (pj[1] > q[1]) && q[0] < (pj[0] - pi[0]) * (q[1] - pi[1]) / (pj[1] - pi[1]) + pi[0] {
             inside = !inside;
         }
         j = i;
@@ -118,35 +111,17 @@ fn contains(poly: &[[f64; 2]], q: [f64; 2]) -> bool {
 /// Fill closed loops (even-odd or non-zero via containment depth): triangulates with holes and returns a mesh.
 pub fn fill_mesh(loops: &[Vec<[f64; 2]>], color: Color32, origin: Pos2) -> Mesh {
     let mut mesh = Mesh::default();
-    let loops: Vec<&Vec<[f64; 2]>> = loops
-        .iter()
-        .filter(|l| l.len() >= 3 && l.iter().all(|p| p[0].is_finite() && p[1].is_finite()))
-        .collect();
+    let loops: Vec<&Vec<[f64; 2]>> = loops.iter().filter(|l| l.len() >= 3 && l.iter().all(|p| p[0].is_finite() && p[1].is_finite())).collect();
     if loops.is_empty() {
         return mesh;
     }
     // containment depth: even = outer boundary, odd = hole
-    let depth: Vec<usize> = loops
-        .iter()
-        .enumerate()
-        .map(|(i, l)| {
-            loops
-                .iter()
-                .enumerate()
-                .filter(|(j, o)| *j != i && contains(o, l[0]))
-                .count()
-        })
-        .collect();
+    let depth: Vec<usize> = loops.iter().enumerate().map(|(i, l)| loops.iter().enumerate().filter(|(j, o)| *j != i && contains(o, l[0])).count()).collect();
     for (i, outer) in loops.iter().enumerate() {
         if depth[i] % 2 != 0 {
             continue;
         }
-        let holes: Vec<&Vec<[f64; 2]>> = loops
-            .iter()
-            .enumerate()
-            .filter(|(j, h)| depth[*j] == depth[i] + 1 && contains(outer, h[0]))
-            .map(|(_, h)| *h)
-            .collect();
+        let holes: Vec<&Vec<[f64; 2]>> = loops.iter().enumerate().filter(|(j, h)| depth[*j] == depth[i] + 1 && contains(outer, h[0])).map(|(_, h)| *h).collect();
         let mut flat: Vec<f64> = vec![];
         let mut hole_idx: Vec<usize> = vec![];
         let mut verts: Vec<[f64; 2]> = vec![];
@@ -161,20 +136,13 @@ pub fn fill_mesh(loops: &[Vec<[f64; 2]>], color: Color32, origin: Pos2) -> Mesh 
                 verts.push(*p);
             }
         }
-        let Ok(tris) = earcutr::earcut(&flat, &hole_idx, 2) else {
-            continue;
-        };
+        let Ok(tris) = earcutr::earcut(&flat, &hole_idx, 2) else { continue };
         let base = mesh.vertices.len() as u32;
         for p in &verts {
-            mesh.vertices.push(Vertex {
-                pos: pos(*p, origin),
-                uv: eframe::egui::epaint::WHITE_UV,
-                color,
-            });
+            mesh.vertices.push(Vertex { pos: pos(*p, origin), uv: eframe::egui::epaint::WHITE_UV, color });
         }
         for t in tris.chunks_exact(3) {
-            mesh.indices
-                .extend([base + t[0] as u32, base + t[1] as u32, base + t[2] as u32]);
+            mesh.indices.extend([base + t[0] as u32, base + t[1] as u32, base + t[2] as u32]);
         }
         let _ = signed_area;
     }
@@ -189,13 +157,7 @@ thread_local! {
 }
 
 /// Upload (or find) the texture of a picture with its IMAGEADJUST settings applied.
-fn image_texture(
-    ctx: &egui::Context,
-    pix: &std::rc::Rc<Decoded>,
-    adj: [i32; 3],
-    bg: [u8; 3],
-    smooth: bool,
-) -> egui::TextureHandle {
+fn image_texture(ctx: &egui::Context, pix: &std::rc::Rc<Decoded>, adj: [i32; 3], bg: [u8; 3], smooth: bool) -> egui::TextureHandle {
     let key: ImgKey = (std::rc::Rc::as_ptr(pix) as usize, adj, bg, smooth);
     IMAGES.with(|c| {
         let mut c = c.borrow_mut();
@@ -205,20 +167,8 @@ fn image_texture(
         if c.len() > 24 {
             c.clear();
         }
-        let img = egui::ColorImage::from_rgba_unmultiplied(
-            [pix.w as usize, pix.h as usize],
-            &pix.adjusted(adj[0], adj[1], adj[2], bg),
-        );
-        let opts = egui::TextureOptions {
-            magnification: if smooth {
-                egui::TextureFilter::Linear
-            } else {
-                egui::TextureFilter::Nearest
-            },
-            minification: egui::TextureFilter::Linear,
-            wrap_mode: egui::TextureWrapMode::ClampToEdge,
-            mipmap_mode: None,
-        };
+        let img = egui::ColorImage::from_rgba_unmultiplied([pix.w as usize, pix.h as usize], &pix.adjusted(adj[0], adj[1], adj[2], bg));
+        let opts = egui::TextureOptions { magnification: if smooth { egui::TextureFilter::Linear } else { egui::TextureFilter::Nearest }, minification: egui::TextureFilter::Linear, wrap_mode: egui::TextureWrapMode::ClampToEdge, mipmap_mode: None };
         let t = ctx.load_texture("cad-image", img, opts);
         c.insert(key, (pix.clone(), t.clone()));
         t
@@ -226,14 +176,7 @@ fn image_texture(
 }
 
 /// A textured mesh for a picture; the boundary polygon (device space) is triangulated, UVs come from the inverse map.
-fn image_mesh(
-    tex: &egui::TextureHandle,
-    pix: &Decoded,
-    m: &[f64; 6],
-    clip: &[[f64; 2]],
-    alpha: f32,
-    origin: Pos2,
-) -> Option<Mesh> {
+fn image_mesh(tex: &egui::TextureHandle, pix: &Decoded, m: &[f64; 6], clip: &[[f64; 2]], alpha: f32, origin: Pos2) -> Option<Mesh> {
     let det = m[0] * m[3] - m[1] * m[2];
     if det.abs() < 1e-18 {
         return None;
@@ -244,29 +187,13 @@ fn image_mesh(
         Pos2::new((px / pix.w as f64) as f32, (py / pix.h as f64) as f32)
     };
     let (w, h) = (pix.w as f64, pix.h as f64);
-    let poly: Vec<[f64; 2]> = if clip.len() >= 3 {
-        clip.to_vec()
-    } else {
-        [[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]]
-            .iter()
-            .map(|q| {
-                [
-                    m[0] * q[0] + m[2] * q[1] + m[4],
-                    m[1] * q[0] + m[3] * q[1] + m[5],
-                ]
-            })
-            .collect()
-    };
+    let poly: Vec<[f64; 2]> = if clip.len() >= 3 { clip.to_vec() } else { [[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]].iter().map(|q| [m[0] * q[0] + m[2] * q[1] + m[4], m[1] * q[0] + m[3] * q[1] + m[5]]).collect() };
     let flat: Vec<f64> = poly.iter().flat_map(|p| [p[0], p[1]]).collect();
     let tris = earcutr::earcut(&flat, &[], 2).ok()?;
     let tint = Color32::from_white_alpha((alpha.clamp(0.0, 1.0) * 255.0).round() as u8);
     let mut mesh = Mesh::with_texture(tex.id());
     for p in &poly {
-        mesh.vertices.push(Vertex {
-            pos: pos(*p, origin),
-            uv: uv(*p),
-            color: tint,
-        });
+        mesh.vertices.push(Vertex { pos: pos(*p, origin), uv: uv(*p), color: tint });
     }
     for t in tris.chunks_exact(3) {
         mesh.indices.extend([t[0] as u32, t[1] as u32, t[2] as u32]);
@@ -278,14 +205,7 @@ fn image_mesh(
 pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
     for op in ops {
         match op {
-            Op::Stroke {
-                paths,
-                color,
-                alpha,
-                width,
-                dash,
-                round,
-            } => {
+            Op::Stroke { paths, color, alpha, width, dash, round } => {
                 let c = col(*color, *alpha);
                 let w = (*width as f32).max(0.5);
                 let dash_f: Vec<f32> = dash.iter().map(|d| *d as f32).collect();
@@ -299,12 +219,7 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
                         continue;
                     }
                     if dash_f.is_empty() {
-                        painter.add(Shape::Path(PathShape {
-                            points: pts,
-                            closed: p.closed,
-                            fill: Color32::TRANSPARENT,
-                            stroke: PathStroke::new(w, c),
-                        }));
+                        painter.add(Shape::Path(PathShape { points: pts, closed: p.closed, fill: Color32::TRANSPARENT, stroke: PathStroke::new(w, c) }));
                     } else {
                         for seg in dash_polyline(&pts, p.closed, &dash_f) {
                             if seg.len() > 1 {
@@ -314,45 +229,15 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
                     }
                 }
             }
-            Op::Fill {
-                paths,
-                color,
-                alpha,
-                ..
-            } => {
-                let loops: Vec<Vec<[f64; 2]>> =
-                    paths.iter().map(|p: &Poly| p.pts.clone()).collect();
+            Op::Fill { paths, color, alpha, .. } => {
+                let loops: Vec<Vec<[f64; 2]>> = paths.iter().map(|p: &Poly| p.pts.clone()).collect();
                 let m = fill_mesh(&loops, col(*color, *alpha), origin);
                 if !m.is_empty() {
                     painter.add(Shape::mesh(m));
                 }
             }
-            Op::Image {
-                pix,
-                adj,
-                bg,
-                m,
-                clip,
-                alpha,
-                smooth,
-            } => {
-                let pts: Vec<Pos2> = [
-                    [0.0, 0.0],
-                    [pix.0.w as f64, 0.0],
-                    [pix.0.w as f64, pix.0.h as f64],
-                    [0.0, pix.0.h as f64],
-                ]
-                .iter()
-                .map(|q| {
-                    pos(
-                        [
-                            m[0] * q[0] + m[2] * q[1] + m[4],
-                            m[1] * q[0] + m[3] * q[1] + m[5],
-                        ],
-                        origin,
-                    )
-                })
-                .collect();
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => {
+                let pts: Vec<Pos2> = [[0.0, 0.0], [pix.0.w as f64, 0.0], [pix.0.w as f64, pix.0.h as f64], [0.0, pix.0.h as f64]].iter().map(|q| pos([m[0] * q[0] + m[2] * q[1] + m[4], m[1] * q[0] + m[3] * q[1] + m[5]], origin)).collect();
                 if !visible(&pts, clip_arg) {
                     continue;
                 }
@@ -361,15 +246,7 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
                     painter.add(Shape::mesh(mesh));
                 }
             }
-            Op::Text {
-                s,
-                x,
-                y,
-                m,
-                em,
-                color,
-                alpha,
-            } => {
+            Op::Text { s, x, y, m, em, color, alpha } => {
                 let sz = (m[0].hypot(m[1]) * *em) as f32;
                 if sz < 1.5 || s.is_empty() {
                     continue;
@@ -378,17 +255,10 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
                 let o = op.text_origin().unwrap_or([0.0, 0.0]);
                 let _ = (x, y);
                 let galley = painter.layout_no_wrap(s.clone(), cad_font(sz), col(*color, *alpha));
-                let base = galley
-                    .rows
-                    .first()
-                    .map(|r| r.pos.y + r.row.glyphs.first().map_or(sz * 0.8, |g| g.pos.y))
-                    .unwrap_or(sz * 0.8);
+                let base = galley.rows.first().map(|r| r.pos.y + r.row.glyphs.first().map_or(sz * 0.8, |g| g.pos.y)).unwrap_or(sz * 0.8);
                 // TextShape rotates about the galley's top-left corner: place it so the baseline start lands on `o`
                 let off = egui::vec2(base * angle.sin(), -base * angle.cos());
-                painter.add(
-                    TextShape::new(pos(o, origin) + off, galley, col(*color, *alpha))
-                        .with_angle(angle),
-                );
+                painter.add(TextShape::new(pos(o, origin) + off, galley, col(*color, *alpha)).with_angle(angle));
             }
         }
     }

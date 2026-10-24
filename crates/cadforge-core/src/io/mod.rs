@@ -23,60 +23,19 @@ pub fn not_kept_in_dxf(d: &crate::drawing::Drawing, r2000: bool) -> Vec<String> 
         }
     };
     let ents: Vec<&crate::entities::Entity> = d.all_entities().collect();
-    count(
-        d.solids.len(),
-        "3D solid",
-        "3D solids",
-        "(DXF and DWG need ACIS data CadForge cannot write)",
-    );
-    count(
-        ents.iter()
-            .filter(|e| matches!(e.kind, Kind::Table(_)))
-            .count(),
-        "table is",
-        "tables are",
-        "saved as lines and text",
-    );
-    count(
-        ents.iter()
-            .filter(|e| matches!(e.kind, Kind::Region(_)))
-            .count(),
-        "region is",
-        "regions are",
-        "saved as its outlines",
-    );
+    count(d.solids.len(), "3D solid", "3D solids", "(DXF and DWG need ACIS data CadForge cannot write)");
+    count(ents.iter().filter(|e| matches!(e.kind, Kind::Table(_))).count(), "table is", "tables are", "saved as lines and text");
+    count(ents.iter().filter(|e| matches!(e.kind, Kind::Region(_))).count(), "region is", "regions are", "saved as its outlines");
     count(d.views.len(), "named view", "named views", "");
     count(d.ucs_named.len(), "named UCS", "named UCSs", "");
     if r2000 {
-        let rgb = ents
-            .iter()
-            .filter(|e| matches!(e.color, Some(crate::style::Color::Rgb(..))))
-            .count()
-            + d.layers
-                .iter()
-                .filter(|l| matches!(l.color, crate::style::Color::Rgb(..)))
-                .count();
-        count(
-            rgb,
-            "true colour is",
-            "true colours are",
-            "saved as the nearest of the 255 colours (AutoCAD 2000 has no true colours)",
-        );
-        count(
-            ents.iter()
-                .filter(|e| matches!(&e.kind, Kind::Hatch(h) if h.gradient.is_some()))
-                .count(),
-            "gradient fill is",
-            "gradient fills are",
-            "saved as a solid fill (AutoCAD 2000 has no gradients)",
-        );
+        let rgb = ents.iter().filter(|e| matches!(e.color, Some(crate::style::Color::Rgb(..)))).count() + d.layers.iter().filter(|l| matches!(l.color, crate::style::Color::Rgb(..))).count();
+        count(rgb, "true colour is", "true colours are", "saved as the nearest of the 255 colours (AutoCAD 2000 has no true colours)");
+        count(ents.iter().filter(|e| matches!(&e.kind, Kind::Hatch(h) if h.gradient.is_some())).count(), "gradient fill is", "gradient fills are", "saved as a solid fill (AutoCAD 2000 has no gradients)");
     }
     if !d.skipped.is_empty() {
         let list: Vec<String> = d.skipped.iter().map(|(k, n)| format!("{n} {k}")).collect();
-        out.push(format!(
-            "objects of the opened file that CadForge could not read: {}",
-            list.join(", ")
-        ));
+        out.push(format!("objects of the opened file that CadForge could not read: {}", list.join(", ")));
     }
     out.iter_mut().for_each(|s| *s = s.trim_end().to_string());
     out

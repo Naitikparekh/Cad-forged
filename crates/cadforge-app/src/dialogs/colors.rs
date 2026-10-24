@@ -1,12 +1,8 @@
 //! Colour, linetype, lineweight, insert and hatch-settings dialogs.
 use super::{ColorTarget, Out};
 use crate::app::CadForgeApp;
-use cadforge_core::style::{
-    aci_hex, all_linetypes, describe_color, lw_display, parse_hex, Color, LINEWEIGHTS,
-};
-use eframe::egui::{
-    self, vec2, Color32, CornerRadius, Pos2, Rect, RichText, Sense, Stroke, StrokeKind,
-};
+use cadforge_core::style::{aci_hex, describe_color, lw_display, parse_hex, Color, all_linetypes, LINEWEIGHTS};
+use eframe::egui::{self, vec2, Color32, CornerRadius, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 
 // ---------------------------------------------------------------- colour
 
@@ -26,18 +22,7 @@ impl ColorState {
             Some(Color::Aci(i)) => parse_hex(aci_hex(i)),
             _ => [255, 255, 255],
         };
-        ColorState {
-            value,
-            allow_by_layer,
-            target,
-            tab: if matches!(value, Some(Color::Rgb(..))) {
-                1
-            } else {
-                0
-            },
-            rgb,
-            hex: format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]),
-        }
+        ColorState { value, allow_by_layer, target, tab: if matches!(value, Some(Color::Rgb(..))) { 1 } else { 0 }, rgb, hex: format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]) }
     }
 }
 
@@ -51,46 +36,29 @@ impl CadForgeApp {
         let t = self.t;
         self.tab_strip(ui, &["Index Color", "True Color"], &mut s.tab);
         let mut dbl = false;
-        let cell =
-            |ui: &mut egui::Ui, value: &mut Option<Color>, i: u8, size: f32, dbl: &mut bool| {
-                let (r, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click());
-                ui.painter().rect_filled(r, 0.0, aci_color(i));
-                let sel = *value == Some(Color::Aci(i));
-                if sel {
-                    ui.painter().rect_stroke(
-                        r.expand(1.0),
-                        0.0,
-                        Stroke::new(2.0, Color32::WHITE),
-                        StrokeKind::Outside,
-                    );
-                    ui.painter().rect_stroke(
-                        r.expand(2.0),
-                        0.0,
-                        Stroke::new(1.0, Color32::BLACK),
-                        StrokeKind::Outside,
-                    );
-                }
-                if resp.clicked() {
-                    *value = Some(Color::Aci(i));
-                }
-                if resp.double_clicked() {
-                    *dbl = true;
-                }
-                resp.on_hover_text(format!("{i}"));
-            };
+        let cell = |ui: &mut egui::Ui, value: &mut Option<Color>, i: u8, size: f32, dbl: &mut bool| {
+            let (r, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+            ui.painter().rect_filled(r, 0.0, aci_color(i));
+            let sel = *value == Some(Color::Aci(i));
+            if sel {
+                ui.painter().rect_stroke(r.expand(1.0), 0.0, Stroke::new(2.0, Color32::WHITE), StrokeKind::Outside);
+                ui.painter().rect_stroke(r.expand(2.0), 0.0, Stroke::new(1.0, Color32::BLACK), StrokeKind::Outside);
+            }
+            if resp.clicked() {
+                *value = Some(Color::Aci(i));
+            }
+            if resp.double_clicked() {
+                *dbl = true;
+            }
+            resp.on_hover_text(format!("{i}"));
+        };
         if s.tab == 0 {
             self.note(ui, "AutoCAD Color Index (ACI)");
             ui.spacing_mut().item_spacing = vec2(1.0, 1.0);
             for row in 0..10 {
                 ui.horizontal(|ui| {
                     for hue in 0..24 {
-                        cell(
-                            ui,
-                            &mut s.value,
-                            (10 + hue * 10 + row) as u8,
-                            18.0,
-                            &mut dbl,
-                        );
+                        cell(ui, &mut s.value, (10 + hue * 10 + row) as u8, 18.0, &mut dbl);
                     }
                 });
             }
@@ -108,11 +76,7 @@ impl CadForgeApp {
         } else {
             ui.horizontal(|ui| {
                 ui.label("Hex");
-                let r = ui.add(
-                    egui::TextEdit::singleline(&mut s.hex)
-                        .desired_width(90.0)
-                        .font(egui::FontId::monospace(12.0)),
-                );
+                let r = ui.add(egui::TextEdit::singleline(&mut s.hex).desired_width(90.0).font(egui::FontId::monospace(12.0)));
                 if r.changed() {
                     if let Some(Color::Rgb(a, b, c)) = Color::from_hex(s.hex.trim()) {
                         s.rgb = [a, b, c];
@@ -170,61 +134,29 @@ impl LinetypeState {
 impl CadForgeApp {
     pub(super) fn ui_linetype(&mut self, ui: &mut egui::Ui, s: &mut LinetypeState) -> Out {
         let t = self.t;
-        self.note(
-            ui,
-            if s.pick {
-                "Choose a linetype."
-            } else {
-                "Choose the current linetype for new objects."
-            },
-        );
+        self.note(ui, if s.pick { "Choose a linetype." } else { "Choose the current linetype for new objects." });
         let mut dbl = false;
-        egui::ScrollArea::vertical()
-            .max_height(260.0)
-            .show(ui, |ui| {
-                for l in all_linetypes().iter() {
-                    let (r, resp) =
-                        ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
-                    let sel = s.sel.as_deref() == Some(l.name);
-                    if sel {
-                        ui.painter()
-                            .rect_filled(r, CornerRadius::same(2), t.accent_soft);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
-                    }
-                    ui.painter().text(
-                        r.left_center() + vec2(8.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        cadforge_core::style::ltype_display(l.name),
-                        egui::FontId::proportional(12.5),
-                        t.text,
-                    );
-                    let desc_clip = egui::Rect::from_min_max(
-                        r.left_top() + vec2(130.0, 0.0),
-                        egui::pos2(r.right() - 160.0, r.bottom()),
-                    );
-                    ui.painter().with_clip_rect(desc_clip).text(
-                        r.left_center() + vec2(130.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        l.desc,
-                        egui::FontId::proportional(11.5),
-                        t.text3,
-                    );
-                    crate::ribbon::lt_sample(
-                        ui.painter(),
-                        Pos2::new(r.right() - 140.0, r.center().y),
-                        l.name,
-                        120.0,
-                        t.text,
-                    );
-                    if resp.clicked() {
-                        s.sel = Some(l.name.to_string());
-                    }
-                    if resp.double_clicked() {
-                        dbl = true;
-                    }
+        egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+            for l in all_linetypes().iter() {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+                let sel = s.sel.as_deref() == Some(l.name);
+                if sel {
+                    ui.painter().rect_filled(r, CornerRadius::same(2), t.accent_soft);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
                 }
-            });
+                ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, cadforge_core::style::ltype_display(l.name), egui::FontId::proportional(12.5), t.text);
+                let desc_clip = egui::Rect::from_min_max(r.left_top() + vec2(130.0, 0.0), egui::pos2(r.right() - 160.0, r.bottom()));
+                ui.painter().with_clip_rect(desc_clip).text(r.left_center() + vec2(130.0, 0.0), egui::Align2::LEFT_CENTER, l.desc, egui::FontId::proportional(11.5), t.text3);
+                crate::ribbon::lt_sample(ui.painter(), Pos2::new(r.right() - 140.0, r.center().y), l.name, 120.0, t.text);
+                if resp.clicked() {
+                    s.sel = Some(l.name.to_string());
+                }
+                if resp.double_clicked() {
+                    dbl = true;
+                }
+            }
+        });
         let o = self.ok_cancel(ui, Some("OK"), Some("Cancel"), &[]);
         if dbl {
             return Out::Ok;
@@ -244,12 +176,7 @@ pub struct LweightState {
 
 impl LweightState {
     pub fn new(value: Option<i32>, pick: bool) -> LweightState {
-        LweightState {
-            sel: value,
-            pick,
-            display: false,
-            display_init: false,
-        }
+        LweightState { sel: value, pick, display: false, display_init: false }
     }
 }
 
@@ -263,50 +190,29 @@ impl CadForgeApp {
                 s.sel = self.h.borrow().doc().and_then(|d| d.cur.lw);
             }
         }
-        let mut opts: Vec<(Option<i32>, String)> = vec![
-            (None, "ByLayer".into()),
-            (Some(-2), "ByBlock".into()),
-            (Some(-3), "Default".into()),
-        ];
+        let mut opts: Vec<(Option<i32>, String)> = vec![(None, "ByLayer".into()), (Some(-2), "ByBlock".into()), (Some(-3), "Default".into())];
         opts.extend(LINEWEIGHTS.iter().map(|w| (Some(*w), lw_display(Some(*w)))));
         let mut dbl = false;
-        egui::ScrollArea::vertical()
-            .max_height(280.0)
-            .show(ui, |ui| {
-                for (v, label) in &opts {
-                    let (r, resp) =
-                        ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
-                    let sel = s.sel == *v;
-                    if sel {
-                        ui.painter()
-                            .rect_filled(r, CornerRadius::same(2), t.accent_soft);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
-                    }
-                    ui.painter().text(
-                        r.left_center() + vec2(8.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        label,
-                        egui::FontId::proportional(12.5),
-                        t.text,
-                    );
-                    let h = (v.filter(|x| *x > 0).unwrap_or(25) as f32 / 100.0 * 1.6).max(1.0);
-                    ui.painter().rect_filled(
-                        Rect::from_min_size(
-                            Pos2::new(r.right() - 120.0, r.center().y - h / 2.0),
-                            vec2(104.0, h),
-                        ),
-                        1.0,
-                        t.text,
-                    );
-                    if resp.clicked() {
-                        s.sel = *v;
-                    }
-                    if resp.double_clicked() {
-                        dbl = true;
-                    }
+        egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
+            for (v, label) in &opts {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                let sel = s.sel == *v;
+                if sel {
+                    ui.painter().rect_filled(r, CornerRadius::same(2), t.accent_soft);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
                 }
-            });
+                ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
+                let h = (v.filter(|x| *x > 0).unwrap_or(25) as f32 / 100.0 * 1.6).max(1.0);
+                ui.painter().rect_filled(Rect::from_min_size(Pos2::new(r.right() - 120.0, r.center().y - h / 2.0), vec2(104.0, h)), 1.0, t.text);
+                if resp.clicked() {
+                    s.sel = *v;
+                }
+                if resp.double_clicked() {
+                    dbl = true;
+                }
+            }
+        });
         ui.checkbox(&mut s.display, "Display lineweight");
         let o = self.ok_cancel(ui, Some("OK"), Some("Cancel"), &[]);
         if dbl {
@@ -325,10 +231,7 @@ pub struct InsertState {
 
 impl InsertState {
     pub fn new(names: Vec<String>) -> InsertState {
-        InsertState {
-            sel: names.first().cloned(),
-            names,
-        }
+        InsertState { sel: names.first().cloned(), names }
     }
 }
 
@@ -336,42 +239,29 @@ impl CadForgeApp {
     pub(super) fn ui_insert(&mut self, ui: &mut egui::Ui, s: &mut InsertState) -> Out {
         let t = self.t;
         if s.names.is_empty() {
-            self.note(
-                ui,
-                "No blocks are defined in this drawing. Use BLOCK to create one.",
-            );
+            self.note(ui, "No blocks are defined in this drawing. Use BLOCK to create one.");
             return self.ok_cancel(ui, None, Some("Close"), &[]);
         }
         self.note(ui, "Choose a block definition to insert.");
         let mut dbl = false;
-        egui::ScrollArea::vertical()
-            .max_height(220.0)
-            .show(ui, |ui| {
-                for n in &s.names {
-                    let (r, resp) =
-                        ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
-                    let sel = s.sel.as_deref() == Some(n.as_str());
-                    if sel {
-                        ui.painter()
-                            .rect_filled(r, CornerRadius::same(2), t.accent_soft);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
-                    }
-                    ui.painter().text(
-                        r.left_center() + vec2(8.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        n,
-                        egui::FontId::proportional(12.5),
-                        t.text,
-                    );
-                    if resp.clicked() {
-                        s.sel = Some(n.clone());
-                    }
-                    if resp.double_clicked() {
-                        dbl = true;
-                    }
+        egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+            for n in &s.names {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                let sel = s.sel.as_deref() == Some(n.as_str());
+                if sel {
+                    ui.painter().rect_filled(r, CornerRadius::same(2), t.accent_soft);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
                 }
-            });
+                ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(12.5), t.text);
+                if resp.clicked() {
+                    s.sel = Some(n.clone());
+                }
+                if resp.double_clicked() {
+                    dbl = true;
+                }
+            }
+        });
         let o = self.ok_cancel(ui, Some("OK"), Some("Cancel"), &[]);
         if dbl {
             return Out::Ok;
@@ -393,14 +283,7 @@ pub struct HatchDlgState {
 
 impl HatchDlgState {
     pub fn new() -> HatchDlgState {
-        HatchDlgState {
-            ready: false,
-            pattern: "ANSI31".into(),
-            scale: "1".into(),
-            angle: "0".into(),
-            color: None,
-            token: 0,
-        }
+        HatchDlgState { ready: false, pattern: "ANSI31".into(), scale: "1".into(), angle: "0".into(), color: None, token: 0 }
     }
     pub fn load(&mut self, app: &mut CadForgeApp) {
         if let Some(s) = app.h.borrow().hatch_session.as_ref() {
@@ -444,42 +327,30 @@ impl CadForgeApp {
                 self.ret_color = None;
             }
         }
-        let pats: Vec<(&'static str, &'static str)> = cadforge_core::hatch::all_patterns()
-            .iter()
-            .map(|p| (p.name, p.desc))
-            .collect();
-        egui::Grid::new("hd")
-            .num_columns(2)
-            .spacing([14.0, 8.0])
-            .show(ui, |ui| {
-                ui.label("Pattern");
-                egui::ComboBox::from_id_salt("hd-pat")
-                    .selected_text(&s.pattern)
-                    .show_ui(ui, |ui| {
-                        for (n, _) in &pats {
-                            ui.selectable_value(&mut s.pattern, n.to_string(), *n);
-                        }
-                    });
-                ui.end_row();
-                ui.label("Scale");
-                self.num_edit(ui, &mut s.scale, 90.0);
-                ui.end_row();
-                ui.label("Angle");
-                self.num_edit(ui, &mut s.angle, 90.0);
-                ui.end_row();
-                ui.label("Color");
-                ui.horizontal(|ui| {
-                    self.color_chip(ui, s.color);
-                    if self.btn(ui, &describe_color(s.color), false).clicked() {
-                        self.dialog = Some(super::Dialog::color_for(
-                            s.color,
-                            true,
-                            ColorTarget::Field(s.token),
-                        ));
-                    }
-                });
-                ui.end_row();
+        let pats: Vec<(&'static str, &'static str)> = cadforge_core::hatch::all_patterns().iter().map(|p| (p.name, p.desc)).collect();
+        egui::Grid::new("hd").num_columns(2).spacing([14.0, 8.0]).show(ui, |ui| {
+            ui.label("Pattern");
+            egui::ComboBox::from_id_salt("hd-pat").selected_text(&s.pattern).show_ui(ui, |ui| {
+                for (n, _) in &pats {
+                    ui.selectable_value(&mut s.pattern, n.to_string(), *n);
+                }
             });
+            ui.end_row();
+            ui.label("Scale");
+            self.num_edit(ui, &mut s.scale, 90.0);
+            ui.end_row();
+            ui.label("Angle");
+            self.num_edit(ui, &mut s.angle, 90.0);
+            ui.end_row();
+            ui.label("Color");
+            ui.horizontal(|ui| {
+                self.color_chip(ui, s.color);
+                if self.btn(ui, &describe_color(s.color), false).clicked() {
+                    self.dialog = Some(super::Dialog::color_for(s.color, true, ColorTarget::Field(s.token)));
+                }
+            });
+            ui.end_row();
+        });
         if let Some((_, d)) = pats.iter().find(|p| p.0 == s.pattern) {
             self.note(ui, d);
         }

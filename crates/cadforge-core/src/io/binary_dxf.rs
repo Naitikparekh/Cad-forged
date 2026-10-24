@@ -49,11 +49,7 @@ struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
-        let end = self
-            .i
-            .checked_add(n)
-            .filter(|&e| e <= self.b.len())
-            .ok_or(TRUNCATED)?;
+        let end = self.i.checked_add(n).filter(|&e| e <= self.b.len()).ok_or(TRUNCATED)?;
         let s = &self.b[self.i..end];
         self.i = end;
         Ok(s)
@@ -78,17 +74,13 @@ impl<'a> Cursor<'a> {
 /// The `$ACADVER` value, found the way other readers find it: by scanning the start of the file for the variable name.
 fn version_of(b: &[u8]) -> String {
     let head = &b[SENTINEL.len().min(b.len())..b.len().min(1024)];
-    let Some(at) = head.windows(8).position(|w| w == b"$ACADVER") else {
-        return "AC1009".into();
-    };
+    let Some(at) = head.windows(8).position(|w| w == b"$ACADVER") else { return "AC1009".into() };
     // name, its terminating zero, then the group code (one or two bytes) of the value
     let mut s = at + 10;
     if head.get(s) != Some(&b'A') {
         s += 1;
     }
-    head.get(s..s + 6)
-        .map(|v| String::from_utf8_lossy(v).into_owned())
-        .unwrap_or_else(|| "AC1009".into())
+    head.get(s..s + 6).map(|v| String::from_utf8_lossy(v).into_owned()).unwrap_or_else(|| "AC1009".into())
 }
 
 /// Convert a binary DXF file to DXF text.
@@ -99,10 +91,7 @@ pub fn binary_to_text(bytes: &[u8]) -> Result<String, String> {
     let version = version_of(bytes);
     let r12 = version.as_str() <= "AC1009";
     let utf8 = version.as_str() >= "AC1021";
-    let mut c = Cursor {
-        b: bytes,
-        i: SENTINEL.len(),
-    };
+    let mut c = Cursor { b: bytes, i: SENTINEL.len() };
     let mut out = String::with_capacity(bytes.len() * 2);
     while c.i < bytes.len() {
         let code = if r12 {
@@ -128,11 +117,7 @@ pub fn binary_to_text(bytes: &[u8]) -> Result<String, String> {
             Ty::I64 => out.push_str(&i64::from_le_bytes(c.array()?).to_string()),
             Ty::F64 => {
                 let v = f64::from_le_bytes(c.array()?);
-                out.push_str(&if v.is_finite() {
-                    v.to_string()
-                } else {
-                    "0".into()
-                });
+                out.push_str(&if v.is_finite() { v.to_string() } else { "0".into() });
             }
             Ty::Str => {
                 let s = c.cstring()?;
@@ -154,23 +139,13 @@ pub fn text_to_binary(text: &str) -> Vec<u8> {
     out.extend_from_slice(SENTINEL);
     let mut lines = text.split('\n').map(|l| l.trim_end_matches('\r'));
     while let (Some(c), Some(v)) = (lines.next(), lines.next()) {
-        let Ok(code) = c.trim().parse::<i32>() else {
-            continue;
-        };
-        let Ok(code16) = u16::try_from(code) else {
-            continue;
-        };
+        let Ok(code) = c.trim().parse::<i32>() else { continue };
+        let Ok(code16) = u16::try_from(code) else { continue };
         let ty = type_of(code);
         let value = v.trim();
         if ty == Ty::Chunk {
             // hex text -> at most 127 bytes per group
-            let bytes: Vec<u8> = (0..value.len() / 2)
-                .filter_map(|k| {
-                    value
-                        .get(2 * k..2 * k + 2)
-                        .and_then(|h| u8::from_str_radix(h, 16).ok())
-                })
-                .collect();
+            let bytes: Vec<u8> = (0..value.len() / 2).filter_map(|k| value.get(2 * k..2 * k + 2).and_then(|h| u8::from_str_radix(h, 16).ok())).collect();
             for chunk in bytes.chunks(127) {
                 out.extend_from_slice(&code16.to_le_bytes());
                 out.push(chunk.len() as u8);
@@ -181,31 +156,13 @@ pub fn text_to_binary(text: &str) -> Vec<u8> {
         out.extend_from_slice(&code16.to_le_bytes());
         match ty {
             Ty::Flag => out.push(value.parse::<i64>().unwrap_or(0).clamp(0, 255) as u8),
-            Ty::I16 => out.extend_from_slice(
-                &(value
-                    .parse::<i64>()
-                    .unwrap_or(0)
-                    .clamp(i16::MIN as i64, i16::MAX as i64) as i16)
-                    .to_le_bytes(),
-            ),
-            Ty::I32 => out.extend_from_slice(
-                &(value
-                    .parse::<i64>()
-                    .unwrap_or(0)
-                    .clamp(i32::MIN as i64, i32::MAX as i64) as i32)
-                    .to_le_bytes(),
-            ),
+            Ty::I16 => out.extend_from_slice(&(value.parse::<i64>().unwrap_or(0).clamp(i16::MIN as i64, i16::MAX as i64) as i16).to_le_bytes()),
+            Ty::I32 => out.extend_from_slice(&(value.parse::<i64>().unwrap_or(0).clamp(i32::MIN as i64, i32::MAX as i64) as i32).to_le_bytes()),
             Ty::I64 => out.extend_from_slice(&value.parse::<i64>().unwrap_or(0).to_le_bytes()),
             Ty::F64 => out.extend_from_slice(&value.parse::<f64>().unwrap_or(0.0).to_le_bytes()),
             Ty::Str | Ty::Chunk => {
                 // R2000 strings are code page 1252; the writer has already escaped anything outside ASCII
-                out.extend(v.trim_end_matches('\r').chars().map(|ch| {
-                    if (ch as u32) < 256 {
-                        ch as u8
-                    } else {
-                        b'?'
-                    }
-                }));
+                out.extend(v.trim_end_matches('\r').chars().map(|ch| if (ch as u32) < 256 { ch as u8 } else { b'?' }));
                 out.push(0);
             }
         }

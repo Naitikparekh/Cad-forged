@@ -17,24 +17,10 @@ pub struct Family {
 }
 
 const fn fam(a: f64, ox: f64, oy: f64, dx: f64, dy: f64) -> Family {
-    Family {
-        a,
-        ox,
-        oy,
-        dx,
-        dy,
-        dash: None,
-    }
+    Family { a, ox, oy, dx, dy, dash: None }
 }
 const fn famd(a: f64, ox: f64, oy: f64, dx: f64, dy: f64, dash: &'static [f64]) -> Family {
-    Family {
-        a,
-        ox,
-        oy,
-        dx,
-        dy,
-        dash: Some(dash),
-    }
+    Family { a, ox, oy, dx, dy, dash: Some(dash) }
 }
 
 pub struct Pattern {
@@ -45,100 +31,18 @@ pub struct Pattern {
 }
 
 pub const PATTERNS: [Pattern; 12] = [
-    Pattern {
-        name: "SOLID",
-        desc: "Solid fill",
-        solid: true,
-        families: &[],
-    },
-    Pattern {
-        name: "ANSI31",
-        desc: "ANSI Iron, Brick, Stone masonry",
-        solid: false,
-        families: &[fam(45.0, 0.0, 0.0, 0.0, 3.175)],
-    },
-    Pattern {
-        name: "ANSI32",
-        desc: "ANSI Steel",
-        solid: false,
-        families: &[
-            fam(45.0, 0.0, 0.0, 0.0, 9.525),
-            fam(45.0, 4.49, 0.0, 0.0, 9.525),
-        ],
-    },
-    Pattern {
-        name: "ANSI33",
-        desc: "ANSI Bronze, Brass, Copper",
-        solid: false,
-        families: &[
-            fam(45.0, 0.0, 0.0, 0.0, 6.35),
-            famd(45.0, 4.49, 0.0, 0.0, 6.35, &[3.175, -1.5875]),
-        ],
-    },
-    Pattern {
-        name: "ANSI37",
-        desc: "ANSI Lead, Zinc, Magnesium",
-        solid: false,
-        families: &[
-            fam(45.0, 0.0, 0.0, 0.0, 3.175),
-            fam(135.0, 0.0, 0.0, 0.0, 3.175),
-        ],
-    },
-    Pattern {
-        name: "ANSI38",
-        desc: "ANSI Aluminum",
-        solid: false,
-        families: &[
-            fam(45.0, 0.0, 0.0, 0.0, 3.175),
-            famd(135.0, 0.0, 0.0, 4.49, 3.175, &[7.9375, -4.7625]),
-        ],
-    },
-    Pattern {
-        name: "ANGLE",
-        desc: "Angle steel",
-        solid: false,
-        families: &[
-            famd(0.0, 0.0, 0.0, 0.0, 7.9375, &[6.35, -1.5875]),
-            famd(90.0, 0.0, 0.0, 0.0, 7.9375, &[6.35, -1.5875]),
-        ],
-    },
-    Pattern {
-        name: "BRICK",
-        desc: "Brick or masonry",
-        solid: false,
-        families: &[
-            fam(0.0, 0.0, 0.0, 0.0, 6.35),
-            famd(90.0, 0.0, 0.0, 6.35, 12.7, &[6.35, -6.35]),
-            famd(90.0, 6.35, 6.35, 6.35, 12.7, &[6.35, -6.35]),
-        ],
-    },
-    Pattern {
-        name: "NET",
-        desc: "Horizontal / vertical grid",
-        solid: false,
-        families: &[
-            fam(0.0, 0.0, 0.0, 0.0, 3.175),
-            fam(90.0, 0.0, 0.0, 0.0, 3.175),
-        ],
-    },
-    Pattern {
-        name: "DASH",
-        desc: "Dashed lines",
-        solid: false,
-        families: &[famd(0.0, 0.0, 0.0, 3.175, 6.35, &[3.175, -3.175])],
-    },
-    Pattern {
-        name: "LINE",
-        desc: "Horizontal lines",
-        solid: false,
-        families: &[fam(0.0, 0.0, 0.0, 0.0, 3.175)],
-    },
-    Pattern {
-        name: "DOTS",
-        desc: "Dotted grid",
-        solid: false,
-        families: &[famd(0.0, 0.0, 0.0, 0.0, 3.175, &[0.0, -3.175])],
-    },
+    Pattern { name: "SOLID", desc: "Solid fill", solid: true, families: &[] },
+    Pattern { name: "ANSI31", desc: "ANSI Iron, Brick, Stone masonry", solid: false, families: &[fam(45.0, 0.0, 0.0, 0.0, 3.175)] },
+    Pattern { name: "ANSI32", desc: "ANSI Steel", solid: false, families: &[fam(45.0, 0.0, 0.0, 0.0, 9.525), fam(45.0, 4.49, 0.0, 0.0, 9.525)] },
+    Pattern { name: "ANSI33", desc: "ANSI Bronze, Brass, Copper", solid: false, families: &[fam(45.0, 0.0, 0.0, 0.0, 6.35), famd(45.0, 4.49, 0.0, 0.0, 6.35, &[3.175, -1.5875])] },
+    Pattern { name: "ANSI37", desc: "ANSI Lead, Zinc, Magnesium", solid: false, families: &[fam(45.0, 0.0, 0.0, 0.0, 3.175), fam(135.0, 0.0, 0.0, 0.0, 3.175)] },
+    Pattern { name: "ANSI38", desc: "ANSI Aluminum", solid: false, families: &[fam(45.0, 0.0, 0.0, 0.0, 3.175), famd(135.0, 0.0, 0.0, 4.49, 3.175, &[7.9375, -4.7625])] },
+    Pattern { name: "ANGLE", desc: "Angle steel", solid: false, families: &[famd(0.0, 0.0, 0.0, 0.0, 7.9375, &[6.35, -1.5875]), famd(90.0, 0.0, 0.0, 0.0, 7.9375, &[6.35, -1.5875])] },
+    Pattern { name: "BRICK", desc: "Brick or masonry", solid: false, families: &[fam(0.0, 0.0, 0.0, 0.0, 6.35), famd(90.0, 0.0, 0.0, 6.35, 12.7, &[6.35, -6.35]), famd(90.0, 6.35, 6.35, 6.35, 12.7, &[6.35, -6.35])] },
+    Pattern { name: "NET", desc: "Horizontal / vertical grid", solid: false, families: &[fam(0.0, 0.0, 0.0, 0.0, 3.175), fam(90.0, 0.0, 0.0, 0.0, 3.175)] },
+    Pattern { name: "DASH", desc: "Dashed lines", solid: false, families: &[famd(0.0, 0.0, 0.0, 3.175, 6.35, &[3.175, -3.175])] },
+    Pattern { name: "LINE", desc: "Horizontal lines", solid: false, families: &[fam(0.0, 0.0, 0.0, 0.0, 3.175)] },
+    Pattern { name: "DOTS", desc: "Dotted grid", solid: false, families: &[famd(0.0, 0.0, 0.0, 0.0, 3.175, &[0.0, -3.175])] },
 ];
 
 /// The last pattern ("HONEY") is kept separate so the array above stays 12 entries wide for the UI gallery.
@@ -179,33 +83,17 @@ pub fn register_pattern(def: &PatternDef) -> Result<&'static Pattern, String> {
         return Err(format!("Pattern {name} has no line definitions."));
     }
     if builtin(&name).is_some() {
-        return Err(format!(
-            "{name} is a built-in pattern and cannot be replaced."
-        ));
+        return Err(format!("{name} is a built-in pattern and cannot be replaced."));
     }
     let mut reg = custom();
-    let def = PatternDef {
-        name: name.clone(),
-        ..def.clone()
-    };
+    let def = PatternDef { name: name.clone(), ..def.clone() };
     if let Some((_, p)) = reg.iter().find(|(d, _)| *d == def) {
         return Ok(p);
     }
     let families: Vec<Family> = def
         .families
         .iter()
-        .map(|f| Family {
-            a: f.a,
-            ox: f.ox,
-            oy: f.oy,
-            dx: f.dx,
-            dy: f.dy,
-            dash: if f.dash.is_empty() {
-                None
-            } else {
-                Some(Box::leak(f.dash.clone().into_boxed_slice()))
-            },
-        })
+        .map(|f| Family { a: f.a, ox: f.ox, oy: f.oy, dx: f.dx, dy: f.dy, dash: if f.dash.is_empty() { None } else { Some(Box::leak(f.dash.clone().into_boxed_slice())) } })
         .collect();
     let p: &'static Pattern = Box::leak(Box::new(Pattern {
         name: Box::leak(name.clone().into_boxed_str()),
@@ -227,23 +115,13 @@ pub fn all_patterns() -> Vec<&'static Pattern> {
 }
 
 pub fn pattern(name: &str) -> Option<&'static Pattern> {
-    builtin(name).or_else(|| {
-        custom()
-            .iter()
-            .find(|(d, _)| d.name.eq_ignore_ascii_case(name))
-            .map(|(_, p)| *p)
-    })
+    builtin(name).or_else(|| custom().iter().find(|(d, _)| d.name.eq_ignore_ascii_case(name)).map(|(_, p)| *p))
 }
 
 pub const MAX_HATCH_LINES: usize = 60000;
 
 /// Pattern line segments `[x0, y0, x1, y1]` clipped to the boundary polygons (even-odd filled), or `None` if too dense.
-pub fn hatch_lines(
-    loops: &[Vec<Pt>],
-    pattern_name: &str,
-    scale: f64,
-    angle_deg: f64,
-) -> Option<Vec<[f64; 4]>> {
+pub fn hatch_lines(loops: &[Vec<Pt>], pattern_name: &str, scale: f64, angle_deg: f64) -> Option<Vec<[f64; 4]>> {
     let pat = match pattern(pattern_name) {
         Some(p) => p,
         None => return Some(vec![]),
@@ -262,22 +140,14 @@ pub fn hatch_lines(
             continue;
         }
         let (ca, sa) = (ua.cos(), ua.sin());
-        let o = pt(
-            (f.ox * ca - f.oy * sa) * scale,
-            (f.ox * sa + f.oy * ca) * scale,
-        );
+        let o = pt((f.ox * ca - f.oy * sa) * scale, (f.ox * sa + f.oy * ca) * scale);
         let (ou, os) = (o.x * ux + o.y * uy, o.x * vx + o.y * vy);
         let mut edges: Vec<[f64; 4]> = vec![];
         let (mut smin, mut smax) = (f64::INFINITY, f64::NEG_INFINITY);
         for l in loops {
             for i in 0..l.len() {
                 let (a, b) = (l[i], l[(i + 1) % l.len()]);
-                let (au, a_s, bu, b_s) = (
-                    a.x * ux + a.y * uy,
-                    a.x * vx + a.y * vy,
-                    b.x * ux + b.y * uy,
-                    b.x * vx + b.y * vy,
-                );
+                let (au, a_s, bu, b_s) = (a.x * ux + a.y * uy, a.x * vx + a.y * vy, b.x * ux + b.y * uy, b.x * vx + b.y * vy);
                 edges.push([au, a_s, bu, b_s]);
                 smin = smin.min(a_s).min(b_s);
                 smax = smax.max(a_s).max(b_s);
@@ -290,10 +160,7 @@ pub fn hatch_lines(
             return None;
         }
         let dash: Option<Vec<f64>> = f.dash.map(|d| d.iter().map(|x| x * scale).collect());
-        let period: f64 = dash
-            .as_ref()
-            .map(|d| d.iter().map(|x| x.abs()).sum())
-            .unwrap_or(0.0);
+        let period: f64 = dash.as_ref().map(|d| d.iter().map(|x| x.abs()).sum()).unwrap_or(0.0);
         for k in k0..=k1 {
             let s0 = os + k as f64 * step;
             let mut us: Vec<f64> = vec![];
@@ -321,12 +188,7 @@ pub fn hatch_lines(
                                 if *dd >= 0.0 {
                                     let (a, b) = (pos.max(u0), (pos + len).min(u1));
                                     if b >= a - 1e-12 && pos + len >= u0 && pos <= u1 {
-                                        out.push([
-                                            a * ux + s0 * vx,
-                                            a * uy + s0 * vy,
-                                            b * ux + s0 * vx,
-                                            b * uy + s0 * vy,
-                                        ]);
+                                        out.push([a * ux + s0 * vx, a * uy + s0 * vy, b * ux + s0 * vx, b * uy + s0 * vy]);
                                     }
                                 }
                                 pos += len;
@@ -339,12 +201,7 @@ pub fn hatch_lines(
                             }
                         }
                     }
-                    _ => out.push([
-                        u0 * ux + s0 * vx,
-                        u0 * uy + s0 * vy,
-                        u1 * ux + s0 * vx,
-                        u1 * uy + s0 * vy,
-                    ]),
+                    _ => out.push([u0 * ux + s0 * vx, u0 * uy + s0 * vy, u1 * ux + s0 * vx, u1 * uy + s0 * vy]),
                 }
             }
             if out.len() > MAX_HATCH_LINES * 4 {
@@ -383,15 +240,8 @@ mod tests {
         let hole = square(5.0, 5.0, 10.0);
         let full = hatch_lines(&[outer.clone()], "LINE", 1.0, 0.0).unwrap();
         let holed = hatch_lines(&[outer.clone(), hole], "LINE", 1.0, 0.0).unwrap();
-        assert!(
-            holed.len() > full.len(),
-            "lines through the hole are split in two"
-        );
-        let total = |v: &Vec<[f64; 4]>| {
-            v.iter()
-                .map(|l| (l[2] - l[0]).hypot(l[3] - l[1]))
-                .sum::<f64>()
-        };
+        assert!(holed.len() > full.len(), "lines through the hole are split in two");
+        let total = |v: &Vec<[f64; 4]>| v.iter().map(|l| (l[2] - l[0]).hypot(l[3] - l[1])).sum::<f64>();
         assert!(total(&holed) < total(&full));
         let sparse = hatch_lines(&[outer], "LINE", 2.0, 0.0).unwrap();
         assert!(sparse.len() < full.len());
@@ -401,9 +251,7 @@ mod tests {
     fn dashes_solid_and_density_limit() {
         let dashed = hatch_lines(&[square(0.0, 0.0, 20.0)], "DASH", 1.0, 0.0).unwrap();
         assert!(dashed.len() > 5);
-        assert!(hatch_lines(&[square(0.0, 0.0, 20.0)], "SOLID", 1.0, 0.0)
-            .unwrap()
-            .is_empty());
+        assert!(hatch_lines(&[square(0.0, 0.0, 20.0)], "SOLID", 1.0, 0.0).unwrap().is_empty());
         assert!(hatch_lines(&[square(0.0, 0.0, 1e6)], "LINE", 0.001, 0.0).is_none());
         assert!(all_patterns().len() == 13 && pattern("honey").is_some());
     }

@@ -19,11 +19,5 @@ pub fn to_json(doc: &Drawing) -> String {
 }
 
 pub fn from_json(text: &str, name: &str) -> Result<Drawing, String> {
-    Drawing::from_json_str(text, Some(name)).map_err(|e| {
-        if e.contains("expected") || e.contains("EOF") || e.contains("key must be") {
-            "This file is not valid JSON.".to_string()
-        } else {
-            e
-        }
-    })
+    Drawing::from_json_str(text, Some(name)).map_err(|e| if e.contains("expected") || e.contains("EOF") || e.contains("key must be") { "This file is not valid JSON.".to_string() } else { e })
 }

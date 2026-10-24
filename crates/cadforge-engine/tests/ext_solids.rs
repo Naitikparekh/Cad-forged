@@ -7,10 +7,7 @@ use cadforge_core::solid::{Solid, V3};
 use cadforge_engine::sim::{Sim, Step::*};
 
 fn near(a: f64, b: f64, rel: f64) {
-    assert!(
-        (a - b).abs() <= rel * b.abs().max(1e-9),
-        "expected {b}, got {a}"
-    );
+    assert!((a - b).abs() <= rel * b.abs().max(1e-9), "expected {b}, got {a}");
 }
 fn p(x: f64, y: f64) -> Pt {
     pt(x, y)
@@ -33,10 +30,7 @@ fn with_box(w: f64, d: f64, h: f64) -> Sim {
 }
 
 fn rect(s: &Sim, x0: f64, y0: f64, x1: f64, y1: f64) -> u64 {
-    s.add(Entity::pline_pts(
-        &[p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)],
-        true,
-    ))
+    s.add(Entity::pline_pts(&[p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)], true))
 }
 
 #[test]
@@ -70,26 +64,10 @@ fn every_command_is_registered_in_its_group() {
     ] {
         let d = reg.get(name).unwrap_or_else(|| panic!("{name} is missing"));
         assert_eq!(d.group, group, "{name}");
-        assert!(
-            !d.title.is_empty() && !d.desc.is_empty(),
-            "{name} needs a title and description"
-        );
+        assert!(!d.title.is_empty() && !d.desc.is_empty(), "{name} needs a title and description");
     }
-    for (alias, name) in [
-        ("REV", "REVOLVE"),
-        ("SL", "SLICE"),
-        ("TOR", "TORUS"),
-        ("PYR", "PYRAMID"),
-        ("PSOLID", "POLYSOLID"),
-        ("3A", "3DARRAY"),
-        ("3DMIRROR", "MIRROR3D"),
-        ("INF", "INTERFERE"),
-    ] {
-        assert_eq!(
-            reg.find(alias).map(|d| d.name.clone()),
-            Some(name.to_string()),
-            "{alias}"
-        );
+    for (alias, name) in [("REV", "REVOLVE"), ("SL", "SLICE"), ("TOR", "TORUS"), ("PYR", "PYRAMID"), ("PSOLID", "POLYSOLID"), ("3A", "3DARRAY"), ("3DMIRROR", "MIRROR3D"), ("INF", "INTERFERE")] {
+        assert_eq!(reg.find(alias).map(|d| d.name.clone()), Some(name.to_string()), "{alias}");
     }
 }
 
@@ -101,19 +79,9 @@ fn revolve_a_rectangle_about_the_y_axis_gives_a_hollow_cylinder() {
     let id = rect(&s, 2., 0., 5., 10.);
     s.set_sel(&[id]);
     s.cmd("REVOLVE");
-    assert!(
-        s.prompt()
-            .starts_with("Specify axis start point or define axis by [Object/X/Y/Z] <Object>"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Specify axis start point or define axis by [Object/X/Y/Z] <Object>"), "{}", s.prompt());
     s.ty("Y");
-    assert!(
-        s.prompt()
-            .starts_with("Specify angle of revolution or [STart angle/Reverse] <360>"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Specify angle of revolution or [STart angle/Reverse] <360>"), "{}", s.prompt());
     s.enter();
     assert!(!s.busy());
     assert_eq!(s.solids().len(), 1);
@@ -133,10 +101,7 @@ fn revolve_by_two_points_partial_angle_start_angle_and_reverse() {
     s.set_sel(&[id]);
     s.cmd("REVOLVE").ty("Y").ty("ST").ty("90").ty("90");
     let b = bounds(&s.solids()[1]);
-    assert!(
-        b.max.x < 1e-6 && b.max.z < 1e-6,
-        "start angle 90 + sweep 90 lies in x<=0, z<=0: {b:?}"
-    );
+    assert!(b.max.x < 1e-6 && b.max.z < 1e-6, "start angle 90 + sweep 90 lies in x<=0, z<=0: {b:?}");
     s.set_sel(&[id]);
     s.cmd("REVOLVE").ty("Y").ty("R").ty("90");
     let b = bounds(&s.solids()[2]);
@@ -183,14 +148,7 @@ fn revolve_a_circle_gives_a_torus_like_ring_and_a_region_works_too() {
     s.set_sel(&[c]);
     s.cmd("REVOLVE").ty("Y").enter();
     near(vol(&s.solids()[0]), 2. * PI * 10. * PI * 9., 0.02);
-    let r = s.add(Entity::new(Kind::Region(RegionData {
-        loops: vec![vec![
-            Vertex::new(2., 20., 0.),
-            Vertex::new(4., 20., 0.),
-            Vertex::new(4., 24., 0.),
-            Vertex::new(2., 24., 0.),
-        ]],
-    })));
+    let r = s.add(Entity::new(Kind::Region(RegionData { loops: vec![vec![Vertex::new(2., 20., 0.), Vertex::new(4., 20., 0.), Vertex::new(4., 24., 0.), Vertex::new(2., 24., 0.)]] })));
     s.set_sel(&[r]);
     s.cmd("REVOLVE").ty("Y").enter();
     near(vol(&s.solids()[1]), PI * (16. - 4.) * 4., 0.01);
@@ -206,10 +164,7 @@ fn torus_dimensions_diameter_option_and_validation() {
     near(b.min.z, -2., 0.01);
     near(b.max.x, 12., 0.01);
     assert!(check(&s.solids()[0].mesh()).valid());
-    s.play(
-        "TORUS",
-        &[Click(50., 0.), Type("D"), Type("20"), Type("D"), Type("4")],
-    );
+    s.play("TORUS", &[Click(50., 0.), Type("D"), Type("20"), Type("D"), Type("4")]);
     near(vol(&s.solids()[1]), vol(&s.solids()[0]), 0.001);
     s.play("TORUS", &[Click(100., 0.), Type("5"), Type("6")]);
     assert_eq!(s.solids().len(), 2);
@@ -225,21 +180,13 @@ fn sweep_a_circle_along_a_line_with_scale_and_twist_options() {
     s.add(Entity::line(p(0., 0.), p(20., 0.)));
     s.set_sel(&[circle]);
     s.cmd("SWEEP");
-    assert!(
-        s.prompt()
-            .starts_with("Select sweep path or [Alignment/Base point/Scale/Twist]"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Select sweep path or [Alignment/Base point/Scale/Twist]"), "{}", s.prompt());
     s.click(10., 0.);
     assert!(!s.busy());
     let so = s.solids();
     near(vol(&so[0]), PI * 20., 0.02);
     let b = bounds(&so[0]);
-    assert!(
-        b.min.x.abs() < 1e-6 && (b.max.x - 20.).abs() < 1e-6,
-        "{b:?}"
-    );
+    assert!(b.min.x.abs() < 1e-6 && (b.max.x - 20.).abs() < 1e-6, "{b:?}");
     near(b.max.y, 1., 0.02);
     near(b.max.z, 1., 0.02);
     s.set_sel(&[circle]);
@@ -248,29 +195,20 @@ fn sweep_a_circle_along_a_line_with_scale_and_twist_options() {
     near(cone, PI * 20. / 3. * (1. + 4. + 2.), 0.02);
     s.set_sel(&[circle]);
     s.cmd("SWEEP").ty("A").ty("N").click(10., 0.);
-    assert!(
-        s.history_has("no volume"),
-        "an unaligned sweep of a flat outline along a flat path has no volume"
-    );
+    assert!(s.history_has("no volume"), "an unaligned sweep of a flat outline along a flat path has no volume");
 }
 
 #[test]
 fn sweep_around_a_polyline_corner_and_along_a_closed_path() {
     let s = Sim::new();
     let sq = rect(&s, -50., -50., -48., -48.);
-    let path = s.add(Entity::pline_pts(
-        &[p(0., 0.), p(10., 0.), p(10., 10.)],
-        false,
-    ));
+    let path = s.add(Entity::pline_pts(&[p(0., 0.), p(10., 0.), p(10., 10.)], false));
     s.set_sel(&[sq]);
     s.cmd("SWEEP").click(5., 0.);
     near(vol(&s.solids()[0]), 4. * 20., 0.001);
     assert!(check(&s.solids()[0].mesh()).valid());
     s.doc_mut(|d| d.remove(path));
-    let ring = s.add(Entity::pline_pts(
-        &[p(0., 0.), p(10., 0.), p(10., 10.), p(0., 10.)],
-        true,
-    ));
+    let ring = s.add(Entity::pline_pts(&[p(0., 0.), p(10., 0.), p(10., 10.), p(0., 10.)], true));
     s.set_sel(&[sq]);
     s.cmd("SWEEP").click(5., 0.);
     let _ = ring;
@@ -284,17 +222,9 @@ fn loft_through_two_squares_and_options() {
     let b = rect(&s, 3., 3., 7., 7.);
     s.set_sel(&[a, b]);
     s.cmd("LOFT");
-    assert!(
-        s.prompt().starts_with(
-            "Enter an option or [Guides/Path/Cross-sections only/Settings] <Cross-sections only>"
-        ),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Enter an option or [Guides/Path/Cross-sections only/Settings] <Cross-sections only>"), "{}", s.prompt());
     s.enter();
-    assert!(s
-        .prompt()
-        .starts_with("Specify distance between cross-sections"));
+    assert!(s.prompt().starts_with("Specify distance between cross-sections"));
     s.ty("6");
     near(vol(&s.solids()[0]), 6. / 3. * (100. + 16. + 40.), 0.001);
     assert!(check(&s.solids()[0].mesh()).valid());
@@ -315,10 +245,7 @@ fn loft_through_two_squares_and_options() {
 #[test]
 fn loft_three_circles_smoothly() {
     let s = Sim::new();
-    let ids: Vec<u64> = [(2., 0.), (4., 20.), (2., 40.)]
-        .iter()
-        .map(|(r, x)| s.add(Entity::circle(p(*x, 0.), *r)))
-        .collect();
+    let ids: Vec<u64> = [(2., 0.), (4., 20.), (2., 40.)].iter().map(|(r, x)| s.add(Entity::circle(p(*x, 0.), *r))).collect();
     s.set_sel(&ids);
     s.cmd("LOFT").enter().ty("5");
     let v = vol(&s.solids()[0]);
@@ -331,105 +258,44 @@ fn pyramid_sides_edge_inscribed_and_top_radius() {
     let s = Sim::new();
     s.play("PYRAMID", &[Click(0., 0.), Type("5"), Type("9")]);
     near(vol(&s.solids()[0]), 100. * 9. / 3., 0.001);
-    s.play(
-        "PYRAMID",
-        &[Type("S"), Type("6"), Click(30., 0.), Type("5"), Type("9")],
-    );
-    near(
-        vol(&s.solids()[1]),
-        6. * 25. * (PI / 6.).tan() * 9. / 3.,
-        0.001,
-    );
-    s.play(
-        "PYRAMID",
-        &[Type("E"), Click(60., 0.), Click(70., 0.), Type("6")],
-    );
+    s.play("PYRAMID", &[Type("S"), Type("6"), Click(30., 0.), Type("5"), Type("9")]);
+    near(vol(&s.solids()[1]), 6. * 25. * (PI / 6.).tan() * 9. / 3., 0.001);
+    s.play("PYRAMID", &[Type("E"), Click(60., 0.), Click(70., 0.), Type("6")]);
     near(vol(&s.solids()[2]), 100. * 6. / 3., 0.001);
     let b = bounds(&s.solids()[2]);
     near(b.min.x, 60., 1e-6);
-    assert!(
-        b.max.y > 9.99,
-        "the base lies to the left of the edge direction: {b:?}"
-    );
-    s.play(
-        "PYRAMID",
-        &[Click(100., 0.), Type("I"), Type("5"), Type("9")],
-    );
+    assert!(b.max.y > 9.99, "the base lies to the left of the edge direction: {b:?}");
+    s.play("PYRAMID", &[Click(100., 0.), Type("I"), Type("5"), Type("9")]);
     near(vol(&s.solids()[3]), 50. * 9. / 3., 0.001);
-    s.play(
-        "PYRAMID",
-        &[Click(130., 0.), Type("5"), Type("T"), Type("2"), Type("9")],
-    );
+    s.play("PYRAMID", &[Click(130., 0.), Type("5"), Type("T"), Type("2"), Type("9")]);
     let (a1, a2): (f64, f64) = (100., 16.);
-    near(
-        vol(&s.solids()[4]),
-        9. / 3. * (a1 + a2 + (a1 * a2).sqrt()),
-        0.001,
-    );
+    near(vol(&s.solids()[4]), 9. / 3. * (a1 + a2 + (a1 * a2).sqrt()), 0.001);
     s.play("PYRAMID", &[Click(160., 0.), Type("5"), Type("-9")]);
-    assert!(
-        bounds(&s.solids()[5]).max.z < 1e-9,
-        "a negative height builds downwards"
-    );
+    assert!(bounds(&s.solids()[5]).max.z < 1e-9, "a negative height builds downwards");
 }
 
 #[test]
 fn polysolid_path_options_and_object_conversion() {
     let s = Sim::new();
-    s.play(
-        "POLYSOLID",
-        &[Click(0., 0.), Click(10., 0.), Click(10., 10.), Enter],
-    );
+    s.play("POLYSOLID", &[Click(0., 0.), Click(10., 0.), Click(10., 10.), Enter]);
     near(vol(&s.solids()[0]), 0.25 * 4. * 20., 0.001);
     let b = bounds(&s.solids()[0]);
     near(b.max.z, 4., 1e-6);
-    s.play(
-        "POLYSOLID",
-        &[
-            Type("H"),
-            Type("2"),
-            Type("W"),
-            Type("1"),
-            Click(30., 0.),
-            Click(50., 0.),
-            Enter,
-        ],
-    );
+    s.play("POLYSOLID", &[Type("H"), Type("2"), Type("W"), Type("1"), Click(30., 0.), Click(50., 0.), Enter]);
     near(vol(&s.solids()[1]), 40., 0.001);
     // right justification keeps the wall on the right-hand side of the path
-    s.play(
-        "POLYSOLID",
-        &[Type("J"), Type("R"), Click(0., 30.), Click(10., 30.), Enter],
-    );
+    s.play("POLYSOLID", &[Type("J"), Type("R"), Click(0., 30.), Click(10., 30.), Enter]);
     let b = bounds(&s.solids()[2]);
     assert!(b.min.y > 29.999 && b.max.y > 30.2, "{b:?}");
     // closed path and object conversion
-    s.play(
-        "POLYSOLID",
-        &[
-            Click(0., 50.),
-            Click(10., 50.),
-            Click(10., 60.),
-            Click(0., 60.),
-            Type("C"),
-        ],
-    );
+    s.play("POLYSOLID", &[Click(0., 50.), Click(10., 50.), Click(10., 60.), Click(0., 60.), Type("C")]);
     near(vol(&s.solids()[3]), 0.25 * 4. * 40., 0.001);
     s.add(Entity::circle(p(100., 100.), 5.));
     s.play("POLYSOLID", &[Enter, Click(105., 100.)]);
     assert_eq!(s.solids().len(), 5);
     near(vol(&s.solids()[4]), 0.25 * 4. * 2. * PI * 5., 0.03);
     // an arc segment after a line
-    s.play(
-        "POLYSOLID",
-        &[
-            Click(0., 80.),
-            Click(10., 80.),
-            Type("A"),
-            Click(20., 90.),
-            Enter,
-        ],
-    );
+    s.play("POLYSOLID", &[Click(0., 80.), Click(10., 80.), Type("A"), Click(20., 90.), Enter]);
     assert_eq!(s.solids().len(), 6);
     assert!(check(&s.solids()[5].mesh()).valid());
 }
@@ -442,12 +308,7 @@ fn slice_with_the_xy_plane_keeps_both_halves() {
     s.cmd("SLICE");
     assert!(s.prompt().starts_with("Specify first point on slicing plane or define plane by [Object/Zaxis/View/XY/YZ/ZX/3points] <3points>"), "{}", s.prompt());
     s.ty("XY").click(0., 0.).ty("4");
-    assert!(
-        s.prompt()
-            .starts_with("Specify a point on desired side or [keep Both sides"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Specify a point on desired side or [keep Both sides"), "{}", s.prompt());
     s.ty("B");
     assert!(!s.busy());
     let so = s.solids();
@@ -456,9 +317,7 @@ fn slice_with_the_xy_plane_keeps_both_halves() {
     v.sort_by(f64::total_cmp);
     near(v[0], 400., 1e-6);
     near(v[1], 600., 1e-6);
-    assert!(so
-        .iter()
-        .all(|x| check(&x.mesh()).valid() && x.layer == "0"));
+    assert!(so.iter().all(|x| check(&x.mesh()).valid() && x.layer == "0"));
     s.cmd("U");
     assert_eq!(s.solids().len(), 1);
     near(vol(&s.solids()[0]), 1000., 1e-6);
@@ -493,11 +352,7 @@ fn slice_by_z_axis_three_points_and_planes_that_miss() {
     near(s.solids().iter().map(vol).sum::<f64>(), 1000., 1e-6);
     // three points on the drawing plane make the plane z = 0, which only touches the box
     let t = with_box(10., 10., 10.);
-    t.cmd("SLICE")
-        .click(0., 0.)
-        .click(5., 0.)
-        .click(5., 5.)
-        .ty("B");
+    t.cmd("SLICE").click(0., 0.).click(5., 0.).click(5., 5.).ty("B");
     assert_eq!(t.solids().len(), 1);
     assert!(t.history_has("does not cut"));
     let u = with_box(10., 10., 10.);
@@ -520,18 +375,12 @@ fn slice_acts_on_every_selected_solid() {
 #[test]
 fn sectionplane_draws_the_cut_outline_flat() {
     let s = with_box(10., 6., 10.);
-    s.cmd("SECTIONPLANE")
-        .ty("XY")
-        .click(0., 0.)
-        .ty("5")
-        .click(50., 50.);
+    s.cmd("SECTIONPLANE").ty("XY").click(0., 0.).ty("5").click(50., 50.);
     assert!(!s.busy());
     let ents = s.ents();
     assert_eq!(ents.len(), 2);
     assert!(ents.iter().all(|e| e.layer == "SECTION"));
-    let Kind::Pline { v, closed } = &ents[0].kind else {
-        panic!("expected a polyline")
-    };
+    let Kind::Pline { v, closed } = &ents[0].kind else { panic!("expected a polyline") };
     assert!(*closed);
     let pts: Vec<Pt> = v.iter().map(|q| q.pt()).collect();
     near(polygon_area(&pts).abs(), 60., 1e-6);
@@ -547,12 +396,7 @@ fn sectionplane_draws_the_cut_outline_flat() {
 fn rotate_3d_about_the_x_axis_with_the_gizmo_command() {
     let s = with_box(10., 20., 30.);
     s.cmd("3DROTATE").click(0., 0.);
-    assert!(
-        s.prompt()
-            .starts_with("Pick a rotation axis or [X/Y/Z] <Z>"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Pick a rotation axis or [X/Y/Z] <Z>"), "{}", s.prompt());
     s.ty("X").ty("90");
     assert!(!s.busy());
     let b = bounds(&s.solids()[0]);
@@ -569,9 +413,7 @@ fn rotate_3d_about_z_moves_drawing_objects_too_and_leaves_them_for_other_axes() 
     let line = s.add(Entity::line(p(20., 0.), p(30., 0.)));
     s.set_sel(&[s.solids()[0].id, line]);
     s.cmd("3DROTATE").click(0., 0.).enter().ty("90");
-    let Kind::Line { a, b } = s.ent(0).kind else {
-        panic!()
-    };
+    let Kind::Line { a, b } = s.ent(0).kind else { panic!() };
     assert!(dist(a, p(0., 20.)) < 1e-9 && dist(b, p(0., 30.)) < 1e-9);
     let b = bounds(&s.solids()[0]);
     near(b.min.x, -10., 1e-6);
@@ -579,9 +421,7 @@ fn rotate_3d_about_z_moves_drawing_objects_too_and_leaves_them_for_other_axes() 
     s.set_sel(&[s.solids()[0].id, line]);
     s.cmd("3DROTATE").click(0., 0.).ty("X").ty("90");
     assert!(s.history_has("left unchanged"));
-    let Kind::Line { a, .. } = s.ent(0).kind else {
-        panic!()
-    };
+    let Kind::Line { a, .. } = s.ent(0).kind else { panic!() };
     assert!(dist(a, p(0., 20.)) < 1e-9);
     assert!(bounds(&s.solids()[0]).max.z > 9.99 || bounds(&s.solids()[0]).min.z < -9.99);
 }
@@ -589,11 +429,7 @@ fn rotate_3d_about_z_moves_drawing_objects_too_and_leaves_them_for_other_axes() 
 #[test]
 fn rotate_3d_start_and_end_angle_points() {
     let s = with_box(10., 10., 10.);
-    s.cmd("3DROTATE")
-        .click(0., 0.)
-        .enter()
-        .click(10., 0.)
-        .click(0., 10.);
+    s.cmd("3DROTATE").click(0., 0.).enter().click(10., 0.).click(0., 10.);
     let b = bounds(&s.solids()[0]);
     near(b.min.x, -10., 1e-6);
     near(b.max.y, 10., 1e-6);
@@ -608,13 +444,7 @@ fn rotate3d_command_axes_and_reference_angle() {
     near(b.min.z, -10., 1e-6);
     let t = with_box(10., 20., 30.);
     t.cmd("ROTATE3D");
-    assert!(
-        t.prompt().starts_with(
-            "Specify first point on axis or define axis by [Object/View/Xaxis/Yaxis/Zaxis/2points]"
-        ),
-        "{}",
-        t.prompt()
-    );
+    assert!(t.prompt().starts_with("Specify first point on axis or define axis by [Object/View/Xaxis/Yaxis/Zaxis/2points]"), "{}", t.prompt());
     t.ty("X").click(0., 0.).ty("R").ty("30").ty("120");
     let b = bounds(&t.solids()[0]);
     near(b.min.y, -30., 1e-6);
@@ -622,13 +452,7 @@ fn rotate3d_command_axes_and_reference_angle() {
     let u = with_box(10., 20., 30.);
     u.cmd("ROTATE3D").ty("Z").click(5., 5.).ty("180");
     let b = bounds(&u.solids()[0]);
-    assert!(
-        b.min.x.abs() < 1e-6
-            && (b.max.x - 10.).abs() < 1e-6
-            && (b.min.y + 10.).abs() < 1e-6
-            && (b.max.y - 10.).abs() < 1e-6,
-        "{b:?}"
-    );
+    assert!(b.min.x.abs() < 1e-6 && (b.max.x - 10.).abs() < 1e-6 && (b.min.y + 10.).abs() < 1e-6 && (b.max.y - 10.).abs() < 1e-6, "{b:?}");
 }
 
 #[test]
@@ -639,10 +463,7 @@ fn mirror_3d_about_planes() {
     near(bounds(&s.solids()[1]).max.x, 0., 1e-6);
     near(bounds(&s.solids()[1]).min.x, -10., 1e-6);
     near(vol(&s.solids()[1]), 1000., 1e-6);
-    assert!(
-        check(&s.solids()[1].mesh()).valid(),
-        "mirroring re-winds the faces"
-    );
+    assert!(check(&s.solids()[1].mesh()).valid(), "mirroring re-winds the faces");
     // delete the source and mirror in the XY plane at z = 12
     let t = with_box(10., 10., 10.);
     t.cmd("3DMIRROR").ty("XY").click(0., 0.).ty("12").ty("Y");
@@ -653,9 +474,7 @@ fn mirror_3d_about_planes() {
     let line = u.add(Entity::line(p(2., 3.), p(4., 3.)));
     u.set_sel(&[u.solids()[0].id, line]);
     u.cmd("MIRROR3D").ty("YZ").click(0., 0.).ty("Y");
-    let Kind::Line { a, .. } = u.ent(0).kind else {
-        panic!()
-    };
+    let Kind::Line { a, .. } = u.ent(0).kind else { panic!() };
     assert!(dist(a, p(-2., 3.)) < 1e-9);
 }
 
@@ -673,12 +492,7 @@ fn scale_3d_uniformly_and_along_axes() {
     assert_eq!(u.solids().len(), 2);
     near(vol(&u.solids()[1]), 250., 1e-6);
     let v = with_box(10., 10., 10.);
-    v.cmd("3DSCALE")
-        .click(0., 0.)
-        .enter()
-        .ty("R")
-        .ty("5")
-        .ty("15");
+    v.cmd("3DSCALE").click(0., 0.).enter().ty("R").ty("5").ty("15");
     near(vol(&v.solids()[0]), 27000., 1e-6);
 }
 
@@ -690,23 +504,14 @@ fn align_3d_with_one_two_and_three_point_pairs() {
     near(bounds(&s.solids()[0]).min.x, 30., 1e-6);
     near(bounds(&s.solids()[0]).min.y, 5., 1e-6);
     let t = with_box(10., 10., 10.);
-    t.cmd("3DALIGN")
-        .click(0., 0.)
-        .click(10., 0.)
-        .enter()
-        .click(0., 20.)
-        .click(0., 30.);
+    t.cmd("3DALIGN").click(0., 0.).click(10., 0.).enter().click(0., 20.).click(0., 30.);
     let b = bounds(&t.solids()[0]);
     near(b.min.x, -10., 1e-6);
     near(b.min.y, 20., 1e-6);
     near(b.max.y, 30., 1e-6);
     // copy: the original stays
     let u = with_box(10., 10., 10.);
-    u.cmd("3DALIGN")
-        .ty("C")
-        .click(0., 0.)
-        .enter()
-        .click(40., 0.);
+    u.cmd("3DALIGN").ty("C").click(0., 0.).enter().click(40., 0.);
     assert_eq!(u.solids().len(), 2);
     near(bounds(&u.solids()[1]).min.x, 40., 1e-6);
 }
@@ -714,33 +519,15 @@ fn align_3d_with_one_two_and_three_point_pairs() {
 #[test]
 fn array_3d_rectangular_with_levels_and_polar() {
     let s = with_box(2., 2., 2.);
-    s.cmd("3DARRAY")
-        .enter()
-        .ty("2")
-        .ty("3")
-        .ty("2")
-        .ty("5")
-        .ty("4")
-        .ty("10");
+    s.cmd("3DARRAY").enter().ty("2").ty("3").ty("2").ty("5").ty("4").ty("10");
     assert!(!s.busy());
     assert_eq!(s.solids().len(), 12);
-    let b = mesh_bounds(
-        &s.solids()
-            .iter()
-            .flat_map(|x| x.vertices.clone())
-            .collect::<Vec<V3>>(),
-    );
+    let b = mesh_bounds(&s.solids().iter().flat_map(|x| x.vertices.clone()).collect::<Vec<V3>>());
     near(b.max.x, 2. + 2. * 4., 1e-6);
     near(b.max.y, 2. + 5., 1e-6);
     near(b.max.z, 2. + 10., 1e-6);
     let t = with_box(2., 2., 2.);
-    t.cmd("3DARRAY")
-        .ty("P")
-        .ty("4")
-        .enter()
-        .enter()
-        .click(10., 0.)
-        .enter();
+    t.cmd("3DARRAY").ty("P").ty("4").enter().enter().click(10., 0.).enter();
     assert_eq!(t.solids().len(), 4);
     for x in t.solids() {
         let c = mesh_centroid(&x.mesh());
@@ -749,13 +536,7 @@ fn array_3d_rectangular_with_levels_and_polar() {
     }
     // not rotating keeps each copy's orientation
     let u = with_box(2., 2., 2.);
-    u.cmd("3DARRAY")
-        .ty("P")
-        .ty("2")
-        .ty("180")
-        .ty("N")
-        .click(11., 1.)
-        .enter();
+    u.cmd("3DARRAY").ty("P").ty("2").ty("180").ty("N").click(11., 1.).enter();
     assert_eq!(u.solids().len(), 2);
     near(bounds(&u.solids()[1]).min.x, 20., 1e-6);
     near(bounds(&u.solids()[1]).max.x, 22., 1e-6);
@@ -768,20 +549,11 @@ fn fillet_a_box_edge() {
     let s = with_box(20., 20., 20.);
     s.set_sel(&[]);
     s.cmd("FILLETEDGE");
-    assert!(
-        s.prompt().starts_with("Select an edge or [Loop/Radius]"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Select an edge or [Loop/Radius]"), "{}", s.prompt());
     s.ty("R").ty("3").click(10., 0.);
     assert!(s.history_has("1 edge selected"));
     s.enter();
-    assert!(
-        s.prompt()
-            .starts_with("Press Enter to accept the fillet or [Radius]"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Press Enter to accept the fillet or [Radius]"), "{}", s.prompt());
     s.enter();
     assert!(!s.busy());
     let removed = 8000. - vol(&s.solids()[0]);
@@ -808,12 +580,7 @@ fn fillet_radius_change_loop_and_misses() {
     // a radius too large for the faces is an error and changes nothing
     let v = with_box(20., 20., 2.);
     v.set_sel(&[]);
-    v.cmd("FILLETEDGE")
-        .ty("R")
-        .ty("15")
-        .click(10., 0.)
-        .enter()
-        .enter();
+    v.cmd("FILLETEDGE").ty("R").ty("15").click(10., 0.).enter().enter();
     near(vol(&v.solids()[0]), 800., 1e-6);
     assert!(v.history_has("too large"));
 }
@@ -823,31 +590,15 @@ fn chamfer_a_box_edge_with_distances() {
     let s = with_box(20., 20., 20.);
     s.set_sel(&[]);
     s.cmd("CHAMFEREDGE");
-    assert!(
-        s.prompt()
-            .starts_with("Select an edge on a solid or [Loop/Distance]"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Select an edge on a solid or [Loop/Distance]"), "{}", s.prompt());
     s.ty("D").ty("2").ty("2").click(10., 0.).enter();
-    assert!(
-        s.prompt()
-            .starts_with("Press Enter to accept the chamfer or [Distance]"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Press Enter to accept the chamfer or [Distance]"), "{}", s.prompt());
     s.enter();
     near(8000. - vol(&s.solids()[0]), 0.5 * 4. * 20., 1e-4);
     // unequal distances: distance 1 goes on the face that looks at the viewer (the top face in plan view)
     let t = with_box(20., 20., 20.);
     t.set_sel(&[]);
-    t.cmd("CHAMFEREDGE")
-        .ty("D")
-        .ty("2")
-        .ty("6")
-        .click(10., 0.)
-        .enter()
-        .enter();
+    t.cmd("CHAMFEREDGE").ty("D").ty("2").ty("6").click(10., 0.).enter().enter();
     near(8000. - vol(&t.solids()[0]), 0.5 * 12. * 20., 1e-4);
     let b = bounds(&t.solids()[0]);
     near(b.max.z, 20., 1e-6);
@@ -857,12 +608,7 @@ fn chamfer_a_box_edge_with_distances() {
 fn fillet_the_rim_of_a_cylinder_and_a_picked_edge_in_an_oblique_view() {
     let s = Sim::new();
     s.play("CYLINDER", &[Click(0., 0.), Type("10"), Type("20")]);
-    s.cmd("FILLETEDGE")
-        .ty("R")
-        .ty("2")
-        .click(10., 0.)
-        .enter()
-        .enter();
+    s.cmd("FILLETEDGE").ty("R").ty("2").click(10., 0.).enter().enter();
     let removed = vol(&s.solids()[0]) - 0.;
     let full = PI * 100. * 20.;
     assert!(removed < full && removed > full - 70., "{removed}");
@@ -887,17 +633,9 @@ fn shell_removes_a_face_and_hollows_the_solid() {
     s.set_visual_style("Shaded");
     s.play("BOX", &[Click(0., 0.), Click(10., 10.), Type("10")]);
     s.cmd("SHELL").click(5., 5.);
-    assert!(
-        s.prompt().starts_with("Remove faces or [Undo/Add/ALL]"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Remove faces or [Undo/Add/ALL]"), "{}", s.prompt());
     s.click(5., 5.).enter();
-    assert!(
-        s.prompt().starts_with("Enter the shell offset distance"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Enter the shell offset distance"), "{}", s.prompt());
     s.ty("1");
     assert!(!s.busy());
     near(vol(&s.solids()[0]), 1000. - 8. * 8. * 9., 1e-6);
@@ -922,12 +660,7 @@ fn solidedit_body_clean_check_separate_shell_and_undo() {
     s.set_visual_style("Shaded");
     s.play("BOX", &[Click(0., 0.), Click(10., 10.), Type("10")]);
     s.cmd("SOLIDEDIT");
-    assert!(
-        s.prompt()
-            .starts_with("Enter a solids editing option or [Face/Edge/Body/Undo/eXit] <eXit>"),
-        "{}",
-        s.prompt()
-    );
+    assert!(s.prompt().starts_with("Enter a solids editing option or [Face/Edge/Body/Undo/eXit] <eXit>"), "{}", s.prompt());
     s.ty("B");
     assert!(s.prompt().starts_with("Enter a body editing option or [Imprint/seParate solids/Shell/cLean/Check/Undo/eXit] <eXit>"), "{}", s.prompt());
     s.ty("C").click(5., 5.);
@@ -957,8 +690,7 @@ fn solidedit_separates_disjoint_bodies() {
     let off = a.vertices.len() as u32;
     let mut both = a.clone();
     both.vertices.extend(b.vertices.iter().copied());
-    both.faces
-        .extend(b.faces.iter().map(|f| [f[0] + off, f[1] + off, f[2] + off]));
+    both.faces.extend(b.faces.iter().map(|f| [f[0] + off, f[1] + off, f[2] + off]));
     s.doc_mut(|d| d.add_solid(both));
     assert_eq!(s.solids().len(), 1);
     s.cmd("SOLIDEDIT").ty("B").ty("P").click(5., 5.);
@@ -975,14 +707,7 @@ fn solidedit_separates_disjoint_bodies() {
 #[test]
 fn thicken_regions_and_convtosolid_outlines() {
     let s = Sim::new();
-    let r = s.add(Entity::new(Kind::Region(RegionData {
-        loops: vec![vec![
-            Vertex::new(0., 0., 0.),
-            Vertex::new(10., 0., 0.),
-            Vertex::new(10., 5., 0.),
-            Vertex::new(0., 5., 0.),
-        ]],
-    })));
+    let r = s.add(Entity::new(Kind::Region(RegionData { loops: vec![vec![Vertex::new(0., 0., 0.), Vertex::new(10., 0., 0.), Vertex::new(10., 5., 0.), Vertex::new(0., 5., 0.)]] })));
     s.set_sel(&[r]);
     s.cmd("THICKEN").ty("4");
     assert!(!s.busy());
@@ -1007,22 +732,10 @@ fn interfere_reports_pairs_and_creates_the_common_volume() {
     s.play("BOX", &[Click(0., 0.), Click(10., 10.), Type("10")]);
     s.play("BOX", &[Click(5., 0.), Click(15., 10.), Type("10")]);
     s.play("BOX", &[Click(40., 0.), Click(50., 10.), Type("10")]);
-    s.cmd("INTERFERE")
-        .click(2., 5.)
-        .click(12., 5.)
-        .click(45., 5.)
-        .enter();
-    assert!(
-        s.prompt().starts_with("Select second set of objects"),
-        "{}",
-        s.prompt()
-    );
+    s.cmd("INTERFERE").click(2., 5.).click(12., 5.).click(45., 5.).enter();
+    assert!(s.prompt().starts_with("Select second set of objects"), "{}", s.prompt());
     s.enter();
-    assert!(
-        s.history_has("Number of interfering pairs: 1"),
-        "{}",
-        s.log_text()
-    );
+    assert!(s.history_has("Number of interfering pairs: 1"), "{}", s.log_text());
     assert!(s.history_has("Interfering objects in first set: 2"));
     s.ty("Y");
     assert_eq!(s.solids().len(), 4);
@@ -1033,11 +746,7 @@ fn interfere_reports_pairs_and_creates_the_common_volume() {
     t.set_visual_style("Shaded");
     t.play("BOX", &[Click(0., 0.), Click(10., 10.), Type("10")]);
     t.play("BOX", &[Click(5., 0.), Click(15., 10.), Type("10")]);
-    t.cmd("INTERFERE")
-        .click(2., 5.)
-        .enter()
-        .click(12., 5.)
-        .enter();
+    t.cmd("INTERFERE").click(2., 5.).enter().click(12., 5.).enter();
     assert!(t.history_has("Interfering objects in second set: 1"));
     t.ty("N");
     assert_eq!(t.solids().len(), 2);
@@ -1046,11 +755,7 @@ fn interfere_reports_pairs_and_creates_the_common_volume() {
     u.set_visual_style("Shaded");
     u.play("BOX", &[Click(0., 0.), Click(10., 10.), Type("10")]);
     u.play("BOX", &[Click(20., 0.), Click(30., 10.), Type("10")]);
-    u.cmd("INTERFERE")
-        .click(2., 5.)
-        .click(25., 5.)
-        .enter()
-        .enter();
+    u.cmd("INTERFERE").click(2., 5.).click(25., 5.).enter().enter();
     assert!(u.history_has("Number of interfering pairs: 0"));
     assert!(!u.busy());
 }
@@ -1091,26 +796,16 @@ fn flatshot_creates_a_block_of_lines_in_plan_view() {
     assert!(!s.busy());
     let ents = s.ents();
     assert_eq!(ents.len(), 1);
-    let Kind::Insert(ins) = &ents[0].kind else {
-        panic!("expected a block insert")
-    };
+    let Kind::Insert(ins) = &ents[0].kind else { panic!("expected a block insert") };
     assert_eq!(ins.name, "FLATSHOT1");
     let n = s.doc(|d| d.blocks[&ins.name].entities.len());
     assert_eq!(n, 4, "the outline of the top face");
     // obscured lines are added dashed on request
     s.cmd("FLATSHOT").ty("Y").click(200., 0.);
     let ents = s.ents();
-    let Kind::Insert(ins) = &ents[1].kind else {
-        panic!()
-    };
+    let Kind::Insert(ins) = &ents[1].kind else { panic!() };
     assert_eq!(ins.name, "FLATSHOT2");
-    let hidden = s.doc(|d| {
-        d.blocks[&ins.name]
-            .entities
-            .iter()
-            .filter(|e| e.ltype.as_deref() == Some("HIDDEN"))
-            .count()
-    });
+    let hidden = s.doc(|d| d.blocks[&ins.name].entities.iter().filter(|e| e.ltype.as_deref() == Some("HIDDEN")).count());
     assert_eq!(hidden, 4);
     // nothing to flatten
     let t = Sim::new();
@@ -1120,26 +815,7 @@ fn flatshot_creates_a_block_of_lines_in_plan_view() {
 
 #[test]
 fn commands_cancel_cleanly_with_escape() {
-    for cmd in [
-        "SLICE",
-        "FILLETEDGE",
-        "CHAMFEREDGE",
-        "3DROTATE",
-        "ROTATE3D",
-        "MIRROR3D",
-        "3DSCALE",
-        "3DALIGN",
-        "3DARRAY",
-        "SOLIDEDIT",
-        "SHELL",
-        "PYRAMID",
-        "POLYSOLID",
-        "TORUS",
-        "INTERFERE",
-        "SOLIDHIST",
-        "SECTIONPLANE",
-        "FLATSHOT",
-    ] {
+    for cmd in ["SLICE", "FILLETEDGE", "CHAMFEREDGE", "3DROTATE", "ROTATE3D", "MIRROR3D", "3DSCALE", "3DALIGN", "3DARRAY", "SOLIDEDIT", "SHELL", "PYRAMID", "POLYSOLID", "TORUS", "INTERFERE", "SOLIDHIST", "SECTIONPLANE", "FLATSHOT"] {
         let s = with_box(10., 10., 10.);
         s.cmd(cmd).esc();
         assert!(!s.busy(), "{cmd}");

@@ -12,9 +12,7 @@ fn ps(m: &str) -> PromptSpec {
     PromptSpec::new(m)
 }
 
-const PAPERS: [&str; 9] = [
-    "A0", "A1", "A2", "A3", "A4", "Letter", "Legal", "Tabloid", "ANSI C",
-];
+const PAPERS: [&str; 9] = ["A0", "A1", "A2", "A3", "A4", "Letter", "Legal", "Tabloid", "ANSI C"];
 
 fn refresh(c: &Ctx) {
     c.app(|a| a.emit(Event::Regen));
@@ -41,9 +39,7 @@ fn current_layout(c: &Ctx) -> Option<String> {
 /// The sheet that commands draw on: leaves an active viewport; fails (with a message) in model space.
 fn paper_space(c: &Ctx, cmd: &str) -> Option<String> {
     let Some(l) = current_layout(c) else {
-        c.log_error(&format!(
-            "** Command not allowed unless a layout tab is current ** ({cmd})"
-        ));
+        c.log_error(&format!("** Command not allowed unless a layout tab is current ** ({cmd})"));
         return None;
     };
     c.ed(|e| e.leave_mspace());
@@ -55,24 +51,11 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
     let kw = match args.str("option") {
         Some(o) => o.to_string(),
         None => {
-            let r = c
-                .keyword(
-                    ps("Enter layout option [Copy/Delete/New/Template/Rename/SAveas/Set/?]")
-                        .options(&[
-                            "Copy", "Delete", "New", "Template", "Rename", "SAveas", "Set", "?",
-                        ])
-                        .default_str("Set")
-                        .allow_enter(),
-                )
-                .await?;
+            let r = c.keyword(ps("Enter layout option [Copy/Delete/New/Template/Rename/SAveas/Set/?]").options(&["Copy", "Delete", "New", "Template", "Rename", "SAveas", "Set", "?"]).default_str("Set").allow_enter()).await?;
             r.kw().unwrap_or("Set").to_string()
         }
     };
-    let cur_name = if cur.eq_ignore_ascii_case(MODEL) {
-        "Model".to_string()
-    } else {
-        cur.clone()
-    };
+    let cur_name = if cur.eq_ignore_ascii_case(MODEL) { "Model".to_string() } else { cur.clone() };
     match kw.as_str() {
         "?" => {
             let names = c.doc(|d| d.layout_names());
@@ -83,14 +66,8 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
             let name = match args.str("name") {
                 Some(n) => n.to_string(),
                 None => {
-                    let n = c
-                        .string(ps("Enter new layout name").default_str(&dflt))
-                        .await?;
-                    if n.text.trim().is_empty() {
-                        dflt
-                    } else {
-                        n.text
-                    }
+                    let n = c.string(ps("Enter new layout name").default_str(&dflt)).await?;
+                    if n.text.trim().is_empty() { dflt } else { n.text }
                 }
             };
             match c.doc_mut(|d| d.add_layout(&name)) {
@@ -102,28 +79,16 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
             let from = match args.str("name") {
                 Some(n) => n.to_string(),
                 None => {
-                    let from = c
-                        .string(ps("Enter layout to copy").default_str(&cur_name))
-                        .await?;
-                    if from.text.trim().is_empty() {
-                        cur_name.clone()
-                    } else {
-                        from.text
-                    }
+                    let from = c.string(ps("Enter layout to copy").default_str(&cur_name)).await?;
+                    if from.text.trim().is_empty() { cur_name.clone() } else { from.text }
                 }
             };
             let dflt = format!("{from} (2)");
             let to = match args.str("to") {
                 Some(n) => n.to_string(),
                 None => {
-                    let to = c
-                        .string(ps("Enter layout name for the copy").default_str(&dflt))
-                        .await?;
-                    if to.text.trim().is_empty() {
-                        dflt
-                    } else {
-                        to.text
-                    }
+                    let to = c.string(ps("Enter layout name for the copy").default_str(&dflt)).await?;
+                    if to.text.trim().is_empty() { dflt } else { to.text }
                 }
             };
             if let Err(m) = c.doc_mut(|d| d.copy_layout(&from, &to)) {
@@ -134,14 +99,8 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
             let name = match args.str("name") {
                 Some(n) => n.to_string(),
                 None => {
-                    let n = c
-                        .string(ps("Enter name of layout to delete").default_str(&cur_name))
-                        .await?;
-                    if n.text.trim().is_empty() {
-                        cur_name.clone()
-                    } else {
-                        n.text
-                    }
+                    let n = c.string(ps("Enter name of layout to delete").default_str(&cur_name)).await?;
+                    if n.text.trim().is_empty() { cur_name.clone() } else { n.text }
                 }
             };
             if name.eq_ignore_ascii_case("Model") {
@@ -161,14 +120,8 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
             let from = match args.str("name") {
                 Some(n) => n.to_string(),
                 None => {
-                    let from = c
-                        .string(ps("Enter layout to rename").default_str(&cur_name))
-                        .await?;
-                    if from.text.trim().is_empty() {
-                        cur_name.clone()
-                    } else {
-                        from.text
-                    }
+                    let from = c.string(ps("Enter layout to rename").default_str(&cur_name)).await?;
+                    if from.text.trim().is_empty() { cur_name.clone() } else { from.text }
                 }
             };
             let to = match args.str("to") {
@@ -183,23 +136,15 @@ async fn layout(c: Ctx, args: Args) -> CmdResult<()> {
             let name = match args.str("name") {
                 Some(n) => n.to_string(),
                 None => {
-                    let n = c
-                        .string(ps("Enter layout to make current").default_str(&cur_name))
-                        .await?;
-                    if n.text.trim().is_empty() {
-                        cur_name.clone()
-                    } else {
-                        n.text
-                    }
+                    let n = c.string(ps("Enter layout to make current").default_str(&cur_name)).await?;
+                    if n.text.trim().is_empty() { cur_name.clone() } else { n.text }
                 }
             };
             if let Err(m) = c.ed(|e| e.switch_space(&name)) {
                 c.log_error(&m);
             }
         }
-        "Template" | "SAveas" => c.log_error(
-            "Layout templates (DWT/DWG) are not supported; use the Copy option instead.",
-        ),
+        "Template" | "SAveas" => c.log_error("Layout templates (DWT/DWG) are not supported; use the Copy option instead."),
         _ => {}
     }
     refresh(&c);
@@ -229,11 +174,7 @@ fn viewport_from_polygon(poly: Vec<Pt>) -> Entity {
 
 fn rect_viewport(a: Pt, b: Pt) -> Entity {
     let (x0, x1, y0, y1) = (a.x.min(b.x), a.x.max(b.x), a.y.min(b.y), a.y.max(b.y));
-    Entity::new(Kind::Viewport(ViewportData::new(
-        pt((x0 + x1) / 2.0, (y0 + y1) / 2.0),
-        x1 - x0,
-        y1 - y0,
-    )))
+    Entity::new(Kind::Viewport(ViewportData::new(pt((x0 + x1) / 2.0, (y0 + y1) / 2.0), x1 - x0, y1 - y0)))
 }
 
 fn is_viewport(e: &Entity) -> bool {
@@ -244,11 +185,7 @@ fn set_viewports(c: &Ctx, ids: &[u64], f: impl Fn(&mut ViewportData)) {
     c.doc_mut(|d| {
         d.change(|d| {
             for id in ids {
-                if let Some(Entity {
-                    kind: Kind::Viewport(v),
-                    ..
-                }) = d.by_id_mut(*id)
-                {
+                if let Some(Entity { kind: Kind::Viewport(v), .. }) = d.by_id_mut(*id) {
                     f(v);
                 }
             }
@@ -264,26 +201,13 @@ fn arrangement(n: usize, kind: &str, a: Pt, b: Pt) -> Vec<(Pt, Pt)> {
     match (n, kind) {
         (2, "Horizontal") => vec![r(x0, y0, x1, ym), r(x0, ym, x1, y1)],
         (2, _) => vec![r(x0, y0, xm, y1), r(xm, y0, x1, y1)],
-        (3, "Horizontal") => vec![
-            r(x0, y0, x1, y0 + (y1 - y0) / 3.0),
-            r(x0, y0 + (y1 - y0) / 3.0, x1, y0 + 2.0 * (y1 - y0) / 3.0),
-            r(x0, y0 + 2.0 * (y1 - y0) / 3.0, x1, y1),
-        ],
-        (3, "Vertical") => vec![
-            r(x0, y0, x0 + (x1 - x0) / 3.0, y1),
-            r(x0 + (x1 - x0) / 3.0, y0, x0 + 2.0 * (x1 - x0) / 3.0, y1),
-            r(x0 + 2.0 * (x1 - x0) / 3.0, y0, x1, y1),
-        ],
+        (3, "Horizontal") => vec![r(x0, y0, x1, y0 + (y1 - y0) / 3.0), r(x0, y0 + (y1 - y0) / 3.0, x1, y0 + 2.0 * (y1 - y0) / 3.0), r(x0, y0 + 2.0 * (y1 - y0) / 3.0, x1, y1)],
+        (3, "Vertical") => vec![r(x0, y0, x0 + (x1 - x0) / 3.0, y1), r(x0 + (x1 - x0) / 3.0, y0, x0 + 2.0 * (x1 - x0) / 3.0, y1), r(x0 + 2.0 * (x1 - x0) / 3.0, y0, x1, y1)],
         (3, "Above") => vec![r(x0, ym, x1, y1), r(x0, y0, xm, ym), r(xm, y0, x1, ym)],
         (3, "Below") => vec![r(x0, y0, x1, ym), r(x0, ym, xm, y1), r(xm, ym, x1, y1)],
         (3, "Left") => vec![r(x0, y0, xm, y1), r(xm, y0, x1, ym), r(xm, ym, x1, y1)],
         (3, _) => vec![r(xm, y0, x1, y1), r(x0, y0, xm, ym), r(x0, ym, xm, y1)],
-        _ => vec![
-            r(x0, y0, xm, ym),
-            r(xm, y0, x1, ym),
-            r(x0, ym, xm, y1),
-            r(xm, ym, x1, y1),
-        ],
+        _ => vec![r(x0, y0, xm, ym), r(xm, y0, x1, ym), r(x0, ym, xm, y1), r(xm, ym, x1, y1)],
     }
 }
 
@@ -291,43 +215,19 @@ async fn make_array(c: &Ctx, n: usize) -> CmdResult<()> {
     let kind = if n == 4 {
         String::new()
     } else if n == 2 {
-        let r = c
-            .keyword(
-                ps("Enter viewport arrangement [Horizontal/Vertical]")
-                    .options(&["Horizontal", "Vertical"])
-                    .default_str("Vertical")
-                    .allow_enter(),
-            )
-            .await?;
+        let r = c.keyword(ps("Enter viewport arrangement [Horizontal/Vertical]").options(&["Horizontal", "Vertical"]).default_str("Vertical").allow_enter()).await?;
         r.kw().unwrap_or("Vertical").to_string()
     } else {
-        let r = c
-            .keyword(
-                ps("Enter viewport arrangement [Horizontal/Vertical/Above/Below/Left/Right]")
-                    .options(&["Horizontal", "Vertical", "Above", "Below", "Left", "Right"])
-                    .default_str("Right")
-                    .allow_enter(),
-            )
-            .await?;
+        let r = c.keyword(ps("Enter viewport arrangement [Horizontal/Vertical/Above/Below/Left/Right]").options(&["Horizontal", "Vertical", "Above", "Below", "Left", "Right"]).default_str("Right").allow_enter()).await?;
         r.kw().unwrap_or("Right").to_string()
     };
-    let r = c
-        .point(
-            ps("Specify first corner or [Fit]")
-                .options(&["Fit"])
-                .no_ortho(),
-        )
-        .await?;
+    let r = c.point(ps("Specify first corner or [Fit]").options(&["Fit"]).no_ortho()).await?;
     let (a, b) = if r.kw() == Some("Fit") {
-        let p = c
-            .doc(|d| d.paper_of(&d.space).cloned())
-            .unwrap_or_else(|| Paper::named("A4", true));
+        let p = c.doc(|d| d.paper_of(&d.space).cloned()).unwrap_or_else(|| Paper::named("A4", true));
         (pt(10.0, 10.0), pt(p.w - 10.0, p.h - 10.0))
     } else {
         let Some(a) = r.pt() else { return Ok(()) };
-        let Some(b) = c.corner(a, ps("Specify opposite corner")).await?.pt() else {
-            return Ok(());
-        };
+        let Some(b) = c.corner(a, ps("Specify opposite corner")).await?.pt() else { return Ok(()) };
         (a, b)
     };
     for (p, q) in arrangement(n, &kind, a, b) {
@@ -340,17 +240,7 @@ async fn mview(c: Ctx, args: Args) -> CmdResult<()> {
     if paper_space(&c, "MVIEW").is_none() {
         return Ok(());
     }
-    let opts = [
-        "ON",
-        "OFF",
-        "Fit",
-        "Lock",
-        "Object",
-        "Polygonal",
-        "2",
-        "3",
-        "4",
-    ];
+    let opts = ["ON", "OFF", "Fit", "Lock", "Object", "Polygonal", "2", "3", "4"];
     // the ribbon starts MVIEW with an option already chosen
     let mut preset = args.str("option").map(str::to_string);
     loop {
@@ -365,17 +255,13 @@ async fn mview(c: Ctx, args: Args) -> CmdResult<()> {
                 set_viewports(&c, &sel.ents, |v| v.off = !on);
             }
             Some("Lock") => {
-                let st = c
-                    .keyword(ps("Enter viewport lock option [ON/OFF]").options(&["ON", "OFF"]))
-                    .await?;
+                let st = c.keyword(ps("Enter viewport lock option [ON/OFF]").options(&["ON", "OFF"])).await?;
                 let lock = st.kw() == Some("ON");
                 let sel = c.select(ps("Select objects").filter(is_viewport)).await?;
                 set_viewports(&c, &sel.ents, |v| v.locked = lock);
             }
             Some("Fit") => {
-                let p = c
-                    .doc(|d| d.paper_of(&d.space).cloned())
-                    .unwrap_or_else(|| Paper::named("A4", true));
+                let p = c.doc(|d| d.paper_of(&d.space).cloned()).unwrap_or_else(|| Paper::named("A4", true));
                 c.add(Drawing::default_viewport(&p));
             }
             Some("Object") => {
@@ -388,19 +274,10 @@ async fn mview(c: Ctx, args: Args) -> CmdResult<()> {
                 c.add(viewport_from_polygon(poly));
             }
             Some("Polygonal") => {
-                let Some(first) = c.point(ps("Specify start point")).await?.pt() else {
-                    return Ok(());
-                };
+                let Some(first) = c.point(ps("Specify start point")).await?.pt() else { return Ok(()) };
                 let mut pts = vec![first];
                 loop {
-                    let r = c
-                        .point(
-                            ps("Specify next point or [Close/Undo]")
-                                .options(&["Close", "Undo"])
-                                .base(*pts.last().expect("point"))
-                                .allow_enter(),
-                        )
-                        .await?;
+                    let r = c.point(ps("Specify next point or [Close/Undo]").options(&["Close", "Undo"]).base(*pts.last().expect("point")).allow_enter()).await?;
                     match r.kw() {
                         Some("Undo") => {
                             if pts.len() > 1 {
@@ -429,9 +306,7 @@ async fn mview(c: Ctx, args: Args) -> CmdResult<()> {
             }
             None => match r {
                 PointR::Pt(a) => {
-                    let Some(b) = c.corner(a, ps("Specify opposite corner")).await?.pt() else {
-                        return Ok(());
-                    };
+                    let Some(b) = c.corner(a, ps("Specify opposite corner")).await?.pt() else { return Ok(()) };
                     if (a.x - b.x).abs() < 1e-9 || (a.y - b.y).abs() < 1e-9 {
                         c.log_error("The viewport has no area.");
                         continue;
@@ -439,9 +314,7 @@ async fn mview(c: Ctx, args: Args) -> CmdResult<()> {
                     c.add(rect_viewport(a, b));
                 }
                 _ => {
-                    let p = c
-                        .doc(|d| d.paper_of(&d.space).cloned())
-                        .unwrap_or_else(|| Paper::named("A4", true));
+                    let p = c.doc(|d| d.paper_of(&d.space).cloned()).unwrap_or_else(|| Paper::named("A4", true));
                     c.add(Drawing::default_viewport(&p));
                 }
             },
@@ -464,12 +337,7 @@ async fn mspace(c: Ctx, _args: Args) -> CmdResult<()> {
         return Ok(());
     };
     let ids = c.ed(|e| e.viewport_ids(&layout));
-    let active: Vec<u64> = c.doc(|d| {
-        ids.iter()
-            .copied()
-            .filter(|id| matches!(d.by_id(*id).map(|e| &e.kind), Some(Kind::Viewport(v)) if !v.off))
-            .collect()
-    });
+    let active: Vec<u64> = c.doc(|d| ids.iter().copied().filter(|id| matches!(d.by_id(*id).map(|e| &e.kind), Some(Kind::Viewport(v)) if !v.off)).collect());
     let vp = match active.len() {
         0 => {
             c.log_error("There is no viewport in this layout. Use MVIEW to create one.");
@@ -477,9 +345,7 @@ async fn mspace(c: Ctx, _args: Args) -> CmdResult<()> {
         }
         1 => active[0],
         _ => {
-            let r = c
-                .point(ps("Select viewport to make active").no_ortho())
-                .await?;
+            let r = c.point(ps("Select viewport to make active").no_ortho()).await?;
             let Some(p) = r.pt() else { return Ok(()) };
             match c.ed(|e| e.viewport_at(p)) {
                 Some(id) => id,
@@ -511,34 +377,16 @@ async fn vpclip(c: Ctx, _args: Args) -> CmdResult<()> {
     if paper_space(&c, "VPCLIP").is_none() {
         return Ok(());
     }
-    let r = c
-        .entity(ps("Select viewport to clip").filter(is_viewport))
-        .await?;
+    let r = c.entity(ps("Select viewport to clip").filter(is_viewport)).await?;
     let Some(id) = r.id() else { return Ok(()) };
-    let k = c
-        .keyword(
-            ps("Select clipping object or [Delete/Polygonal]")
-                .options(&["Delete", "Polygonal", "Select"])
-                .default_str("Select")
-                .allow_enter(),
-        )
-        .await?;
+    let k = c.keyword(ps("Select clipping object or [Delete/Polygonal]").options(&["Delete", "Polygonal", "Select"]).default_str("Select").allow_enter()).await?;
     let poly: Option<Vec<Pt>> = match k.kw() {
         Some("Delete") => None,
         Some("Polygonal") => {
-            let Some(first) = c.point(ps("Specify start point")).await?.pt() else {
-                return Ok(());
-            };
+            let Some(first) = c.point(ps("Specify start point")).await?.pt() else { return Ok(()) };
             let mut pts = vec![first];
             loop {
-                let r = c
-                    .point(
-                        ps("Specify next point or [Close]")
-                            .options(&["Close"])
-                            .base(*pts.last().expect("point"))
-                            .allow_enter(),
-                    )
-                    .await?;
+                let r = c.point(ps("Specify next point or [Close]").options(&["Close"]).base(*pts.last().expect("point")).allow_enter()).await?;
                 match r {
                     PointR::Pt(p) => pts.push(p),
                     _ => break,
@@ -588,20 +436,11 @@ async fn vports(c: Ctx, _args: Args) -> CmdResult<()> {
         c.log_error("Tiled model-space viewports are not supported. Use a layout (VPORTS then creates floating viewports).");
         return Ok(());
     }
-    let r = c
-        .keyword(
-            ps("Enter an option [SIngle/2/3/4]")
-                .options(&["SIngle", "2", "3", "4"])
-                .default_str("3")
-                .allow_enter(),
-        )
-        .await?;
+    let r = c.keyword(ps("Enter an option [SIngle/2/3/4]").options(&["SIngle", "2", "3", "4"]).default_str("3").allow_enter()).await?;
     paper_space(&c, "VPORTS");
     match r.kw().unwrap_or("3") {
         "SIngle" => {
-            let p = c
-                .doc(|d| d.paper_of(&d.space).cloned())
-                .unwrap_or_else(|| Paper::named("A4", true));
+            let p = c.doc(|d| d.paper_of(&d.space).cloned()).unwrap_or_else(|| Paper::named("A4", true));
             c.add(Drawing::default_viewport(&p));
         }
         "2" => make_array(&c, 2).await?,
@@ -613,10 +452,7 @@ async fn vports(c: Ctx, _args: Args) -> CmdResult<()> {
 }
 
 fn parse_paper(name: &str) -> Option<&'static str> {
-    PAPERS
-        .iter()
-        .find(|p| p.eq_ignore_ascii_case(name.trim()))
-        .copied()
+    PAPERS.iter().find(|p| p.eq_ignore_ascii_case(name.trim())).copied()
 }
 
 async fn pagesetup(c: Ctx, args: Args) -> CmdResult<()> {
@@ -625,54 +461,27 @@ async fn pagesetup(c: Ctx, args: Args) -> CmdResult<()> {
         return Ok(());
     };
     if args.str("paper").is_none() && c.app(|a| a.ui.dialogs) {
-        c.app(|a| {
-            a.emit(Event::UiAction {
-                name: "PAGESETUP".into(),
-                args: Args::none(),
-            })
-        });
+        c.app(|a| a.emit(Event::UiAction { name: "PAGESETUP".into(), args: Args::none() }));
         return Ok(());
     }
     let paper = match args.str("paper").and_then(parse_paper) {
         Some(p) => p.to_string(),
         None => {
-            let cur = c.doc(|d| {
-                d.paper_of(&layout)
-                    .map(|p| p.name.clone())
-                    .unwrap_or_default()
-            });
-            let r = c
-                .keyword(
-                    ps("Enter paper size [A0/A1/A2/A3/A4/Letter/Legal/Tabloid/ANSI C]")
-                        .options(&PAPERS)
-                        .default_str(&cur)
-                        .allow_enter(),
-                )
-                .await?;
+            let cur = c.doc(|d| d.paper_of(&layout).map(|p| p.name.clone()).unwrap_or_default());
+            let r = c.keyword(ps("Enter paper size [A0/A1/A2/A3/A4/Letter/Legal/Tabloid/ANSI C]").options(&PAPERS).default_str(&cur).allow_enter()).await?;
             r.kw().and_then(parse_paper).unwrap_or("A4").to_string()
         }
     };
     let landscape = match args.str("orientation") {
         Some(o) => !o.eq_ignore_ascii_case("portrait"),
         None => {
-            let r = c
-                .keyword(
-                    ps("Enter drawing orientation [Landscape/Portrait]")
-                        .options(&["Landscape", "Portrait"])
-                        .default_str("Landscape")
-                        .allow_enter(),
-                )
-                .await?;
+            let r = c.keyword(ps("Enter drawing orientation [Landscape/Portrait]").options(&["Landscape", "Portrait"]).default_str("Landscape").allow_enter()).await?;
             r.kw() != Some("Portrait")
         }
     };
     c.doc_mut(|d| {
         d.change(|d| {
-            if let Some(l) = d
-                .layouts
-                .iter_mut()
-                .find(|l| l.name.eq_ignore_ascii_case(&layout))
-            {
+            if let Some(l) = d.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(&layout)) {
                 l.paper = Paper::named(&paper, landscape);
             }
         })
@@ -684,39 +493,13 @@ async fn pagesetup(c: Ctx, args: Args) -> CmdResult<()> {
 
 async fn layoutwizard(c: Ctx, _args: Args) -> CmdResult<()> {
     let dflt = next_name(&c);
-    let n = c
-        .string(ps("Enter a name for the new layout").default_str(&dflt))
-        .await?;
-    let name = if n.text.trim().is_empty() {
-        dflt
-    } else {
-        n.text
-    };
-    let p = c
-        .keyword(
-            ps("Enter paper size [A0/A1/A2/A3/A4/Letter/Legal/Tabloid/ANSI C]")
-                .options(&PAPERS)
-                .default_str("A4")
-                .allow_enter(),
-        )
-        .await?;
+    let n = c.string(ps("Enter a name for the new layout").default_str(&dflt)).await?;
+    let name = if n.text.trim().is_empty() { dflt } else { n.text };
+    let p = c.keyword(ps("Enter paper size [A0/A1/A2/A3/A4/Letter/Legal/Tabloid/ANSI C]").options(&PAPERS).default_str("A4").allow_enter()).await?;
     let paper = p.kw().and_then(parse_paper).unwrap_or("A4");
-    let o = c
-        .keyword(
-            ps("Enter drawing orientation [Landscape/Portrait]")
-                .options(&["Landscape", "Portrait"])
-                .default_str("Landscape")
-                .allow_enter(),
-        )
-        .await?;
+    let o = c.keyword(ps("Enter drawing orientation [Landscape/Portrait]").options(&["Landscape", "Portrait"]).default_str("Landscape").allow_enter()).await?;
     let landscape = o.kw() != Some("Portrait");
-    if let Err(m) = c.doc_mut(|d| {
-        d.add_layout(&name).map(|_| {
-            d.layouts
-                .last_mut()
-                .map(|l| l.paper = Paper::named(paper, landscape))
-        })
-    }) {
+    if let Err(m) = c.doc_mut(|d| d.add_layout(&name).map(|_| d.layouts.last_mut().map(|l| l.paper = Paper::named(paper, landscape)))) {
         c.log_error(&m);
         return Ok(());
     }
@@ -741,50 +524,12 @@ async fn layoutwizard(c: Ctx, _args: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(
-        def("Layout", "LAYOUT", run(layout))
-            .title("Layout")
-            .desc("Creates and modifies layout tabs.")
-            .icon("layout"),
-    );
-    r.define(
-        def("Layout", "MVIEW", run(mview))
-            .aliases(&["MV"])
-            .title("Viewport")
-            .desc("Creates and controls layout viewports.")
-            .icon("viewport"),
-    );
-    r.define(
-        def("Layout", "MSPACE", run(mspace))
-            .aliases(&["MS"])
-            .title("Model")
-            .desc("Switches from paper space to model space in a layout viewport.")
-            .icon("model"),
-    );
-    r.define(
-        def("Layout", "PSPACE", run(pspace))
-            .aliases(&["PS"])
-            .title("Paper")
-            .desc("Switches from model space in a layout viewport to paper space.")
-            .icon("paper"),
-    );
-    r.define(
-        def("Layout", "VPCLIP", run(vpclip))
-            .title("Clip Viewport")
-            .desc("Clips layout viewport objects and reshapes the viewport border.")
-            .icon("viewport"),
-    );
-    r.define(
-        def("Layout", "VPORTS", run(vports))
-            .title("Viewports")
-            .desc("Creates multiple viewports in a layout.")
-            .icon("viewport"),
-    );
+    r.define(def("Layout", "LAYOUT", run(layout)).title("Layout").desc("Creates and modifies layout tabs.").icon("layout"));
+    r.define(def("Layout", "MVIEW", run(mview)).aliases(&["MV"]).title("Viewport").desc("Creates and controls layout viewports.").icon("viewport"));
+    r.define(def("Layout", "MSPACE", run(mspace)).aliases(&["MS"]).title("Model").desc("Switches from paper space to model space in a layout viewport.").icon("model"));
+    r.define(def("Layout", "PSPACE", run(pspace)).aliases(&["PS"]).title("Paper").desc("Switches from model space in a layout viewport to paper space.").icon("paper"));
+    r.define(def("Layout", "VPCLIP", run(vpclip)).title("Clip Viewport").desc("Clips layout viewport objects and reshapes the viewport border.").icon("viewport"));
+    r.define(def("Layout", "VPORTS", run(vports)).title("Viewports").desc("Creates multiple viewports in a layout.").icon("viewport"));
     r.define(def("Layout", "PAGESETUP", run(pagesetup)).title("Page Setup").desc("Controls the page layout, plotting device, paper size and other settings for each new layout.").icon("plot"));
-    r.define(
-        def("Layout", "LAYOUTWIZARD", run(layoutwizard))
-            .title("Layout Wizard")
-            .desc("Creates a new layout tab and specifies page and plot settings.")
-            .icon("layout"),
-    );
+    r.define(def("Layout", "LAYOUTWIZARD", run(layoutwizard)).title("Layout Wizard").desc("Creates a new layout tab and specifies page and plot settings.").icon("layout"));
 }

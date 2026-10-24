@@ -2,10 +2,7 @@
 use cadforge_core::entities::Entity;
 use cadforge_core::geom::pt;
 fn main() {
-    let n: usize = std::env::args()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(100_000);
+    let n: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(100_000);
     let mut d = cadforge_core::drawing::Drawing::new("bench");
     for i in 0..n {
         let x = (i % 1000) as f64;

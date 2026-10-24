@@ -30,9 +30,7 @@ async fn select(c: Ctx, _a: Args) -> CmdResult<()> {
 
 // ---------------------------------------------------------------- FILTER
 
-const KINDS: &[&str] = &[
-    "Object", "Layer", "Color", "LType", "LWeight", "Name", "Text", "Radius",
-];
+const KINDS: &[&str] = &["Object", "Layer", "Color", "LType", "LWeight", "Name", "Text", "Radius"];
 const FILTER_KEY: &str = "_FILTERLIST";
 
 /// One entry of the filter list: `kind op value`.
@@ -48,27 +46,13 @@ fn load_list(c: &Ctx) -> Vec<Crit> {
         .lines()
         .filter_map(|l| {
             let mut f = l.split('\t');
-            Some(Crit {
-                kind: f.next()?.into(),
-                op: f.next()?.into(),
-                value: f.next()?.into(),
-            })
+            Some(Crit { kind: f.next()?.into(), op: f.next()?.into(), value: f.next()?.into() })
         })
         .collect()
 }
 
 fn store_list(c: &Ctx, list: &[Crit]) {
-    let text: Vec<String> = list
-        .iter()
-        .map(|k| {
-            format!(
-                "{}\t{}\t{}",
-                k.kind,
-                k.op,
-                k.value.replace(['\t', '\n'], " ")
-            )
-        })
-        .collect();
+    let text: Vec<String> = list.iter().map(|k| format!("{}\t{}\t{}", k.kind, k.op, k.value.replace(['\t', '\n'], " "))).collect();
     set_pref(c, FILTER_KEY, Value::Str(text.join("\n")));
 }
 
@@ -122,19 +106,9 @@ fn holds(k: &Crit, e: &Entity) -> bool {
     let eq = match k.kind.as_str() {
         "Object" => type_of(e) == k.value,
         "Layer" => wildcard_match(&k.value, if e.layer.is_empty() { "0" } else { &e.layer }),
-        "Color" => {
-            parse_color(&k.value).ok()
-                == Some(
-                    e.color
-                        .filter(|c| *c != cadforge_core::style::Color::ByLayer),
-                )
-        }
+        "Color" => parse_color(&k.value).ok() == Some(e.color.filter(|c| *c != cadforge_core::style::Color::ByLayer)),
         "LType" => {
-            let own = e
-                .ltype
-                .as_deref()
-                .filter(|l| !l.eq_ignore_ascii_case("BYLAYER"))
-                .unwrap_or("BYLAYER");
+            let own = e.ltype.as_deref().filter(|l| !l.eq_ignore_ascii_case("BYLAYER")).unwrap_or("BYLAYER");
             own.eq_ignore_ascii_case(ltype_key(&k.value).unwrap_or(&k.value))
         }
         "Name" => matches!(&e.kind, Kind::Insert(i) if wildcard_match(&k.value, &i.name)),
@@ -143,13 +117,7 @@ fn holds(k: &Crit, e: &Entity) -> bool {
             Kind::Leader { s, .. } => wildcard_match(&k.value, s),
             _ => false,
         },
-        "LWeight" => {
-            return matches!(e.lw, Some(w) if w >= 0)
-                && cmp(
-                    e.lw.unwrap_or(0) as f64,
-                    k.value.parse::<f64>().unwrap_or(f64::NAN) * 100.0,
-                )
-        }
+        "LWeight" => return matches!(e.lw, Some(w) if w >= 0) && cmp(e.lw.unwrap_or(0) as f64, k.value.parse::<f64>().unwrap_or(f64::NAN) * 100.0),
         _ => {
             let r = match &e.kind {
                 Kind::Circle { r, .. } | Kind::Arc { r, .. } => *r,
@@ -177,25 +145,16 @@ fn passes(list: &[Crit], e: &Entity) -> bool {
 fn check_value(kind: &str, value: &str) -> Result<String, String> {
     let v = value.trim();
     match kind {
-        "Object" => object_type(v)
-            .map(str::to_string)
-            .ok_or_else(|| format!("Unknown object type \"{v}\".")),
+        "Object" => object_type(v).map(str::to_string).ok_or_else(|| format!("Unknown object type \"{v}\".")),
         "Color" => parse_color(v).map(|_| v.to_string()),
         "LType" => {
             if v.eq_ignore_ascii_case("BYLAYER") || v.eq_ignore_ascii_case("BYBLOCK") {
                 Ok(v.to_uppercase())
             } else {
-                ltype_key(v)
-                    .map(str::to_string)
-                    .ok_or_else(|| format!("Linetype \"{v}\" not found."))
+                ltype_key(v).map(str::to_string).ok_or_else(|| format!("Linetype \"{v}\" not found."))
             }
         }
-        "LWeight" | "Radius" => v
-            .parse::<f64>()
-            .ok()
-            .filter(|x| x.is_finite())
-            .map(|_| v.to_string())
-            .ok_or_else(|| "Requires a numeric value.".into()),
+        "LWeight" | "Radius" => v.parse::<f64>().ok().filter(|x| x.is_finite()).map(|_| v.to_string()).ok_or_else(|| "Requires a numeric value.".into()),
         _ if v.is_empty() => Err("A value is required.".into()),
         _ => Ok(v.to_string()),
     }
@@ -204,52 +163,14 @@ fn check_value(kind: &str, value: &str) -> Result<String, String> {
 async fn filter(c: Ctx, _a: Args) -> CmdResult<()> {
     let mut list = load_list(&c);
     loop {
-        c.log(&format!(
-            "Filter list: {}",
-            if list.is_empty() {
-                "(empty)".to_string()
-            } else {
-                list.iter().map(show).collect::<Vec<_>>().join("; ")
-            }
-        ));
-        let r = c
-            .keyword(
-                ps("Enter filter option")
-                    .options(&[
-                        "ADd to list",
-                        "Delete",
-                        "Clear list",
-                        "List",
-                        "Apply",
-                        "eXit",
-                    ])
-                    .default_str("Apply"),
-            )
-            .await?;
+        c.log(&format!("Filter list: {}", if list.is_empty() { "(empty)".to_string() } else { list.iter().map(show).collect::<Vec<_>>().join("; ") }));
+        let r = c.keyword(ps("Enter filter option").options(&["ADd to list", "Delete", "Clear list", "List", "Apply", "eXit"]).default_str("Apply")).await?;
         match r.kw() {
             Some("ADd to list") => {
-                let Some(kind) = c
-                    .keyword(ps("Enter filter type").options(KINDS))
-                    .await?
-                    .kw()
-                    .map(str::to_string)
-                else {
-                    continue;
-                };
+                let Some(kind) = c.keyword(ps("Enter filter type").options(KINDS)).await?.kw().map(str::to_string) else { continue };
                 let numeric = matches!(kind.as_str(), "LWeight" | "Radius");
-                let ops: &[&str] = if numeric {
-                    &["=", "!=", "<", ">", "<=", ">="]
-                } else {
-                    &["=", "!="]
-                };
-                let Some(op) = c
-                    .keyword(ps("Enter operator").options(ops).default_str("="))
-                    .await?
-                    .kw()
-                    .map(str::to_string)
-                else {
-                    continue;
-                };
+                let ops: &[&str] = if numeric { &["=", "!=", "<", ">", "<=", ">="] } else { &["=", "!="] };
+                let Some(op) = c.keyword(ps("Enter operator").options(ops).default_str("=")).await?.kw().map(str::to_string) else { continue };
                 let what = match kind.as_str() {
                     "Object" => "Enter object type (Line, Circle, Arc, Polyline, Text, MText, Insert, Hatch...)",
                     "Layer" => "Enter layer name (wildcards allowed)",
@@ -276,17 +197,7 @@ async fn filter(c: Ctx, _a: Args) -> CmdResult<()> {
                     c.log_error("The filter list is empty.");
                     continue;
                 }
-                let n = c
-                    .number(
-                        ps(&format!(
-                            "Enter the number of the entry to delete (1-{})",
-                            list.len()
-                        ))
-                        .integer()
-                        .min(1.0)
-                        .max(list.len() as f64),
-                    )
-                    .await?;
+                let n = c.number(ps(&format!("Enter the number of the entry to delete (1-{})", list.len())).integer().min(1.0).max(list.len() as f64)).await?;
                 if let Some(i) = n.value() {
                     let gone = list.remove(i as usize - 1);
                     c.log(&format!("Deleted: {}", show(&gone)));
@@ -309,9 +220,7 @@ async fn filter(c: Ctx, _a: Args) -> CmdResult<()> {
                     continue;
                 }
                 let l2 = list.clone();
-                let sel = c
-                    .select(ps("Select objects").filter(move |e| passes(&l2, e)))
-                    .await?;
+                let sel = c.select(ps("Select objects").filter(move |e| passes(&l2, e))).await?;
                 if !sel.is_empty() {
                     c.ed(|e| e.sel = sel.ents.iter().copied().collect());
                     c.emit();
@@ -349,10 +258,7 @@ async fn multiple(c: Ctx, _a: Args) -> CmdResult<()> {
         })
         .await?;
         if !prompted {
-            c.log_error(&format!(
-                "{} does not wait for input, so it is not repeated.",
-                def.name
-            ));
+            c.log_error(&format!("{} does not wait for input, so it is not repeated.", def.name));
             return Ok(());
         }
     }
@@ -372,12 +278,7 @@ async fn groupedit(c: Ctx, _a: Args) -> CmdResult<()> {
         if r.kw() == Some("Name") {
             let n = c.string(ps("Enter group name")).await?.text;
             let want = n.trim().trim_start_matches('*').to_uppercase();
-            gid = c.doc(|d| {
-                d.entities()
-                    .iter()
-                    .filter_map(|e| e.grp.clone())
-                    .find(|g| group_name(g).trim_start_matches('*').to_uppercase() == want)
-            });
+            gid = c.doc(|d| d.entities().iter().filter_map(|e| e.grp.clone()).find(|g| group_name(g).trim_start_matches('*').to_uppercase() == want));
             if gid.is_none() {
                 c.log_error(&format!("Group \"{}\" not found.", n.trim()));
             }
@@ -392,14 +293,10 @@ async fn groupedit(c: Ctx, _a: Args) -> CmdResult<()> {
     }
     let gid = gid.expect("a group was chosen");
     loop {
-        let r = c
-            .keyword(ps("Enter a group option").options(&["Add objects", "Remove objects"]))
-            .await?;
+        let r = c.keyword(ps("Enter a group option").options(&["Add objects", "Remove objects"])).await?;
         match r.kw() {
             Some("Add objects") => {
-                let sel = c
-                    .select(ps("Select objects to add to group").pickfirst(false))
-                    .await?;
+                let sel = c.select(ps("Select objects to add to group").pickfirst(false)).await?;
                 let n = sel.ents.len();
                 c.doc_mut(|d| {
                     d.change(|d| {
@@ -410,20 +307,11 @@ async fn groupedit(c: Ctx, _a: Args) -> CmdResult<()> {
                         }
                     })
                 });
-                c.log(&format!(
-                    "{n} object(s) added to group {}.",
-                    group_name(&gid)
-                ));
+                c.log(&format!("{n} object(s) added to group {}.", group_name(&gid)));
             }
             Some("Remove objects") => loop {
                 let g = gid.clone();
-                let r = c
-                    .entity(
-                        ps("Select objects to remove from group")
-                            .allow_enter()
-                            .filter(move |e| e.grp.as_deref() == Some(g.as_str())),
-                    )
-                    .await?;
+                let r = c.entity(ps("Select objects to remove from group").allow_enter().filter(move |e| e.grp.as_deref() == Some(g.as_str()))).await?;
                 let Some(id) = r.id() else { break };
                 c.doc_mut(|d| {
                     d.change(|d| {
@@ -432,10 +320,7 @@ async fn groupedit(c: Ctx, _a: Args) -> CmdResult<()> {
                         }
                     })
                 });
-                c.log(&format!(
-                    "1 object removed from group {}.",
-                    group_name(&gid)
-                ));
+                c.log(&format!("1 object removed from group {}.", group_name(&gid)));
             },
             _ => return Ok(()),
         }
@@ -457,12 +342,7 @@ async fn groups(c: Ctx, _a: Args) -> CmdResult<()> {
         c.log("No groups are defined.");
     }
     for (g, members) in &found {
-        c.log(&format!(
-            "{}: {} object(s) - {}",
-            group_name(g),
-            members.len(),
-            members.join(", ")
-        ));
+        c.log(&format!("{}: {} object(s) - {}", group_name(g), members.len(), members.join(", ")));
     }
     Ok(())
 }
@@ -470,24 +350,7 @@ async fn groups(c: Ctx, _a: Args) -> CmdResult<()> {
 pub fn register(r: &mut Registry) {
     r.define(dsel("SELECT", run(select)).title("Select").icon("cursor").desc("Places selected objects in the Previous selection set and keeps them selected for the next command."));
     r.define(dsel("FILTER", run(filter)).aliases(&["FI"]).title("Filter").icon("qselect").desc("Creates a list of requirements that an object must meet to be included in a selection set (command-line form of the Object Selection Filters dialog)."));
-    r.define(
-        dm("MULTIPLE", run(multiple))
-            .title("Multiple")
-            .desc("Repeats the next command until you cancel it.")
-            .no_pickfirst(),
-    );
-    r.define(
-        crate::commands::def("Blocks", "GROUPEDIT", run(groupedit))
-            .title("Edit Group")
-            .icon("group")
-            .desc("Adds objects to and removes objects from a group.")
-            .no_pickfirst(),
-    );
-    r.define(
-        crate::commands::def("Blocks", "GROUPS", run(groups))
-            .title("Groups")
-            .icon("group")
-            .desc("Lists the groups defined in the drawing.")
-            .no_pickfirst(),
-    );
+    r.define(dm("MULTIPLE", run(multiple)).title("Multiple").desc("Repeats the next command until you cancel it.").no_pickfirst());
+    r.define(crate::commands::def("Blocks", "GROUPEDIT", run(groupedit)).title("Edit Group").icon("group").desc("Adds objects to and removes objects from a group.").no_pickfirst());
+    r.define(crate::commands::def("Blocks", "GROUPS", run(groups)).title("Groups").icon("group").desc("Lists the groups defined in the drawing.").no_pickfirst());
 }

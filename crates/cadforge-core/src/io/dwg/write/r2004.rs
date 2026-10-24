@@ -41,11 +41,7 @@ pub fn crc32(data: &[u8]) -> u32 {
     for &b in data {
         c ^= b as u32;
         for _ in 0..8 {
-            c = if c & 1 != 0 {
-                (c >> 1) ^ 0xEDB8_8320
-            } else {
-                c >> 1
-            };
+            c = if c & 1 != 0 { (c >> 1) ^ 0xEDB8_8320 } else { c >> 1 };
         }
     }
     !c
@@ -60,12 +56,7 @@ pub fn compress(src: &[u8]) -> Vec<u8> {
     let n = src.len();
     let mut head = vec![usize::MAX; HASH];
     let mut prev = vec![usize::MAX; n];
-    let hash = |i: usize| {
-        ((src[i] as usize) << 8 ^ (src[i + 1] as usize) << 4 ^ src[i + 2] as usize)
-            .wrapping_mul(2654435761)
-            >> 7
-            & (HASH - 1)
-    };
+    let hash = |i: usize| ((src[i] as usize) << 8 ^ (src[i + 1] as usize) << 4 ^ src[i + 2] as usize).wrapping_mul(2654435761) >> 7 & (HASH - 1);
     let insert = |i: usize, head: &mut Vec<usize>, prev: &mut Vec<usize>| {
         if i + 3 <= n {
             let h = hash(i);
@@ -126,11 +117,7 @@ pub fn compress(src: &[u8]) -> Vec<u8> {
             Some(nx) => (nx.0, nx.1),
             None => (t.0 + t.1 + len, n - (t.0 + t.1 + len)),
         };
-        let bits = if (1..=3).contains(&after_len) {
-            after_len as u8
-        } else {
-            0
-        };
+        let bits = if (1..=3).contains(&after_len) { after_len as u8 } else { 0 };
         if (3..=14).contains(&len) && off <= 0x400 {
             out.push((((len + 1) << 4) | (((off - 1) & 3) << 2)) as u8 | bits);
             out.push(((off - 1) >> 2) as u8);
@@ -200,24 +187,9 @@ pub fn assemble(sections: &[Section], maint: u8) -> Vec<u8> {
     let mut descs: Vec<Desc> = vec![];
     for (k, s) in sections.iter().enumerate() {
         let id = n - k as u32; // the first section written has the highest id
-        let max = if s.compressed {
-            0x7400
-        } else {
-            s.data.len().max(1).div_ceil(0x100) as u32 * 0x100
-        };
-        let mut d = Desc {
-            name: s.name,
-            size: s.data.len() as u64,
-            max,
-            compressed: s.compressed,
-            id,
-            pages: vec![],
-        };
-        let chunks: Vec<&[u8]> = if s.data.is_empty() {
-            vec![&[][..]]
-        } else {
-            s.data.chunks(max as usize).collect()
-        };
+        let max = if s.compressed { 0x7400 } else { s.data.len().max(1).div_ceil(0x100) as u32 * 0x100 };
+        let mut d = Desc { name: s.name, size: s.data.len() as u64, max, compressed: s.compressed, id, pages: vec![] };
+        let chunks: Vec<&[u8]> = if s.data.is_empty() { vec![&[][..]] } else { s.data.chunks(max as usize).collect() };
         for (c, chunk) in chunks.iter().enumerate() {
             let mut raw = chunk.to_vec();
             raw.resize(max as usize, 0);
@@ -249,11 +221,7 @@ pub fn assemble(sections: &[Section], maint: u8) -> Vec<u8> {
             let pad = page_size - 32 - body.len();
             f.extend_from_slice(&magic[..pad]);
             let number = pages.len() as u32 + 1;
-            pages.push(Page {
-                number,
-                at,
-                size: page_size,
-            });
+            pages.push(Page { number, at, size: page_size });
             d.pages.push((number, body.len() as u32, offset));
         }
         descs.push(d);
@@ -264,24 +232,10 @@ pub fn assemble(sections: &[Section], maint: u8) -> Vec<u8> {
     for v in [ndesc, 2, 0x7400, 0, ndesc] {
         sm.extend_from_slice(&v.to_le_bytes());
     }
-    let empty = Desc {
-        name: "",
-        size: 0,
-        max: 0x7400,
-        compressed: true,
-        id: 0,
-        pages: vec![],
-    };
+    let empty = Desc { name: "", size: 0, max: 0x7400, compressed: true, id: 0, pages: vec![] };
     for d in std::iter::once(&empty).chain(descs.iter()) {
         sm.extend_from_slice(&d.size.to_le_bytes());
-        for v in [
-            d.pages.len() as u32,
-            d.max,
-            1,
-            if d.compressed { 2 } else { 1 },
-            d.id,
-            0,
-        ] {
+        for v in [d.pages.len() as u32, d.max, 1, if d.compressed { 2 } else { 1 }, d.id, 0] {
             sm.extend_from_slice(&v.to_le_bytes());
         }
         let mut name = [0u8; 64];
@@ -314,11 +268,7 @@ pub fn assemble(sections: &[Section], maint: u8) -> Vec<u8> {
     };
     let sm_at = system_page(&mut f, 0x4163_003B, &sm);
     let sm_number = pages.len() as u32 + 1;
-    pages.push(Page {
-        number: sm_number,
-        at: sm_at,
-        size: f.len() - sm_at,
-    });
+    pages.push(Page { number: sm_number, at: sm_at, size: f.len() - sm_at });
     // page map: every page with its size, this one included (its size is known only once written, so it is
     // reserved generously: it is the last page, its size only gives the end of the paged area)
     let pm_number = pages.len() as u32 + 1;
@@ -371,12 +321,7 @@ pub fn assemble(sections: &[Section], maint: u8) -> Vec<u8> {
     f.extend_from_slice(&h);
     // the plain start of the file
     let seek = |name: &str| -> u32 {
-        descs
-            .iter()
-            .find(|d| d.name == name)
-            .and_then(|d| d.pages.first())
-            .and_then(|p| pages.iter().find(|q| q.number == p.0))
-            .map_or(0, |q| q.at as u32 + 0x20)
+        descs.iter().find(|d| d.name == name).and_then(|d| d.pages.first()).and_then(|p| pages.iter().find(|q| q.number == p.0)).map_or(0, |q| q.at as u32 + 0x20)
     };
     let mut head = vec![];
     head.extend_from_slice(b"AC1018");
@@ -413,43 +358,15 @@ mod tests {
             seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
             (seed >> 16) as u8
         };
-        let mut cases: Vec<Vec<u8>> = vec![
-            vec![],
-            vec![1],
-            vec![1, 2],
-            vec![1, 2, 3],
-            vec![9; 5],
-            vec![0; 0x7400],
-            (0..=255u8).collect(),
-        ];
+        let mut cases: Vec<Vec<u8>> = vec![vec![], vec![1], vec![1, 2], vec![1, 2, 3], vec![9; 5], vec![0; 0x7400], (0..=255u8).collect()];
         cases.push((0..5000).map(|i| (i % 7) as u8).collect());
         cases.push((0..0x7400).map(|_| rnd()).collect());
-        cases.push(
-            (0..0x7400)
-                .map(|i| {
-                    if i % 97 < 60 {
-                        b'a' + (i % 13) as u8
-                    } else {
-                        rnd()
-                    }
-                })
-                .collect(),
-        );
-        let text: Vec<u8> = b"LINE 10 20 30 CIRCLE 40 50 LINE 10 20 31 "
-            .iter()
-            .cycle()
-            .take(20000)
-            .copied()
-            .collect();
+        cases.push((0..0x7400).map(|i| if i % 97 < 60 { b'a' + (i % 13) as u8 } else { rnd() }).collect());
+        let text: Vec<u8> = b"LINE 10 20 30 CIRCLE 40 50 LINE 10 20 31 ".iter().cycle().take(20000).copied().collect();
         cases.push(text);
         for c in &cases {
             let z = compress(c);
-            assert_eq!(
-                decompress18(&z, c.len() + 16).unwrap(),
-                *c,
-                "{} bytes",
-                c.len()
-            );
+            assert_eq!(decompress18(&z, c.len() + 16).unwrap(), *c, "{} bytes", c.len());
         }
         // compressible data shrinks
         assert!(compress(&cases[7]).len() < 200);
@@ -459,28 +376,16 @@ mod tests {
     #[test]
     fn checksums_match_autocad() {
         // the file header of AutoCAD's 2004 sample: its CRC-32 is computed with the CRC field zeroed
-        let d = std::fs::read(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/dwg/samples/sample_AC1018.dwg"
-        ))
-        .unwrap();
+        let d = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dwg/samples/sample_AC1018.dwg")).unwrap();
         let m = magic();
-        let mut h: Vec<u8> = d[0x80..0xEC]
-            .iter()
-            .zip(m.iter())
-            .map(|(a, b)| a ^ b)
-            .collect();
+        let mut h: Vec<u8> = d[0x80..0xEC].iter().zip(m.iter()).map(|(a, b)| a ^ b).collect();
         let stored = u32::from_le_bytes([h[0x68], h[0x69], h[0x6A], h[0x6B]]);
         h[0x68..0x6C].fill(0);
         assert_eq!(crc32(&h), stored);
         // a data page: the header checksum of AutoCAD's Header page (page 54 at 1094720, see the page map)
         let at = 1_095_008usize;
         let mask = (0x4164_536B_u32 ^ at as u32).to_le_bytes();
-        let hdr: Vec<u8> = d[at..at + 32]
-            .iter()
-            .enumerate()
-            .map(|(i, b)| b ^ mask[i % 4])
-            .collect();
+        let hdr: Vec<u8> = d[at..at + 32].iter().enumerate().map(|(i, b)| b ^ mask[i % 4]).collect();
         let field = |k: usize| u32::from_le_bytes([hdr[k], hdr[k + 1], hdr[k + 2], hdr[k + 3]]);
         let size = field(8) as usize;
         let data_sum = checksum(0, &d[at + 32..at + 32 + size]);

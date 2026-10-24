@@ -51,11 +51,7 @@ pub fn planar_edges(segs: &[Seg]) -> Vec<Seg> {
     for (i, s) in segs.iter().enumerate() {
         if s.is_full() {
             // a closed circle needs a node even without intersections
-            let ts = if cuts[i].is_empty() {
-                vec![0.0]
-            } else {
-                cuts[i].clone()
-            };
+            let ts = if cuts[i].is_empty() { vec![0.0] } else { cuts[i].clone() };
             let mut sorted: Vec<f64> = ts.iter().map(|t| (t * 1e9).round() / 1e9).collect();
             sorted.sort_by(|a, b| a.total_cmp(b));
             sorted.dedup();
@@ -66,11 +62,7 @@ pub fn planar_edges(segs: &[Seg]) -> Vec<Seg> {
             }
             for k in 0..sorted.len() {
                 let t0 = sorted[k];
-                let t1 = if k + 1 < sorted.len() {
-                    sorted[k + 1]
-                } else {
-                    sorted[0] + 1.0
-                };
+                let t1 = if k + 1 < sorted.len() { sorted[k + 1] } else { sorted[0] + 1.0 };
                 out.push(s.slice(t0, t1));
             }
             continue;
@@ -102,13 +94,7 @@ fn round_js(x: f64) -> i64 {
 
 impl Graph {
     fn new(edges: &[Seg]) -> Graph {
-        let mut g = Graph {
-            nodes: vec![],
-            key_map: HashMap::new(),
-            half: vec![],
-            out: vec![],
-            alive: vec![],
-        };
+        let mut g = Graph { nodes: vec![], key_map: HashMap::new(), half: vec![], out: vec![], alive: vec![] };
         for e in edges {
             let a = g.node(e.start());
             let b = g.node(e.end());
@@ -120,20 +106,8 @@ impl Graph {
                 }
             }
             let i = g.half.len();
-            g.half.push(Half {
-                from: a,
-                to: b,
-                seg: *e,
-                twin: i + 1,
-                angle: 0.0,
-            });
-            g.half.push(Half {
-                from: b,
-                to: a,
-                seg: e.reverse(),
-                twin: i,
-                angle: 0.0,
-            });
+            g.half.push(Half { from: a, to: b, seg: *e, twin: i + 1, angle: 0.0 });
+            g.half.push(Half { from: b, to: a, seg: e.reverse(), twin: i, angle: 0.0 });
         }
         g.out = vec![vec![]; g.nodes.len()];
         for (id, h) in g.half.iter().enumerate() {
@@ -150,16 +124,7 @@ impl Graph {
         let k = (round_js(p.x / TOL), round_js(p.y / TOL));
         let mut id = self.key_map.get(&k).copied();
         if id.is_none() {
-            for (dx, dy) in [
-                (1, 0),
-                (-1, 0),
-                (0, 1),
-                (0, -1),
-                (1, 1),
-                (-1, -1),
-                (1, -1),
-                (-1, 1),
-            ] {
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)] {
                 if let Some(&near) = self.key_map.get(&(k.0 + dx, k.1 + dy)) {
                     if dist(self.nodes[near], p) < TOL * 2.0 {
                         id = Some(near);
@@ -180,19 +145,13 @@ impl Graph {
     fn prune(&mut self) {
         let mut alive = vec![true; self.half.len()];
         let mut deg: Vec<i64> = self.out.iter().map(|o| o.len() as i64).collect();
-        let mut queue: Vec<usize> = deg
-            .iter()
-            .enumerate()
-            .filter(|(_, d)| **d == 1)
-            .map(|(n, _)| n)
-            .collect();
+        let mut queue: Vec<usize> = deg.iter().enumerate().filter(|(_, d)| **d == 1).map(|(n, _)| n).collect();
         while let Some(n) = queue.pop() {
             for &hid in &self.out[n] {
                 if !alive[hid] {
                     continue;
                 }
-                let (from, to, twin) =
-                    (self.half[hid].from, self.half[hid].to, self.half[hid].twin);
+                let (from, to, twin) = (self.half[hid].from, self.half[hid].to, self.half[hid].twin);
                 alive[hid] = false;
                 alive[twin] = false;
                 deg[from] -= 1;
@@ -264,21 +223,11 @@ pub struct Region {
 pub fn find_region(doc: &Drawing, p: Pt, entities: Option<&[&Entity]>) -> Result<Region, String> {
     let list: Vec<&Entity> = match entities {
         Some(l) => l.to_vec(),
-        None => doc
-            .entities()
-            .iter()
-            .filter(|e| doc.is_visible(e))
-            .collect(),
+        None => doc.entities().iter().filter(|e| doc.is_visible(e)).collect(),
     };
     let segs: Vec<Seg> = list
         .iter()
-        .flat_map(|e| {
-            if matches!(e.kind, Kind::Hatch(_)) {
-                vec![]
-            } else {
-                edge_segs(e, doc)
-            }
-        })
+        .flat_map(|e| if matches!(e.kind, Kind::Hatch(_)) { vec![] } else { edge_segs(e, doc) })
         .filter(|s| !matches!(s, Seg::L { a, .. } if a.x.abs() > 5e5))
         .collect();
     if segs.len() > MAX_SEGS {
@@ -303,13 +252,9 @@ pub fn find_region(doc: &Drawing, p: Pt, entities: Option<&[&Entity]>) -> Result
             Cyc { c, poly, area }
         })
         .collect();
-    let mut enclosing: Vec<usize> = (0..cycles.len())
-        .filter(|&i| cycles[i].area > 1e-9 && point_in_polygon(p, &cycles[i].poly))
-        .collect();
+    let mut enclosing: Vec<usize> = (0..cycles.len()).filter(|&i| cycles[i].area > 1e-9 && point_in_polygon(p, &cycles[i].poly)).collect();
     enclosing.sort_by(|&a, &b| cycles[a].area.total_cmp(&cycles[b].area));
-    let Some(&outer) = enclosing.first() else {
-        return Err("Unable to determine a valid closed boundary at that point.".into());
-    };
+    let Some(&outer) = enclosing.first() else { return Err("Unable to determine a valid closed boundary at that point.".into()) };
     // component id for each node, to exclude the outer's own component from islands
     let mut comp = vec![-1i64; graph.nodes.len()];
     let mut cid = 0;

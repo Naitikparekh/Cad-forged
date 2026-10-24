@@ -67,27 +67,12 @@ fn rotate_typed_angle_and_copy_scale_and_mirror() {
     near(ab(&s.ent(0)).1.y, 10.);
     s.cmd("SC").click(0., 5.).enter().click(0., 0.).ty("2.5");
     near(ab(&s.ent(0)).1.y, 25.);
-    s.cmd("MI")
-        .click(0., 12.)
-        .enter()
-        .click(0., 0.)
-        .click(10., 0.)
-        .ty("n");
+    s.cmd("MI").click(0., 12.).enter().click(0., 0.).click(10., 0.).ty("n");
     assert_eq!(s.n(), 2);
     near(ab(&s.ent(1)).1.y, -25.);
-    s.cmd("MI")
-        .click(0., 12.)
-        .enter()
-        .click(0., 0.)
-        .click(10., 0.)
-        .ty("y");
+    s.cmd("MI").click(0., 12.).enter().click(0., 0.).click(10., 0.).ty("y");
     assert_eq!(s.n(), 2);
-    s.cmd("RO")
-        .click(0., -12.)
-        .enter()
-        .click(0., 0.)
-        .ty("c")
-        .ty("90");
+    s.cmd("RO").click(0., -12.).enter().click(0., 0.).ty("c").ty("90");
     assert_eq!(s.n(), 3);
 }
 
@@ -116,12 +101,7 @@ fn trim_and_extend_with_cutting_edges() {
     s.click(6., 0.).enter();
     assert!(!s.busy());
     assert_eq!(s.n(), 4); // middle piece removed: line splits in two
-    let horiz = |s: &Sim| {
-        s.ents()
-            .into_iter()
-            .filter(|e| matches!(e.kind, Kind::Line { a, b } if a.y == 0. && b.y == 0.))
-            .collect::<Vec<_>>()
-    };
+    let horiz = |s: &Sim| s.ents().into_iter().filter(|e| matches!(e.kind, Kind::Line { a, b } if a.y == 0. && b.y == 0.)).collect::<Vec<_>>();
     assert_eq!(horiz(&s).len(), 2);
     s.cmd("EX").enter();
     s.click(3.5, 0.).enter();
@@ -158,10 +138,7 @@ fn fillet_and_chamfer_between_two_lines_polyline_fillet() {
     near(ab(&t.ent(2)).0.x, 2.);
     near(ab(&t.ent(2)).1.y, 3.);
     let u = Sim::new();
-    u.add(Entity::pline_pts(
-        &[p(0., 0.), p(10., 0.), p(10., 10.), p(0., 10.)],
-        true,
-    ));
+    u.add(Entity::pline_pts(&[p(0., 0.), p(10., 0.), p(10., 10.), p(0., 10.)], true));
     u.doc_mut(|d| d.settings.fillet_radius = 1.0);
     u.cmd("F").ty("p").click(5., 0.);
     assert!(!u.busy());
@@ -216,10 +193,7 @@ fn break_join_and_explode() {
     assert!(!s.busy());
     assert_eq!(s.n(), 2); // gap remains: cannot join disconnected lines
     let t = Sim::new();
-    t.add(Entity::pline_pts(
-        &[p(0., 0.), p(10., 0.), p(10., 10.)],
-        false,
-    ));
+    t.add(Entity::pline_pts(&[p(0., 0.), p(10., 0.), p(10., 10.)], false));
     t.cmd("X").click(5., 0.).enter();
     assert!(!t.busy());
     assert_eq!(t.n(), 2);

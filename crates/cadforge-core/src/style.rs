@@ -1,10 +1,10 @@
 //! Colors (AutoCAD Color Index + true color), linetypes, lineweights, default styles and number formatting
 //! (port of `src/core/style.js`).
-use crate::defs::LinetypeDef;
 use indexmap::IndexMap;
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
+use crate::defs::LinetypeDef;
 use std::sync::{Mutex, OnceLock};
 
 // ---------------------------------------------------------------- colors
@@ -76,13 +76,8 @@ impl<'de> Deserialize<'de> for Color {
     }
 }
 
-const STD: [&str; 10] = [
-    "#000000", "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff", "#ffffff",
-    "#808080", "#c0c0c0",
-];
-const GRAYS: [&str; 6] = [
-    "#333333", "#505050", "#696969", "#828282", "#bebebe", "#ffffff",
-];
+const STD: [&str; 10] = ["#000000", "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff", "#ffffff", "#808080", "#c0c0c0"];
+const GRAYS: [&str; 6] = ["#333333", "#505050", "#696969", "#828282", "#bebebe", "#ffffff"];
 
 fn hsv(h: f64, s: f64, v: f64) -> String {
     let c = v * s;
@@ -197,20 +192,14 @@ fn darken_for_light(c: [u8; 3]) -> [u8; 3] {
         return c;
     }
     let k = 0.5 / l;
-    [
-        (c[0] as f64 * k).round() as u8,
-        (c[1] as f64 * k).round() as u8,
-        (c[2] as f64 * k).round() as u8,
-    ]
+    [(c[0] as f64 * k).round() as u8, (c[1] as f64 * k).round() as u8, (c[2] as f64 * k).round() as u8]
 }
 
 pub fn describe_color(c: Option<Color>) -> String {
     match c {
         None | Some(Color::ByLayer) => "ByLayer".into(),
         Some(Color::ByBlock) => "ByBlock".into(),
-        Some(Color::Aci(i)) => aci_name(i)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| i.to_string()),
+        Some(Color::Aci(i)) => aci_name(i).map(|s| s.to_string()).unwrap_or_else(|| i.to_string()),
         Some(c @ Color::Rgb(..)) => c.rgb_hex().unwrap().to_uppercase(),
     }
 }
@@ -226,201 +215,45 @@ pub struct LineType {
 
 /// The standard linetype library (acad.lin): dash lengths in drawing units at LTSCALE 1, negative = gap, 0 = dot.
 pub const LINETYPES: &[LineType] = &[
-    LineType {
-        name: "Continuous",
-        desc: "Solid line",
-        pattern: &[],
-    },
-    LineType {
-        name: "BORDER",
-        desc: "Border __ __ . __ __ . __ __ . __ __ . __ __ .",
-        pattern: &[0.5, -0.25, 0.5, -0.25, 0.0, -0.25],
-    },
-    LineType {
-        name: "BORDER2",
-        desc: "Border (.5x) __.__.__.__.__.__.__.__.__.__.__.",
-        pattern: &[0.25, -0.125, 0.25, -0.125, 0.0, -0.125],
-    },
-    LineType {
-        name: "BORDERX2",
-        desc: "Border (2x) ____  ____  .  ____  ____  .  ___",
-        pattern: &[1.0, -0.5, 1.0, -0.5, 0.0, -0.5],
-    },
-    LineType {
-        name: "CENTER",
-        desc: "Center ____ _ ____ _ ____ _ ____ _ ____ _ ____",
-        pattern: &[1.25, -0.25, 0.25, -0.25],
-    },
-    LineType {
-        name: "CENTER2",
-        desc: "Center (.5x) ___ _ ___ _ ___ _ ___ _ ___ _ ___",
-        pattern: &[0.75, -0.125, 0.125, -0.125],
-    },
-    LineType {
-        name: "CENTERX2",
-        desc: "Center (2x) ________  __  ________  __  _____",
-        pattern: &[2.5, -0.5, 0.5, -0.5],
-    },
-    LineType {
-        name: "DASHDOT",
-        desc: "Dash dot __ . __ . __ . __ . __ . __ . __ . __",
-        pattern: &[0.5, -0.25, 0.0, -0.25],
-    },
-    LineType {
-        name: "DASHDOT2",
-        desc: "Dash dot (.5x) _._._._._._._._._._._._._._._.",
-        pattern: &[0.25, -0.125, 0.0, -0.125],
-    },
-    LineType {
-        name: "DASHDOTX2",
-        desc: "Dash dot (2x) ____  .  ____  .  ____  .  ___",
-        pattern: &[1.0, -0.5, 0.0, -0.5],
-    },
-    LineType {
-        name: "DASHED",
-        desc: "Dashed __ __ __ __ __ __ __ __ __ __ __ __ __ _",
-        pattern: &[0.5, -0.25],
-    },
-    LineType {
-        name: "DASHED2",
-        desc: "Dashed (.5x) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _",
-        pattern: &[0.25, -0.125],
-    },
-    LineType {
-        name: "DASHEDX2",
-        desc: "Dashed (2x) ____  ____  ____  ____  ____  ___",
-        pattern: &[1.0, -0.5],
-    },
-    LineType {
-        name: "DIVIDE",
-        desc: "Divide ____ . . ____ . . ____ . . ____ . . ____",
-        pattern: &[0.5, -0.25, 0.0, -0.25, 0.0, -0.25],
-    },
-    LineType {
-        name: "DIVIDE2",
-        desc: "Divide (.5x) __..__..__..__..__..__..__..__.._",
-        pattern: &[0.25, -0.125, 0.0, -0.125, 0.0, -0.125],
-    },
-    LineType {
-        name: "DIVIDEX2",
-        desc: "Divide (2x) ________  .  .  ________  .  .  _",
-        pattern: &[1.0, -0.5, 0.0, -0.5, 0.0, -0.5],
-    },
-    LineType {
-        name: "DOT",
-        desc: "Dot . . . . . . . . . . . . . . . . . . . . . .",
-        pattern: &[0.0, -0.25],
-    },
-    LineType {
-        name: "DOT2",
-        desc: "Dot (.5x) .....................................",
-        pattern: &[0.0, -0.125],
-    },
-    LineType {
-        name: "DOTX2",
-        desc: "Dot (2x) .  .  .  .  .  .  .  .  .  .  .  .  .",
-        pattern: &[0.0, -0.5],
-    },
-    LineType {
-        name: "HIDDEN",
-        desc: "Hidden __ __ __ __ __ __ __ __ __ __ __ __ __ __",
-        pattern: &[0.25, -0.125],
-    },
-    LineType {
-        name: "HIDDEN2",
-        desc: "Hidden (.5x) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _",
-        pattern: &[0.125, -0.0625],
-    },
-    LineType {
-        name: "HIDDENX2",
-        desc: "Hidden (2x) ____ ____ ____ ____ ____ ____ ____",
-        pattern: &[0.5, -0.25],
-    },
-    LineType {
-        name: "PHANTOM",
-        desc: "Phantom ______  __  __  ______  __  __  ______",
-        pattern: &[1.25, -0.25, 0.25, -0.25, 0.25, -0.25],
-    },
-    LineType {
-        name: "PHANTOM2",
-        desc: "Phantom (.5x) ___ _ _ ___ _ _ ___ _ _ ___ _ _ ___",
-        pattern: &[0.625, -0.125, 0.125, -0.125, 0.125, -0.125],
-    },
-    LineType {
-        name: "PHANTOMX2",
-        desc: "Phantom (2x) ____________    ____    ____    _",
-        pattern: &[2.5, -0.5, 0.5, -0.5, 0.5, -0.5],
-    },
-    LineType {
-        name: "ACAD_ISO02W100",
-        desc: "ISO dash __ __ __ __ __ __ __ __ __ __ __ __ __",
-        pattern: &[12.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO03W100",
-        desc: "ISO dash space __    __    __    __    __    __",
-        pattern: &[12.0, -18.0],
-    },
-    LineType {
-        name: "ACAD_ISO04W100",
-        desc: "ISO long-dash dot ____ . ____ . ____ . ____ . _",
-        pattern: &[24.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO05W100",
-        desc: "ISO long-dash double-dot ____ .. ____ .. ____ .",
-        pattern: &[24.0, -3.0, 0.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO06W100",
-        desc: "ISO long-dash triple-dot ____ ... ____ ... ____",
-        pattern: &[24.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO07W100",
-        desc: "ISO dot . . . . . . . . . . . . . . . . . . . .",
-        pattern: &[0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO08W100",
-        desc: "ISO long-dash short-dash ____ __ ____ __ ____ _",
-        pattern: &[24.0, -3.0, 6.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO09W100",
-        desc: "ISO long-dash double-short-dash ____ __ __ ____",
-        pattern: &[24.0, -3.0, 6.0, -3.0, 6.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO10W100",
-        desc: "ISO dash dot __ . __ . __ . __ . __ . __ . __ .",
-        pattern: &[12.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO11W100",
-        desc: "ISO double-dash dot __ __ . __ __ . __ __ . __ _",
-        pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO12W100",
-        desc: "ISO dash double-dot __ . . __ . . __ . . __ . .",
-        pattern: &[12.0, -3.0, 0.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO13W100",
-        desc: "ISO double-dash double-dot __ __ . . __ __ . . _",
-        pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO14W100",
-        desc: "ISO dash triple-dot __ . . . __ . . . __ . . . _",
-        pattern: &[12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0],
-    },
-    LineType {
-        name: "ACAD_ISO15W100",
-        desc: "ISO double-dash triple-dot __ __ . . . __ __ . .",
-        pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0],
-    },
+    LineType { name: "Continuous", desc: "Solid line", pattern: &[] },
+    LineType { name: "BORDER", desc: "Border __ __ . __ __ . __ __ . __ __ . __ __ .", pattern: &[0.5, -0.25, 0.5, -0.25, 0.0, -0.25] },
+    LineType { name: "BORDER2", desc: "Border (.5x) __.__.__.__.__.__.__.__.__.__.__.", pattern: &[0.25, -0.125, 0.25, -0.125, 0.0, -0.125] },
+    LineType { name: "BORDERX2", desc: "Border (2x) ____  ____  .  ____  ____  .  ___", pattern: &[1.0, -0.5, 1.0, -0.5, 0.0, -0.5] },
+    LineType { name: "CENTER", desc: "Center ____ _ ____ _ ____ _ ____ _ ____ _ ____", pattern: &[1.25, -0.25, 0.25, -0.25] },
+    LineType { name: "CENTER2", desc: "Center (.5x) ___ _ ___ _ ___ _ ___ _ ___ _ ___", pattern: &[0.75, -0.125, 0.125, -0.125] },
+    LineType { name: "CENTERX2", desc: "Center (2x) ________  __  ________  __  _____", pattern: &[2.5, -0.5, 0.5, -0.5] },
+    LineType { name: "DASHDOT", desc: "Dash dot __ . __ . __ . __ . __ . __ . __ . __", pattern: &[0.5, -0.25, 0.0, -0.25] },
+    LineType { name: "DASHDOT2", desc: "Dash dot (.5x) _._._._._._._._._._._._._._._.", pattern: &[0.25, -0.125, 0.0, -0.125] },
+    LineType { name: "DASHDOTX2", desc: "Dash dot (2x) ____  .  ____  .  ____  .  ___", pattern: &[1.0, -0.5, 0.0, -0.5] },
+    LineType { name: "DASHED", desc: "Dashed __ __ __ __ __ __ __ __ __ __ __ __ __ _", pattern: &[0.5, -0.25] },
+    LineType { name: "DASHED2", desc: "Dashed (.5x) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _", pattern: &[0.25, -0.125] },
+    LineType { name: "DASHEDX2", desc: "Dashed (2x) ____  ____  ____  ____  ____  ___", pattern: &[1.0, -0.5] },
+    LineType { name: "DIVIDE", desc: "Divide ____ . . ____ . . ____ . . ____ . . ____", pattern: &[0.5, -0.25, 0.0, -0.25, 0.0, -0.25] },
+    LineType { name: "DIVIDE2", desc: "Divide (.5x) __..__..__..__..__..__..__..__.._", pattern: &[0.25, -0.125, 0.0, -0.125, 0.0, -0.125] },
+    LineType { name: "DIVIDEX2", desc: "Divide (2x) ________  .  .  ________  .  .  _", pattern: &[1.0, -0.5, 0.0, -0.5, 0.0, -0.5] },
+    LineType { name: "DOT", desc: "Dot . . . . . . . . . . . . . . . . . . . . . .", pattern: &[0.0, -0.25] },
+    LineType { name: "DOT2", desc: "Dot (.5x) .....................................", pattern: &[0.0, -0.125] },
+    LineType { name: "DOTX2", desc: "Dot (2x) .  .  .  .  .  .  .  .  .  .  .  .  .", pattern: &[0.0, -0.5] },
+    LineType { name: "HIDDEN", desc: "Hidden __ __ __ __ __ __ __ __ __ __ __ __ __ __", pattern: &[0.25, -0.125] },
+    LineType { name: "HIDDEN2", desc: "Hidden (.5x) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _", pattern: &[0.125, -0.0625] },
+    LineType { name: "HIDDENX2", desc: "Hidden (2x) ____ ____ ____ ____ ____ ____ ____", pattern: &[0.5, -0.25] },
+    LineType { name: "PHANTOM", desc: "Phantom ______  __  __  ______  __  __  ______", pattern: &[1.25, -0.25, 0.25, -0.25, 0.25, -0.25] },
+    LineType { name: "PHANTOM2", desc: "Phantom (.5x) ___ _ _ ___ _ _ ___ _ _ ___ _ _ ___", pattern: &[0.625, -0.125, 0.125, -0.125, 0.125, -0.125] },
+    LineType { name: "PHANTOMX2", desc: "Phantom (2x) ____________    ____    ____    _", pattern: &[2.5, -0.5, 0.5, -0.5, 0.5, -0.5] },
+    LineType { name: "ACAD_ISO02W100", desc: "ISO dash __ __ __ __ __ __ __ __ __ __ __ __ __", pattern: &[12.0, -3.0] },
+    LineType { name: "ACAD_ISO03W100", desc: "ISO dash space __    __    __    __    __    __", pattern: &[12.0, -18.0] },
+    LineType { name: "ACAD_ISO04W100", desc: "ISO long-dash dot ____ . ____ . ____ . ____ . _", pattern: &[24.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO05W100", desc: "ISO long-dash double-dot ____ .. ____ .. ____ .", pattern: &[24.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO06W100", desc: "ISO long-dash triple-dot ____ ... ____ ... ____", pattern: &[24.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO07W100", desc: "ISO dot . . . . . . . . . . . . . . . . . . . .", pattern: &[0.0, -3.0] },
+    LineType { name: "ACAD_ISO08W100", desc: "ISO long-dash short-dash ____ __ ____ __ ____ _", pattern: &[24.0, -3.0, 6.0, -3.0] },
+    LineType { name: "ACAD_ISO09W100", desc: "ISO long-dash double-short-dash ____ __ __ ____", pattern: &[24.0, -3.0, 6.0, -3.0, 6.0, -3.0] },
+    LineType { name: "ACAD_ISO10W100", desc: "ISO dash dot __ . __ . __ . __ . __ . __ . __ .", pattern: &[12.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO11W100", desc: "ISO double-dash dot __ __ . __ __ . __ __ . __ _", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO12W100", desc: "ISO dash double-dot __ . . __ . . __ . . __ . .", pattern: &[12.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO13W100", desc: "ISO double-dash double-dot __ __ . . __ __ . . _", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO14W100", desc: "ISO dash triple-dot __ . . . __ . . . __ . . . _", pattern: &[12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
+    LineType { name: "ACAD_ISO15W100", desc: "ISO double-dash triple-dot __ __ . . . __ __ . .", pattern: &[12.0, -3.0, 12.0, -3.0, 0.0, -3.0, 0.0, -3.0, 0.0, -3.0] },
 ];
 
 /// Linetypes loaded from `.lin` files (leaked once so they stay `&'static` like the built-in table).
@@ -441,15 +274,10 @@ pub fn register_linetype(def: &LinetypeDef) -> Result<&'static LineType, String>
         return Err(format!("Linetype {name} has no pattern."));
     }
     if LINETYPES.iter().any(|l| l.name.eq_ignore_ascii_case(&name)) {
-        return Err(format!(
-            "{name} is a standard linetype and cannot be replaced."
-        ));
+        return Err(format!("{name} is a standard linetype and cannot be replaced."));
     }
     let mut reg = custom_lt();
-    let def = LinetypeDef {
-        name: name.clone(),
-        ..def.clone()
-    };
+    let def = LinetypeDef { name: name.clone(), ..def.clone() };
     if let Some((_, l)) = reg.iter().find(|(d, _)| *d == def) {
         return Ok(l);
     }
@@ -465,22 +293,11 @@ pub fn register_linetype(def: &LinetypeDef) -> Result<&'static LineType, String>
 
 /// The standard linetypes followed by the ones loaded from files.
 pub fn all_linetypes() -> Vec<&'static LineType> {
-    LINETYPES
-        .iter()
-        .chain(custom_lt().iter().map(|(_, l)| *l).collect::<Vec<_>>())
-        .collect()
+    LINETYPES.iter().chain(custom_lt().iter().map(|(_, l)| *l).collect::<Vec<_>>()).collect()
 }
 
 pub fn linetype(name: &str) -> Option<&'static LineType> {
-    LINETYPES
-        .iter()
-        .find(|l| l.name.eq_ignore_ascii_case(name))
-        .or_else(|| {
-            custom_lt()
-                .iter()
-                .find(|(d, _)| d.name.eq_ignore_ascii_case(name))
-                .map(|(_, l)| *l)
-        })
+    LINETYPES.iter().find(|l| l.name.eq_ignore_ascii_case(name)).or_else(|| custom_lt().iter().find(|(d, _)| d.name.eq_ignore_ascii_case(name)).map(|(_, l)| *l))
 }
 /// Canonical (upper-case) key of a linetype name.
 pub fn ltype_key(name: &str) -> Option<&'static str> {
@@ -491,18 +308,13 @@ pub fn ltype_display(name: &str) -> String {
         name.into()
     } else {
         let mut c = name.chars();
-        c.next()
-            .map(|f| f.to_string() + &c.as_str().to_lowercase())
-            .unwrap_or_default()
+        c.next().map(|f| f.to_string() + &c.as_str().to_lowercase()).unwrap_or_default()
     }
 }
 
 // ---------------------------------------------------------------- lineweights (hundredths of mm)
 
-pub const LINEWEIGHTS: [i32; 24] = [
-    0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200,
-    211,
-];
+pub const LINEWEIGHTS: [i32; 24] = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211];
 pub const LW_BYLAYER: i32 = -1;
 pub const LW_BYBLOCK: i32 = -2;
 pub const LW_DEFAULT_VALUE: i32 = -3;
@@ -569,19 +381,7 @@ fn yes() -> bool {
 
 impl Layer {
     pub fn new(name: &str) -> Layer {
-        Layer {
-            name: name.into(),
-            color: Color::Aci(7),
-            ltype: "Continuous".into(),
-            lw: LW_DEFAULT,
-            on: true,
-            frozen: false,
-            locked: false,
-            plot: true,
-            desc: String::new(),
-            transp: None,
-            vp_frozen_default: false,
-        }
+        Layer { name: name.into(), color: Color::Aci(7), ltype: "Continuous".into(), lw: LW_DEFAULT, on: true, frozen: false, locked: false, plot: true, desc: String::new(), transp: None, vp_frozen_default: false }
     }
     pub fn with_color(mut self, c: Color) -> Layer {
         self.color = c;
@@ -649,25 +449,7 @@ fn ser_bool_as_int<S: Serializer>(v: &bool, s: S) -> Result<S::Ok, S::Error> {
 
 impl Default for DimStyle {
     fn default() -> DimStyle {
-        DimStyle {
-            name: "Standard".into(),
-            scale: 1.0,
-            txt: 2.5,
-            asz: 2.5,
-            exo: 0.625,
-            exe: 1.25,
-            gap: 0.625,
-            cen: 2.5,
-            dec: 2,
-            tad: true,
-            tih: false,
-            zin: 0,
-            lfac: 1.0,
-            pre: String::new(),
-            suf: String::new(),
-            blk: "closed".into(),
-            color: None,
-        }
+        DimStyle { name: "Standard".into(), scale: 1.0, txt: 2.5, asz: 2.5, exo: 0.625, exe: 1.25, gap: 0.625, cen: 2.5, dec: 2, tad: true, tih: false, zin: 0, lfac: 1.0, pre: String::new(), suf: String::new(), blk: "closed".into(), color: None }
     }
 }
 
@@ -683,12 +465,7 @@ pub struct MLeaderStyle {
 
 impl Default for MLeaderStyle {
     fn default() -> MLeaderStyle {
-        MLeaderStyle {
-            name: "Standard".into(),
-            text_height: 2.5,
-            arrow: 2.5,
-            landing: 5.0,
-        }
+        MLeaderStyle { name: "Standard".into(), text_height: 2.5, arrow: 2.5, landing: 5.0 }
     }
 }
 
@@ -704,11 +481,7 @@ pub struct TableStyle {
 
 impl Default for TableStyle {
     fn default() -> TableStyle {
-        TableStyle {
-            name: "Standard".into(),
-            text_height: 2.5,
-            title: false,
-        }
+        TableStyle { name: "Standard".into(), text_height: 2.5, title: false }
     }
 }
 
@@ -724,12 +497,7 @@ pub struct Units {
 
 impl Default for Units {
     fn default() -> Units {
-        Units {
-            kind: "decimal".into(),
-            precision: 4,
-            ang_precision: 0,
-            ins_units: 4,
-        }
+        Units { kind: "decimal".into(), precision: 4, ang_precision: 0, ins_units: 4 }
     }
 }
 
@@ -762,13 +530,7 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Limits {
-        Limits {
-            min_x: 0.0,
-            min_y: 0.0,
-            max_x: 420.0,
-            max_y: 297.0,
-            on: false,
-        }
+        Limits { min_x: 0.0, min_y: 0.0, max_x: 420.0, max_y: 297.0, on: false }
     }
 }
 
@@ -855,26 +617,17 @@ impl Default for Settings {
 
 impl Settings {
     pub fn cur_dim(&self) -> &DimStyle {
-        self.dim_styles
-            .get(&self.cur_dim_style)
-            .or_else(|| self.dim_styles.values().next())
-            .expect("a dimension style")
+        self.dim_styles.get(&self.cur_dim_style).or_else(|| self.dim_styles.values().next()).expect("a dimension style")
     }
 
     /// The current multileader style (the built-in Standard style until MLEADERSTYLE defines one).
     pub fn cur_mleader(&self) -> MLeaderStyle {
-        self.mleader_styles
-            .get(&self.cur_mleader_style)
-            .cloned()
-            .unwrap_or_default()
+        self.mleader_styles.get(&self.cur_mleader_style).cloned().unwrap_or_default()
     }
 
     /// The current table style (the built-in Standard style until TABLESTYLE defines one).
     pub fn cur_table(&self) -> TableStyle {
-        self.table_styles
-            .get(&self.cur_table_style)
-            .cloned()
-            .unwrap_or_default()
+        self.table_styles.get(&self.cur_table_style).cloned().unwrap_or_default()
     }
 }
 
@@ -885,17 +638,9 @@ pub fn fmt_num(x: f64, precision: usize, trim: bool) -> String {
     if !x.is_finite() {
         return x.to_string();
     }
-    let x = if x.abs() < 0.5 * 10f64.powi(-(precision as i32)) {
-        0.0
-    } else {
-        x
-    };
+    let x = if x.abs() < 0.5 * 10f64.powi(-(precision as i32)) { 0.0 } else { x };
     let mut s = format!("{:.*}", precision, x);
-    if s.starts_with("-0")
-        && s.trim_start_matches('-')
-            .chars()
-            .all(|c| c == '0' || c == '.')
-    {
+    if s.starts_with("-0") && s.trim_start_matches('-').chars().all(|c| c == '0' || c == '.') {
         s = s.trim_start_matches('-').to_string();
     }
     if trim && s.contains('.') {
@@ -905,10 +650,7 @@ pub fn fmt_num(x: f64, precision: usize, trim: bool) -> String {
 }
 
 pub fn fmt_angle(radians: f64, precision: usize) -> String {
-    format!(
-        "{}°",
-        fmt_num(radians * 180.0 / std::f64::consts::PI, precision, false)
-    )
+    format!("{}°", fmt_num(radians * 180.0 / std::f64::consts::PI, precision, false))
 }
 
 #[cfg(test)]
@@ -925,24 +667,15 @@ mod tests {
         assert_eq!(rgb_to_aci([255, 0, 0]), 1);
         assert_eq!(color_rgb(Color::Aci(7), true, false), [255, 255, 255]);
         assert_eq!(color_rgb(Color::Aci(7), false, false), [0, 0, 0]);
-        assert_eq!(color_rgb(Color::Aci(2), false, true)[0], 137); // yellow is darkened on white
+        assert_eq!(color_rgb(Color::Aci(2), false, true)[0], 137);       // yellow is darkened on white
     }
 
     #[test]
     fn color_json_forms() {
         assert_eq!(serde_json::to_string(&Color::Aci(3)).unwrap(), "3");
-        assert_eq!(
-            serde_json::to_string(&Color::Rgb(255, 136, 0)).unwrap(),
-            "\"#ff8800\""
-        );
-        assert_eq!(
-            serde_json::from_str::<Color>("\"BYBLOCK\"").unwrap(),
-            Color::ByBlock
-        );
-        assert_eq!(
-            serde_json::from_str::<Color>("\"#ff8800\"").unwrap(),
-            Color::Rgb(255, 136, 0)
-        );
+        assert_eq!(serde_json::to_string(&Color::Rgb(255, 136, 0)).unwrap(), "\"#ff8800\"");
+        assert_eq!(serde_json::from_str::<Color>("\"BYBLOCK\"").unwrap(), Color::ByBlock);
+        assert_eq!(serde_json::from_str::<Color>("\"#ff8800\"").unwrap(), Color::Rgb(255, 136, 0));
         assert_eq!(serde_json::from_str::<Color>("5").unwrap(), Color::Aci(5));
     }
 
@@ -955,12 +688,8 @@ mod tests {
         fn norm(v: serde_json::Value) -> serde_json::Value {
             match v {
                 serde_json::Value::Number(n) => serde_json::json!(n.as_f64().unwrap()),
-                serde_json::Value::Array(a) => {
-                    serde_json::Value::Array(a.into_iter().map(norm).collect())
-                }
-                serde_json::Value::Object(o) => {
-                    serde_json::Value::Object(o.into_iter().map(|(k, v)| (k, norm(v))).collect())
-                }
+                serde_json::Value::Array(a) => serde_json::Value::Array(a.into_iter().map(norm).collect()),
+                serde_json::Value::Object(o) => serde_json::Value::Object(o.into_iter().map(|(k, v)| (k, norm(v))).collect()),
                 v => v,
             }
         }

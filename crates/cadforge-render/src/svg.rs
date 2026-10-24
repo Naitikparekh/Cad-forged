@@ -6,10 +6,7 @@ fn f(v: f64) -> String {
 }
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 fn col(c: Rgb) -> String {
@@ -17,20 +14,7 @@ fn col(c: Rgb) -> String {
 }
 
 fn d(paths: &[Poly]) -> String {
-    paths
-        .iter()
-        .map(|p| {
-            format!(
-                "M{}{}",
-                p.pts
-                    .iter()
-                    .map(|q| format!("{} {}", f(q[0]), f(q[1])))
-                    .collect::<Vec<_>>()
-                    .join("L"),
-                if p.closed { "Z" } else { "" }
-            )
-        })
-        .collect()
+    paths.iter().map(|p| format!("M{}{}", p.pts.iter().map(|q| format!("{} {}", f(q[0]), f(q[1]))).collect::<Vec<_>>().join("L"), if p.closed { "Z" } else { "" })).collect()
 }
 
 pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> String {
@@ -42,14 +26,7 @@ pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Str
     ];
     for op in ops {
         match op {
-            Op::Stroke {
-                paths,
-                color,
-                alpha,
-                width,
-                dash,
-                round,
-            } => {
+            Op::Stroke { paths, color, alpha, width, dash, round } => {
                 if *alpha <= 0.0 {
                     continue;
                 }
@@ -66,12 +43,7 @@ pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Str
                     if dash.is_empty() { String::new() } else { format!(" stroke-dasharray=\"{}\"", dash.iter().map(|v| f(*v)).collect::<Vec<_>>().join(" ")) }
                 ));
             }
-            Op::Fill {
-                paths,
-                color,
-                alpha,
-                evenodd,
-            } => {
+            Op::Fill { paths, color, alpha, evenodd } => {
                 if *alpha <= 0.0 {
                     continue;
                 }
@@ -79,44 +51,20 @@ pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Str
                     "<path d=\"{}\" fill=\"{}\"{} fill-rule=\"{}\" stroke=\"none\"/>",
                     d(paths),
                     col(*color),
-                    if *alpha < 1.0 {
-                        format!(" fill-opacity=\"{}\"", f(*alpha as f64))
-                    } else {
-                        String::new()
-                    },
+                    if *alpha < 1.0 { format!(" fill-opacity=\"{}\"", f(*alpha as f64)) } else { String::new() },
                     if *evenodd { "evenodd" } else { "nonzero" }
                 ));
             }
-            Op::Image {
-                pix,
-                adj,
-                bg,
-                m,
-                clip,
-                alpha,
-                smooth,
-            } => {
+            Op::Image { pix, adj, bg, m, clip, alpha, smooth } => {
                 if *alpha <= 0.0 {
                     continue;
                 }
-                let Some(png) = cadforge_core::picture::encode_png(
-                    pix.0.w,
-                    pix.0.h,
-                    pix.0.adjusted(adj[0], adj[1], adj[2], *bg),
-                ) else {
-                    continue;
-                };
+                let Some(png) = cadforge_core::picture::encode_png(pix.0.w, pix.0.h, pix.0.adjusted(adj[0], adj[1], adj[2], *bg)) else { continue };
                 use base64::Engine as _;
                 let data = base64::engine::general_purpose::STANDARD.encode(png);
                 let id = format!("imgclip{}", out.len());
                 let (open, close) = if clip.len() >= 3 {
-                    out.push(format!(
-                        "<clipPath id=\"{id}\"><path d=\"{}\"/></clipPath>",
-                        d(&[Poly {
-                            pts: clip.clone(),
-                            closed: true
-                        }])
-                    ));
+                    out.push(format!("<clipPath id=\"{id}\"><path d=\"{}\"/></clipPath>", d(&[Poly { pts: clip.clone(), closed: true }])));
                     (format!("<g clip-path=\"url(#{id})\">"), "</g>")
                 } else {
                     (String::new(), "")
@@ -130,15 +78,7 @@ pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Str
                     if *smooth { "" } else { " image-rendering=\"pixelated\"" },
                 ));
             }
-            Op::Text {
-                s,
-                x,
-                y,
-                m,
-                em,
-                color,
-                alpha,
-            } => {
+            Op::Text { s, x, y, m, em, color, alpha } => {
                 if *alpha <= 0.0 {
                     continue;
                 }

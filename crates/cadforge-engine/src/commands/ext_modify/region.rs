@@ -9,9 +9,9 @@ use crate::sysvars::{parse_color, Value};
 use cadforge_core::drawing::Drawing;
 use cadforge_core::entities::*;
 use cadforge_core::geom::*;
-use cadforge_core::ops::boundary::find_region;
 use cadforge_core::ops::path::{inherit_props, path_of};
 use cadforge_core::ops::polybool::{boolean, Area, Loop, Op};
+use cadforge_core::ops::boundary::find_region;
 use cadforge_core::ops::trim::join;
 use cadforge_core::solid::boolean::{boolean_sync, BoolOp};
 use cadforge_core::solid::mesh::mesh_volume;
@@ -30,20 +30,13 @@ struct Closed {
 }
 
 fn circle_loop(c: Pt, r: f64) -> Loop {
-    vec![
-        Vertex::new(c.x + r, c.y, 1.0),
-        Vertex::new(c.x - r, c.y, 1.0),
-    ]
+    vec![Vertex::new(c.x + r, c.y, 1.0), Vertex::new(c.x - r, c.y, 1.0)]
 }
 
 /// Do two non-adjacent segments of a closed loop cross?
 fn self_intersects(segs: &[Seg]) -> bool {
     let n = segs.len();
-    (0..n).any(|i| {
-        (i + 2..n).any(|j| {
-            !(i == 0 && j == n - 1) && !seg_intersect(&segs[i], &segs[j], false, false).is_empty()
-        })
-    })
+    (0..n).any(|i| (i + 2..n).any(|j| !(i == 0 && j == n - 1) && !seg_intersect(&segs[i], &segs[j], false, false).is_empty()))
 }
 
 /// Closed loops among `ents`: circles, closed polylines, ellipses and splines, plus lines, arcs and open polylines
@@ -52,13 +45,7 @@ fn closed_loops(doc: &Drawing, ents: &[Entity]) -> (Vec<Closed>, usize) {
     let (mut out, mut open, mut skipped): (Vec<Closed>, Vec<&Entity>, usize) = (vec![], vec![], 0);
     for e in ents {
         let segs = segs_of(e, doc);
-        let mut closed = |verts: Loop| {
-            out.push(Closed {
-                verts,
-                src: vec![e.id],
-                proto: e.clone(),
-            })
-        };
+        let mut closed = |verts: Loop| out.push(Closed { verts, src: vec![e.id], proto: e.clone() });
         match &e.kind {
             Kind::Circle { c, r } => closed(circle_loop(*c, *r)),
             Kind::Pline { v, closed: true } if !self_intersects(&segs) => closed(v.clone()),
@@ -85,24 +72,8 @@ fn closed_loops(doc: &Drawing, ents: &[Entity]) -> (Vec<Closed>, usize) {
             skipped += 1;
             continue;
         }
-        let src: Vec<u64> = open
-            .iter()
-            .filter(|e| {
-                path_of(e, doc)
-                    .and_then(|p| {
-                        p.segs
-                            .first()
-                            .map(|s| dist_to_segs(&segs, s.at(0.5)).0 < 1e-6)
-                    })
-                    .unwrap_or(false)
-            })
-            .map(|e| e.id)
-            .collect();
-        out.push(Closed {
-            verts,
-            src,
-            proto: r,
-        });
+        let src: Vec<u64> = open.iter().filter(|e| path_of(e, doc).and_then(|p| p.segs.first().map(|s| dist_to_segs(&segs, s.at(0.5)).0 < 1e-6)).unwrap_or(false)).map(|e| e.id).collect();
+        out.push(Closed { verts, src, proto: r });
     }
     let found = out.len();
     out.retain(|l| pline_area(&l.verts).abs() > 1e-9);
@@ -129,10 +100,7 @@ async fn region(c: Ctx, _a: Args) -> CmdResult<()> {
     let ents = c.entities(&sel.ents);
     let (loops, skipped) = c.doc(|d| closed_loops(d, &ents));
     if skipped > 0 {
-        c.log_error(&format!(
-            "{} not part of a closed, non-self-intersecting loop.",
-            plural(skipped, "object")
-        ));
+        c.log_error(&format!("{} not part of a closed, non-self-intersecting loop.", plural(skipped, "object")));
     }
     if loops.is_empty() {
         c.log_error("No closed loops were found.");
@@ -181,18 +149,8 @@ async fn region_op(c: &Ctx, op: Op, a: Vec<Entity>) -> CmdResult<()> {
     let mut b: Vec<Entity> = vec![];
     if op == Op::Subtract {
         c.ed(|e| e.temp_sel = a.iter().map(|x| x.id).collect());
-        let sel = c
-            .select(
-                ps("Select solids and regions to subtract")
-                    .solids()
-                    .filter(is_region),
-            )
-            .await?;
-        b = c
-            .entities(&sel.ents)
-            .into_iter()
-            .filter(|e| !a.iter().any(|x| x.id == e.id))
-            .collect();
+        let sel = c.select(ps("Select solids and regions to subtract").solids().filter(is_region)).await?;
+        b = c.entities(&sel.ents).into_iter().filter(|e| !a.iter().any(|x| x.id == e.id)).collect();
         if b.is_empty() {
             c.log_error("Nothing to subtract.");
             return Ok(());
@@ -202,13 +160,7 @@ async fn region_op(c: &Ctx, op: Op, a: Vec<Entity>) -> CmdResult<()> {
         return Ok(());
     }
     let areas = if op == Op::Subtract {
-        let flat = |l: &[Entity]| {
-            fold(l, Op::Union)
-                .iter()
-                .flatten()
-                .cloned()
-                .collect::<Vec<Loop>>()
-        };
+        let flat = |l: &[Entity]| fold(l, Op::Union).iter().flatten().cloned().collect::<Vec<Loop>>();
         boolean(&flat(&a), &flat(&b), Op::Subtract)
     } else {
         fold(&a, op)
@@ -243,15 +195,7 @@ fn solid_op(c: &Ctx, op: Op, a: &[u64], b: &[u64]) -> CmdResult<()> {
     c.log("Computing...");
     let mut acc = sa[0].mesh();
     for s in &sa[1..] {
-        acc = boolean_sync(
-            &acc,
-            &s.mesh(),
-            if op == Op::Subtract {
-                BoolOp::Union
-            } else {
-                bop
-            },
-        )?;
+        acc = boolean_sync(&acc, &s.mesh(), if op == Op::Subtract { BoolOp::Union } else { bop })?;
     }
     for s in &sb {
         acc = boolean_sync(&acc, &s.mesh(), BoolOp::Subtract)?;
@@ -274,11 +218,7 @@ fn solid_op(c: &Ctx, op: Op, a: &[u64], b: &[u64]) -> CmdResult<()> {
     });
     if nonempty {
         let prec = c.doc(|d| d.settings.units.precision.max(0) as usize);
-        c.log(&format!(
-            "{} complete (volume {}).",
-            bop.name(),
-            fmt_num(vol, prec, false)
-        ));
+        c.log(&format!("{} complete (volume {}).", bop.name(), fmt_num(vol, prec, false)));
     } else {
         c.log("The result is empty; no solid remains.");
     }
@@ -296,14 +236,7 @@ async fn region_aware(c: Ctx, args: Args, op: Op, stock: RunFn) -> CmdResult<()>
         Op::Intersect => "intersect",
         Op::Subtract => "subtract from",
     };
-    let sel = c
-        .select(
-            ps(&format!("Select solids and regions to {verb}"))
-                .solids()
-                .filter(is_region)
-                .pickfirst(true),
-        )
-        .await?;
+    let sel = c.select(ps(&format!("Select solids and regions to {verb}")).solids().filter(is_region).pickfirst(true)).await?;
     if sel.is_empty() {
         return Ok(());
     }
@@ -317,30 +250,13 @@ async fn region_aware(c: Ctx, args: Args, op: Op, stock: RunFn) -> CmdResult<()>
     let mut b: Vec<u64> = vec![];
     if op == Op::Subtract {
         c.ed(|e| e.temp_sel = sel.solids.iter().copied().collect());
-        b = c
-            .select(
-                ps("Select solids and regions to subtract")
-                    .solids()
-                    .filter(|_| false),
-            )
-            .await?
-            .solids
-            .into_iter()
-            .filter(|s| !sel.solids.contains(s))
-            .collect();
+        b = c.select(ps("Select solids and regions to subtract").solids().filter(|_| false)).await?.solids.into_iter().filter(|s| !sel.solids.contains(s)).collect();
         if b.is_empty() {
             c.log_error("Nothing to subtract.");
             return Ok(());
         }
     } else if sel.solids.len() < 2 {
-        c.log_error(&format!(
-            "{} needs at least two solids.",
-            if op == Op::Union {
-                "Union"
-            } else {
-                "Intersect"
-            }
-        ));
+        c.log_error(&format!("{} needs at least two solids.", if op == Op::Union { "Union" } else { "Intersect" }));
         return Ok(());
     }
     solid_op(&c, op, &sel.solids, &b)
@@ -348,28 +264,8 @@ async fn region_aware(c: Ctx, args: Args, op: Op, stock: RunFn) -> CmdResult<()>
 
 // ---------------------------------------------------------------- GRADIENT
 
-const PATTERNS: [&str; 9] = [
-    "LINEAR",
-    "CYLINDER",
-    "INVCYLINDER",
-    "SPHERICAL",
-    "HEMISPHERICAL",
-    "CURVED",
-    "INVSPHERICAL",
-    "INVHEMISPHERICAL",
-    "INVCURVED",
-];
-const PATTERN_LABELS: [&str; 9] = [
-    "Linear",
-    "CYlinder",
-    "INVCylinder",
-    "Spherical",
-    "Hemispherical",
-    "CUrved",
-    "INVSpherical",
-    "INVHemispherical",
-    "INVCUrved",
-];
+const PATTERNS: [&str; 9] = ["LINEAR", "CYLINDER", "INVCYLINDER", "SPHERICAL", "HEMISPHERICAL", "CURVED", "INVSPHERICAL", "INVHEMISPHERICAL", "INVCURVED"];
+const PATTERN_LABELS: [&str; 9] = ["Linear", "CYlinder", "INVCylinder", "Spherical", "Hemispherical", "CUrved", "INVSpherical", "INVHemispherical", "INVCUrved"];
 
 /// Gradient settings, kept in the same variables AutoCAD uses (GFNAME, GFANG, GFCLR1, GFCLR2, GFCLRSTATE, GFCLRLUM).
 #[derive(Clone, Debug, PartialEq)]
@@ -389,10 +285,7 @@ fn rgb_text(c: [u8; 3]) -> String {
 }
 
 fn rgb_pref(c: &Ctx, name: &str, default: [u8; 3]) -> [u8; 3] {
-    let v: Vec<u8> = pref_text(c, name, &rgb_text(default))
-        .split(',')
-        .filter_map(|p| p.trim().parse().ok())
-        .collect();
+    let v: Vec<u8> = pref_text(c, name, &rgb_text(default)).split(',').filter_map(|p| p.trim().parse().ok()).collect();
     if v.len() == 3 {
         [v[0], v[1], v[2]]
     } else {
@@ -430,21 +323,12 @@ fn mix(a: [u8; 3], b: [u8; 3], t: f64) -> [u8; 3] {
 fn gradient_data(g: &Grad) -> GradientData {
     let name = PATTERNS[g.pattern - 1];
     let swapped = matches!(name, "INVSPHERICAL" | "INVHEMISPHERICAL" | "INVCURVED");
-    let (c1, c2) = if g.one_color {
-        (g.c1, mix(g.c1, [255, 255, 255], g.tint))
-    } else {
-        (g.c1, g.c2)
-    };
+    let (c1, c2) = if g.one_color { (g.c1, mix(g.c1, [255, 255, 255], g.tint)) } else { (g.c1, g.c2) };
     GradientData {
         c1: if swapped { c2 } else { c1 },
         c2: if swapped { c1 } else { c2 },
         angle: rad(g.angle),
-        kind: if swapped {
-            name.trim_start_matches("INV")
-        } else {
-            name
-        }
-        .to_string(),
+        kind: if swapped { name.trim_start_matches("INV") } else { name }.to_string(),
         one_color: g.one_color && !swapped,
         tint: g.tint,
     }
@@ -471,60 +355,18 @@ fn gradient_color(text: &str) -> Result<[u8; 3], String> {
 async fn gradient_settings(c: &Ctx, g: &RefCell<Grad>) -> CmdResult<()> {
     loop {
         let cur = g.borrow().clone();
-        c.log(&format!(
-            "Current gradient: {}, angle {}, {}",
-            PATTERN_LABELS[cur.pattern - 1].to_uppercase(),
-            fmt_num(cur.angle, 2, true),
-            if cur.one_color {
-                format!(
-                    "one color {} tint {}",
-                    rgb_text(cur.c1),
-                    fmt_num(cur.tint, 2, true)
-                )
-            } else {
-                format!("colors {} to {}", rgb_text(cur.c1), rgb_text(cur.c2))
-            }
-        ));
-        let r = c
-            .keyword(
-                ps("Enter a gradient option")
-                    .options(&[
-                        "Pattern",
-                        "Color1",
-                        "Color2",
-                        "One color",
-                        "Angle",
-                        "Tint",
-                        "Done",
-                    ])
-                    .default_str("Done"),
-            )
-            .await?;
+        c.log(&format!("Current gradient: {}, angle {}, {}", PATTERN_LABELS[cur.pattern - 1].to_uppercase(), fmt_num(cur.angle, 2, true), if cur.one_color { format!("one color {} tint {}", rgb_text(cur.c1), fmt_num(cur.tint, 2, true)) } else { format!("colors {} to {}", rgb_text(cur.c1), rgb_text(cur.c2)) }));
+        let r = c.keyword(ps("Enter a gradient option").options(&["Pattern", "Color1", "Color2", "One color", "Angle", "Tint", "Done"]).default_str("Done")).await?;
         match r.kw() {
             Some("Pattern") => {
-                let k = c
-                    .keyword(
-                        ps("Enter gradient pattern")
-                            .options(&PATTERN_LABELS)
-                            .default_str(PATTERN_LABELS[cur.pattern - 1]),
-                    )
-                    .await?;
+                let k = c.keyword(ps("Enter gradient pattern").options(&PATTERN_LABELS).default_str(PATTERN_LABELS[cur.pattern - 1])).await?;
                 if let Some(i) = PATTERN_LABELS.iter().position(|l| Some(*l) == k.kw()) {
                     g.borrow_mut().pattern = i + 1;
                 }
             }
             Some(kw @ ("Color1" | "Color2")) => {
-                let (n, now) = if kw == "Color1" {
-                    (1, cur.c1)
-                } else {
-                    (2, cur.c2)
-                };
-                let t = c
-                    .string(
-                        ps(&format!("Enter color {n} (index, name or r,g,b)"))
-                            .default_str(&rgb_text(now)),
-                    )
-                    .await?;
+                let (n, now) = if kw == "Color1" { (1, cur.c1) } else { (2, cur.c2) };
+                let t = c.string(ps(&format!("Enter color {n} (index, name or r,g,b)")).default_str(&rgb_text(now))).await?;
                 match gradient_color(&t.text) {
                     Ok(rgb) if n == 1 => g.borrow_mut().c1 = rgb,
                     Ok(rgb) => g.borrow_mut().c2 = rgb,
@@ -532,33 +374,16 @@ async fn gradient_settings(c: &Ctx, g: &RefCell<Grad>) -> CmdResult<()> {
                 }
             }
             Some("One color") => {
-                let k = c
-                    .keyword(
-                        ps("Enter color mode")
-                            .options(&["One", "Two"])
-                            .default_str(if cur.one_color { "One" } else { "Two" }),
-                    )
-                    .await?;
+                let k = c.keyword(ps("Enter color mode").options(&["One", "Two"]).default_str(if cur.one_color { "One" } else { "Two" })).await?;
                 g.borrow_mut().one_color = k.kw() == Some("One");
             }
             Some("Angle") => {
-                if let Some(a) = c
-                    .angle(ps("Specify gradient angle").default_num(rad(cur.angle)))
-                    .await?
-                    .value()
-                {
+                if let Some(a) = c.angle(ps("Specify gradient angle").default_num(rad(cur.angle))).await?.value() {
                     g.borrow_mut().angle = deg(a);
                 }
             }
             Some("Tint") => {
-                if let Some(v) = c
-                    .number(
-                        ps("Specify tint of the one-color gradient (0 = color, 1 = white)")
-                            .default_num(cur.tint),
-                    )
-                    .await?
-                    .value()
-                {
+                if let Some(v) = c.number(ps("Specify tint of the one-color gradient (0 = color, 1 = white)").default_num(cur.tint)).await?.value() {
                     if (0.0..=1.0).contains(&v) {
                         g.borrow_mut().tint = v;
                     } else {
@@ -586,15 +411,7 @@ async fn gradient(c: Ctx, _a: Args) -> CmdResult<()> {
     };
     c.set_preview(preview.clone());
     loop {
-        let r = c
-            .point(
-                ps("Pick internal point or")
-                    .options(&["Select objects", "seTtings", "Undo"])
-                    .allow_enter()
-                    .no_ortho()
-                    .preview(preview.clone()),
-            )
-            .await?;
+        let r = c.point(ps("Pick internal point or").options(&["Select objects", "seTtings", "Undo"]).allow_enter().no_ortho().preview(preview.clone())).await?;
         match r.kw() {
             Some("seTtings") => {
                 gradient_settings(&c, &g).await?;
@@ -611,14 +428,9 @@ async fn gradient(c: Ctx, _a: Args) -> CmdResult<()> {
                 if found.is_empty() {
                     c.log_error("The selected objects do not form a closed boundary.");
                 } else if skipped > 0 {
-                    c.log_error(&format!(
-                        "{} not part of a closed, non-self-intersecting loop.",
-                        plural(skipped, "object")
-                    ));
+                    c.log_error(&format!("{} not part of a closed, non-self-intersecting loop.", plural(skipped, "object")));
                 }
-                loops
-                    .borrow_mut()
-                    .extend(found.into_iter().map(|l| l.verts));
+                loops.borrow_mut().extend(found.into_iter().map(|l| l.verts));
                 continue;
             }
             _ => {}
@@ -647,19 +459,10 @@ async fn gradient(c: Ctx, _a: Args) -> CmdResult<()> {
 /// Masks the objects below it with a polygon filled in the background colour.
 async fn wipeout(c: Ctx, _a: Args) -> CmdResult<()> {
     loop {
-        let r = c
-            .point(
-                ps("Specify first point")
-                    .options(&["Frames", "Polyline"])
-                    .default_str("Polyline")
-                    .allow_enter(),
-            )
-            .await?;
+        let r = c.point(ps("Specify first point").options(&["Frames", "Polyline"]).default_str("Polyline").allow_enter()).await?;
         match r {
             PointR::Kw(k) if k == "Frames" => {
-                let m = c
-                    .keyword(ps("Enter mode").options(&["ON", "OFF"]).default_str("ON"))
-                    .await?;
+                let m = c.keyword(ps("Enter mode").options(&["ON", "OFF"]).default_str("ON")).await?;
                 let on = m.kw() != Some("OFF");
                 set_pref(&c, "WIPEOUTFRAME", Value::Num(on as u8 as f64));
                 if !on {
@@ -676,24 +479,14 @@ async fn wipeout_points(c: &Ctx, first: Pt) -> CmdResult<()> {
     let mut pts = vec![first];
     loop {
         let snapshot = pts.clone();
-        let opts: &[&str] = if pts.len() > 2 {
-            &["Close", "Undo"]
-        } else {
-            &["Undo"]
-        };
+        let opts: &[&str] = if pts.len() > 2 { &["Close", "Undo"] } else { &["Undo"] };
         let last = *pts.last().expect("a point");
         let r = c
-            .point(
-                ps("Specify next point")
-                    .options(opts)
-                    .base(last)
-                    .allow_enter()
-                    .preview(move |_, p| {
-                        let mut v = snapshot.clone();
-                        v.push(p);
-                        vec![pv(Entity::pline_pts(&v, true))]
-                    }),
-            )
+            .point(ps("Specify next point").options(opts).base(last).allow_enter().preview(move |_, p| {
+                let mut v = snapshot.clone();
+                v.push(p);
+                vec![pv(Entity::pline_pts(&v, true))]
+            }))
             .await?;
         match r.kw() {
             Some("Undo") => {
@@ -717,18 +510,8 @@ async fn wipeout_points(c: &Ctx, first: Pt) -> CmdResult<()> {
 }
 
 async fn wipeout_polyline(c: &Ctx) -> CmdResult<()> {
-    let Some(id) = c
-        .pick_entity(
-            ps("Select a closed polyline")
-                .filter(|e| matches!(e.kind, Kind::Pline { closed: true, .. })),
-        )
-        .await?
-    else {
-        return Ok(());
-    };
-    let Some(e) = c.entity_by_id(id) else {
-        return Ok(());
-    };
+    let Some(id) = c.pick_entity(ps("Select a closed polyline").filter(|e| matches!(e.kind, Kind::Pline { closed: true, .. }))).await? else { return Ok(()) };
+    let Some(e) = c.entity_by_id(id) else { return Ok(()) };
     let mut pts = c.doc(|d| {
         let b = bounds_of(&e, d).map_or(1.0, |b| b.width().hypot(b.height()));
         tess_segs(&segs_of(&e, d), (b * 1e-3).max(1e-6))
@@ -740,24 +523,13 @@ async fn wipeout_polyline(c: &Ctx) -> CmdResult<()> {
         c.log_error("The polyline is too small for a wipeout.");
         return Ok(());
     }
-    let erase = c
-        .keyword(
-            ps("Erase polyline?")
-                .options(&["Yes", "No"])
-                .default_str("No"),
-        )
-        .await?
-        .kw()
-        == Some("Yes");
+    let erase = c.keyword(ps("Erase polyline?").options(&["Yes", "No"]).default_str("No")).await?.kw() == Some("Yes");
     c.doc_mut(|d| {
         d.change(|d| {
             if erase {
                 d.remove(id);
             }
-            d.add(inherit_props(
-                &e,
-                Entity::new(Kind::Wipeout(WipeoutData { pts })),
-            ));
+            d.add(inherit_props(&e, Entity::new(Kind::Wipeout(WipeoutData { pts }))));
         })
     });
     Ok(())
@@ -766,14 +538,7 @@ async fn wipeout_polyline(c: &Ctx) -> CmdResult<()> {
 pub fn register(r: &mut Registry) {
     r.define(dd("REGION", run(region)).aliases(&["REG"]).title("Region").icon("region").desc("Converts an object that encloses an area into a region object. The source objects are deleted."));
     r.define(dd("GRADIENT", run(gradient)).title("Gradient").icon("hatch").desc("Fills an enclosed area or selected objects with a gradient fill. Settings are chosen at the command line."));
-    r.define(
-        dd("WIPEOUT", run(wipeout))
-            .title("Wipeout")
-            .icon("region")
-            .desc(
-                "Creates a polygonal area that masks existing objects with the background color.",
-            ),
-    );
+    r.define(dd("WIPEOUT", run(wipeout)).title("Wipeout").icon("region").desc("Creates a polygonal area that masks existing objects with the background color."));
     // UNION / SUBTRACT / INTERSECT keep their solid behaviour and additionally take regions once the drawing has any
     for (name, op, text) in [
         ("UNION", Op::Union, "Combines selected 3D solids or 2D regions into a single object."),

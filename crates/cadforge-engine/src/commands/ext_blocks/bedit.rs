@@ -35,11 +35,7 @@ fn block_drawing(p: &Drawing, b: &Block) -> Drawing {
     d.settings = p.settings.clone();
     d.cur.layer = p.cur.layer.clone();
     d.next_id = p.next_id;
-    d.splice(
-        0,
-        0,
-        transformed_clones(&b.entities, &mat::translate(-b.base.x, -b.base.y)),
-    );
+    d.splice(0, 0, transformed_clones(&b.entities, &mat::translate(-b.base.x, -b.base.y)));
     d.dirty = false;
     d
 }
@@ -76,28 +72,18 @@ async fn bedit(c: Ctx, args: Args, sessions: Sessions) -> CmdResult<()> {
         return Ok(());
     };
     if c.doc(|d| d.blocks[&key].xref.is_some()) {
-        c.log_error(&format!(
-            "\"{key}\" is an external reference and cannot be opened in the Block Editor."
-        ));
+        c.log_error(&format!("\"{key}\" is an external reference and cannot be opened in the Block Editor."));
         return Ok(());
     }
     // the drawing being left closes its undo step now; the runtime would close the new tab's instead
     c.doc_mut(|d| d.end_command(&label));
-    let open = sessions
-        .borrow()
-        .iter()
-        .find(|s| s.parent == here && s.block == key)
-        .map(|s| s.editor);
+    let open = sessions.borrow().iter().find(|s| s.parent == here && s.block == key).map(|s| s.editor);
     match open.and_then(|id| c.app(|a| a.editors.iter().position(|e| e.id == id))) {
         Some(idx) => c.app(|a| a.set_active(idx)),
         None => {
             let d = c.doc(|p| block_drawing(p, &p.blocks[&key]));
             let editor = c.app(|a| a.add_drawing(d));
-            sessions.borrow_mut().push(Session {
-                editor,
-                parent: here,
-                block: key,
-            });
+            sessions.borrow_mut().push(Session { editor, parent: here, block: key });
             c.ed(|e| e.zoom_extents(0.1));
         }
     }
@@ -106,13 +92,7 @@ async fn bedit(c: Ctx, args: Args, sessions: Sessions) -> CmdResult<()> {
 
 /// Replace block `name` in `p` by the edited `entities` as one undo step. Layers and blocks created in the editor
 /// are added; existing definitions other than the edited block are left alone.
-fn write_back(
-    p: &mut Drawing,
-    name: &str,
-    entities: &[Entity],
-    blocks: &IndexMap<String, Block>,
-    layers: &[Layer],
-) {
+fn write_back(p: &mut Drawing, name: &str, entities: &[Entity], blocks: &IndexMap<String, Block>, layers: &[Layer]) {
     let base = p.blocks.get(name).map_or(Pt::ZERO, |b| b.base);
     p.checkpoint("BCLOSE");
     p.change(|p| {
@@ -123,58 +103,30 @@ fn write_back(
         }
         for (n, b) in blocks {
             if !p.blocks.contains_key(n) {
-                p.define_block(
-                    n,
-                    b.base,
-                    b.entities.iter().map(Entity::cloned_noid).collect(),
-                );
+                p.define_block(n, b.base, b.entities.iter().map(Entity::cloned_noid).collect());
             }
         }
-        p.define_block(
-            name,
-            base,
-            transformed_clones(entities, &mat::translate(base.x, base.y)),
-        );
+        p.define_block(name, base, transformed_clones(entities, &mat::translate(base.x, base.y)));
     });
 }
 
 async fn bclose(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
     let here = c.ed(|e| e.id);
-    let found = sessions
-        .borrow()
-        .iter()
-        .find(|s| s.editor == here)
-        .map(|s| (s.parent, s.block.clone()));
+    let found = sessions.borrow().iter().find(|s| s.editor == here).map(|s| (s.parent, s.block.clone()));
     let Some((parent, block)) = found else {
         c.log_error("BCLOSE works in a Block Editor tab; open one with BEDIT.");
         return Ok(());
     };
     let mut save = c.doc(|d| d.dirty);
     if save {
-        save = c
-            .keyword(
-                ps(&format!("Save changes to {block}?"))
-                    .options(&["Yes", "No"])
-                    .default_str("Yes"),
-            )
-            .await?
-            .kw()
-            != Some("No");
+        save = c.keyword(ps(&format!("Save changes to {block}?")).options(&["Yes", "No"]).default_str("Yes")).await?.kw() != Some("No");
     }
     if save {
-        let (entities, blocks, layers) =
-            c.doc(|d| (d.model.entities.clone(), d.blocks.clone(), d.layers.clone()));
-        let saved = c.app(|a| {
-            a.editors
-                .iter_mut()
-                .find(|e| e.id == parent)
-                .map(|e| write_back(&mut e.doc, &block, &entities, &blocks, &layers))
-        });
+        let (entities, blocks, layers) = c.doc(|d| (d.model.entities.clone(), d.blocks.clone(), d.layers.clone()));
+        let saved = c.app(|a| a.editors.iter_mut().find(|e| e.id == parent).map(|e| write_back(&mut e.doc, &block, &entities, &blocks, &layers)));
         match saved {
             Some(()) => c.log(&format!("Block \"{block}\" redefined.")),
-            None => c.log_error(
-                "The drawing this block came from is closed; the changes were discarded.",
-            ),
+            None => c.log_error("The drawing this block came from is closed; the changes were discarded."),
         }
     }
     sessions.borrow_mut().retain(|s| s.editor != here);
@@ -193,11 +145,7 @@ async fn bclose(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
 /// The block this editor tab edits and the drawing it belongs to.
 fn current_session(c: &Ctx, sessions: &Sessions) -> Option<(u64, String)> {
     let here = c.ed(|e| e.id);
-    let found = sessions
-        .borrow()
-        .iter()
-        .find(|s| s.editor == here)
-        .map(|s| (s.parent, s.block.clone()));
+    let found = sessions.borrow().iter().find(|s| s.editor == here).map(|s| (s.parent, s.block.clone()));
     found
 }
 
@@ -207,14 +155,8 @@ async fn bsave(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         c.log_error("BSAVE works in a Block Editor tab; open one with BEDIT.");
         return Ok(());
     };
-    let (entities, blocks, layers) =
-        c.doc(|d| (d.model.entities.clone(), d.blocks.clone(), d.layers.clone()));
-    let saved = c.app(|a| {
-        a.editors
-            .iter_mut()
-            .find(|e| e.id == parent)
-            .map(|e| write_back(&mut e.doc, &block, &entities, &blocks, &layers))
-    });
+    let (entities, blocks, layers) = c.doc(|d| (d.model.entities.clone(), d.blocks.clone(), d.layers.clone()));
+    let saved = c.app(|a| a.editors.iter_mut().find(|e| e.id == parent).map(|e| write_back(&mut e.doc, &block, &entities, &blocks, &layers)));
     match saved {
         Some(()) => {
             c.doc_mut(|d| d.dirty = false);
@@ -231,12 +173,7 @@ async fn bsaveas(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         c.log_error("BSAVEAS works in a Block Editor tab; open one with BEDIT.");
         return Ok(());
     };
-    let name = c
-        .string(ps("Enter new block name"))
-        .await?
-        .text
-        .trim()
-        .to_string();
+    let name = c.string(ps("Enter new block name")).await?.text.trim().to_string();
     if name.is_empty() || name.starts_with('*') || name.contains(['|', ',', '=']) {
         c.log_error("A block name cannot be empty, start with * or contain | , or =.");
         return Ok(());
@@ -255,11 +192,7 @@ async fn bsaveas(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
                         p.layers.push(l.clone());
                     }
                 }
-                p.define_block(
-                    &name,
-                    base,
-                    transformed_clones(&entities, &mat::translate(base.x, base.y)),
-                );
+                p.define_block(&name, base, transformed_clones(&entities, &mat::translate(base.x, base.y)));
             });
             Ok(())
         })
@@ -275,32 +208,9 @@ async fn bsaveas(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
 pub(super) fn register(r: &mut Registry) {
     let sessions = Sessions::default();
     let (save, save_as) = (sessions.clone(), sessions.clone());
-    r.define(
-        db("BSAVE", run(move |c, a| bsave(c, a, save.clone())))
-            .title("Save Block")
-            .icon("block")
-            .desc("Saves the current block definition in the Block Editor.")
-            .once(),
-    );
-    r.define(
-        db("BSAVEAS", run(move |c, a| bsaveas(c, a, save_as.clone())))
-            .title("Save Block As")
-            .icon("block")
-            .desc("Saves a copy of the current block definition under a new name.")
-            .once(),
-    );
+    r.define(db("BSAVE", run(move |c, a| bsave(c, a, save.clone()))).title("Save Block").icon("block").desc("Saves the current block definition in the Block Editor.").once());
+    r.define(db("BSAVEAS", run(move |c, a| bsaveas(c, a, save_as.clone()))).title("Save Block As").icon("block").desc("Saves a copy of the current block definition under a new name.").once());
     let open = sessions.clone();
-    r.define(
-        db("BEDIT", run(move |c, a| bedit(c, a, open.clone())))
-            .aliases(&["BE"])
-            .title("Block Editor")
-            .icon("block")
-            .desc("Opens a block definition in the Block Editor."),
-    );
-    r.define(
-        db("BCLOSE", run(move |c, a| bclose(c, a, sessions.clone())))
-            .title("Close Block Editor")
-            .icon("block")
-            .desc("Closes the Block Editor and saves the block definition."),
-    );
+    r.define(db("BEDIT", run(move |c, a| bedit(c, a, open.clone()))).aliases(&["BE"]).title("Block Editor").icon("block").desc("Opens a block definition in the Block Editor."));
+    r.define(db("BCLOSE", run(move |c, a| bclose(c, a, sessions.clone()))).title("Close Block Editor").icon("block").desc("Closes the Block Editor and saves the block definition."));
 }

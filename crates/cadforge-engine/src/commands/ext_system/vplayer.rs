@@ -10,8 +10,7 @@ use cadforge_core::style::Color;
 
 /// The layout whose viewports a command works on: the layout of the active viewport, else the current layout tab.
 fn layout_name(c: &Ctx) -> Option<String> {
-    c.ed(|e| e.mspace.as_ref().map(|m| m.layout.clone()))
-        .or_else(|| c.doc(|d| (!d.is_model()).then(|| d.space.clone())))
+    c.ed(|e| e.mspace.as_ref().map(|m| m.layout.clone())).or_else(|| c.doc(|d| (!d.is_model()).then(|| d.space.clone())))
 }
 
 fn active_viewport(c: &Ctx) -> Option<(String, u64)> {
@@ -19,17 +18,7 @@ fn active_viewport(c: &Ctx) -> Option<(String, u64)> {
 }
 
 fn viewports_of(c: &Ctx, layout: &str) -> Vec<u64> {
-    c.doc(|d| {
-        d.layout(layout)
-            .map(|l| {
-                l.entities
-                    .iter()
-                    .filter(|e| matches!(e.kind, Kind::Viewport(_)))
-                    .map(|e| e.id)
-                    .collect()
-            })
-            .unwrap_or_default()
-    })
+    c.doc(|d| d.layout(layout).map(|l| l.entities.iter().filter(|e| matches!(e.kind, Kind::Viewport(_))).map(|e| e.id).collect()).unwrap_or_default())
 }
 
 /// Which viewports a VPLAYER option applies to: All / Select / Current.
@@ -39,32 +28,15 @@ async fn which_viewports(c: &Ctx) -> CmdResult<Option<(String, Vec<u64>)>> {
         return Ok(None);
     };
     let active = active_viewport(c);
-    let default = if active.is_some() {
-        "Current"
-    } else {
-        "Select"
-    };
-    let opts: &[&str] = if active.is_some() {
-        &["All", "Select", "Current"]
-    } else {
-        &["All", "Select"]
-    };
-    let r = c
-        .keyword(
-            ps(&format!("Enter an option [{}]", opts.join("/")))
-                .options(opts)
-                .default_str(default)
-                .allow_enter(),
-        )
-        .await?;
+    let default = if active.is_some() { "Current" } else { "Select" };
+    let opts: &[&str] = if active.is_some() { &["All", "Select", "Current"] } else { &["All", "Select"] };
+    let r = c.keyword(ps(&format!("Enter an option [{}]", opts.join("/"))).options(opts).default_str(default).allow_enter()).await?;
     let pick = r.kw().unwrap_or(default).to_string();
     let ids = match pick.as_str() {
         "All" => viewports_of(c, &layout),
         "Current" => active.map(|(_, id)| vec![id]).unwrap_or_default(),
         _ => {
-            let sel = c
-                .select(ps("Select viewports").filter(|e| matches!(e.kind, Kind::Viewport(_))))
-                .await?;
+            let sel = c.select(ps("Select viewports").filter(|e| matches!(e.kind, Kind::Viewport(_)))).await?;
             sel.ents
         }
     };
@@ -91,40 +63,14 @@ async fn ask_layers(c: &Ctx, prompt: &str) -> CmdResult<Vec<String>> {
 }
 
 fn edit_all(c: &Ctx, layout: &str, ids: &[u64], f: impl Fn(&mut ViewportData)) -> usize {
-    c.doc_mut(|d| {
-        d.change(|d| {
-            ids.iter()
-                .filter(|id| d.edit_viewport(layout, **id, &f))
-                .count()
-        })
-    })
+    c.doc_mut(|d| d.change(|d| ids.iter().filter(|id| d.edit_viewport(layout, **id, &f)).count()))
 }
 
 async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
-    let opts = [
-        "?",
-        "Freeze",
-        "Thaw",
-        "Reset",
-        "Newfrz",
-        "Vpvisdflt",
-        "Color",
-        "Linetype",
-        "LWeight",
-        "Transparency",
-    ];
+    let opts = ["?", "Freeze", "Thaw", "Reset", "Newfrz", "Vpvisdflt", "Color", "Linetype", "LWeight", "Transparency"];
     let option = match args.str("option") {
         Some(o) => o.to_string(),
-        None => c
-            .keyword(
-                ps("Enter an option [?/Freeze/Thaw/Reset/Newfrz/Vpvisdflt]")
-                    .options(&opts)
-                    .allow_enter(),
-            )
-            .await?
-            .kw()
-            .unwrap_or("")
-            .to_string(),
+        None => c.keyword(ps("Enter an option [?/Freeze/Thaw/Reset/Newfrz/Vpvisdflt]").options(&opts).allow_enter()).await?.kw().unwrap_or("").to_string(),
     };
     match option.as_str() {
         "?" => {
@@ -134,30 +80,12 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
             };
             let ids = match active_viewport(&c) {
                 Some((_, id)) => vec![id],
-                None => {
-                    c.select(
-                        ps("Select a viewport").filter(|e| matches!(e.kind, Kind::Viewport(_))),
-                    )
-                    .await?
-                    .ents
-                }
+                None => c.select(ps("Select a viewport").filter(|e| matches!(e.kind, Kind::Viewport(_)))).await?.ents,
             };
             for id in ids {
                 let (n, list) = c.doc(|d| {
-                    let v = d
-                        .layout(&layout)
-                        .and_then(|l| l.entities.iter().find(|e| e.id == id))
-                        .and_then(|e| {
-                            if let Kind::Viewport(v) = &e.kind {
-                                Some(v.clone())
-                            } else {
-                                None
-                            }
-                        });
-                    (
-                        v.as_ref().map_or(0, |v| v.layers.len()),
-                        v.map(|v| v.layers).unwrap_or_default(),
-                    )
+                    let v = d.layout(&layout).and_then(|l| l.entities.iter().find(|e| e.id == id)).and_then(|e| if let Kind::Viewport(v) = &e.kind { Some(v.clone()) } else { None });
+                    (v.as_ref().map_or(0, |v| v.layers.len()), v.map(|v| v.layers).unwrap_or_default())
                 });
                 if n == 0 {
                     c.log(&format!("Viewport {id}: no layer overrides."));
@@ -189,9 +117,7 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
             if layers.is_empty() {
                 return Ok(());
             }
-            let Some((layout, ids)) = which_viewports(&c).await? else {
-                return Ok(());
-            };
+            let Some((layout, ids)) = which_viewports(&c).await? else { return Ok(()) };
             let (freeze, reset) = (option == "Freeze", option == "Reset");
             let n = edit_all(&c, &layout, &ids, |v| {
                 for l in &layers {
@@ -202,29 +128,15 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                     }
                 }
             });
-            c.log(&format!(
-                "{} in {}: {}.",
-                plural(layers.len(), "layer"),
-                plural(n, "viewport"),
-                match option.as_str() {
-                    "Freeze" => "frozen",
-                    "Thaw" => "thawed",
-                    _ => "reset to the drawing's settings",
-                }
-            ));
+            c.log(&format!("{} in {}: {}.", plural(layers.len(), "layer"), plural(n, "viewport"), match option.as_str() {
+                "Freeze" => "frozen",
+                "Thaw" => "thawed",
+                _ => "reset to the drawing's settings",
+            }));
         }
         "Newfrz" => {
-            let t = c
-                .string(ps(
-                    "Enter name(s) of new layer(s) that are frozen in all viewports",
-                ))
-                .await?
-                .text;
-            let names: Vec<String> = t
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
+            let t = c.string(ps("Enter name(s) of new layer(s) that are frozen in all viewports")).await?.text;
+            let names: Vec<String> = t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
             if names.is_empty() {
                 return Ok(());
             }
@@ -235,11 +147,7 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                         if d.layer(name).is_none() && d.add_layer(name).is_err() {
                             return false;
                         }
-                        if let Some(l) = d
-                            .layers
-                            .iter_mut()
-                            .find(|l| l.name.eq_ignore_ascii_case(name))
-                        {
+                        if let Some(l) = d.layers.iter_mut().find(|l| l.name.eq_ignore_ascii_case(name)) {
                             l.vp_frozen_default = true;
                         }
                         true
@@ -254,45 +162,18 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                     edit_all(&c, lay, &ids, |v| v.set_frozen(name, true));
                 }
             }
-            c.log(&format!(
-                "{} frozen in all viewports, existing and new.",
-                plural(names.len(), "layer")
-            ));
+            c.log(&format!("{} frozen in all viewports, existing and new.", plural(names.len(), "layer")));
         }
         "Vpvisdflt" => {
-            let layers = ask_layers(
-                &c,
-                "Enter layer name(s) to change the viewport visibility default",
-            )
-            .await?;
+            let layers = ask_layers(&c, "Enter layer name(s) to change the viewport visibility default").await?;
             if layers.is_empty() {
                 return Ok(());
             }
-            let frozen = c
-                .keyword(
-                    ps("Enter a viewport visibility default [Frozen/Thawed]")
-                        .options(&["Frozen", "Thawed"])
-                        .default_str("Thawed"),
-                )
-                .await?
-                .kw()
-                == Some("Frozen");
-            let existing = c
-                .keyword(
-                    ps("Change visibility in current viewport(s)? [Yes/No]")
-                        .options(&["Yes", "No"])
-                        .default_str("No"),
-                )
-                .await?
-                .kw()
-                == Some("Yes");
+            let frozen = c.keyword(ps("Enter a viewport visibility default [Frozen/Thawed]").options(&["Frozen", "Thawed"]).default_str("Thawed")).await?.kw() == Some("Frozen");
+            let existing = c.keyword(ps("Change visibility in current viewport(s)? [Yes/No]").options(&["Yes", "No"]).default_str("No")).await?.kw() == Some("Yes");
             c.doc_mut(|d| {
                 d.change(|d| {
-                    for l in d
-                        .layers
-                        .iter_mut()
-                        .filter(|l| layers.iter().any(|n| n.eq_ignore_ascii_case(&l.name)))
-                    {
+                    for l in d.layers.iter_mut().filter(|l| layers.iter().any(|n| n.eq_ignore_ascii_case(&l.name))) {
                         l.vp_frozen_default = frozen;
                     }
                 })
@@ -307,11 +188,7 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                     });
                 }
             }
-            c.log(&format!(
-                "New viewports will show {} {}.",
-                plural(layers.len(), "layer"),
-                if frozen { "frozen" } else { "thawed" }
-            ));
+            c.log(&format!("New viewports will show {} {}.", plural(layers.len(), "layer"), if frozen { "frozen" } else { "thawed" }));
         }
         "Color" | "Linetype" | "LWeight" | "Transparency" => {
             // CadForge extension: the layer manager's "VP Color / VP Linetype / VP Lineweight / VP Transparency" columns
@@ -319,16 +196,7 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
             if layers.is_empty() {
                 return Ok(());
             }
-            let text = c
-                .string(
-                    ps(&format!(
-                        "Enter the {} override, or Reset to remove it",
-                        option.to_lowercase()
-                    ))
-                    .raw(),
-                )
-                .await?
-                .text;
+            let text = c.string(ps(&format!("Enter the {} override, or Reset to remove it", option.to_lowercase())).raw()).await?.text;
             let text = text.trim().to_string();
             let reset = text.eq_ignore_ascii_case("reset");
             let apply: Result<Box<dyn Fn(&mut LayerOverride)>, String> = match option.as_str() {
@@ -336,18 +204,13 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                     if reset {
                         Ok(Box::new(|o| o.color = None))
                     } else {
-                        parse_color(&text).map(|col| {
-                            Box::new(move |o: &mut LayerOverride| o.color = Some(col))
-                                as Box<dyn Fn(&mut LayerOverride)>
-                        })
+                        parse_color(&text).map(|col| Box::new(move |o: &mut LayerOverride| o.color = Some(col)) as Box<dyn Fn(&mut LayerOverride)>)
                     }
                 }
                 "Linetype" => {
                     if reset {
                         Ok(Box::new(|o| o.ltype = None))
-                    } else if cadforge_core::style::linetype(&text).is_some()
-                        || text.eq_ignore_ascii_case("continuous")
-                    {
+                    } else if cadforge_core::style::linetype(&text).is_some() || text.eq_ignore_ascii_case("continuous") {
                         let name = text.clone();
                         Ok(Box::new(move |o| o.ltype = Some(name.clone())))
                     } else {
@@ -358,30 +221,14 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                     if reset {
                         Ok(Box::new(|o| o.lw = None))
                     } else {
-                        text.parse::<f64>()
-                            .map(|mm| {
-                                Box::new(move |o: &mut LayerOverride| {
-                                    o.lw = Some((mm * 100.0).round() as i32)
-                                })
-                                    as Box<dyn Fn(&mut LayerOverride)>
-                            })
-                            .map_err(|_| {
-                                "Enter a lineweight in millimetres, such as 0.35.".to_string()
-                            })
+                        text.parse::<f64>().map(|mm| Box::new(move |o: &mut LayerOverride| o.lw = Some((mm * 100.0).round() as i32)) as Box<dyn Fn(&mut LayerOverride)>).map_err(|_| "Enter a lineweight in millimetres, such as 0.35.".to_string())
                     }
                 }
                 _ => {
                     if reset {
                         Ok(Box::new(|o| o.transp = None))
                     } else {
-                        text.parse::<f64>()
-                            .ok()
-                            .filter(|t| (0.0..=90.0).contains(t))
-                            .map(|t| {
-                                Box::new(move |o: &mut LayerOverride| o.transp = Some(t))
-                                    as Box<dyn Fn(&mut LayerOverride)>
-                            })
-                            .ok_or_else(|| "Transparency is a percentage from 0 to 90.".to_string())
+                        text.parse::<f64>().ok().filter(|t| (0.0..=90.0).contains(t)).map(|t| Box::new(move |o: &mut LayerOverride| o.transp = Some(t)) as Box<dyn Fn(&mut LayerOverride)>).ok_or_else(|| "Transparency is a percentage from 0 to 90.".to_string())
                     }
                 }
             };
@@ -392,19 +239,13 @@ async fn vplayer(c: Ctx, args: Args) -> CmdResult<()> {
                     return Ok(());
                 }
             };
-            let Some((layout, ids)) = which_viewports(&c).await? else {
-                return Ok(());
-            };
+            let Some((layout, ids)) = which_viewports(&c).await? else { return Ok(()) };
             let n = edit_all(&c, &layout, &ids, |v| {
                 for l in &layers {
                     v.edit_override(l, |o| apply(o));
                 }
             });
-            c.log(&format!(
-                "{} overridden in {}.",
-                plural(layers.len(), "layer"),
-                plural(n, "viewport")
-            ));
+            c.log(&format!("{} overridden in {}.", plural(layers.len(), "layer"), plural(n, "viewport")));
         }
         _ => {}
     }
@@ -428,11 +269,7 @@ fn parse_color(t: &str) -> Result<Color, String> {
     }
     let parts: Vec<&str> = t.split(',').map(str::trim).collect();
     if parts.len() == 3 {
-        if let (Ok(r), Ok(g), Ok(b)) = (
-            parts[0].parse::<u8>(),
-            parts[1].parse::<u8>(),
-            parts[2].parse::<u8>(),
-        ) {
+        if let (Ok(r), Ok(g), Ok(b)) = (parts[0].parse::<u8>(), parts[1].parse::<u8>(), parts[2].parse::<u8>()) {
             return Ok(Color::Rgb(r, g, b));
         }
     }
@@ -449,16 +286,8 @@ async fn layvpi(c: Ctx, _a: Args) -> CmdResult<()> {
         }
         return Ok(());
     };
-    let sel = c
-        .select(ps(
-            "Select an object on the layer(s) to isolate in this viewport",
-        ))
-        .await?;
-    let keep: std::collections::BTreeSet<String> = c
-        .entities(&sel.ents)
-        .iter()
-        .map(|e| c.doc(|d| d.layer_of(e).name.to_lowercase()))
-        .collect();
+    let sel = c.select(ps("Select an object on the layer(s) to isolate in this viewport")).await?;
+    let keep: std::collections::BTreeSet<String> = c.entities(&sel.ents).iter().map(|e| c.doc(|d| d.layer_of(e).name.to_lowercase())).collect();
     if keep.is_empty() {
         return Ok(());
     }
@@ -472,10 +301,7 @@ async fn layvpi(c: Ctx, _a: Args) -> CmdResult<()> {
             }
         }
     });
-    c.log(&format!(
-        "{} isolated in this viewport; the others are frozen here only.",
-        plural(keep.len(), "layer")
-    ));
+    c.log(&format!("{} isolated in this viewport; the others are frozen here only.", plural(keep.len(), "layer")));
     c.ed(|e| e.clear_sel());
     Ok(())
 }
@@ -489,28 +315,7 @@ async fn layerpall(c: Ctx, _a: Args) -> CmdResult<()> {
         let ids = viewports_of(&c, lay);
         vps += ids.len();
         for id in ids {
-            let n = c.doc(|d| {
-                d.layout(lay)
-                    .and_then(|l| l.entities.iter().find(|e| e.id == id))
-                    .and_then(|e| {
-                        if let Kind::Viewport(v) = &e.kind {
-                            Some(
-                                v.layers
-                                    .iter()
-                                    .filter(|o| {
-                                        o.color.is_some()
-                                            || o.ltype.is_some()
-                                            || o.lw.is_some()
-                                            || o.transp.is_some()
-                                    })
-                                    .count(),
-                            )
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or(0)
-            });
+            let n = c.doc(|d| d.layout(lay).and_then(|l| l.entities.iter().find(|e| e.id == id)).and_then(|e| if let Kind::Viewport(v) = &e.kind { Some(v.layers.iter().filter(|o| o.color.is_some() || o.ltype.is_some() || o.lw.is_some() || o.transp.is_some()).count()) } else { None }).unwrap_or(0));
             if n > 0 {
                 cleared += n;
                 edit_all(&c, lay, &[id], |v| {
@@ -530,27 +335,13 @@ async fn layerpall(c: Ctx, _a: Args) -> CmdResult<()> {
     if vps == 0 {
         c.log_error("There are no layout viewports.");
     } else {
-        c.log(&format!(
-            "{} reset in {}.",
-            plural(cleared, "layer override"),
-            plural(vps, "viewport")
-        ));
+        c.log(&format!("{} reset in {}.", plural(cleared, "layer override"), plural(vps, "viewport")));
     }
     Ok(())
 }
 
 pub(super) fn register(r: &mut Registry) {
     r.define(def("Layers", "VPLAYER", run(vplayer)).title("Viewport Layer").icon("layers").desc("Freezes, thaws or resets layers in individual layout viewports, and sets defaults for new viewports."));
-    r.define(
-        def("Layers", "LAYVPI", run(layvpi))
-            .title("Layer Viewport Isolate")
-            .icon("layiso")
-            .desc("Isolates the layer of a selected object in the active layout viewport."),
-    );
-    r.define(
-        def("Layers", "LAYERPALL", run(layerpall))
-            .title("Reset All Viewport Layer Overrides")
-            .icon("layers")
-            .desc("Resets the layer property overrides in all layout viewports."),
-    );
+    r.define(def("Layers", "LAYVPI", run(layvpi)).title("Layer Viewport Isolate").icon("layiso").desc("Isolates the layer of a selected object in the active layout viewport."));
+    r.define(def("Layers", "LAYERPALL", run(layerpall)).title("Reset All Viewport Layer Overrides").icon("layers").desc("Resets the layer property overrides in all layout viewports."));
 }

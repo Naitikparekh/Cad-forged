@@ -42,10 +42,7 @@ impl Vertex {
         self.normal = self.normal.scale(-1.0);
     }
     fn interpolate(&self, o: &Vertex, t: f64) -> Vertex {
-        Vertex {
-            pos: lerp(self.pos, o.pos, t),
-            normal: lerp(self.normal, o.normal, t),
-        }
+        Vertex { pos: lerp(self.pos, o.pos, t), normal: lerp(self.normal, o.normal, t) }
     }
 }
 
@@ -71,13 +68,7 @@ impl Polygon {
         let n = b.sub(a).cross(c.sub(a));
         let l = n.len();
         let n = n.scale(1.0 / l);
-        Polygon {
-            plane: Plane {
-                normal: n,
-                w: n.dot(a),
-            },
-            vertices,
-        }
+        Polygon { plane: Plane { normal: n, w: n.dot(a) }, vertices }
     }
     fn flip(&mut self) {
         self.vertices.reverse();
@@ -142,8 +133,7 @@ impl Plane {
                         b.push(vi);
                     }
                     if (ti | tj) == SPANNING {
-                        let t = (self.w - self.normal.dot(vi.pos))
-                            / self.normal.dot(vj.pos.sub(vi.pos));
+                        let t = (self.w - self.normal.dot(vi.pos)) / self.normal.dot(vj.pos.sub(vi.pos));
                         let v = vi.interpolate(&vj, t);
                         f.push(v);
                         b.push(v);
@@ -193,9 +183,7 @@ impl Node {
     }
 
     fn clip_polygons(&self, polygons: Vec<Polygon>) -> Vec<Polygon> {
-        let Some(plane) = &self.plane else {
-            return polygons;
-        };
+        let Some(plane) = &self.plane else { return polygons };
         let (mut front, mut back): (Vec<Polygon>, Vec<Polygon>) = (vec![], vec![]);
         for p in polygons {
             plane.split(p, &mut |w, poly| match w {
@@ -263,19 +251,13 @@ impl Node {
 fn to_csg(m: &Mesh) -> Vec<Polygon> {
     let mut polys = vec![];
     for f in &m.faces {
-        let ps = [
-            m.vertices[f[0] as usize],
-            m.vertices[f[1] as usize],
-            m.vertices[f[2] as usize],
-        ];
+        let ps = [m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize]];
         let n = ps[1].sub(ps[0]).cross(ps[2].sub(ps[0]));
         if n.len() < 1e-12 {
             continue; // skip degenerate triangles
         }
         let normal = n.scale(1.0 / n.len());
-        polys.push(Polygon::new(
-            ps.iter().map(|p| Vertex { pos: *p, normal }).collect(),
-        ));
+        polys.push(Polygon::new(ps.iter().map(|p| Vertex { pos: *p, normal }).collect()));
     }
     polys
 }
@@ -285,11 +267,7 @@ fn from_csg(polys: &[Polygon]) -> Mesh {
     let mut faces: Vec<[u32; 3]> = vec![];
     let mut lookup: HashMap<(i64, i64, i64), u32> = HashMap::new();
     let mut index = |p: V3| -> u32 {
-        let key = (
-            (p.x * 1e7).round() as i64,
-            (p.y * 1e7).round() as i64,
-            (p.z * 1e7).round() as i64,
-        );
+        let key = ((p.x * 1e7).round() as i64, (p.y * 1e7).round() as i64, (p.z * 1e7).round() as i64);
         *lookup.entry(key).or_insert_with(|| {
             let r = |x: f64| (x * 1e9).round() / 1e9;
             vertices.push(V3::new(r(p.x), r(p.y), r(p.z)));
@@ -310,9 +288,7 @@ fn from_csg(polys: &[Polygon]) -> Mesh {
 /// Boolean of two meshes. The result may be empty.
 pub fn boolean_sync(a: &Mesh, b: &Mesh, op: BoolOp) -> Result<Mesh, String> {
     if a.faces.len() + b.faces.len() > MAX_TRIANGLES {
-        return Err(format!(
-            "The solids have more than {MAX_TRIANGLES} triangles."
-        ));
+        return Err(format!("The solids have more than {MAX_TRIANGLES} triangles."));
     }
     let mut na = Node::from_polygons(to_csg(a));
     let mut nb = Node::from_polygons(to_csg(b));

@@ -36,10 +36,7 @@ pub fn write_dwg_as(doc: &Drawing, ver: Ver) -> Result<Vec<u8>, String> {
 /// Encode CadForge's DXF output as a DWG file.
 pub fn dxf_to_dwg(text: &str, ver: Ver) -> Result<Vec<u8>, String> {
     if !matches!(ver, Ver::R2000 | Ver::R2004) {
-        return Err(format!(
-            "CadForge writes DWG 2000 and 2004 files, not {}.",
-            ver.label()
-        ));
+        return Err(format!("CadForge writes DWG 2000 and 2004 files, not {}.", ver.label()));
     }
     let d = dxfin::parse(text);
     let mut w = Writer::new(&d, ver)?;
@@ -66,12 +63,7 @@ fn cmc(m: &mut BitW, ver: Ver, aci: i64, rgb: Option<u32>) {
 
 /// The DXF colour of a record: its index (62) and true colour (420).
 fn colour(r: &Rec, default: i64) -> (i64, Option<u32>) {
-    (
-        r.i(62, default),
-        r.get(420)
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .map(|v| v as u32),
-    )
+    (r.i(62, default), r.get(420).and_then(|v| v.trim().parse::<i64>().ok()).map(|v| v as u32))
 }
 
 fn rad(deg: f64) -> f64 {
@@ -80,19 +72,12 @@ fn rad(deg: f64) -> f64 {
 
 /// A DWG lineweight index for a DXF lineweight (-1 ByLayer, -2 ByBlock, -3 default, else hundredths of a mm).
 fn lw_index(v: i64) -> u8 {
-    const W: [i64; 24] = [
-        0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158,
-        200, 211,
-    ];
+    const W: [i64; 24] = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211];
     match v {
         -1 => 29,
         -2 => 30,
         v if v < 0 => 31,
-        v => W
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, w)| (*w - v).abs())
-            .map_or(31, |(i, _)| i as u8),
+        v => W.iter().enumerate().min_by_key(|(_, w)| (*w - v).abs()).map_or(31, |(i, _)| i as u8),
     }
 }
 
@@ -121,11 +106,7 @@ impl O {
             m.bytes(&b[..b.len().min(i16::MAX as usize)]);
         }
         m.bs(0); // end of extended data
-        O {
-            m,
-            h: BitW::new(),
-            size_at,
-        }
+        O { m, h: BitW::new(), size_at }
     }
 
     /// MS size, the object, CRC.
@@ -136,12 +117,7 @@ impl O {
         self.m.align();
         let n = self.m.buf.len() as u32;
         let mut out = if n >= 0x8000 {
-            vec![
-                (n & 0xFF) as u8,
-                (((n >> 8) & 0x7F) | 0x80) as u8,
-                ((n >> 15) & 0xFF) as u8,
-                ((n >> 23) & 0xFF) as u8,
-            ]
+            vec![(n & 0xFF) as u8, (((n >> 8) & 0x7F) | 0x80) as u8, ((n >> 15) & 0xFF) as u8, ((n >> 23) & 0xFF) as u8]
         } else {
             vec![(n & 0xFF) as u8, (n >> 8) as u8]
         };
@@ -167,55 +143,13 @@ struct Class {
 }
 
 const CLASSES: [Class; 7] = [
-    Class {
-        dxf: "ACDBDICTIONARYWDFLT",
-        cpp: "AcDbDictionaryWithDefault",
-        app: "ObjectDBX Classes",
-        proxy: 0,
-        entity: false,
-    },
-    Class {
-        dxf: "ACDBPLACEHOLDER",
-        cpp: "AcDbPlaceHolder",
-        app: "ObjectDBX Classes",
-        proxy: 0,
-        entity: false,
-    },
-    Class {
-        dxf: "LAYOUT",
-        cpp: "AcDbLayout",
-        app: "ObjectDBX Classes",
-        proxy: 0,
-        entity: false,
-    },
-    Class {
-        dxf: "IMAGEDEF",
-        cpp: "AcDbRasterImageDef",
-        app: "ISM",
-        proxy: 0,
-        entity: false,
-    },
-    Class {
-        dxf: "IMAGEDEF_REACTOR",
-        cpp: "AcDbRasterImageDefReactor",
-        app: "ISM",
-        proxy: 1,
-        entity: false,
-    },
-    Class {
-        dxf: "IMAGE",
-        cpp: "AcDbRasterImage",
-        app: "ISM",
-        proxy: 2175,
-        entity: true,
-    },
-    Class {
-        dxf: "WIPEOUT",
-        cpp: "AcDbWipeout",
-        app: "WipeOut",
-        proxy: 2175,
-        entity: true,
-    },
+    Class { dxf: "ACDBDICTIONARYWDFLT", cpp: "AcDbDictionaryWithDefault", app: "ObjectDBX Classes", proxy: 0, entity: false },
+    Class { dxf: "ACDBPLACEHOLDER", cpp: "AcDbPlaceHolder", app: "ObjectDBX Classes", proxy: 0, entity: false },
+    Class { dxf: "LAYOUT", cpp: "AcDbLayout", app: "ObjectDBX Classes", proxy: 0, entity: false },
+    Class { dxf: "IMAGEDEF", cpp: "AcDbRasterImageDef", app: "ISM", proxy: 0, entity: false },
+    Class { dxf: "IMAGEDEF_REACTOR", cpp: "AcDbRasterImageDefReactor", app: "ISM", proxy: 1, entity: false },
+    Class { dxf: "IMAGE", cpp: "AcDbRasterImage", app: "ISM", proxy: 2175, entity: true },
+    Class { dxf: "WIPEOUT", cpp: "AcDbWipeout", app: "WipeOut", proxy: 2175, entity: true },
 ];
 
 /// An entity of a block with the ones that follow it (attributes and their SEQEND).
@@ -231,11 +165,7 @@ fn group(list: &[Rec]) -> Vec<Ent<'_>> {
         match r.ty.as_str() {
             "ATTRIB" | "VERTEX" if !out.is_empty() => out.last_mut().expect("entity").kids.push(r),
             "SEQEND" if !out.is_empty() => out.last_mut().expect("entity").seqend = Some(r),
-            _ => out.push(Ent {
-                r,
-                kids: vec![],
-                seqend: None,
-            }),
+            _ => out.push(Ent { r, kids: vec![], seqend: None }),
         }
     }
     out
@@ -319,17 +249,7 @@ impl<'a> Writer<'a> {
         d.entities.iter().for_each(&mut scan);
         d.objects.iter().for_each(&mut scan);
         w.next = top + 1;
-        for (name, key) in [
-            ("BLOCK_RECORD", "BLOCK"),
-            ("LAYER", "LAYER"),
-            ("STYLE", "STYLE"),
-            ("LTYPE", "LTYPE"),
-            ("VIEW", "VIEW"),
-            ("UCS", "UCS"),
-            ("VPORT", "VPORT"),
-            ("APPID", "APPID"),
-            ("DIMSTYLE", "DIMSTYLE"),
-        ] {
+        for (name, key) in [("BLOCK_RECORD", "BLOCK"), ("LAYER", "LAYER"), ("STYLE", "STYLE"), ("LTYPE", "LTYPE"), ("VIEW", "VIEW"), ("UCS", "UCS"), ("VPORT", "VPORT"), ("APPID", "APPID"), ("DIMSTYLE", "DIMSTYLE")] {
             let h = match d.table(name) {
                 Some((t, _)) => t.handle(),
                 None => w.alloc(),
@@ -338,31 +258,14 @@ impl<'a> Writer<'a> {
         }
         let vp = w.alloc();
         w.controls.insert("VP_ENT_HDR", vp);
-        let names = |t: &str| -> HashMap<String, u64> {
-            d.table(t)
-                .map(|(_, e)| {
-                    e.iter()
-                        .map(|r| (r.s(2).to_lowercase(), r.handle()))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
+        let names = |t: &str| -> HashMap<String, u64> { d.table(t).map(|(_, e)| e.iter().map(|r| (r.s(2).to_lowercase(), r.handle())).collect()).unwrap_or_default() };
         w.layers = names("LAYER");
         w.ltypes = names("LTYPE");
         w.styles = names("STYLE");
         w.dimstyles = names("DIMSTYLE");
-        w.blocks = d
-            .table("BLOCK_RECORD")
-            .map(|(_, e)| e.iter().map(|r| (r.s(2).to_string(), r.handle())).collect())
-            .unwrap_or_default();
-        w.model = *w
-            .blocks
-            .get("*Model_Space")
-            .ok_or("The drawing has no model space.")?;
-        w.paper = *w
-            .blocks
-            .get("*Paper_Space")
-            .ok_or("The drawing has no paper space.")?;
+        w.blocks = d.table("BLOCK_RECORD").map(|(_, e)| e.iter().map(|r| (r.s(2).to_string(), r.handle())).collect()).unwrap_or_default();
+        w.model = *w.blocks.get("*Model_Space").ok_or("The drawing has no model space.")?;
+        w.paper = *w.blocks.get("*Paper_Space").ok_or("The drawing has no paper space.")?;
         if !w.layers.contains_key("0") {
             return Err("The drawing has no layer 0.".into());
         }
@@ -371,28 +274,11 @@ impl<'a> Writer<'a> {
                 return Err(format!("The drawing has no {lt} linetype."));
             }
         }
-        w.std_style = w
-            .styles
-            .get("standard")
-            .copied()
-            .ok_or("The drawing has no Standard text style.")?;
-        w.std_dimstyle = w
-            .dimstyles
-            .get("standard")
-            .copied()
-            .ok_or("The drawing has no Standard dimension style.")?;
-        let root = d
-            .objects
-            .iter()
-            .find(|o| o.ty == "DICTIONARY" && o.owner() == 0)
-            .ok_or("The drawing has no named object dictionary.")?;
+        w.std_style = w.styles.get("standard").copied().ok_or("The drawing has no Standard text style.")?;
+        w.std_dimstyle = w.dimstyles.get("standard").copied().ok_or("The drawing has no Standard dimension style.")?;
+        let root = d.objects.iter().find(|o| o.ty == "DICTIONARY" && o.owner() == 0).ok_or("The drawing has no named object dictionary.")?;
         w.dict_root = root.handle();
-        let entry = |name: &str| {
-            root.g
-                .windows(2)
-                .find(|p| p[0].0 == 3 && p[0].1 == name && p[1].0 == 350)
-                .map(|p| hex(&p[1].1))
-        };
+        let entry = |name: &str| root.g.windows(2).find(|p| p[0].0 == 3 && p[0].1 == name && p[1].0 == 350).map(|p| hex(&p[1].1));
         w.dict_group = entry("ACAD_GROUP").unwrap_or(0);
         w.dict_layout = entry("ACAD_LAYOUT").ok_or("The drawing has no layout dictionary.")?;
         w.dict_mline = w.alloc();
@@ -421,10 +307,7 @@ impl<'a> Writer<'a> {
     }
 
     fn class(&mut self, dxf: &str) -> u16 {
-        let k = CLASSES
-            .iter()
-            .position(|c| c.dxf == dxf)
-            .expect("known class");
+        let k = CLASSES.iter().position(|c| c.dxf == dxf).expect("known class");
         let i = match self.classes.iter().position(|&c| c == k) {
             Some(i) => i,
             None => {
@@ -440,25 +323,15 @@ impl<'a> Writer<'a> {
     }
 
     fn layer(&self, name: &str) -> u64 {
-        self.layers
-            .get(&name.to_lowercase())
-            .or(self.layers.get("0"))
-            .copied()
-            .unwrap_or(0)
+        self.layers.get(&name.to_lowercase()).or(self.layers.get("0")).copied().unwrap_or(0)
     }
 
     fn style(&self, name: &str) -> u64 {
-        self.styles
-            .get(&name.to_lowercase())
-            .copied()
-            .unwrap_or(self.std_style)
+        self.styles.get(&name.to_lowercase()).copied().unwrap_or(self.std_style)
     }
 
     fn dimstyle(&self, name: &str) -> u64 {
-        self.dimstyles
-            .get(&name.to_lowercase())
-            .copied()
-            .unwrap_or(self.std_dimstyle)
+        self.dimstyles.get(&name.to_lowercase()).copied().unwrap_or(self.std_dimstyle)
     }
 
     fn nonent(&self, ty: u16, handle: u64, owner: u64, reactors: &[u64]) -> O {
@@ -480,10 +353,7 @@ impl<'a> Writer<'a> {
     /// integers, reals, points and handles are kept; applications without an APPID record are left out.
     fn eed(&self, r: &Rec) -> Vec<(u64, Vec<u8>)> {
         let mut out: Vec<(u64, Vec<u8>)> = vec![];
-        let mut i =
-            r.g.iter()
-                .position(|(c, _)| *c == 1001)
-                .unwrap_or(r.g.len());
+        let mut i = r.g.iter().position(|(c, _)| *c == 1001).unwrap_or(r.g.len());
         while i < r.g.len() {
             let (c, v) = &r.g[i];
             i += 1;
@@ -499,17 +369,11 @@ impl<'a> Writer<'a> {
                 }
                 continue;
             }
-            let Some((_, b)) = out.last_mut() else {
-                continue;
-            };
+            let Some((_, b)) = out.last_mut() else { continue };
             let f = |s: &str| s.trim().parse::<f64>().unwrap_or(0.0);
             match *c {
                 1000 => {
-                    let s: Vec<u8> = v
-                        .chars()
-                        .map(|ch| if (ch as u32) < 0x100 { ch as u8 } else { b'?' })
-                        .take(255)
-                        .collect();
+                    let s: Vec<u8> = v.chars().map(|ch| if (ch as u32) < 0x100 { ch as u8 } else { b'?' }).take(255).collect();
                     // a two-byte length, the code page (ANSI 1252, as in the header), the bytes
                     b.push(0);
                     b.extend((s.len() as u16).to_le_bytes());
@@ -535,14 +399,8 @@ impl<'a> Writer<'a> {
                 }
                 1010..=1013 => {
                     // x here, y and z in the next groups
-                    let y =
-                        r.g.get(i)
-                            .filter(|g| g.0 == *c + 10)
-                            .map_or(0.0, |g| f(&g.1));
-                    let z =
-                        r.g.get(i + 1)
-                            .filter(|g| g.0 == *c + 20)
-                            .map_or(0.0, |g| f(&g.1));
+                    let y = r.g.get(i).filter(|g| g.0 == *c + 10).map_or(0.0, |g| f(&g.1));
+                    let z = r.g.get(i + 1).filter(|g| g.0 == *c + 20).map_or(0.0, |g| f(&g.1));
                     b.push((*c - 1000) as u8);
                     for k in [f(v), y, z] {
                         b.extend(k.to_le_bytes());
@@ -616,20 +474,11 @@ impl<'a> Writer<'a> {
         self.tables();
         let d = self.d;
         // blocks: the BLOCK_RECORD order, model space taking its entities from the ENTITIES section
-        let recs: Vec<Rec> = d
-            .table("BLOCK_RECORD")
-            .map(|(_, e)| e.clone())
-            .unwrap_or_default();
+        let recs: Vec<Rec> = d.table("BLOCK_RECORD").map(|(_, e)| e.clone()).unwrap_or_default();
         for rec in &recs {
             let name = rec.s(2);
-            let Some(b) = d.blocks.iter().find(|b| b.begin.s(2) == name) else {
-                continue;
-            };
-            let list = if name == "*Model_Space" {
-                &d.entities
-            } else {
-                &b.ents
-            };
+            let Some(b) = d.blocks.iter().find(|b| b.begin.s(2) == name) else { continue };
+            let list = if name == "*Model_Space" { &d.entities } else { &b.ents };
             self.block(rec, b, list)?;
         }
         self.objects();
@@ -655,40 +504,23 @@ impl<'a> Writer<'a> {
     }
 
     fn entries(&self, table: &str) -> Vec<Rec> {
-        self.d
-            .table(table)
-            .map(|(_, e)| e.clone())
-            .unwrap_or_default()
+        self.d.table(table).map(|(_, e)| e.clone()).unwrap_or_default()
     }
 
     fn tables(&mut self) {
         // block records
         let recs = self.entries("BLOCK_RECORD");
-        let others: Vec<u64> = recs
-            .iter()
-            .filter(|r| !matches!(r.s(2), "*Model_Space" | "*Paper_Space"))
-            .map(|r| r.handle())
-            .collect();
+        let others: Vec<u64> = recs.iter().filter(|r| !matches!(r.s(2), "*Model_Space" | "*Paper_Space")).map(|r| r.handle()).collect();
         let (ms, ps) = (self.model, self.paper);
         self.control("BLOCK", 48, &others, &[ms, ps]);
         // (the block records themselves are written with their blocks, which give their entity lists)
         let layers = self.entries("LAYER");
-        self.control(
-            "LAYER",
-            50,
-            &layers.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
+        self.control("LAYER", 50, &layers.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         for r in &layers {
             self.layer_rec(r);
         }
         let styles = self.entries("STYLE");
-        self.control(
-            "STYLE",
-            52,
-            &styles.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
+        self.control("STYLE", 52, &styles.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         for r in &styles {
             let mut o = self.nonent(53, r.handle(), self.controls["STYLE"], &[]);
             o.m.tv(r.s(2));
@@ -708,11 +540,7 @@ impl<'a> Writer<'a> {
         }
         let ltypes = self.entries("LTYPE");
         let (byblock, bylayer) = (self.ltypes["byblock"], self.ltypes["bylayer"]);
-        let listed: Vec<u64> = ltypes
-            .iter()
-            .map(|r| r.handle())
-            .filter(|h| *h != byblock && *h != bylayer)
-            .collect();
+        let listed: Vec<u64> = ltypes.iter().map(|r| r.handle()).filter(|h| *h != byblock && *h != bylayer).collect();
         self.control("LTYPE", 56, &listed, &[byblock, bylayer]);
         for r in &ltypes {
             let mut o = self.nonent(57, r.handle(), self.controls["LTYPE"], &[]);
@@ -721,11 +549,7 @@ impl<'a> Writer<'a> {
             o.m.tv(r.s(3));
             o.m.bd(r.f(40));
             o.m.rc(r.i(72, 65) as u8);
-            let dashes: Vec<f64> = r
-                .all(49)
-                .iter()
-                .map(|v| v.trim().parse().unwrap_or(0.0))
-                .collect();
+            let dashes: Vec<f64> = r.all(49).iter().map(|v| v.trim().parse().unwrap_or(0.0)).collect();
             o.m.rc(dashes.len().min(255) as u8);
             for dash in dashes.iter().take(255) {
                 o.m.bd(*dash);
@@ -744,40 +568,17 @@ impl<'a> Writer<'a> {
             self.put(r.handle(), o);
         }
         let views = self.entries("VIEW");
-        self.control(
-            "VIEW",
-            60,
-            &views.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
+        self.control("VIEW", 60, &views.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         let ucss = self.entries("UCS");
-        self.control(
-            "UCS",
-            62,
-            &ucss.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
+        self.control("UCS", 62, &ucss.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         let vports = self.entries("VPORT");
-        self.control(
-            "VPORT",
-            64,
-            &vports.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
+        self.control("VPORT", 64, &vports.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         for r in &vports {
             self.vport(r);
         }
         let appids = self.entries("APPID");
-        self.control(
-            "APPID",
-            66,
-            &appids.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
-        self.appids = appids
-            .iter()
-            .map(|r| (r.s(2).to_lowercase(), r.handle()))
-            .collect();
+        self.control("APPID", 66, &appids.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
+        self.appids = appids.iter().map(|r| (r.s(2).to_lowercase(), r.handle())).collect();
         for r in &appids {
             let mut o = self.nonent(67, r.handle(), self.controls["APPID"], &[]);
             o.m.tv(r.s(2));
@@ -787,12 +588,7 @@ impl<'a> Writer<'a> {
             self.put(r.handle(), o);
         }
         let dimstyles = self.entries("DIMSTYLE");
-        self.control(
-            "DIMSTYLE",
-            68,
-            &dimstyles.iter().map(|r| r.handle()).collect::<Vec<_>>(),
-            &[],
-        );
+        self.control("DIMSTYLE", 68, &dimstyles.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         for r in &dimstyles {
             self.dimstyle_rec(r);
         }
@@ -824,23 +620,11 @@ impl<'a> Writer<'a> {
             v |= 16;
         }
         o.m.bs(v);
-        let rgb = r
-            .get(420)
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .map(|v| v as u32);
-        cmc(
-            &mut o.m,
-            self.ver,
-            color.unsigned_abs().clamp(1, 255) as i64,
-            rgb,
-        );
+        let rgb = r.get(420).and_then(|v| v.trim().parse::<i64>().ok()).map(|v| v as u32);
+        cmc(&mut o.m, self.ver, color.unsigned_abs().clamp(1, 255) as i64, rgb);
         o.h.h(5, 0); // xref block
         o.h.h(5, self.placeholder); // plot style "Normal"
-        let lt = self
-            .ltypes
-            .get(&r.s(6).to_lowercase())
-            .copied()
-            .unwrap_or(self.ltypes["continuous"]);
+        let lt = self.ltypes.get(&r.s(6).to_lowercase()).copied().unwrap_or(self.ltypes["continuous"]);
         o.h.h(5, lt);
         self.put(r.handle(), o);
     }
@@ -900,17 +684,7 @@ impl<'a> Writer<'a> {
         o.xref();
         o.m.tv(r.s(3)); // DIMPOST
         o.m.tv(r.s(4)); // DIMAPOST
-        for (c, d) in [
-            (40, 1.0),
-            (41, 2.5),
-            (42, 0.625),
-            (43, 3.75),
-            (44, 1.25),
-            (45, 0.0),
-            (46, 0.0),
-            (47, 0.0),
-            (48, 0.0),
-        ] {
+        for (c, d) in [(40, 1.0), (41, 2.5), (42, 0.625), (43, 3.75), (44, 1.25), (45, 0.0), (46, 0.0), (47, 0.0), (48, 0.0)] {
             o.m.bd(r.fd(c, d));
         }
         for c in [71, 72, 73, 74, 75, 76] {
@@ -919,17 +693,7 @@ impl<'a> Writer<'a> {
         o.m.bs(r.i(77, 1) as i16); // DIMTAD
         o.m.bs(r.i(78, 8) as i16); // DIMZIN
         o.m.bs(r.i(79, 0) as i16); // DIMAZIN
-        for (c, d) in [
-            (140, 2.5),
-            (141, 2.5),
-            (142, 0.0),
-            (143, 0.03937007874),
-            (144, 1.0),
-            (145, 0.0),
-            (146, 1.0),
-            (147, 0.625),
-            (148, 0.0),
-        ] {
+        for (c, d) in [(140, 2.5), (141, 2.5), (142, 0.0), (143, 0.03937007874), (144, 1.0), (145, 0.0), (146, 1.0), (147, 0.625), (148, 0.0)] {
             o.m.bd(r.fd(c, d));
         }
         o.m.bit(r.i(170, 0) != 0); // DIMALT
@@ -940,19 +704,7 @@ impl<'a> Writer<'a> {
         for c in [176, 177, 178] {
             cmc(&mut o.m, self.ver, r.i(c, 0), None); // DIMCLRD DIMCLRE DIMCLRT
         }
-        for (c, d) in [
-            (179, 0),
-            (271, 2),
-            (272, 2),
-            (273, 2),
-            (274, 2),
-            (275, 0),
-            (276, 0),
-            (277, 2),
-            (278, b'.' as i64),
-            (279, 0),
-            (280, 0),
-        ] {
+        for (c, d) in [(179, 0), (271, 2), (272, 2), (273, 2), (274, 2), (275, 0), (276, 0), (277, 2), (278, b'.' as i64), (279, 0), (280, 0)] {
             o.m.bs(r.i(c, d) as i16);
         }
         o.m.bit(r.i(281, 0) != 0); // DIMSD1
@@ -1031,11 +783,7 @@ impl<'a> Writer<'a> {
         let mut o = self.ent(4, &b.begin, rh, 0, 0);
         o.m.tv(name);
         self.put(b.begin.handle(), o);
-        let vps: Vec<u64> = ents
-            .iter()
-            .filter(|e| e.r.ty == "VIEWPORT")
-            .map(|e| e.r.handle())
-            .collect();
+        let vps: Vec<u64> = ents.iter().filter(|e| e.r.ty == "VIEWPORT").map(|e| e.r.handle()).collect();
         if !vps.is_empty() {
             self.viewports.insert(rh, vps);
         }
@@ -1141,11 +889,7 @@ impl<'a> Writer<'a> {
                 let mut o = self.ent(44, r, owner, prev, next);
                 o.m.bd3(r.p(10));
                 o.m.bd3(ext);
-                o.m.bd3(if r.get(11).is_some() {
-                    r.p(11)
-                } else {
-                    [1.0, 0.0, 0.0]
-                });
+                o.m.bd3(if r.get(11).is_some() { r.p(11) } else { [1.0, 0.0, 0.0] });
                 o.m.bd(r.f(41));
                 o.m.bd(r.fd(40, 2.5));
                 o.m.bs(r.i(71, 1) as i16);
@@ -1190,11 +934,7 @@ impl<'a> Writer<'a> {
                 if atts && self.ver >= Ver::R2004 {
                     o.m.bl(e.kids.len() as i32);
                 }
-                let block = self
-                    .blocks
-                    .get(r.s(2))
-                    .copied()
-                    .ok_or_else(|| format!("INSERT of a missing block {}", r.s(2)))?;
+                let block = self.blocks.get(r.s(2)).copied().ok_or_else(|| format!("INSERT of a missing block {}", r.s(2)))?;
                 o.h.h(5, block);
                 if atts {
                     if self.ver >= Ver::R2004 {
@@ -1217,11 +957,7 @@ impl<'a> Writer<'a> {
             "SPLINE" => {
                 let mut o = self.ent(36, r, owner, prev, next);
                 let flags = r.i(70, 0);
-                let knots: Vec<f64> = r
-                    .all(40)
-                    .iter()
-                    .map(|v| v.trim().parse().unwrap_or(0.0))
-                    .collect();
+                let knots: Vec<f64> = r.all(40).iter().map(|v| v.trim().parse().unwrap_or(0.0)).collect();
                 let ctrl = points(r, 10);
                 o.m.bl(1); // control points (not fit points)
                 o.m.bl(r.i(71, 3) as i32);
@@ -1357,16 +1093,7 @@ impl<'a> Writer<'a> {
         for (i, k) in e.kids.iter().enumerate() {
             let prev = if i > 0 { kids[i - 1] } else { 0 };
             let next = kids.get(i + 1).copied().unwrap_or(0);
-            self.entity(
-                &Ent {
-                    r: k,
-                    kids: vec![],
-                    seqend: None,
-                },
-                h,
-                prev,
-                next,
-            )?;
+            self.entity(&Ent { r: k, kids: vec![], seqend: None }, h, prev, next)?;
         }
         if let Some(s) = e.seqend {
             let o = self.ent(6, s, h, 0, 0);
@@ -1378,24 +1105,11 @@ impl<'a> Writer<'a> {
     /// TEXT, ATTRIB and ATTDEF data (`vcode`: the DXF group of the vertical alignment).
     fn text_data(&self, o: &mut O, r: &Rec, vcode: i32) {
         let ins = r.p(10);
-        let al = if r.get(11).is_some() {
-            r.p(11)
-        } else {
-            [0.0; 3]
-        };
+        let al = if r.get(11).is_some() { r.p(11) } else { [0.0; 3] };
         let (obl, rot, wf) = (rad(r.f(51)), rad(r.f(50)), r.fd(41, 1.0));
         let (gen, ha, va) = (r.i(71, 0), r.i(72, 0), r.i(vcode, 0));
         let mut fl = 0u8;
-        for (bit, zero) in [
-            (1, ins[2] == 0.0),
-            (2, al == [0.0; 3]),
-            (4, obl == 0.0),
-            (8, rot == 0.0),
-            (16, wf == 1.0),
-            (32, gen == 0),
-            (64, ha == 0),
-            (128, va == 0),
-        ] {
+        for (bit, zero) in [(1, ins[2] == 0.0), (2, al == [0.0; 3]), (4, obl == 0.0), (8, rot == 0.0), (16, wf == 1.0), (32, gen == 0), (64, ha == 0), (128, va == 0)] {
             if zero {
                 fl |= bit;
             }
@@ -1540,16 +1254,8 @@ impl<'a> Writer<'a> {
             o.m.bd(r.f(461));
             o.m.bl(r.i(452, 0) as i32);
             o.m.bd(r.f(462));
-            let stops: Vec<f64> = r
-                .all(463)
-                .iter()
-                .map(|v| v.trim().parse().unwrap_or(0.0))
-                .collect();
-            let cols: Vec<u32> = r
-                .all(421)
-                .iter()
-                .map(|v| v.trim().parse::<i64>().unwrap_or(0) as u32)
-                .collect();
+            let stops: Vec<f64> = r.all(463).iter().map(|v| v.trim().parse().unwrap_or(0.0)).collect();
+            let cols: Vec<u32> = r.all(421).iter().map(|v| v.trim().parse::<i64>().unwrap_or(0) as u32).collect();
             let n = if grad { stops.len().min(cols.len()) } else { 0 };
             o.m.bl(n as i32);
             for k in 0..n {
@@ -1583,12 +1289,7 @@ impl<'a> Writer<'a> {
             match (*c, stage) {
                 (92, _) => {
                     stage = 1;
-                    paths.push(Path {
-                        flags: n,
-                        bulges: false,
-                        closed: true,
-                        v: vec![],
-                    });
+                    paths.push(Path { flags: n, bulges: false, closed: true, v: vec![] });
                 }
                 (72, 1) => paths.last_mut().expect("path").bulges = n != 0,
                 (73, 1) => paths.last_mut().expect("path").closed = n != 0,
@@ -1656,14 +1357,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn dimension(
-        &self,
-        r: &Rec,
-        owner: u64,
-        prev: u64,
-        next: u64,
-        ext: [f64; 3],
-    ) -> Result<O, String> {
+    fn dimension(&self, r: &Rec, owner: u64, prev: u64, next: u64, ext: [f64; 3]) -> Result<O, String> {
         let kind = r.i(70, 0);
         let ty = match kind & 7 {
             0 => 21,
@@ -1729,11 +1423,7 @@ impl<'a> Writer<'a> {
             }
         }
         o.h.h(5, self.dimstyle(r.s(3)));
-        let block = self
-            .blocks
-            .get(r.s(2))
-            .copied()
-            .ok_or_else(|| format!("DIMENSION with a missing block {}", r.s(2)))?;
+        let block = self.blocks.get(r.s(2)).copied().ok_or_else(|| format!("DIMENSION with a missing block {}", r.s(2)))?;
         o.h.h(5, block);
         Ok(o)
     }
@@ -1757,11 +1447,7 @@ impl<'a> Writer<'a> {
             let h = r.handle();
             match r.ty.as_str() {
                 "DICTIONARY" => {
-                    let mut entries: Vec<(String, u64)> =
-                        r.g.windows(2)
-                            .filter(|p| p[0].0 == 3 && matches!(p[1].0, 350 | 360))
-                            .map(|p| (p[0].1.clone(), hex(&p[1].1)))
-                            .collect();
+                    let mut entries: Vec<(String, u64)> = r.g.windows(2).filter(|p| p[0].0 == 3 && matches!(p[1].0, 350 | 360)).map(|p| (p[0].1.clone(), hex(&p[1].1))).collect();
                     if h == self.dict_root {
                         entries.push(("ACAD_MLINESTYLE".into(), self.dict_mline));
                         entries.push(("ACAD_PLOTSETTINGS".into(), self.dict_plotsettings));
@@ -1789,18 +1475,9 @@ impl<'a> Writer<'a> {
                     let ty = self.class("LAYOUT");
                     let mut o = self.nonent(ty, h, r.owner(), &r.reactors());
                     // the plot settings part and the layout part each have their own group 1, 70 and 330
-                    let at =
-                        r.g.iter()
-                            .position(|(c, v)| *c == 100 && v == "AcDbLayout")
-                            .unwrap_or(r.g.len());
-                    let p = Rec {
-                        ty: String::new(),
-                        g: r.g[..at].to_vec(),
-                    };
-                    let l = Rec {
-                        ty: String::new(),
-                        g: r.g[at..].to_vec(),
-                    };
+                    let at = r.g.iter().position(|(c, v)| *c == 100 && v == "AcDbLayout").unwrap_or(r.g.len());
+                    let p = Rec { ty: String::new(), g: r.g[..at].to_vec() };
+                    let l = Rec { ty: String::new(), g: r.g[at..].to_vec() };
                     o.m.tv(p.s(1));
                     o.m.tv(p.s(2));
                     o.m.bs(p.i(70, 688) as i16);
@@ -1850,11 +1527,7 @@ impl<'a> Writer<'a> {
                         o.m.bl(vps.len() as i32);
                     }
                     o.h.h(4, block);
-                    o.h.h(
-                        4,
-                        l.get(331)
-                            .map_or_else(|| vps.first().copied().unwrap_or(0), hex),
-                    );
+                    o.h.h(4, l.get(331).map_or_else(|| vps.first().copied().unwrap_or(0), hex));
                     o.h.h(5, 0); // base UCS
                     o.h.h(5, 0); // named UCS
                     if self.ver >= Ver::R2004 {
@@ -1888,14 +1561,7 @@ impl<'a> Writer<'a> {
             return;
         }
         // what a DWG needs and the DXF leaves out: the multiline style and the plot style dictionaries
-        let (root, ml, mls, ps, pst, ph) = (
-            self.dict_root,
-            self.dict_mline,
-            self.mline_std,
-            self.dict_plotsettings,
-            self.dict_plotstyle,
-            self.placeholder,
-        );
+        let (root, ml, mls, ps, pst, ph) = (self.dict_root, self.dict_mline, self.mline_std, self.dict_plotsettings, self.dict_plotstyle, self.placeholder);
         let mut o = self.nonent(42, ml, root, &[root]);
         self.dictionary(&mut o, &[("Standard".into(), mls)], 1);
         self.put(ml, o);
@@ -1946,11 +1612,7 @@ impl<'a> Writer<'a> {
             m.bit(false);
             m.bs(if c.entity { 0x1F2 } else { 0x1F3 });
             if self.ver >= Ver::R2004 {
-                let count = self
-                    .objs
-                    .iter()
-                    .filter(|(_, b)| object_type(b) == 500 + i as u16)
-                    .count();
+                let count = self.objs.iter().filter(|(_, b)| object_type(b) == 500 + i as u16).count();
                 m.bl(count as i32);
                 m.bl(0); // dwg version
                 m.bl(0); // maintenance version
@@ -1959,18 +1621,12 @@ impl<'a> Writer<'a> {
             }
         }
         m.align();
-        let mut out = vec![
-            0x8D, 0xA1, 0xC4, 0xB8, 0xC4, 0xA9, 0xF8, 0xC5, 0xC0, 0xDC, 0xF4, 0x5F, 0xE7, 0xCF,
-            0xB6, 0x8A,
-        ];
+        let mut out = vec![0x8D, 0xA1, 0xC4, 0xB8, 0xC4, 0xA9, 0xF8, 0xC5, 0xC0, 0xDC, 0xF4, 0x5F, 0xE7, 0xCF, 0xB6, 0x8A];
         let mut body = (m.buf.len() as i32).to_le_bytes().to_vec();
         body.extend_from_slice(&m.buf);
         out.extend_from_slice(&body);
         out.extend_from_slice(&crc16(0xC0C1, &body).to_le_bytes());
-        out.extend_from_slice(&[
-            0x72, 0x5E, 0x3B, 0x47, 0x3B, 0x56, 0x07, 0x3A, 0x3F, 0x23, 0x0B, 0xA0, 0x18, 0x30,
-            0x49, 0x75,
-        ]);
+        out.extend_from_slice(&[0x72, 0x5E, 0x3B, 0x47, 0x3B, 0x56, 0x07, 0x3A, 0x3F, 0x23, 0x0B, 0xA0, 0x18, 0x30, 0x49, 0x75]);
         if self.ver >= Ver::R2004 {
             out.extend_from_slice(&[0; 8]);
         }
@@ -2037,18 +1693,7 @@ impl<'a> Writer<'a> {
             dimstyle: self.std_dimstyle,
             cmlstyle: self.mline_std,
             dimtxsty: self.std_style,
-            controls: [
-                c["BLOCK"],
-                c["LAYER"],
-                c["STYLE"],
-                c["LTYPE"],
-                c["VIEW"],
-                c["UCS"],
-                c["VPORT"],
-                c["APPID"],
-                c["DIMSTYLE"],
-                c["VP_ENT_HDR"],
-            ],
+            controls: [c["BLOCK"], c["LAYER"], c["STYLE"], c["LTYPE"], c["VIEW"], c["UCS"], c["VPORT"], c["APPID"], c["DIMSTYLE"], c["VP_ENT_HDR"]],
             dict_group: self.dict_group,
             dict_mline: self.dict_mline,
             dict_root: self.dict_root,
@@ -2078,11 +1723,7 @@ impl<'a> Writer<'a> {
             }
             let handles = Self::handles_section(&map);
             let free = free_space(map.len(), julian, 0);
-            let s = |name, data: Vec<u8>, compressed| r2004::Section {
-                name,
-                data,
-                compressed,
-            };
+            let s = |name, data: Vec<u8>, compressed| r2004::Section { name, data, compressed };
             let sections = vec![
                 s("AcDb:SummaryInfo", summary_info(julian), false),
                 s("AcDb:Preview", preview, false),
@@ -2122,35 +1763,16 @@ impl<'a> Writer<'a> {
         f.extend_from_slice(&[0x1B, 0x19]);
         f.extend_from_slice(&30u16.to_le_bytes()); // ANSI_1252
         f.extend_from_slice(&6u32.to_le_bytes());
-        for (n, at, len) in [
-            (0u8, header_at, header.len()),
-            (1, classes_at, classes.len()),
-            (2, handles_at, handles.len()),
-            (3, free_at, free.len()),
-            (4, template_at, template.len()),
-            (5, aux_at, aux.len()),
-        ] {
+        for (n, at, len) in [(0u8, header_at, header.len()), (1, classes_at, classes.len()), (2, handles_at, handles.len()), (3, free_at, free.len()), (4, template_at, template.len()), (5, aux_at, aux.len())] {
             f.push(n);
             f.extend_from_slice(&(at as u32).to_le_bytes());
             f.extend_from_slice(&(len as u32).to_le_bytes());
         }
         let crc = crc16(0xC0C1, &f);
         f.extend_from_slice(&crc.to_le_bytes());
-        f.extend_from_slice(&[
-            0x95, 0xA0, 0x4E, 0x28, 0x99, 0x82, 0x1A, 0xE5, 0x5E, 0x41, 0xE0, 0x5F, 0x9D, 0x3A,
-            0x4D, 0x00,
-        ]);
+        f.extend_from_slice(&[0x95, 0xA0, 0x4E, 0x28, 0x99, 0x82, 0x1A, 0xE5, 0x5E, 0x41, 0xE0, 0x5F, 0x9D, 0x3A, 0x4D, 0x00]);
         debug_assert_eq!(f.len(), head_len);
-        for part in [
-            &aux[..],
-            &preview,
-            &header,
-            &classes,
-            &objects,
-            &handles,
-            &free,
-            &template,
-        ] {
+        for part in [&aux[..], &preview, &header, &classes, &objects, &handles, &free, &template] {
             f.extend_from_slice(part);
         }
         f
@@ -2162,11 +1784,7 @@ const MAINT_2004: u8 = 0x68;
 
 /// The object type an encoded object starts with (after its MS size).
 fn object_type(b: &[u8]) -> u16 {
-    let skip = if b.len() > 1 && b[1] & 0x80 != 0 {
-        4
-    } else {
-        2
-    };
+    let skip = if b.len() > 1 && b[1] & 0x80 != 0 { 4 } else { 2 };
     let mut r = super::bits::Bits::new(&b[skip.min(b.len())..], Ver::R2000);
     r.bs().unwrap_or(0) as u16
 }
@@ -2257,24 +1875,14 @@ fn points2(r: &Rec, c: i32) -> Vec<[f64; 2]> {
 /// Today as a Julian day and milliseconds (a fixed date where the clock is not available).
 fn julian_now() -> (i32, i32) {
     #[cfg(not(target_arch = "wasm32"))]
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     #[cfg(target_arch = "wasm32")]
     let secs = 1_700_000_000u64;
-    (
-        (2_440_588 + secs / 86_400) as i32,
-        ((secs % 86_400) * 1000) as i32,
-    )
+    ((2_440_588 + secs / 86_400) as i32, ((secs % 86_400) * 1000) as i32)
 }
 
 fn aux_header(julian: (i32, i32), handseed: u64, ver: Ver) -> Vec<u8> {
-    let (code, maint) = if ver >= Ver::R2004 {
-        (25, MAINT_2004 as i16)
-    } else {
-        (23, 15)
-    };
+    let (code, maint) = if ver >= Ver::R2004 { (25, MAINT_2004 as i16) } else { (23, 15) };
     let mut b = vec![0xFF, 0x77, 0x01];
     let rs = |b: &mut Vec<u8>, v: i16| b.extend_from_slice(&v.to_le_bytes());
     let rl = |b: &mut Vec<u8>, v: i32| b.extend_from_slice(&v.to_le_bytes());
@@ -2299,14 +1907,7 @@ fn aux_header(julian: (i32, i32), handseed: u64, ver: Ver) -> Vec<u8> {
         rl(&mut b, julian.0);
         rl(&mut b, julian.1);
     }
-    rl(
-        &mut b,
-        if handseed <= 0x7FFF_FFFF {
-            handseed as i32
-        } else {
-            -1
-        },
-    );
+    rl(&mut b, if handseed <= 0x7FFF_FFFF { handseed as i32 } else { -1 });
     rl(&mut b, 0);
     rs(&mut b, 0);
     rs(&mut b, 1);
@@ -2322,15 +1923,9 @@ fn aux_header(julian: (i32, i32), handseed: u64, ver: Ver) -> Vec<u8> {
 
 /// An empty preview image section.
 fn preview() -> Vec<u8> {
-    let mut b = vec![
-        0x1F, 0x25, 0x6D, 0x07, 0xD4, 0x36, 0x28, 0x28, 0x9D, 0x57, 0xCA, 0x3F, 0x9D, 0x44, 0x10,
-        0x2B,
-    ];
+    let mut b = vec![0x1F, 0x25, 0x6D, 0x07, 0xD4, 0x36, 0x28, 0x28, 0x9D, 0x57, 0xCA, 0x3F, 0x9D, 0x44, 0x10, 0x2B];
     b.extend_from_slice(&1u32.to_le_bytes());
     b.push(0);
-    b.extend_from_slice(&[
-        0xE0, 0xDA, 0x92, 0xF8, 0x2B, 0xC9, 0xD7, 0xD7, 0x62, 0xA8, 0x35, 0xC0, 0x62, 0xBB, 0xEF,
-        0xD4,
-    ]);
+    b.extend_from_slice(&[0xE0, 0xDA, 0x92, 0xF8, 0x2B, 0xC9, 0xD7, 0xD7, 0x62, 0xA8, 0x35, 0xC0, 0x62, 0xBB, 0xEF, 0xD4]);
     b
 }

@@ -48,17 +48,7 @@ fn valid_tag(t: &str) -> bool {
 
 /// Tags of the constant attributes of `block`; their values live in the definition and cannot be edited.
 fn constants(d: &Drawing, block: &str) -> Vec<String> {
-    d.blocks
-        .get(block)
-        .map(|b| {
-            attdefs(b)
-                .iter()
-                .map(att_of)
-                .filter(|a| a.constant)
-                .map(|a| a.tag.clone())
-                .collect()
-        })
-        .unwrap_or_default()
+    d.blocks.get(block).map(|b| attdefs(b).iter().map(att_of).filter(|a| a.constant).map(|a| a.tag.clone()).collect()).unwrap_or_default()
 }
 
 /// One attribute of a reference, placed in world space from its definition.
@@ -66,52 +56,25 @@ fn instance(def: &TextData, ins: &InsertData, base: Pt, value: &str, mode: AttDi
     let a = att_of(def);
     let m = insert_matrix(ins, base);
     let k = mat::scale_factor(&m);
-    let t = TextData {
-        att: None,
-        s: value.to_string(),
-        p: mat::apply(&m, def.p),
-        h: def.h * k,
-        rot: def.rot + mat::angle(&m),
-        w: def.w.map(|w| w * k),
-        ..def.clone()
-    };
+    let t = TextData { att: None, s: value.to_string(), p: mat::apply(&m, def.p), h: def.h * k, rot: def.rot + mat::angle(&m), w: def.w.map(|w| w * k), ..def.clone() };
     let hidden = match mode {
         AttDisp::On => false,
         AttDisp::Off => true,
         AttDisp::Normal => a.invisible,
     };
-    AttribData {
-        tag: a.tag.clone(),
-        t,
-        hidden,
-    }
+    AttribData { tag: a.tag.clone(), t, hidden }
 }
 
 /// Rebuild the attributes of a reference from the block's definitions: values it already has are kept, new ones take
 /// `values[tag]` or the definition's default, attributes the block no longer defines are dropped.
-fn sync_attribs(
-    ins: &mut InsertData,
-    base: Pt,
-    defs: &[TextData],
-    mode: AttDisp,
-    values: &HashMap<String, String>,
-) {
+fn sync_attribs(ins: &mut InsertData, base: Pt, defs: &[TextData], mode: AttDisp, values: &HashMap<String, String>) {
     let mut old = std::mem::take(&mut ins.attribs);
     let rebuilt: Vec<AttribData> = defs
         .iter()
         .map(|d| {
             let a = att_of(d);
-            let kept = if a.constant {
-                None
-            } else {
-                old.iter()
-                    .position(|o| o.tag == a.tag)
-                    .map(|i| old.remove(i))
-            };
-            let value = kept
-                .map(|o| o.t.s)
-                .or_else(|| values.get(&a.tag).cloned())
-                .unwrap_or_else(|| d.s.clone());
+            let kept = if a.constant { None } else { old.iter().position(|o| o.tag == a.tag).map(|i| old.remove(i)) };
+            let value = kept.map(|o| o.t.s).or_else(|| values.get(&a.tag).cloned()).unwrap_or_else(|| d.s.clone());
             instance(d, ins, base, &value, mode)
         })
         .collect();
@@ -120,9 +83,7 @@ fn sync_attribs(
 
 /// Bring every reference of block `name` (in all spaces and blocks) in line with its definitions.
 fn sync_block(d: &mut Drawing, name: &str) -> usize {
-    let Some(b) = d.blocks.get(name) else {
-        return 0;
-    };
+    let Some(b) = d.blocks.get(name) else { return 0 };
     let (base, defs, mode) = (b.base, attdefs(b), d.settings.attdisp);
     d.change(|d| {
         let mut n = 0;
@@ -140,22 +101,13 @@ fn sync_block(d: &mut Drawing, name: &str) -> usize {
 
 /// Apply an attribute display mode to the drawing and to every attribute in it.
 fn set_attdisp(d: &mut Drawing, mode: AttDisp) {
-    let defs: HashMap<String, Vec<TextData>> = d
-        .blocks
-        .iter()
-        .map(|(n, b)| (n.clone(), attdefs(b)))
-        .collect();
+    let defs: HashMap<String, Vec<TextData>> = d.blocks.iter().map(|(n, b)| (n.clone(), attdefs(b))).collect();
     d.change(|d| {
         d.settings.attdisp = mode;
         for e in d.all_entities_mut() {
-            let Kind::Insert(InsertData { name, attribs, .. }) = &mut e.kind else {
-                continue;
-            };
+            let Kind::Insert(InsertData { name, attribs, .. }) = &mut e.kind else { continue };
             for a in attribs.iter_mut() {
-                let invisible = defs
-                    .get(name.as_str())
-                    .and_then(|v| v.iter().map(att_of).find(|x| x.tag == a.tag))
-                    .map(|x| x.invisible);
+                let invisible = defs.get(name.as_str()).and_then(|v| v.iter().map(att_of).find(|x| x.tag == a.tag)).map(|x| x.invisible);
                 a.hidden = match mode {
                     AttDisp::On => false,
                     AttDisp::Off => true,
@@ -200,12 +152,7 @@ fn modify(value: &str, old: &str, new: &str) -> String {
 
 async fn ask_value(c: &Ctx, def: &TextData) -> CmdResult<String> {
     let a = att_of(def);
-    let label = if a.prompt.is_empty() {
-        a.tag.as_str()
-    } else {
-        a.prompt.as_str()
-    }
-    .trim_end_matches(':');
+    let label = if a.prompt.is_empty() { a.tag.as_str() } else { a.prompt.as_str() }.trim_end_matches(':');
     let mut v = c.string(ps_def(label, &def.s)).await?.text;
     if a.verify {
         v = c.string(ps_def(&format!("Verify {label}"), &v)).await?.text;
@@ -221,11 +168,7 @@ pub async fn fill_attributes(c: &Ctx, id: u64, ask: bool) -> CmdResult<()> {
     let Some((base, defs, missing)) = c.doc(|d| match d.by_id(id).map(|e| &e.kind) {
         Some(Kind::Insert(i)) => d.blocks.get(&i.name).filter(|b| b.xref.is_none()).map(|b| {
             let defs = attdefs(b);
-            let missing: Vec<TextData> = defs
-                .iter()
-                .filter(|t| !i.attribs.iter().any(|a| a.tag == att_of(t).tag))
-                .cloned()
-                .collect();
+            let missing: Vec<TextData> = defs.iter().filter(|t| !i.attribs.iter().any(|a| a.tag == att_of(t).tag)).cloned().collect();
             (b.base, defs, missing)
         }),
         _ => None,
@@ -233,10 +176,7 @@ pub async fn fill_attributes(c: &Ctx, id: u64, ask: bool) -> CmdResult<()> {
         return Ok(());
     };
     let mut values = HashMap::new();
-    for t in missing
-        .iter()
-        .filter(|t| ask && !att_of(t).constant && !att_of(t).preset)
-    {
+    for t in missing.iter().filter(|t| ask && !att_of(t).constant && !att_of(t).preset) {
         values.insert(att_of(t).tag.clone(), ask_value(c, t).await?);
     }
     if !missing.is_empty() {
@@ -255,9 +195,7 @@ pub async fn fill_attributes(c: &Ctx, id: u64, ask: bool) -> CmdResult<()> {
 // ---------------------------------------------------------------- ATTDEF
 
 const MODES: [&str; 4] = ["Invisible", "Constant", "Verify", "Preset"];
-const JUSTIFY: [&str; 13] = [
-    "Left", "Center", "Right", "Middle", "TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR",
-];
+const JUSTIFY: [&str; 13] = ["Left", "Center", "Right", "Middle", "TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"];
 
 fn justification(k: &str) -> (HJust, VJust) {
     use HJust::*;
@@ -282,30 +220,14 @@ async fn attdef(c: Ctx, _a: Args) -> CmdResult<()> {
     let mut mode = [false; 4];
     loop {
         let yn = |b: bool| if b { 'Y' } else { 'N' };
-        c.log(&format!(
-            "Current attribute modes:  Invisible={} Constant={} Verify={} Preset={}",
-            yn(mode[0]),
-            yn(mode[1]),
-            yn(mode[2]),
-            yn(mode[3])
-        ));
-        let k = c
-            .keyword(
-                ps("Enter an option to change")
-                    .options(&MODES)
-                    .default_str("done"),
-            )
-            .await?;
+        c.log(&format!("Current attribute modes:  Invisible={} Constant={} Verify={} Preset={}", yn(mode[0]), yn(mode[1]), yn(mode[2]), yn(mode[3])));
+        let k = c.keyword(ps("Enter an option to change").options(&MODES).default_str("done")).await?;
         match MODES.iter().position(|m| Some(*m) == k.kw()) {
             Some(i) => mode[i] = !mode[i],
             None => break,
         }
     }
-    let tag = c
-        .string(ps("Enter attribute tag name"))
-        .await?
-        .text
-        .to_uppercase();
+    let tag = c.string(ps("Enter attribute tag name")).await?.text.to_uppercase();
     if tag.is_empty() {
         return Ok(());
     }
@@ -314,25 +236,15 @@ async fn attdef(c: Ctx, _a: Args) -> CmdResult<()> {
         return Ok(());
     }
     let (prompt, value) = if mode[1] {
-        (
-            String::new(),
-            c.string(ps("Enter attribute value")).await?.text,
-        )
+        (String::new(), c.string(ps("Enter attribute value")).await?.text)
     } else {
-        (
-            c.string(ps("Enter attribute prompt")).await?.text,
-            c.string(ps("Enter default attribute value")).await?.text,
-        )
+        (c.string(ps("Enter attribute prompt")).await?.text, c.string(ps("Enter default attribute value")).await?.text)
     };
     let (mut jh, mut jv) = (HJust::Left, VJust::Baseline);
     let p = loop {
-        let r = c
-            .point(ps("Specify start point of text").options(&["Justify"]))
-            .await?;
+        let r = c.point(ps("Specify start point of text").options(&["Justify"])).await?;
         if r.kw() == Some("Justify") {
-            let j = c
-                .keyword(ps("Enter an option").options(&JUSTIFY).default_str("Left"))
-                .await?;
+            let j = c.keyword(ps("Enter an option").options(&JUSTIFY).default_str("Left")).await?;
             (jh, jv) = justification(j.kw().unwrap_or("Left"));
             continue;
         }
@@ -342,40 +254,11 @@ async fn attdef(c: Ctx, _a: Args) -> CmdResult<()> {
         }
     };
     let mem_h = c.app(|a| a.mem.text_height);
-    let Some(h) = c
-        .distance(
-            ps("Specify height")
-                .base(p)
-                .default_num(mem_h)
-                .min(0.0)
-                .nonzero(),
-        )
-        .await?
-        .value()
-    else {
-        return Ok(());
-    };
+    let Some(h) = c.distance(ps("Specify height").base(p).default_num(mem_h).min(0.0).nonzero()).await?.value() else { return Ok(()) };
     c.app(|a| a.mem.text_height = h);
-    let Some(rot) = c
-        .angle(
-            ps("Specify rotation angle of text")
-                .base(p)
-                .default_num(0.0),
-        )
-        .await?
-        .value()
-    else {
-        return Ok(());
-    };
+    let Some(rot) = c.angle(ps("Specify rotation angle of text").base(p).default_num(0.0)).await?.value() else { return Ok(()) };
     let mut t = TextData::new(p, h, &value).with_rot(rot).with_just(jh, jv);
-    t.att = Some(AttDef {
-        tag,
-        prompt,
-        invisible: mode[0],
-        constant: mode[1],
-        verify: mode[2],
-        preset: mode[3],
-    });
+    t.att = Some(AttDef { tag, prompt, invisible: mode[0], constant: mode[1], verify: mode[2], preset: mode[3] });
     c.add(Entity::new(Kind::Text(t)));
     Ok(())
 }
@@ -387,19 +270,13 @@ async fn attdef(c: Ctx, _a: Args) -> CmdResult<()> {
 fn matching(d: &Drawing, ids: &[u64], spec: &[String], visible_only: bool) -> Vec<(u64, usize)> {
     let mut out = vec![];
     for &id in ids {
-        let Some(Kind::Insert(ins)) = d.by_id(id).map(|e| &e.kind) else {
-            continue;
-        };
+        let Some(Kind::Insert(ins)) = d.by_id(id).map(|e| &e.kind) else { continue };
         if !wildcard_match(&spec[0], &ins.name) {
             continue;
         }
         let constant = constants(d, &ins.name);
         for (i, a) in ins.attribs.iter().enumerate() {
-            if wildcard_match(&spec[1], &a.tag)
-                && wildcard_match(&spec[2], &a.t.s)
-                && !(visible_only && a.hidden)
-                && !constant.contains(&a.tag)
-            {
+            if wildcard_match(&spec[1], &a.tag) && wildcard_match(&spec[2], &a.t.s) && !(visible_only && a.hidden) && !constant.contains(&a.tag) {
                 out.push((id, i));
             }
         }
@@ -411,31 +288,14 @@ fn matching(d: &Drawing, ids: &[u64], spec: &[String], visible_only: bool) -> Ve
 async fn edit_one(c: &Ctx, id: u64, i: usize) -> CmdResult<()> {
     c.ed(|e| e.temp_sel = [id].into_iter().collect());
     if let Some((block, a)) = attrib(c, id, i) {
-        c.log(&format!(
-            "Block \"{block}\", attribute {} = \"{}\"",
-            a.tag, a.t.s
-        ));
+        c.log(&format!("Block \"{block}\", attribute {} = \"{}\"", a.tag, a.t.s));
     }
     loop {
-        let Some((_, a)) = attrib(c, id, i) else {
-            return Ok(());
-        };
-        let k = c
-            .keyword(
-                ps("Enter an option")
-                    .options(&["Value", "Position", "Height", "Angle", "Next"])
-                    .default_str("N"),
-            )
-            .await?;
+        let Some((_, a)) = attrib(c, id, i) else { return Ok(()) };
+        let k = c.keyword(ps("Enter an option").options(&["Value", "Position", "Height", "Angle", "Next"]).default_str("N")).await?;
         match k.kw() {
             Some("Value") => {
-                let m = c
-                    .keyword(
-                        ps("Enter type of value modification")
-                            .options(&["Modify", "Replace"])
-                            .default_str("R"),
-                    )
-                    .await?;
+                let m = c.keyword(ps("Enter type of value modification").options(&["Modify", "Replace"]).default_str("R")).await?;
                 let value = if m.kw() == Some("Modify") {
                     let old = c.string(ps("Enter string to change")).await?.text;
                     let new = c.string(ps("Enter new string")).await?.text;
@@ -446,39 +306,17 @@ async fn edit_one(c: &Ctx, id: u64, i: usize) -> CmdResult<()> {
                 edit(c, id, i, |a| a.t.s = value);
             }
             Some("Position") => {
-                if let Some(p) = c
-                    .point(ps("Specify new text insertion point").default_pt(a.t.p))
-                    .await?
-                    .pt()
-                {
+                if let Some(p) = c.point(ps("Specify new text insertion point").default_pt(a.t.p)).await?.pt() {
                     edit(c, id, i, |a| a.t.p = p);
                 }
             }
             Some("Height") => {
-                if let Some(h) = c
-                    .distance(
-                        ps("Specify new height")
-                            .base(a.t.p)
-                            .default_num(a.t.h)
-                            .min(0.0)
-                            .nonzero(),
-                    )
-                    .await?
-                    .value()
-                {
+                if let Some(h) = c.distance(ps("Specify new height").base(a.t.p).default_num(a.t.h).min(0.0).nonzero()).await?.value() {
                     edit(c, id, i, |a| a.t.h = h);
                 }
             }
             Some("Angle") => {
-                if let Some(r) = c
-                    .angle(
-                        ps("Specify new rotation angle")
-                            .base(a.t.p)
-                            .default_num(a.t.rot),
-                    )
-                    .await?
-                    .value()
-                {
+                if let Some(r) = c.angle(ps("Specify new rotation angle").base(a.t.p).default_num(a.t.rot)).await?.value() {
                     edit(c, id, i, |a| a.t.rot = r);
                 }
             }
@@ -488,41 +326,16 @@ async fn edit_one(c: &Ctx, id: u64, i: usize) -> CmdResult<()> {
 }
 
 async fn attedit(c: Ctx, _a: Args) -> CmdResult<()> {
-    let one = c
-        .keyword(
-            ps("Edit attributes one at a time?")
-                .options(&["Yes", "No"])
-                .default_str("Y"),
-        )
-        .await?
-        .kw()
-        != Some("No");
-    let visible_only = !one
-        && c.keyword(
-            ps("Edit only attributes visible on screen?")
-                .options(&["Yes", "No"])
-                .default_str("Y"),
-        )
-        .await?
-        .kw()
-            != Some("No");
+    let one = c.keyword(ps("Edit attributes one at a time?").options(&["Yes", "No"]).default_str("Y")).await?.kw() != Some("No");
+    let visible_only = !one && c.keyword(ps("Edit only attributes visible on screen?").options(&["Yes", "No"]).default_str("Y")).await?.kw() != Some("No");
     let mut spec = vec![];
     for what in ["block name", "attribute tag", "attribute value"] {
-        let s = c
-            .string(ps(&format!("Enter {what} specification")).default_str("*"))
-            .await?
-            .text;
+        let s = c.string(ps(&format!("Enter {what} specification")).default_str("*")).await?.text;
         spec.push(if s.is_empty() { "*".to_string() } else { s });
     }
-    let sel = c
-        .select(ps("Select Attributes").filter(has_attribs))
-        .await?;
+    let sel = c.select(ps("Select Attributes").filter(has_attribs)).await?;
     let targets = c.doc(|d| matching(d, &sel.ents, &spec, visible_only));
-    c.log(&format!(
-        "{} attribute{} selected.",
-        targets.len(),
-        if targets.len() == 1 { "" } else { "s" }
-    ));
+    c.log(&format!("{} attribute{} selected.", targets.len(), if targets.len() == 1 { "" } else { "s" }));
     if targets.is_empty() {
         return Ok(());
     }
@@ -543,20 +356,13 @@ async fn attedit(c: Ctx, _a: Args) -> CmdResult<()> {
 
 /// (tag, prompt, value, constant) of each attribute of reference `id`.
 fn attribute_rows(d: &Drawing, id: u64) -> Vec<(String, String, String, bool)> {
-    let Some(Kind::Insert(ins)) = d.by_id(id).map(|e| &e.kind) else {
-        return vec![];
-    };
+    let Some(Kind::Insert(ins)) = d.by_id(id).map(|e| &e.kind) else { return vec![] };
     let defs = d.blocks.get(&ins.name).map(attdefs).unwrap_or_default();
     ins.attribs
         .iter()
         .map(|a| {
             let def = defs.iter().map(att_of).find(|x| x.tag == a.tag);
-            (
-                a.tag.clone(),
-                def.map(|x| x.prompt.clone()).unwrap_or_default(),
-                a.t.s.clone(),
-                def.is_some_and(|x| x.constant),
-            )
+            (a.tag.clone(), def.map(|x| x.prompt.clone()).unwrap_or_default(), a.t.s.clone(), def.is_some_and(|x| x.constant))
         })
         .collect()
 }
@@ -564,10 +370,7 @@ fn attribute_rows(d: &Drawing, id: u64) -> Vec<(String, String, String, bool)> {
 async fn eattedit(c: Ctx, args: Args) -> CmdResult<()> {
     let id = match args.id("entity") {
         Some(id) => id,
-        None => match c
-            .pick_entity(ps("Select a block").filter(has_attribs))
-            .await?
-        {
+        None => match c.pick_entity(ps("Select a block").filter(has_attribs)).await? {
             Some(id) => id,
             None => return Ok(()),
         },
@@ -576,15 +379,9 @@ async fn eattedit(c: Ctx, args: Args) -> CmdResult<()> {
     loop {
         let rows = c.doc(|d| attribute_rows(d, id));
         for (tag, prompt, value, constant) in &rows {
-            c.log(&format!(
-                "{tag:<12} {prompt:<24} {value}{}",
-                if *constant { "  (constant)" } else { "" }
-            ));
+            c.log(&format!("{tag:<12} {prompt:<24} {value}{}", if *constant { "  (constant)" } else { "" }));
         }
-        let t = c
-            .string(ps("Enter attribute tag to edit or [All] <exit>"))
-            .await?
-            .text;
+        let t = c.string(ps("Enter attribute tag to edit or [All] <exit>")).await?.text;
         let picked: Vec<usize> = if t.is_empty() {
             return Ok(());
         } else if let Some(i) = rows.iter().position(|r| r.0.eq_ignore_ascii_case(&t)) {
@@ -598,15 +395,10 @@ async fn eattedit(c: Ctx, args: Args) -> CmdResult<()> {
         for i in picked {
             let (tag, _, value, constant) = &rows[i];
             if *constant {
-                c.log_error(&format!(
-                    "{tag} is a constant attribute and cannot be edited."
-                ));
+                c.log_error(&format!("{tag} is a constant attribute and cannot be edited."));
                 continue;
             }
-            let v = c
-                .string(ps_def(&format!("Enter new value for {tag}"), value))
-                .await?
-                .text;
+            let v = c.string(ps_def(&format!("Enter new value for {tag}"), value)).await?.text;
             edit(&c, id, i, |a| a.t.s = v);
         }
     }
@@ -621,13 +413,7 @@ async fn attdisp(c: Ctx, _a: Args) -> CmdResult<()> {
         AttDisp::Off => "OFF",
     };
     let cur = c.doc(|d| d.settings.attdisp);
-    let k = c
-        .keyword(
-            ps("Enter attribute visibility setting")
-                .options(&["Normal", "ON", "OFF"])
-                .default_str(name(cur)),
-        )
-        .await?;
+    let k = c.keyword(ps("Enter attribute visibility setting").options(&["Normal", "ON", "OFF"]).default_str(name(cur))).await?;
     let mode = match k.kw() {
         Some("Normal") => AttDisp::Normal,
         Some("ON") => AttDisp::On,
@@ -646,43 +432,21 @@ fn list_attribute_blocks(c: &Ctx) {
             .iter()
             .filter_map(|(n, b)| {
                 let defs = attdefs(b).len();
-                let refs = d
-                    .all_entities()
-                    .filter(|e| matches!(&e.kind, Kind::Insert(i) if i.name == *n))
-                    .count();
-                (defs > 0).then(|| {
-                    format!(
-                        "{n}: {defs} attribute definition{}, {refs} reference{}",
-                        if defs == 1 { "" } else { "s" },
-                        if refs == 1 { "" } else { "s" }
-                    )
-                })
+                let refs = d.all_entities().filter(|e| matches!(&e.kind, Kind::Insert(i) if i.name == *n)).count();
+                (defs > 0).then(|| format!("{n}: {defs} attribute definition{}, {refs} reference{}", if defs == 1 { "" } else { "s" }, if refs == 1 { "" } else { "s" }))
             })
             .collect()
     });
-    c.log(&if lines.is_empty() {
-        "No blocks with attributes.".to_string()
-    } else {
-        lines.join("\n")
-    });
+    c.log(&if lines.is_empty() { "No blocks with attributes.".to_string() } else { lines.join("\n") });
 }
 
 async fn attsync(c: Ctx, _a: Args) -> CmdResult<()> {
     let name = loop {
-        let k = c
-            .keyword(
-                ps("Enter an option")
-                    .options(&["?", "Name", "Select"])
-                    .default_str("Select"),
-            )
-            .await?;
+        let k = c.keyword(ps("Enter an option").options(&["?", "Name", "Select"]).default_str("Select")).await?;
         match k.kw() {
             Some("?") => list_attribute_blocks(&c),
             Some("Name") => {
-                let t = c
-                    .string(ps("Enter name of block to synchronize or [?]"))
-                    .await?
-                    .text;
+                let t = c.string(ps("Enter name of block to synchronize or [?]")).await?.text;
                 match t.as_str() {
                     "" => return Ok(()),
                     "?" => list_attribute_blocks(&c),
@@ -696,15 +460,7 @@ async fn attsync(c: Ctx, _a: Args) -> CmdResult<()> {
                 }
             }
             _ => {
-                let Some(id) = c
-                    .pick_entity(
-                        ps("Select a block reference")
-                            .filter(|e| matches!(e.kind, Kind::Insert(_))),
-                    )
-                    .await?
-                else {
-                    return Ok(());
-                };
+                let Some(id) = c.pick_entity(ps("Select a block reference").filter(|e| matches!(e.kind, Kind::Insert(_)))).await? else { return Ok(()) };
                 if let Some(Kind::Insert(i)) = c.entity_by_id(id).map(|e| e.kind) {
                     break i.name;
                 }
@@ -712,10 +468,7 @@ async fn attsync(c: Ctx, _a: Args) -> CmdResult<()> {
         }
     };
     let n = c.doc_mut(|d| sync_block(d, &name));
-    c.log(&format!(
-        "Block \"{name}\" synchronized: {n} reference{} updated.",
-        if n == 1 { "" } else { "s" }
-    ));
+    c.log(&format!("Block \"{name}\" synchronized: {n} reference{} updated.", if n == 1 { "" } else { "s" }));
     Ok(())
 }
 
@@ -725,16 +478,8 @@ async fn attsync(c: Ctx, _a: Args) -> CmdResult<()> {
 fn set_def(c: &Ctx, block: &str, k: usize, f: impl FnOnce(&mut TextData)) {
     c.doc_mut(|d| {
         d.change(|d| {
-            let Some(b) = d.blocks.get_mut(block) else {
-                return;
-            };
-            if let Some(Kind::Text(t)) = b
-                .entities
-                .iter_mut()
-                .filter(|e| is_attdef(e))
-                .nth(k)
-                .map(|e| &mut e.kind)
-            {
+            let Some(b) = d.blocks.get_mut(block) else { return };
+            if let Some(Kind::Text(t)) = b.entities.iter_mut().filter(|e| is_attdef(e)).nth(k).map(|e| &mut e.kind) {
                 f(t);
             }
         })
@@ -745,16 +490,8 @@ fn set_def(c: &Ctx, block: &str, k: usize, f: impl FnOnce(&mut TextData)) {
 fn arrange_def(c: &Ctx, block: &str, k: usize, up: Option<bool>) {
     c.doc_mut(|d| {
         d.change(|d| {
-            let Some(b) = d.blocks.get_mut(block) else {
-                return;
-            };
-            let at: Vec<usize> = b
-                .entities
-                .iter()
-                .enumerate()
-                .filter(|(_, e)| is_attdef(e))
-                .map(|(i, _)| i)
-                .collect();
+            let Some(b) = d.blocks.get_mut(block) else { return };
+            let at: Vec<usize> = b.entities.iter().enumerate().filter(|(_, e)| is_attdef(e)).map(|(i, _)| i).collect();
             match up {
                 None => {
                     b.entities.remove(at[k]);
@@ -772,23 +509,9 @@ fn arrange_def(c: &Ctx, block: &str, k: usize, up: Option<bool>) {
 
 /// Change the properties of the `k`th attribute definition until done.
 async fn edit_def(c: &Ctx, block: &str, k: usize) -> CmdResult<()> {
-    let props = [
-        "Tag",
-        "Prompt",
-        "Default",
-        "Invisible",
-        "Constant",
-        "Verify",
-        "Preset",
-    ];
+    let props = ["Tag", "Prompt", "Default", "Invisible", "Constant", "Verify", "Preset"];
     loop {
-        let r = c
-            .keyword(
-                ps("Enter attribute property to change")
-                    .options(&props)
-                    .default_str("done"),
-            )
-            .await?;
+        let r = c.keyword(ps("Enter attribute property to change").options(&props).default_str("done")).await?;
         match r.kw() {
             Some("Tag") => {
                 let t = c.string(ps("Enter new tag")).await?.text.to_uppercase();
@@ -806,30 +529,22 @@ async fn edit_def(c: &Ctx, block: &str, k: usize) -> CmdResult<()> {
                 let v = c.string(ps("Enter new default value")).await?.text;
                 set_def(c, block, k, |x| x.s = v);
             }
-            Some(m @ ("Invisible" | "Constant" | "Verify" | "Preset")) => {
-                set_def(c, block, k, |x| {
-                    let a = att_mut(x);
-                    match m {
-                        "Invisible" => a.invisible = !a.invisible,
-                        "Constant" => a.constant = !a.constant,
-                        "Verify" => a.verify = !a.verify,
-                        _ => a.preset = !a.preset,
-                    }
-                })
-            }
+            Some(m @ ("Invisible" | "Constant" | "Verify" | "Preset")) => set_def(c, block, k, |x| {
+                let a = att_mut(x);
+                match m {
+                    "Invisible" => a.invisible = !a.invisible,
+                    "Constant" => a.constant = !a.constant,
+                    "Verify" => a.verify = !a.verify,
+                    _ => a.preset = !a.preset,
+                }
+            }),
             _ => return Ok(()),
         }
     }
 }
 
 async fn battman(c: Ctx, _a: Args) -> CmdResult<()> {
-    let r = c
-        .entity(
-            ps("Select a block reference")
-                .options(&["Name"])
-                .filter(|e| matches!(e.kind, Kind::Insert(_))),
-        )
-        .await?;
+    let r = c.entity(ps("Select a block reference").options(&["Name"]).filter(|e| matches!(e.kind, Kind::Insert(_)))).await?;
     let name = match r {
         EntR::Entity { id, .. } => match c.entity_by_id(id).map(|e| e.kind) {
             Some(Kind::Insert(i)) => i.name,
@@ -857,46 +572,22 @@ async fn battman(c: Ctx, _a: Args) -> CmdResult<()> {
         c.log(&format!("Attributes of block \"{name}\":"));
         for (n, t) in defs.iter().enumerate() {
             let a = att_of(t);
-            let flags: Vec<&str> = MODES
-                .iter()
-                .zip([a.invisible, a.constant, a.verify, a.preset])
-                .filter(|(_, on)| *on)
-                .map(|(m, _)| *m)
-                .collect();
-            c.log(&format!(
-                "{}. {:<12} {:<24} {:<12} {}",
-                n + 1,
-                a.tag,
-                a.prompt,
-                t.s,
-                flags.join(" ")
-            ));
+            let flags: Vec<&str> = MODES.iter().zip([a.invisible, a.constant, a.verify, a.preset]).filter(|(_, on)| *on).map(|(m, _)| *m).collect();
+            c.log(&format!("{}. {:<12} {:<24} {:<12} {}", n + 1, a.tag, a.prompt, t.s, flags.join(" ")));
         }
-        let k = c
-            .keyword(
-                ps("Enter an option")
-                    .options(&["Edit", "Remove", "Up", "Down", "Sync", "eXit"])
-                    .default_str("eXit"),
-            )
-            .await?;
+        let k = c.keyword(ps("Enter an option").options(&["Edit", "Remove", "Up", "Down", "Sync", "eXit"]).default_str("eXit")).await?;
         let op = match k.kw() {
             Some(op @ ("Edit" | "Remove" | "Up" | "Down")) => op,
             Some("Sync") => {
                 let n = c.doc_mut(|d| sync_block(d, &name));
-                c.log(&format!(
-                    "{n} reference{} synchronized.",
-                    if n == 1 { "" } else { "s" }
-                ));
+                c.log(&format!("{n} reference{} synchronized.", if n == 1 { "" } else { "s" }));
                 changed = false;
                 continue;
             }
             _ => break,
         };
         let tag = c.string(ps("Enter attribute tag")).await?.text;
-        let Some(i) = defs
-            .iter()
-            .position(|t| att_of(t).tag.eq_ignore_ascii_case(&tag))
-        else {
+        let Some(i) = defs.iter().position(|t| att_of(t).tag.eq_ignore_ascii_case(&tag)) else {
             c.log_error(&format!("No attribute with tag \"{tag}\"."));
             continue;
         };
@@ -909,51 +600,16 @@ async fn battman(c: Ctx, _a: Args) -> CmdResult<()> {
     }
     if changed {
         let n = c.doc_mut(|d| sync_block(d, &name));
-        c.log(&format!(
-            "{n} reference{} updated.",
-            if n == 1 { "" } else { "s" }
-        ));
+        c.log(&format!("{n} reference{} updated.", if n == 1 { "" } else { "s" }));
     }
     Ok(())
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(
-        db("ATTDEF", run(attdef))
-            .aliases(&["ATT", "-ATT", "-ATTDEF"])
-            .title("Define Attributes")
-            .icon("text")
-            .desc("Creates an attribute definition for storing data in a block."),
-    );
-    r.define(
-        db("ATTEDIT", run(attedit))
-            .aliases(&["ATE", "-ATE", "-ATTEDIT"])
-            .title("Edit Attributes")
-            .icon("textedit")
-            .desc("Changes attribute information in a block."),
-    );
-    r.define(
-        db("EATTEDIT", run(eattedit))
-            .title("Edit Block Attributes")
-            .icon("textedit")
-            .desc("Edits the attribute values of a block reference."),
-    );
-    r.define(
-        db("ATTDISP", run(attdisp))
-            .title("Attribute Display")
-            .icon("block")
-            .desc("Globally controls attribute visibility."),
-    );
-    r.define(
-        db("ATTSYNC", run(attsync))
-            .title("Synchronize Attributes")
-            .icon("block")
-            .desc("Updates block references with the attributes currently defined for the block."),
-    );
-    r.define(
-        db("BATTMAN", run(battman))
-            .title("Block Attribute Manager")
-            .icon("block")
-            .desc("Manages the attributes of a block definition."),
-    );
+    r.define(db("ATTDEF", run(attdef)).aliases(&["ATT", "-ATT", "-ATTDEF"]).title("Define Attributes").icon("text").desc("Creates an attribute definition for storing data in a block."));
+    r.define(db("ATTEDIT", run(attedit)).aliases(&["ATE", "-ATE", "-ATTEDIT"]).title("Edit Attributes").icon("textedit").desc("Changes attribute information in a block."));
+    r.define(db("EATTEDIT", run(eattedit)).title("Edit Block Attributes").icon("textedit").desc("Edits the attribute values of a block reference."));
+    r.define(db("ATTDISP", run(attdisp)).title("Attribute Display").icon("block").desc("Globally controls attribute visibility."));
+    r.define(db("ATTSYNC", run(attsync)).title("Synchronize Attributes").icon("block").desc("Updates block references with the attributes currently defined for the block."));
+    r.define(db("BATTMAN", run(battman)).title("Block Attribute Manager").icon("block").desc("Manages the attributes of a block definition."));
 }

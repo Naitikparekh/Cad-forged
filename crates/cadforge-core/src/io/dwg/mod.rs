@@ -64,19 +64,12 @@ pub struct DwgReport {
 /// Convert a DWG file to DXF text (plus a report of what could not be read).
 pub fn dwg_to_dxf(bytes: &[u8]) -> Result<(String, DwgReport), String> {
     let f = file::DwgFile::open(bytes)?;
-    let hdr = f
-        .section("AcDb:Header")
-        .map(|d| header::read(d, f.ver, f.maint))
-        .unwrap_or_default();
+    let hdr = f.section("AcDb:Header").map(|d| header::read(d, f.ver, f.maint)).unwrap_or_default();
     let classes = f.classes();
     let map = f.handle_map()?;
     let data = f.objects().ok_or("The DWG file has no objects section.")?;
-    let names: std::collections::HashMap<u16, String> =
-        classes.iter().map(|(k, (n, _))| (*k, n.clone())).collect();
-    let mut rep = DwgReport {
-        version: f.ver.label(),
-        ..Default::default()
-    };
+    let names: std::collections::HashMap<u16, String> = classes.iter().map(|(k, (n, _))| (*k, n.clone())).collect();
+    let mut rep = DwgReport { version: f.ver.label(), ..Default::default() };
     let mut objs = Vec::with_capacity(map.len());
     for (_, off) in &map {
         if *off >= data.len() {
@@ -113,19 +106,9 @@ pub fn dwg_to_dxf(bytes: &[u8]) -> Result<(String, DwgReport), String> {
 pub fn list_objects(bytes: &[u8]) -> Result<Vec<(u64, String)>, String> {
     let f = file::DwgFile::open(bytes)?;
     let classes = f.classes();
-    let names: std::collections::HashMap<u16, String> =
-        classes.iter().map(|(k, (n, _))| (*k, n.clone())).collect();
+    let names: std::collections::HashMap<u16, String> = classes.iter().map(|(k, (n, _))| (*k, n.clone())).collect();
     let data = f.objects().ok_or("The DWG file has no objects section.")?;
-    let mut out: Vec<(u64, String)> = f
-        .handle_map()?
-        .into_iter()
-        .map(|(h, off)| {
-            (
-                h,
-                objects::type_name(data, f.ver, off, &names).unwrap_or_else(|| "?".into()),
-            )
-        })
-        .collect();
+    let mut out: Vec<(u64, String)> = f.handle_map()?.into_iter().map(|(h, off)| (h, objects::type_name(data, f.ver, off, &names).unwrap_or_else(|| "?".into()))).collect();
     out.sort();
     Ok(out)
 }

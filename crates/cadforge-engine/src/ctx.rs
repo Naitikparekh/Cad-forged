@@ -29,10 +29,7 @@ pub enum PointR {
     /// Enter pressed (with the prompt's default point, if it had one).
     Enter(Option<Pt>),
     /// A bare number (only for prompts created with `accept_number`).
-    Num {
-        value: f64,
-        rel: Option<NumRel>,
-    },
+    Num { value: f64, rel: Option<NumRel> },
 }
 
 impl PointR {
@@ -200,12 +197,7 @@ impl Future for AskFuture {
             return Poll::Pending;
         }
         let mut app = this.ctx.h.0.borrow_mut();
-        match app
-            .rt
-            .tasks
-            .get_mut(&this.ctx.task)
-            .and_then(|t| t.slot.take())
-        {
+        match app.rt.tasks.get_mut(&this.ctx.task).and_then(|t| t.slot.take()) {
             Some(r) => Poll::Ready(r),
             None => Poll::Pending,
         }
@@ -237,10 +229,7 @@ impl Ctx {
     /// themselves; use `d.change(|d| ..)` for in-place edits.
     pub fn doc_mut<R>(&self, f: impl FnOnce(&mut Drawing) -> R) -> R {
         let mut a = self.h.0.borrow_mut();
-        f(&mut a
-            .editor_mut()
-            .expect("a command runs on an open drawing")
-            .doc)
+        f(&mut a.editor_mut().expect("a command runs on an open drawing").doc)
     }
 
     pub fn view<R>(&self, f: impl FnOnce(&mut View) -> R) -> R {
@@ -252,12 +241,7 @@ impl Ctx {
     }
 
     pub fn name(&self) -> String {
-        self.app(|a| {
-            a.rt.tasks
-                .get(&self.task)
-                .map(|t| t.def.name.clone())
-                .unwrap_or_default()
-        })
+        self.app(|a| a.rt.tasks.get(&self.task).map(|t| t.def.name.clone()).unwrap_or_default())
     }
 
     pub fn log(&self, text: &str) {
@@ -324,11 +308,7 @@ impl Ctx {
 
     /// Clones of the solids with these ids.
     pub fn solids(&self, ids: &[u64]) -> Vec<cadforge_core::solid::Solid> {
-        self.doc(|d| {
-            ids.iter()
-                .filter_map(|id| d.solid_by_id(*id).cloned())
-                .collect()
-        })
+        self.doc(|d| ids.iter().filter_map(|id| d.solid_by_id(*id).cloned()).collect())
     }
 
     pub fn entity_by_id(&self, id: u64) -> Option<Entity> {
@@ -343,11 +323,7 @@ impl Ctx {
     // ------------------------------------------------------------ prompts
 
     async fn ask(&self, kind: PromptKind, spec: PromptSpec) -> CmdResult<Reply> {
-        AskFuture {
-            ctx: self.clone(),
-            pending: Some(Pending::new(kind, spec)),
-        }
-        .await
+        AskFuture { ctx: self.clone(), pending: Some(Pending::new(kind, spec)) }.await
     }
 
     /// Specify a point.
@@ -401,14 +377,8 @@ impl Ctx {
 
     pub async fn string(&self, spec: PromptSpec) -> CmdResult<StrR> {
         match self.ask(PromptKind::String, spec).await? {
-            Reply::Text(t) => Ok(StrR {
-                text: t,
-                entered: false,
-            }),
-            Reply::Enter { text, .. } => Ok(StrR {
-                text: text.unwrap_or_default(),
-                entered: true,
-            }),
+            Reply::Text(t) => Ok(StrR { text: t, entered: false }),
+            Reply::Enter { text, .. } => Ok(StrR { text: text.unwrap_or_default(), entered: true }),
             _ => unexpected(),
         }
     }
@@ -480,12 +450,7 @@ impl Ctx {
         }
         let mut p = Pending::new(PromptKind::Dialog, PromptSpec::new(""));
         p.dialog = Some(req);
-        match (AskFuture {
-            ctx: self.clone(),
-            pending: Some(p),
-        })
-        .await?
-        {
+        match (AskFuture { ctx: self.clone(), pending: Some(p) }).await? {
             Reply::Dialog(r) => Ok(Some(r)),
             _ => unexpected(),
         }
@@ -507,10 +472,7 @@ impl Ctx {
             let def = match a.registry.find(name) {
                 Some(d) => d,
                 None => {
-                    a.log(
-                        &format!("Unknown command \"{name}\".  Press F1 for help."),
-                        "error",
-                    );
+                    a.log(&format!("Unknown command \"{name}\".  Press F1 for help."), "error");
                     return None;
                 }
             };
@@ -530,17 +492,8 @@ impl Ctx {
 
 impl App {
     /// Objects already selected (pick-first) that satisfy the prompt, if any.
-    pub(crate) fn pickfirst_selection(
-        &mut self,
-        task: TaskId,
-        spec: &PromptSpec,
-    ) -> Option<Selection> {
-        let def_pick = self
-            .rt
-            .tasks
-            .get(&task)
-            .map(|t| t.def.pickfirst)
-            .unwrap_or(true);
+    pub(crate) fn pickfirst_selection(&mut self, task: TaskId, spec: &PromptSpec) -> Option<Selection> {
+        let def_pick = self.rt.tasks.get(&task).map(|t| t.def.pickfirst).unwrap_or(true);
         if !(spec.pickfirst.unwrap_or(def_pick) && self.sysvars.int("PICKFIRST") != 0) {
             return None;
         }
@@ -548,21 +501,8 @@ impl App {
         if ed.sel.is_empty() {
             return None;
         }
-        let ents: Vec<u64> = ed
-            .selected()
-            .into_iter()
-            .filter(|e| self.selectable_by(e, spec.allow_off, spec.filter.as_ref()))
-            .map(|e| e.id)
-            .collect();
-        let solids: Vec<u64> = if spec.solids {
-            ed.selected_solids()
-                .into_iter()
-                .filter(|s| ed.doc.solid_visible(s))
-                .map(|s| s.id)
-                .collect()
-        } else {
-            vec![]
-        };
+        let ents: Vec<u64> = ed.selected().into_iter().filter(|e| self.selectable_by(e, spec.allow_off, spec.filter.as_ref())).map(|e| e.id).collect();
+        let solids: Vec<u64> = if spec.solids { ed.selected_solids().into_iter().filter(|s| ed.doc.solid_visible(s)).map(|s| s.id).collect() } else { vec![] };
         if ents.is_empty() && solids.is_empty() {
             return None;
         }

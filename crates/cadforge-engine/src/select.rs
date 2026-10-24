@@ -21,34 +21,18 @@ fn is_infinite(e: &Entity) -> bool {
 
 /// Topmost entity within `ap` world units of `p`. Nearest wins; ties go to the later (upper) entity.
 /// Filled hatches yield to line work.
-pub fn pick_at(
-    doc: &Drawing,
-    p: Pt,
-    ap: f64,
-    filter: Filter,
-    exclude: Option<&HashSet<u64>>,
-) -> Option<u64> {
+pub fn pick_at(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Option<&HashSet<u64>>) -> Option<u64> {
     pick_at_locked(doc, p, ap, filter, exclude, false)
 }
 
 /// [`pick_at`], optionally also picking objects on locked layers (LAYULK and friends need to).
-pub fn pick_at_locked(
-    doc: &Drawing,
-    p: Pt,
-    ap: f64,
-    filter: Filter,
-    exclude: Option<&HashSet<u64>>,
-    locked_ok: bool,
-) -> Option<u64> {
+pub fn pick_at_locked(doc: &Drawing, p: Pt, ap: f64, filter: Filter, exclude: Option<&HashSet<u64>>, locked_ok: bool) -> Option<u64> {
     let mut best: Option<u64> = None;
     let mut best_score = f64::INFINITY;
     let win = Bounds::new(p.x - ap, p.y - ap, p.x + ap, p.y + ap);
     let ents = doc.entities();
     for e in doc.candidates(&win).into_iter().map(|i| &ents[i]) {
-        if !(doc.is_visible(e) && (locked_ok || !doc.is_locked(e)))
-            || !passes(filter, e)
-            || exclude.is_some_and(|x| x.contains(&e.id))
-        {
+        if !(doc.is_visible(e) && (locked_ok || !doc.is_locked(e))) || !passes(filter, e) || exclude.is_some_and(|x| x.contains(&e.id)) {
             continue;
         }
         if !is_infinite(e) && !bounds_of(e, doc).is_some_and(|b| b.overlaps(&win)) {
@@ -98,20 +82,7 @@ pub fn rect_of(a: Pt, b: Pt) -> Bounds {
 pub fn select_rect(doc: &Drawing, rect: &Bounds, crossing: bool, filter: Filter) -> Vec<u64> {
     // an entity that is inside or touches the rectangle has bounds that overlap it, so only those few need testing
     let ents = doc.entities();
-    doc.candidates(rect)
-        .into_iter()
-        .map(|i| &ents[i])
-        .filter(|e| {
-            selectable(doc, e)
-                && passes(filter, e)
-                && if crossing {
-                    crosses_rect(e, rect, doc)
-                } else {
-                    in_window(e, rect, doc)
-                }
-        })
-        .map(|e| e.id)
-        .collect()
+    doc.candidates(rect).into_iter().map(|i| &ents[i]).filter(|e| selectable(doc, e) && passes(filter, e) && if crossing { crosses_rect(e, rect, doc) } else { in_window(e, rect, doc) }).map(|e| e.id).collect()
 }
 
 fn sample_points(e: &Entity, doc: &Drawing) -> Vec<Pt> {
@@ -137,9 +108,7 @@ fn sample_points(e: &Entity, doc: &Drawing) -> Vec<Pt> {
 fn poly_edges(poly: &[Pt], closed: bool) -> Vec<Seg> {
     let n = poly.len();
     let take = if closed { n } else { n.saturating_sub(1) };
-    (0..take)
-        .map(|i| Seg::line(poly[i], poly[(i + 1) % n]))
-        .collect()
+    (0..take).map(|i| Seg::line(poly[i], poly[(i + 1) % n])).collect()
 }
 
 fn crosses_path(e: &Entity, doc: &Drawing, edges: &[Seg]) -> bool {
@@ -180,11 +149,7 @@ pub fn select_polygon(doc: &Drawing, poly: &[Pt], crossing: bool, filter: Filter
         let all_in = pts.iter().all(|p| point_in_polygon(*p, poly));
         let any_in = pts.iter().any(|p| point_in_polygon(*p, poly));
         let crosses = crosses_path(e, doc, &edges);
-        if if crossing {
-            any_in || crosses
-        } else {
-            all_in && !crosses
-        } {
+        if if crossing { any_in || crosses } else { all_in && !crosses } {
             out.push(e.id);
         }
     }
@@ -196,12 +161,7 @@ pub fn select_fence(doc: &Drawing, pts: &[Pt], filter: Filter) -> Vec<u64> {
     let edges = poly_edges(pts, false);
     let ents = doc.entities();
     let reach = Bounds::of_points(pts);
-    doc.candidates(&reach)
-        .into_iter()
-        .map(|i| &ents[i])
-        .filter(|e| selectable(doc, e) && passes(filter, e) && crosses_path(e, doc, &edges))
-        .map(|e| e.id)
-        .collect()
+    doc.candidates(&reach).into_iter().map(|i| &ents[i]).filter(|e| selectable(doc, e) && passes(filter, e) && crosses_path(e, doc, &edges)).map(|e| e.id).collect()
 }
 
 #[cfg(test)]
@@ -212,15 +172,7 @@ mod tests {
         let mut d = Drawing::new("t");
         d.add(Entity::line(pt(0.0, 0.0), pt(10.0, 0.0))); // 1
         d.add(Entity::circle(pt(20.0, 0.0), 3.0)); // 2
-        d.add(Entity::hatch(
-            vec![vec![
-                Vertex::new(0.0, 0.0, 0.0),
-                Vertex::new(10.0, 0.0, 0.0),
-                Vertex::new(10.0, 10.0, 0.0),
-                Vertex::new(0.0, 10.0, 0.0),
-            ]],
-            "SOLID",
-        )); // 3
+        d.add(Entity::hatch(vec![vec![Vertex::new(0.0, 0.0, 0.0), Vertex::new(10.0, 0.0, 0.0), Vertex::new(10.0, 10.0, 0.0), Vertex::new(0.0, 10.0, 0.0)]], "SOLID")); // 3
         d.add(Entity::text(pt(0.0, 20.0), 2.0, "HELLO")); // 4
         d
     }
@@ -228,58 +180,25 @@ mod tests {
     #[test]
     fn picking_prefers_line_work_over_fills() {
         let d = doc();
-        assert_eq!(
-            pick_at(&d, pt(5.0, 0.1), 0.5, None, None),
-            Some(1),
-            "a line beats the hatch under it"
-        );
-        assert_eq!(
-            pick_at(&d, pt(5.0, 5.0), 0.5, None, None),
-            Some(3),
-            "inside the fill picks the hatch"
-        );
+        assert_eq!(pick_at(&d, pt(5.0, 0.1), 0.5, None, None), Some(1), "a line beats the hatch under it");
+        assert_eq!(pick_at(&d, pt(5.0, 5.0), 0.5, None, None), Some(3), "inside the fill picks the hatch");
         assert_eq!(pick_at(&d, pt(50.0, 50.0), 0.5, None, None), None);
         let f = |e: &Entity| matches!(e.kind, Kind::Circle { .. });
         assert_eq!(pick_at(&d, pt(5.0, 0.1), 0.5, Some(&f), None), None);
         let ex: HashSet<u64> = [1].into();
-        assert_eq!(
-            pick_at(&d, pt(5.0, 0.1), 0.5, None, Some(&ex)),
-            Some(3),
-            "excluded ids are skipped"
-        );
-        assert_eq!(
-            pick_all(&d, pt(5.0, 0.1), 0.5, None),
-            vec![3, 1],
-            "cycling lists nearest first (the fill is at distance 0)"
-        );
+        assert_eq!(pick_at(&d, pt(5.0, 0.1), 0.5, None, Some(&ex)), Some(3), "excluded ids are skipped");
+        assert_eq!(pick_all(&d, pt(5.0, 0.1), 0.5, None), vec![3, 1], "cycling lists nearest first (the fill is at distance 0)");
     }
 
     #[test]
     fn window_crossing_polygon_and_fence() {
         let d = doc();
-        assert_eq!(
-            select_rect(&d, &rect_of(pt(-1.0, -1.0), pt(11.0, 11.0)), false, None),
-            vec![1, 3]
-        );
-        assert_eq!(
-            select_rect(&d, &rect_of(pt(-1.0, -1.0), pt(5.0, 5.0)), false, None),
-            Vec::<u64>::new()
-        );
-        assert_eq!(
-            select_rect(&d, &rect_of(pt(-1.0, -1.0), pt(5.0, 5.0)), true, None),
-            vec![1, 3]
-        );
-        let tri = [
-            pt(-1.0, -5.0),
-            pt(30.0, -5.0),
-            pt(30.0, 12.0),
-            pt(-1.0, 12.0),
-        ];
+        assert_eq!(select_rect(&d, &rect_of(pt(-1.0, -1.0), pt(11.0, 11.0)), false, None), vec![1, 3]);
+        assert_eq!(select_rect(&d, &rect_of(pt(-1.0, -1.0), pt(5.0, 5.0)), false, None), Vec::<u64>::new());
+        assert_eq!(select_rect(&d, &rect_of(pt(-1.0, -1.0), pt(5.0, 5.0)), true, None), vec![1, 3]);
+        let tri = [pt(-1.0, -5.0), pt(30.0, -5.0), pt(30.0, 12.0), pt(-1.0, 12.0)];
         assert_eq!(select_polygon(&d, &tri, false, None), vec![1, 2, 3]);
-        assert_eq!(
-            select_fence(&d, &[pt(5.0, -5.0), pt(5.0, 5.0)], None),
-            vec![1]
-        );
+        assert_eq!(select_fence(&d, &[pt(5.0, -5.0), pt(5.0, 5.0)], None), vec![1]);
     }
 
     #[test]

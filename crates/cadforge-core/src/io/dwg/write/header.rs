@@ -30,22 +30,15 @@ pub struct Refs {
     pub continuous: u64,
 }
 
-pub const START: [u8; 16] = [
-    0xCF, 0x7B, 0x1F, 0x23, 0xFD, 0xDE, 0x38, 0xA9, 0x5F, 0x7C, 0x68, 0xB8, 0x4E, 0x6D, 0x33, 0x5F,
-];
-pub const END: [u8; 16] = [
-    0x30, 0x84, 0xE0, 0xDC, 0x02, 0x21, 0xC7, 0x56, 0xA0, 0x83, 0x97, 0x47, 0xB1, 0x92, 0xCC, 0xA0,
-];
+pub const START: [u8; 16] = [0xCF, 0x7B, 0x1F, 0x23, 0xFD, 0xDE, 0x38, 0xA9, 0x5F, 0x7C, 0x68, 0xB8, 0x4E, 0x6D, 0x33, 0x5F];
+pub const END: [u8; 16] = [0x30, 0x84, 0xE0, 0xDC, 0x02, 0x21, 0xC7, 0x56, 0xA0, 0x83, 0x97, 0x47, 0xB1, 0x92, 0xCC, 0xA0];
 
 /// The section, sentinels and CRC included. `julian` is the creation / update date (day, milliseconds).
 pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32), ver: Ver) -> Vec<u8> {
     let r2004 = ver >= Ver::R2004;
     let f = |name: &str, code: i32, d: f64| h.get(name).map_or(d, |v| v.fd(code, d));
     let i = |name: &str, d: i64| h.get(name).map_or(d, |v| v.i(70, d)) as i16;
-    let p3 = |name: &str, d: [f64; 3]| {
-        h.get(name)
-            .map_or(d, |v| [v.fd(10, d[0]), v.fd(20, d[1]), v.fd(30, d[2])])
-    };
+    let p3 = |name: &str, d: [f64; 3]| h.get(name).map_or(d, |v| [v.fd(10, d[0]), v.fd(20, d[1]), v.fd(30, d[2])]);
     let p2 = |name: &str, d: [f64; 2]| h.get(name).map_or(d, |v| [v.fd(10, d[0]), v.fd(20, d[1])]);
     let metric = i("$MEASUREMENT", 1) == 1;
     let mut m = BitW::new();
@@ -137,7 +130,7 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32), ver: Ver) -
     m.h(5, r.dimstyle);
     m.h(5, r.cmlstyle);
     m.bd(0.0); // PSVPSCALE
-               // paper space
+    // paper space
     m.bd3([0.0; 3]); // INSBASE
     m.bd3([1e20, 1e20, 1e20]); // EXTMIN
     m.bd3([-1e20, -1e20, -1e20]); // EXTMAX
@@ -149,10 +142,7 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32), ver: Ver) -
     m.bd3(p3("$EXTMIN", [0.0; 3]));
     m.bd3(p3("$EXTMAX", [0.0; 3]));
     m.rd2(p2("$LIMMIN", [0.0, 0.0]));
-    m.rd2(p2(
-        "$LIMMAX",
-        if metric { [420.0, 297.0] } else { [12.0, 9.0] },
-    ));
+    m.rd2(p2("$LIMMAX", if metric { [420.0, 297.0] } else { [12.0, 9.0] }));
     ucs_block(&mut m);
     m.tv(""); // DIMPOST
     m.tv(""); // DIMAPOST

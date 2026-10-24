@@ -11,11 +11,7 @@ fn table_text() -> String {
     }
     t.push_str("}\nplot_style{\n");
     for i in 0..255 {
-        let (color, lw) = if i == 0 {
-            (-1006632960_i64, 1)
-        } else {
-            (-1, 0)
-        };
+        let (color, lw) = if i == 0 { (-1006632960_i64, 1) } else { (-1, 0) };
         t.push_str(&format!("\t{i}{{\n\t\tname=\"Color_{}\"\n\t\tcolor={color}\n\t\tscreen=100\n\t\tlineweight={lw}\n\t}}\n", i + 1));
     }
     t.push_str("}\n");
@@ -27,13 +23,7 @@ fn b64(bytes: &[u8]) -> String {
 }
 
 fn load(s: &Sim, name: &str, bytes: &[u8]) {
-    s.cmd_args(
-        "PLOTSTYLE",
-        Args::none()
-            .with("option", ArgVal::Str("Load".into()))
-            .with("name", ArgVal::Str(name.into()))
-            .with("data", ArgVal::Str(b64(bytes))),
-    );
+    s.cmd_args("PLOTSTYLE", Args::none().with("option", ArgVal::Str("Load".into())).with("name", ArgVal::Str(name.into())).with("data", ArgVal::Str(b64(bytes))));
 }
 
 #[test]
@@ -55,16 +45,8 @@ fn load_reads_a_table_from_the_file_bytes_and_names_it_after_the_file() {
     assert_eq!(t.styles[0].lineweight, Some(25));
     assert!(s.doc(|d| d.dirty), "loading changes the drawing");
     s.cmd("PLOTSTYLE").ty("?");
-    assert!(
-        s.history_has("Plot style table \"Office\": colour dependent, 255 styles. Office table"),
-        "{}",
-        s.log_text()
-    );
-    assert!(
-        s.history_has("colour   1: 0,0,0, 0.25 mm, screening 100%"),
-        "{}",
-        s.log_text()
-    );
+    assert!(s.history_has("Plot style table \"Office\": colour dependent, 255 styles. Office table"), "{}", s.log_text());
+    assert!(s.history_has("colour   1: 0,0,0, 0.25 mm, screening 100%"), "{}", s.log_text());
 }
 
 #[test]
@@ -73,12 +55,7 @@ fn a_bad_file_leaves_the_drawing_alone_and_says_why() {
     load(&s, "junk.ctb", b"definitely not a plot style table");
     assert!(s.history_has("no plot styles"), "{}", s.log_text());
     assert!(s.doc(|d| d.plot_styles.is_none()));
-    s.cmd_args(
-        "PLOTSTYLE",
-        Args::none()
-            .with("option", ArgVal::Str("Load".into()))
-            .with("data", ArgVal::Str("???".into())),
-    );
+    s.cmd_args("PLOTSTYLE", Args::none().with("option", ArgVal::Str("Load".into())).with("data", ArgVal::Str("???".into())));
     assert!(s.history_has("not valid base64"));
 }
 
@@ -86,20 +63,14 @@ fn a_bad_file_leaves_the_drawing_alone_and_says_why() {
 fn monochrome_and_none_and_undo() {
     let s = Sim::new();
     s.cmd("PLOTSTYLE").ty("Monochrome");
-    assert_eq!(
-        s.doc(|d| d.plot_styles.as_ref().map(|t| t.name.clone())),
-        Some("monochrome".to_string())
-    );
+    assert_eq!(s.doc(|d| d.plot_styles.as_ref().map(|t| t.name.clone())), Some("monochrome".to_string()));
     s.cmd("PLOTSTYLE").ty("None");
     assert!(s.doc(|d| d.plot_styles.is_none()));
     assert!(s.history_has("The plot style table was removed"));
     s.cmd("PLOTSTYLE").ty("None");
     assert!(s.history_has("The drawing has no plot style table."));
     s.undo();
-    assert!(
-        s.doc(|d| d.plot_styles.is_some()),
-        "undo brings the table back"
-    );
+    assert!(s.doc(|d| d.plot_styles.is_some()), "undo brings the table back");
 }
 
 #[test]
@@ -108,11 +79,7 @@ fn a_named_table_loads_but_warns_that_objects_cannot_use_it() {
     let named = "description=\"named\"\nplot_style{\n\t0{\n\t\tname=\"Normal\"\n\t\tcolor=-1\n\t\tscreen=100\n\t\tlineweight=0\n\t}\n}\n";
     load(&s, "Named.stb", named.as_bytes());
     assert!(s.history_has("(named, 1 style)"), "{}", s.log_text());
-    assert!(
-        s.history_has("objects have no plot style assignment"),
-        "{}",
-        s.log_text()
-    );
+    assert!(s.history_has("objects have no plot style assignment"), "{}", s.log_text());
 }
 
 #[test]
@@ -120,27 +87,10 @@ fn without_data_the_host_is_asked_for_a_file() {
     let s = Sim::new();
     s.h.borrow_mut().ui.dialogs = true;
     s.h.borrow_mut().take_events();
-    s.cmd_args(
-        "PLOTSTYLE",
-        Args::none().with("option", ArgVal::Str("Load".into())),
-    );
-    let asks: Vec<String> =
-        s.h.borrow_mut()
-            .take_events()
-            .into_iter()
-            .filter_map(|e| {
-                if let Event::UiAction { name, .. } = e {
-                    Some(name)
-                } else {
-                    None
-                }
-            })
-            .collect();
+    s.cmd_args("PLOTSTYLE", Args::none().with("option", ArgVal::Str("Load".into())));
+    let asks: Vec<String> = s.h.borrow_mut().take_events().into_iter().filter_map(|e| if let Event::UiAction { name, .. } = e { Some(name) } else { None }).collect();
     assert_eq!(asks, vec!["PLOTSTYLELOAD".to_string()]);
     let h = Sim::new();
-    h.cmd_args(
-        "PLOTSTYLE",
-        Args::none().with("option", ArgVal::Str("Load".into())),
-    );
+    h.cmd_args("PLOTSTYLE", Args::none().with("option", ArgVal::Str("Load".into())));
     assert!(h.history_has("needs a file chooser"), "{}", h.log_text());
 }

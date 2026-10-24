@@ -4,9 +4,7 @@ use crate::app::CadForgeApp;
 use cadforge_core::style::Color;
 use cadforge_engine::commands::ext_system::{with_ext, SaveFormat};
 use cadforge_engine::runtime::{DialogReply, DialogReq, TextEditSpec};
-use eframe::egui::{
-    self, vec2, Color32, CornerRadius, FontFamily, FontId, Margin, RichText, Stroke,
-};
+use eframe::egui::{self, vec2, Color32, CornerRadius, FontFamily, FontId, Margin, RichText, Stroke};
 
 mod colors;
 mod dimstyle;
@@ -50,16 +48,8 @@ pub enum ColorTarget {
 }
 
 pub enum Kind {
-    Confirm {
-        title: String,
-        message: String,
-        buttons: Vec<String>,
-        then: Then,
-    },
-    SaveAs {
-        name: String,
-        fmt: SaveFormat,
-    },
+    Confirm { title: String, message: String, buttons: Vec<String>, then: Then },
+    SaveAs { name: String, fmt: SaveFormat },
     About,
     Help(HelpState),
     Calc(CalcState),
@@ -102,33 +92,16 @@ pub enum Out {
 
 impl Dialog {
     fn new(kind: Kind) -> Dialog {
-        Dialog {
-            kind,
-            from_cmd: false,
-            id: 0,
-        }
+        Dialog { kind, from_cmd: false, id: 0 }
     }
     pub fn confirm(title: &str, message: &str, buttons: &[&str], then: Then) -> Dialog {
-        Dialog::new(Kind::Confirm {
-            title: title.into(),
-            message: message.into(),
-            buttons: buttons.iter().map(|s| s.to_string()).collect(),
-            then,
-        })
+        Dialog::new(Kind::Confirm { title: title.into(), message: message.into(), buttons: buttons.iter().map(|s| s.to_string()).collect(), then })
     }
     pub fn confirm_close(idx: usize) -> Dialog {
-        Dialog::new(Kind::Confirm {
-            title: "CadForge".into(),
-            message: "Save changes to this drawing?".into(),
-            buttons: vec!["Save".into(), "Don't Save".into(), "Cancel".into()],
-            then: Then::CloseDrawing(idx),
-        })
+        Dialog::new(Kind::Confirm { title: "CadForge".into(), message: "Save changes to this drawing?".into(), buttons: vec!["Save".into(), "Don't Save".into(), "Cancel".into()], then: Then::CloseDrawing(idx) })
     }
     pub fn save_as(name: &str, fmt: SaveFormat) -> Dialog {
-        Dialog::new(Kind::SaveAs {
-            name: name.into(),
-            fmt,
-        })
+        Dialog::new(Kind::SaveAs { name: name.into(), fmt })
     }
     pub fn about() -> Dialog {
         Dialog::new(Kind::About)
@@ -148,14 +121,7 @@ impl CadForgeApp {
             Some(req) if !have_cmd_dialog => {
                 let kind = match req {
                     DialogReq::Insert { names } => Some(Kind::Insert(InsertState::new(names))),
-                    DialogReq::Color {
-                        value,
-                        allow_by_layer,
-                    } => Some(Kind::Color(ColorState::new(
-                        value,
-                        allow_by_layer,
-                        ColorTarget::Command,
-                    ))),
+                    DialogReq::Color { value, allow_by_layer } => Some(Kind::Color(ColorState::new(value, allow_by_layer, ColorTarget::Command))),
                     DialogReq::Linetype => Some(Kind::Linetype(LinetypeState::new(None, false))),
                     DialogReq::Lweight => Some(Kind::Lweight(LweightState::new(None, false))),
                     DialogReq::Hatch => Some(Kind::Hatch(HatchDlgState::new())),
@@ -197,14 +163,7 @@ impl CadForgeApp {
         let mut finished: Vec<(usize, Out)> = vec![];
         let n = self.dialogs.len();
         for i in 0..n {
-            let mut d = std::mem::replace(
-                &mut self.dialogs[i],
-                Dialog {
-                    kind: Kind::About,
-                    from_cmd: false,
-                    id: 0,
-                },
-            );
+            let mut d = std::mem::replace(&mut self.dialogs[i], Dialog { kind: Kind::About, from_cmd: false, id: 0 });
             let cancel_requested = d.id == u64::MAX && i == n - 1;
             if cancel_requested {
                 d.id = self.dialog_counter + 1000 + i as u64;
@@ -226,75 +185,32 @@ impl CadForgeApp {
         self.init_dialog(d);
         let t = self.t;
         let (title, width) = dialog_title_width(&d.kind);
-        let frame = egui::Frame::new()
-            .fill(t.ribbon)
-            .stroke(Stroke::new(1.0, t.border))
-            .corner_radius(CornerRadius::same(4))
-            .inner_margin(Margin::ZERO)
-            .shadow(egui::epaint::Shadow {
-                offset: [0, 10],
-                blur: 32,
-                spread: 0,
-                color: Color32::from_black_alpha(150),
-            });
+        let frame = egui::Frame::new().fill(t.ribbon).stroke(Stroke::new(1.0, t.border)).corner_radius(CornerRadius::same(4)).inner_margin(Margin::ZERO).shadow(egui::epaint::Shadow { offset: [0, 10], blur: 32, spread: 0, color: Color32::from_black_alpha(150) });
         let mut out = Out::Open;
-        let resp = egui::Modal::new(egui::Id::new(("dialog", d.id)))
-            .backdrop_color(if top {
-                Color32::from_black_alpha(110)
-            } else {
-                Color32::from_black_alpha(0)
-            })
-            .frame(frame)
-            .show(ctx, |ui| {
-                ui.set_width(width);
-                ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
-                // title bar
-                let (tr, _) = ui.allocate_exact_size(vec2(width, 30.0), egui::Sense::hover());
-                ui.painter().rect_filled(
-                    tr,
-                    CornerRadius {
-                        nw: 4,
-                        ne: 4,
-                        sw: 0,
-                        se: 0,
-                    },
-                    t.ribbon_title,
-                );
-                ui.painter().text(
-                    tr.left_center() + vec2(12.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    &title,
-                    FontId::new(13.0, FontFamily::Name("bold".into())),
-                    t.text,
-                );
-                let xr = egui::Rect::from_center_size(
-                    tr.right_center() - vec2(16.0, 0.0),
-                    vec2(20.0, 20.0),
-                );
-                let xresp = ui.interact(xr, ui.id().with("dlg-x"), egui::Sense::click());
-                if xresp.hovered() {
-                    ui.painter().rect_filled(xr, CornerRadius::same(3), t.hover);
+        let resp = egui::Modal::new(egui::Id::new(("dialog", d.id))).backdrop_color(if top { Color32::from_black_alpha(110) } else { Color32::from_black_alpha(0) }).frame(frame).show(ctx, |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+            // title bar
+            let (tr, _) = ui.allocate_exact_size(vec2(width, 30.0), egui::Sense::hover());
+            ui.painter().rect_filled(tr, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.ribbon_title);
+            ui.painter().text(tr.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, &title, FontId::new(13.0, FontFamily::Name("bold".into())), t.text);
+            let xr = egui::Rect::from_center_size(tr.right_center() - vec2(16.0, 0.0), vec2(20.0, 20.0));
+            let xresp = ui.interact(xr, ui.id().with("dlg-x"), egui::Sense::click());
+            if xresp.hovered() {
+                ui.painter().rect_filled(xr, CornerRadius::same(3), t.hover);
+            }
+            self.icons.paint(ui.painter(), "x", xr.shrink(5.0), &t, crate::icons::Tint::Mono(t.text2));
+            if xresp.clicked() {
+                out = Out::Cancel;
+            }
+            egui::Frame::new().inner_margin(Margin::symmetric(14, 12)).show(ui, |ui| {
+                ui.set_width(width - 28.0);
+                let o = self.dialog_body(ctx, ui, d);
+                if o != Out::Open {
+                    out = o;
                 }
-                self.icons.paint(
-                    ui.painter(),
-                    "x",
-                    xr.shrink(5.0),
-                    &t,
-                    crate::icons::Tint::Mono(t.text2),
-                );
-                if xresp.clicked() {
-                    out = Out::Cancel;
-                }
-                egui::Frame::new()
-                    .inner_margin(Margin::symmetric(14, 12))
-                    .show(ui, |ui| {
-                        ui.set_width(width - 28.0);
-                        let o = self.dialog_body(ctx, ui, d);
-                        if o != Out::Open {
-                            out = o;
-                        }
-                    });
             });
+        });
         if top && (resp.should_close() || cancel) && out == Out::Open {
             out = Out::Cancel;
         }
@@ -319,9 +235,7 @@ impl CadForgeApp {
 
     fn dialog_body(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, d: &mut Dialog) -> Out {
         match &mut d.kind {
-            Kind::Confirm {
-                message, buttons, ..
-            } => {
+            Kind::Confirm { message, buttons, .. } => {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(message.clone()));
                 });
@@ -395,12 +309,7 @@ impl CadForgeApp {
                         }
                         None => {
                             // needs a file name: ask, then the user closes again
-                            let n = self
-                                .h
-                                .borrow()
-                                .doc()
-                                .map(|d| with_ext(&d.name, SaveFormat::Dwg2004))
-                                .unwrap_or_default();
+                            let n = self.h.borrow().doc().map(|d| with_ext(&d.name, SaveFormat::Dwg2004)).unwrap_or_default();
                             self.dialog = Some(Dialog::save_as(&n, SaveFormat::Dwg2004));
                         }
                     }
@@ -507,21 +416,12 @@ impl CadForgeApp {
                         if s.pick {
                             self.ret_text = Some(("linetype".into(), sel));
                         } else {
-                            self.set_property(
-                                "ltype",
-                                None,
-                                None,
-                                if sel == "BYLAYER" { None } else { Some(sel) },
-                            );
+                            self.set_property("ltype", None, None, if sel == "BYLAYER" { None } else { Some(sel) });
                         }
                     }
                 }
                 if from_cmd {
-                    reply = Some(if ok {
-                        DialogReply::Done
-                    } else {
-                        DialogReply::Cancelled
-                    });
+                    reply = Some(if ok { DialogReply::Done } else { DialogReply::Cancelled });
                 }
             }
             Kind::Lweight(s) => {
@@ -534,19 +434,11 @@ impl CadForgeApp {
                     }
                 }
                 if from_cmd {
-                    reply = Some(if ok {
-                        DialogReply::Done
-                    } else {
-                        DialogReply::Cancelled
-                    });
+                    reply = Some(if ok { DialogReply::Done } else { DialogReply::Cancelled });
                 }
             }
             Kind::Insert(s) => {
-                reply = Some(if ok {
-                    s.sel.map_or(DialogReply::Cancelled, DialogReply::Text)
-                } else {
-                    DialogReply::Cancelled
-                });
+                reply = Some(if ok { s.sel.map_or(DialogReply::Cancelled, DialogReply::Text) } else { DialogReply::Cancelled });
             }
             Kind::Hatch(s) => {
                 if ok {
@@ -557,11 +449,7 @@ impl CadForgeApp {
                 }
             }
             Kind::EditText(s) => {
-                reply = Some(if ok {
-                    DialogReply::Text(s.text)
-                } else {
-                    DialogReply::Cancelled
-                });
+                reply = Some(if ok { DialogReply::Text(s.text) } else { DialogReply::Cancelled });
             }
             Kind::FileBrowser(s) => {
                 if ok {
@@ -582,21 +470,12 @@ impl CadForgeApp {
     pub fn btn(&self, ui: &mut egui::Ui, label: &str, primary: bool) -> egui::Response {
         let t = self.t;
         let text = RichText::new(label).color(if primary { Color32::WHITE } else { t.text });
-        let b = egui::Button::new(text)
-            .min_size(vec2(78.0, 24.0))
-            .fill(if primary { t.accent } else { t.raised })
-            .stroke(Stroke::new(1.0, if primary { t.accent2 } else { t.sep }));
+        let b = egui::Button::new(text).min_size(vec2(78.0, 24.0)).fill(if primary { t.accent } else { t.raised }).stroke(Stroke::new(1.0, if primary { t.accent2 } else { t.sep }));
         ui.add(b)
     }
 
     /// OK / Cancel (and extra) button row.
-    pub fn ok_cancel(
-        &self,
-        ui: &mut egui::Ui,
-        ok: Option<&str>,
-        cancel: Option<&str>,
-        extra: &[&str],
-    ) -> Out {
+    pub fn ok_cancel(&self, ui: &mut egui::Ui, ok: Option<&str>, cancel: Option<&str>, extra: &[&str]) -> Out {
         let mut out = Out::Open;
         ui.add_space(6.0);
         ui.horizontal(|ui| {
@@ -625,22 +504,12 @@ impl CadForgeApp {
         ui.label(RichText::new(text).small().color(self.t.text3));
     }
 
-    pub fn group<R>(
-        &self,
-        ui: &mut egui::Ui,
-        title: &str,
-        add: impl FnOnce(&mut egui::Ui) -> R,
-    ) -> R {
+    pub fn group<R>(&self, ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let t = self.t;
-        egui::Frame::new()
-            .stroke(Stroke::new(1.0, t.border))
-            .corner_radius(CornerRadius::same(3))
-            .inner_margin(Margin::symmetric(10, 8))
-            .show(ui, |ui| {
-                ui.label(RichText::new(title).color(t.text2).small());
-                add(ui)
-            })
-            .inner
+        egui::Frame::new().stroke(Stroke::new(1.0, t.border)).corner_radius(CornerRadius::same(3)).inner_margin(Margin::symmetric(10, 8)).show(ui, |ui| {
+            ui.label(RichText::new(title).color(t.text2).small());
+            add(ui)
+        }).inner
     }
 
     pub fn tab_strip(&self, ui: &mut egui::Ui, tabs: &[&str], cur: &mut usize) {
@@ -649,21 +518,7 @@ impl CadForgeApp {
             ui.spacing_mut().item_spacing.x = 2.0;
             for (i, name) in tabs.iter().enumerate() {
                 let active = *cur == i;
-                let b = egui::Button::new(RichText::new(*name).color(if active {
-                    t.text
-                } else {
-                    t.text2
-                }))
-                .fill(if active {
-                    t.raised
-                } else {
-                    Color32::TRANSPARENT
-                })
-                .stroke(Stroke::new(
-                    1.0,
-                    if active { t.sep } else { Color32::TRANSPARENT },
-                ))
-                .min_size(vec2(0.0, 24.0));
+                let b = egui::Button::new(RichText::new(*name).color(if active { t.text } else { t.text2 })).fill(if active { t.raised } else { Color32::TRANSPARENT }).stroke(Stroke::new(1.0, if active { t.sep } else { Color32::TRANSPARENT })).min_size(vec2(0.0, 24.0));
                 if ui.add(b).clicked() {
                     *cur = i;
                 }
@@ -673,21 +528,12 @@ impl CadForgeApp {
     }
 
     pub fn num_edit(&self, ui: &mut egui::Ui, text: &mut String, width: f32) -> egui::Response {
-        ui.add(
-            egui::TextEdit::singleline(text)
-                .desired_width(width)
-                .font(FontId::monospace(12.0)),
-        )
+        ui.add(egui::TextEdit::singleline(text).desired_width(width).font(FontId::monospace(12.0)))
     }
 
     pub fn color_chip(&self, ui: &mut egui::Ui, c: Option<Color>) {
         let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), egui::Sense::hover());
-        crate::ribbon::swatch(
-            ui.painter(),
-            r,
-            crate::ribbon::color_rgb_of(c, &None, self.t.dark),
-            &self.t,
-        );
+        crate::ribbon::swatch(ui.painter(), r, crate::ribbon::color_rgb_of(c, &None, self.t.dark), &self.t);
     }
 }
 
@@ -709,28 +555,13 @@ fn dialog_title_width(k: &Kind) -> (String, f32) {
         Kind::DSettings(_) => ("Drafting Settings".into(), 540.0),
         Kind::DimStyle(_) => ("Dimension Style Manager".into(), 500.0),
         Kind::DimStyleEdit(s) => (s.title.clone(), 460.0),
-        Kind::Plot(s) => (
-            format!(
-                "Plot — {}",
-                s.o.as_ref()
-                    .and_then(|o| o.layout.clone())
-                    .unwrap_or_else(|| "Model".into())
-            ),
-            780.0,
-        ),
+        Kind::Plot(s) => (format!("Plot — {}", s.o.as_ref().and_then(|o| o.layout.clone()).unwrap_or_else(|| "Model".into())), 780.0),
         Kind::Color(_) => ("Select Color".into(), 520.0),
         Kind::Linetype(_) => ("Linetype Manager".into(), 520.0),
         Kind::Lweight(_) => ("Lineweight Settings".into(), 380.0),
         Kind::Insert(_) => ("Insert".into(), 360.0),
         Kind::Hatch(_) => ("Hatch Settings".into(), 380.0),
-        Kind::EditText(s) => (
-            if s.multi {
-                "Multiline Text Editor".into()
-            } else {
-                "Single Line Text".into()
-            },
-            460.0,
-        ),
+        Kind::EditText(s) => (if s.multi { "Multiline Text Editor".into() } else { "Single Line Text".into() }, 460.0),
         Kind::FileBrowser(s) => (s.title.clone(), 560.0),
         Kind::PageSetup(_) => ("Page Setup".into(), 420.0),
     }
@@ -782,11 +613,7 @@ impl Dialog {
         Dialog::new(Kind::Purge(None))
     }
     pub fn color_for_property() -> Dialog {
-        Dialog::new(Kind::Color(ColorState::new(
-            None,
-            true,
-            ColorTarget::Property,
-        )))
+        Dialog::new(Kind::Color(ColorState::new(None, true, ColorTarget::Property)))
     }
     pub fn color_for_hatch() -> Dialog {
         Dialog::new(Kind::Color(ColorState::new(None, true, ColorTarget::Hatch)))

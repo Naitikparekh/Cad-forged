@@ -84,17 +84,7 @@ pub struct AttDef {
 
 impl TextData {
     pub fn new(p: Pt, h: f64, s: &str) -> TextData {
-        TextData {
-            p,
-            h,
-            s: s.to_string(),
-            rot: 0.0,
-            jh: HJust::Left,
-            jv: VJust::Baseline,
-            w: None,
-            multi: false,
-            att: None,
-        }
+        TextData { p, h, s: s.to_string(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false, att: None }
     }
     pub fn with_rot(mut self, rot: f64) -> TextData {
         self.rot = rot;
@@ -109,11 +99,7 @@ impl TextData {
 
 /// Break text to lines, honouring explicit newlines and (optionally) wrapping at width `w`.
 pub fn wrap_lines(s: &str, h: f64, w: f64) -> Vec<String> {
-    let raw: Vec<String> = s
-        .replace("\\P", "\n")
-        .split('\n')
-        .map(|x| x.to_string())
-        .collect();
+    let raw: Vec<String> = s.replace("\\P", "\n").split('\n').map(|x| x.to_string()).collect();
     if !(w > 0.0) {
         return raw;
     }
@@ -121,11 +107,7 @@ pub fn wrap_lines(s: &str, h: f64, w: f64) -> Vec<String> {
     for line in raw {
         let mut cur = String::new();
         for word in line.split(' ') {
-            let next = if cur.is_empty() {
-                word.to_string()
-            } else {
-                format!("{} {}", cur, word)
-            };
+            let next = if cur.is_empty() { word.to_string() } else { format!("{} {}", cur, word) };
             if !cur.is_empty() && measure_text(&next, h) > w {
                 out.push(std::mem::take(&mut cur));
                 cur = word.to_string();
@@ -206,23 +188,12 @@ pub fn text_layout(e: &TextData) -> Layout {
                 HJust::Right => ox + box_w - w,
                 HJust::Left => ox,
             };
-            LineLayout {
-                s,
-                x,
-                y: y0 - i as f64 * pitch,
-                w,
-            }
+            LineLayout { s, x, y: y0 - i as f64 * pitch, w }
         })
         .collect();
     let top = y0 + h;
     let bottom = y0 - (n - 1.0) * pitch - h * 0.3;
-    Layout {
-        lines: out,
-        bx: (ox, bottom, ox + box_w, top),
-        em: em_size(h),
-        runs: vec![],
-        bars: vec![],
-    }
+    Layout { lines: out, bx: (ox, bottom, ox + box_w, top), em: em_size(h), runs: vec![], bars: vec![] }
 }
 
 /// Layout of text with inline formatting: words of every run are flowed into lines (wrapping at the text width), each
@@ -257,27 +228,12 @@ fn layout_formatted(e: &TextData) -> Layout {
                     if !w.is_empty() {
                         words.push(w);
                     }
-                    words
-                        .into_iter()
-                        .map(|w| Tok {
-                            style: run.style.clone(),
-                            w: measure_text(&w, hh),
-                            trim: measure_text(w.trim_end(), hh),
-                            text: w,
-                            stack: None,
-                        })
-                        .collect()
+                    words.into_iter().map(|w| Tok { style: run.style.clone(), w: measure_text(&w, hh), trim: measure_text(w.trim_end(), hh), text: w, stack: None }).collect()
                 }
                 Piece::Stack { num, den, bar } => {
                     let sh = hh * 0.7;
                     let w = measure_text(&num, sh).max(measure_text(&den, sh)) + 0.25 * sh;
-                    vec![Tok {
-                        style: run.style.clone(),
-                        text: format!("{num}/{den}"),
-                        stack: Some((num, den, bar)),
-                        w,
-                        trim: w,
-                    }]
+                    vec![Tok { style: run.style.clone(), text: format!("{num}/{den}"), stack: Some((num, den, bar)), w, trim: w }]
                 }
             };
             for t in toks {
@@ -291,27 +247,11 @@ fn layout_formatted(e: &TextData) -> Layout {
         }
         lines.push(cur);
     }
-    let line_w: Vec<f64> = lines
-        .iter()
-        .map(|l| l.iter().map(|t| t.w).sum::<f64>() - l.last().map_or(0.0, |t| t.w - t.trim))
-        .collect();
+    let line_w: Vec<f64> = lines.iter().map(|l| l.iter().map(|t| t.w).sum::<f64>() - l.last().map_or(0.0, |t| t.w - t.trim)).collect();
     // a line is as tall as its largest run (a stacked fraction needs about 1.3 times its height)
-    let line_scale: Vec<f64> = lines
-        .iter()
-        .map(|l| {
-            if l.is_empty() {
-                1.0
-            } else {
-                l.iter()
-                    .map(|t| t.style.scale * if t.stack.is_some() { 1.3 } else { 1.0 })
-                    .fold(0.0, f64::max)
-            }
-        })
-        .collect();
+    let line_scale: Vec<f64> = lines.iter().map(|l| if l.is_empty() { 1.0 } else { l.iter().map(|t| t.style.scale * if t.stack.is_some() { 1.3 } else { 1.0 }).fold(0.0, f64::max) }).collect();
     let n = lines.len();
-    let pitches: Vec<f64> = (0..n.saturating_sub(1))
-        .map(|i| h * LINE_PITCH * line_scale[i].max(line_scale[i + 1]))
-        .collect();
+    let pitches: Vec<f64> = (0..n.saturating_sub(1)).map(|i| h * LINE_PITCH * line_scale[i].max(line_scale[i + 1])).collect();
     let span: f64 = pitches.iter().sum();
     let h0 = h * line_scale[0];
     let block_h = span + h * line_scale[n - 1];
@@ -349,14 +289,7 @@ fn layout_formatted(e: &TextData) -> Layout {
             plain.push_str(&t.text);
             match &t.stack {
                 None => {
-                    runs.push(RunLayout {
-                        s: t.text.clone(),
-                        x: cx,
-                        y: base,
-                        w: t.w,
-                        h: hh,
-                        style: t.style.clone(),
-                    });
+                    runs.push(RunLayout { s: t.text.clone(), x: cx, y: base, w: t.w, h: hh, style: t.style.clone() });
                     top = top.max(base + hh);
                     bottom = bottom.min(base - hh * 0.3);
                 }
@@ -365,22 +298,8 @@ fn layout_formatted(e: &TextData) -> Layout {
                     let bar_y = base + 0.4 * hh;
                     let (nw, dw) = (measure_text(num, sh), measure_text(den, sh));
                     let (ny, dy) = (bar_y + 0.2 * sh, bar_y - 0.2 * sh - sh);
-                    runs.push(RunLayout {
-                        s: num.clone(),
-                        x: cx + (t.w - nw) / 2.0,
-                        y: ny,
-                        w: nw,
-                        h: sh,
-                        style: t.style.clone(),
-                    });
-                    runs.push(RunLayout {
-                        s: den.clone(),
-                        x: cx + (t.w - dw) / 2.0,
-                        y: dy,
-                        w: dw,
-                        h: sh,
-                        style: t.style.clone(),
-                    });
+                    runs.push(RunLayout { s: num.clone(), x: cx + (t.w - nw) / 2.0, y: ny, w: nw, h: sh, style: t.style.clone() });
+                    runs.push(RunLayout { s: den.clone(), x: cx + (t.w - dw) / 2.0, y: dy, w: dw, h: sh, style: t.style.clone() });
                     if *bar {
                         bars.push((cx, cx + t.w - 0.1 * sh, bar_y));
                     }
@@ -390,20 +309,9 @@ fn layout_formatted(e: &TextData) -> Layout {
             }
             cx += t.w;
         }
-        out_lines.push(LineLayout {
-            s: plain.trim_end().to_string(),
-            x,
-            y: base,
-            w: line_w[i],
-        });
+        out_lines.push(LineLayout { s: plain.trim_end().to_string(), x, y: base, w: line_w[i] });
     }
-    Layout {
-        lines: out_lines,
-        bx: (ox, bottom, ox + box_w, top),
-        em: em_size(h),
-        runs,
-        bars,
-    }
+    Layout { lines: out_lines, bx: (ox, bottom, ox + box_w, top), em: em_size(h), runs, bars }
 }
 
 fn local_matrix(e: &TextData) -> Mat {
@@ -422,10 +330,7 @@ pub fn text_corners(e: &TextData) -> [Pt; 4] {
 pub fn text_line_origins(e: &TextData) -> Vec<(String, Pt, f64)> {
     let l = text_layout(e);
     let m = local_matrix(e);
-    l.lines
-        .into_iter()
-        .map(|ln| (ln.s, mat::apply(&m, pt(ln.x, ln.y)), ln.w))
-        .collect()
+    l.lines.into_iter().map(|ln| (ln.s, mat::apply(&m, pt(ln.x, ln.y)), ln.w)).collect()
 }
 
 #[cfg(test)]
@@ -441,7 +346,7 @@ mod tests {
         assert!((l.bx.2 - w).abs() < 1e-12 && l.bx.0 == 0.0);
         let c = text_layout(&t.clone().with_just(HJust::Center, VJust::Middle));
         assert!((c.lines[0].x + w / 2.0).abs() < 1e-12);
-        assert!((c.lines[0].y + 2.0 / 2.0).abs() < 1e-12); // middle: baseline sits h/2 below the insertion point
+        assert!((c.lines[0].y + 2.0 / 2.0).abs() < 1e-12);     // middle: baseline sits h/2 below the insertion point
         let r = text_layout(&t.clone().with_just(HJust::Right, VJust::Top));
         assert!((r.lines[0].x + w).abs() < 1e-12 && (r.lines[0].y + 2.0).abs() < 1e-12);
     }
@@ -457,15 +362,12 @@ mod tests {
         assert!(l.lines.iter().all(|x| x.w <= t.w.unwrap() + 1e-9));
         let corners = text_corners(&t.clone().with_rot(PI / 2.0));
         let min_x = corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min);
-        assert!((min_x + 2.0).abs() < 1e-9); // rotated 90° CCW: the cap height (2.0) extends towards -x
+        assert!((min_x + 2.0).abs() < 1e-9);           // rotated 90° CCW: the cap height (2.0) extends towards -x
     }
 
     #[test]
     fn json_matches_the_web_format() {
-        let t: TextData = serde_json::from_str(
-            r#"{"p":{"x":1,"y":2},"h":2.5,"s":"Hi","rot":0.5,"jh":"center","jv":"middle"}"#,
-        )
-        .unwrap();
+        let t: TextData = serde_json::from_str(r#"{"p":{"x":1,"y":2},"h":2.5,"s":"Hi","rot":0.5,"jh":"center","jv":"middle"}"#).unwrap();
         assert_eq!((t.jh, t.jv), (HJust::Center, VJust::Middle));
         assert_eq!(t.w, None);
         let v = serde_json::to_value(&t).unwrap();

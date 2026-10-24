@@ -39,11 +39,7 @@ enum St {
 
 /// Continuations.
 enum Fr {
-    Args {
-        head: Value,
-        done: Vec<Value>,
-        rest: VecDeque<Value>,
-    },
+    Args { head: Value, done: Vec<Value>, rest: VecDeque<Value> },
     Head(VecDeque<Value>),
     If(Option<Value>, Option<Value>),
     Setq(Rc<str>, VecDeque<Value>),
@@ -110,12 +106,8 @@ impl Interp {
     pub fn new() -> Interp {
         let it = Interp::default();
         it.step_limit.set(DEFAULT_STEP_LIMIT);
-        it.globals
-            .borrow_mut()
-            .insert("PI".into(), Value::Real(std::f64::consts::PI));
-        it.globals
-            .borrow_mut()
-            .insert("PAUSE".into(), Value::str("\\"));
+        it.globals.borrow_mut().insert("PI".into(), Value::Real(std::f64::consts::PI));
+        it.globals.borrow_mut().insert("PAUSE".into(), Value::str("\\"));
         it
     }
 
@@ -125,28 +117,15 @@ impl Interp {
         if let Some(v) = self.bindings.borrow().get(name).and_then(|st| st.last()) {
             return v.clone();
         }
-        self.globals
-            .borrow()
-            .get(name)
-            .cloned()
-            .unwrap_or(Value::Nil)
+        self.globals.borrow().get(name).cloned().unwrap_or(Value::Nil)
     }
 
     pub fn is_bound(&self, name: &str) -> bool {
-        self.bindings
-            .borrow()
-            .get(name)
-            .is_some_and(|st| !st.is_empty())
-            || self.globals.borrow().get(name).is_some_and(|v| v.is_true())
+        self.bindings.borrow().get(name).is_some_and(|st| !st.is_empty()) || self.globals.borrow().get(name).is_some_and(|v| v.is_true())
     }
 
     pub fn set(&self, name: &str, v: Value) {
-        if let Some(slot) = self
-            .bindings
-            .borrow_mut()
-            .get_mut(name)
-            .and_then(|st| st.last_mut())
-        {
+        if let Some(slot) = self.bindings.borrow_mut().get_mut(name).and_then(|st| st.last_mut()) {
             *slot = v;
             return;
         }
@@ -241,25 +220,17 @@ impl Interp {
     async fn run(&self, c: &Ctx, start: St) -> LResult {
         let nest = self.nest.get() + 1;
         if nest > NEST_LIMIT {
-            return Err(LErr::Msg(
-                "stack overflow: functions nested too deeply".into(),
-            ));
+            return Err(LErr::Msg("stack overflow: functions nested too deeply".into()));
         }
         self.nest.set(nest);
-        let _guard = FrameGuard {
-            it: self,
-            len: self.frames.borrow().len(),
-            nest: Some(nest - 1),
-        };
+        let _guard = FrameGuard { it: self, len: self.frames.borrow().len(), nest: Some(nest - 1) };
         let mut stack: Vec<Fr> = vec![];
         let mut st = start;
         loop {
             let n = self.steps.get() + 1;
             self.steps.set(n);
             if n > self.step_limit.get() {
-                return Err(LErr::Msg(
-                    "evaluation limit exceeded (runaway loop?)".into(),
-                ));
+                return Err(LErr::Msg("evaluation limit exceeded (runaway loop?)".into()));
             }
             if stack.len() > STACK_LIMIT {
                 return Err(LErr::Msg("stack overflow: recursion too deep".into()));
@@ -296,59 +267,29 @@ impl Interp {
         };
         let args = &cell.1;
         if let Value::Sym(name) = &cell.0 {
-            let special = matches!(
-                &**name,
-                "QUOTE"
-                    | "FUNCTION"
-                    | "SETQ"
-                    | "DEFUN"
-                    | "LAMBDA"
-                    | "IF"
-                    | "COND"
-                    | "PROGN"
-                    | "WHILE"
-                    | "REPEAT"
-                    | "FOREACH"
-                    | "AND"
-                    | "OR"
-            );
+            let special = matches!(&**name, "QUOTE" | "FUNCTION" | "SETQ" | "DEFUN" | "LAMBDA" | "IF" | "COND" | "PROGN" | "WHILE" | "REPEAT" | "FOREACH" | "AND" | "OR");
             if special {
-                let forms = args
-                    .to_vec()
-                    .ok_or_else(|| LErr::Msg("malformed list".into()))?;
+                let forms = args.to_vec().ok_or_else(|| LErr::Msg("malformed list".into()))?;
                 return self.special(stack, name, forms);
             }
             // an ordinary call: evaluate the arguments left to right, then call
-            let forms: VecDeque<Value> = args
-                .to_vec()
-                .ok_or_else(|| LErr::Msg("malformed list".into()))?
-                .into();
+            let forms: VecDeque<Value> = args.to_vec().ok_or_else(|| LErr::Msg("malformed list".into()))?.into();
             return Ok(Self::start_args(stack, cell.0.clone(), forms));
         }
         if matches!(cell.0, Value::Cons(_)) {
             // ((lambda ...) args): the head is evaluated first
-            let forms: VecDeque<Value> = args
-                .to_vec()
-                .ok_or_else(|| LErr::Msg("malformed list".into()))?
-                .into();
+            let forms: VecDeque<Value> = args.to_vec().ok_or_else(|| LErr::Msg("malformed list".into()))?.into();
             stack.push(Fr::Head(forms));
             return Ok(St::Eval(cell.0.clone()));
         }
-        Err(LErr::Msg(format!(
-            "bad function: {}",
-            print::prin1_str(&cell.0)
-        )))
+        Err(LErr::Msg(format!("bad function: {}", print::prin1_str(&cell.0))))
     }
 
     fn start_args(stack: &mut Vec<Fr>, head: Value, mut forms: VecDeque<Value>) -> St {
         match forms.pop_front() {
             None => St::Call(head, vec![]),
             Some(first) => {
-                stack.push(Fr::Args {
-                    head,
-                    done: vec![],
-                    rest: forms,
-                });
+                stack.push(Fr::Args { head, done: vec![], rest: forms });
                 St::Eval(first)
             }
         }
@@ -358,17 +299,13 @@ impl Interp {
         Ok(match name {
             "QUOTE" => St::Ret(forms.into_iter().next().unwrap_or(Value::Nil)),
             "FUNCTION" => match forms.first() {
-                Some(f @ Value::Cons(_)) if matches!(f.car(), Some(Value::Sym(s)) if &*s == "LAMBDA") => {
-                    St::Ret(self.make_lambda(None, &f.cdr().unwrap_or(Value::Nil))?)
-                }
+                Some(f @ Value::Cons(_)) if matches!(f.car(), Some(Value::Sym(s)) if &*s == "LAMBDA") => St::Ret(self.make_lambda(None, &f.cdr().unwrap_or(Value::Nil))?),
                 Some(f) => St::Ret(f.clone()),
                 None => St::Ret(Value::Nil),
             },
             "LAMBDA" => St::Ret(self.make_lambda(None, &Value::list(forms))?),
             "DEFUN" => {
-                let Some(Value::Sym(n)) = forms.first() else {
-                    return Err(LErr::Msg("bad argument type: symbolp".into()));
-                };
+                let Some(Value::Sym(n)) = forms.first() else { return Err(LErr::Msg("bad argument type: symbolp".into())) };
                 let f = self.make_lambda(Some(n.to_string()), &Value::list(forms[1..].to_vec()))?;
                 self.globals.borrow_mut().insert(n.to_string(), f);
                 if n.starts_with("C:") {
@@ -435,10 +372,7 @@ impl Interp {
                 St::Eval(n)
             }
             "FOREACH" => {
-                let (Some(Value::Sym(var)), true) = (forms.first().cloned(), forms.len() >= 2)
-                else {
-                    return Err(LErr::Msg("bad argument type: symbolp".into()));
-                };
+                let (Some(Value::Sym(var)), true) = (forms.first().cloned(), forms.len() >= 2) else { return Err(LErr::Msg("bad argument type: symbolp".into())) };
                 let list_form = forms[1].clone();
                 stack.push(Fr::ForeachList(var, Rc::new(forms[2..].to_vec())));
                 St::Eval(list_form)
@@ -450,12 +384,8 @@ impl Interp {
     /// Start the next COND clause (or finish with nil).
     fn next_clause(&self, stack: &mut Vec<Fr>, clauses: &mut VecDeque<Value>) -> LResult<St> {
         while let Some(clause) = clauses.pop_front() {
-            let Some(items) = clause.to_vec() else {
-                return Err(LErr::Msg("malformed COND clause".into()));
-            };
-            let Some(test) = items.first().cloned() else {
-                continue;
-            };
+            let Some(items) = clause.to_vec() else { return Err(LErr::Msg("malformed COND clause".into())) };
+            let Some(test) = items.first().cloned() else { continue };
             stack.push(Fr::CondTest(std::mem::take(clauses), items[1..].to_vec()));
             return Ok(St::Eval(test));
         }
@@ -464,11 +394,7 @@ impl Interp {
 
     fn resume(&self, stack: &mut Vec<Fr>, fr: Fr, v: Value) -> LResult<St> {
         Ok(match fr {
-            Fr::Args {
-                head,
-                mut done,
-                mut rest,
-            } => {
+            Fr::Args { head, mut done, mut rest } => {
                 done.push(v);
                 match rest.pop_front() {
                     None => St::Call(head, done),
@@ -571,14 +497,7 @@ impl Interp {
         })
     }
 
-    fn foreach_next(
-        &self,
-        stack: &mut Vec<Fr>,
-        var: Rc<str>,
-        body: Rc<Vec<Value>>,
-        mut items: VecDeque<Value>,
-        last: Value,
-    ) -> St {
+    fn foreach_next(&self, stack: &mut Vec<Fr>, var: Rc<str>, body: Rc<Vec<Value>>, mut items: VecDeque<Value>, last: Value) -> St {
         match items.pop_front() {
             None => St::Ret(last),
             Some(it) => {
@@ -589,20 +508,13 @@ impl Interp {
         }
     }
 
-    async fn call_step(
-        &self,
-        c: &Ctx,
-        stack: &mut Vec<Fr>,
-        f: Value,
-        args: Vec<Value>,
-    ) -> LResult<St> {
+    async fn call_step(&self, c: &Ctx, stack: &mut Vec<Fr>, f: Value, args: Vec<Value>) -> LResult<St> {
         match f {
             Value::Fun(l) => {
                 if args.len() > l.params.len() {
                     return Err(LErr::Msg("too many arguments".into()));
                 }
-                let mut vars: Vec<(String, Value)> =
-                    Vec::with_capacity(l.params.len() + l.locals.len());
+                let mut vars: Vec<(String, Value)> = Vec::with_capacity(l.params.len() + l.locals.len());
                 for (i, p) in l.params.iter().enumerate() {
                     vars.push((p.clone(), args.get(i).cloned().unwrap_or(Value::Nil)));
                 }
@@ -618,9 +530,7 @@ impl Interp {
                 match self.lookup(&name) {
                     f @ Value::Fun(_) => return Box::pin(self.call_step(c, stack, f, args)).await,
                     // a variable holding a function name: `(defun twice (f v) (f (f v)))` called with '1+
-                    f @ Value::Sym(_) if !matches!(&f, Value::Sym(other) if *other == name) => {
-                        return Box::pin(self.call_step(c, stack, f, args)).await
-                    }
+                    f @ Value::Sym(_) if !matches!(&f, Value::Sym(other) if *other == name) => return Box::pin(self.call_step(c, stack, f, args)).await,
                     _ => {}
                 }
                 if let Some(r) = self.higher_order(c, &name, &args).await {
@@ -641,24 +551,15 @@ impl Interp {
                 let made = self.make_lambda(None, &f.cdr().unwrap_or(Value::Nil))?;
                 Box::pin(self.call_step(c, stack, made, args)).await
             }
-            other => Err(LErr::Msg(format!(
-                "bad function: {}",
-                print::prin1_str(&other)
-            ))),
+            other => Err(LErr::Msg(format!("bad function: {}", print::prin1_str(&other)))),
         }
     }
 
     /// `(params / locals) body...` → a function value.
     fn make_lambda(&self, name: Option<String>, spec: &Value) -> LResult {
-        let items = spec
-            .to_vec()
-            .ok_or_else(|| LErr::Msg("malformed function definition".into()))?;
-        let Some(plist) = items.first() else {
-            return Err(LErr::Msg("too few arguments".into()));
-        };
-        let plist = plist
-            .to_vec()
-            .ok_or_else(|| LErr::Msg("malformed parameter list".into()))?;
+        let items = spec.to_vec().ok_or_else(|| LErr::Msg("malformed function definition".into()))?;
+        let Some(plist) = items.first() else { return Err(LErr::Msg("too few arguments".into())) };
+        let plist = plist.to_vec().ok_or_else(|| LErr::Msg("malformed parameter list".into()))?;
         let (mut params, mut locals, mut after_slash) = (vec![], vec![], false);
         for p in &plist {
             match p {
@@ -673,23 +574,12 @@ impl Interp {
                 other => return Err(bad_arg("symbolp", other)),
             }
         }
-        Ok(Value::Fun(Rc::new(Lambda {
-            name,
-            params,
-            locals,
-            body: items[1..].to_vec(),
-        })))
+        Ok(Value::Fun(Rc::new(Lambda { name, params, locals, body: items[1..].to_vec() })))
     }
 
     /// Functions that call back into the interpreter.
     async fn higher_order(&self, c: &Ctx, name: &str, a: &[Value]) -> Option<LResult> {
-        let need = |n: usize| {
-            if a.len() < n {
-                Some(Err(LErr::Msg("too few arguments".into())))
-            } else {
-                None
-            }
-        };
+        let need = |n: usize| if a.len() < n { Some(Err(LErr::Msg("too few arguments".into()))) } else { None };
         match name {
             "MAPCAR" | "MAPCAN" => {
                 if let Some(e) = need(2) {
@@ -740,8 +630,7 @@ impl Interp {
                 }
                 Some(self.eval(c, &a[0]).await)
             }
-            "VL-REMOVE-IF" | "VL-REMOVE-IF-NOT" | "VL-MEMBER-IF" | "VL-MEMBER-IF-NOT"
-            | "VL-SOME" | "VL-EVERY" | "VL-POSITION-IF" => {
+            "VL-REMOVE-IF" | "VL-REMOVE-IF-NOT" | "VL-MEMBER-IF" | "VL-MEMBER-IF-NOT" | "VL-SOME" | "VL-EVERY" | "VL-POSITION-IF" => {
                 if let Some(e) = need(2) {
                     return Some(e);
                 }
@@ -760,12 +649,8 @@ impl Interp {
                         "VL-REMOVE-IF-NOT" if hit.is_true() => kept.push(it.clone()),
                         "VL-SOME" if hit.is_true() => return Some(Ok(hit)),
                         "VL-EVERY" if hit.is_nil() => return Some(Ok(Value::Nil)),
-                        "VL-MEMBER-IF" if hit.is_true() => {
-                            return Some(Ok(Value::list(items[i..].to_vec())))
-                        }
-                        "VL-MEMBER-IF-NOT" if hit.is_nil() => {
-                            return Some(Ok(Value::list(items[i..].to_vec())))
-                        }
+                        "VL-MEMBER-IF" if hit.is_true() => return Some(Ok(Value::list(items[i..].to_vec()))),
+                        "VL-MEMBER-IF-NOT" if hit.is_nil() => return Some(Ok(Value::list(items[i..].to_vec()))),
                         "VL-POSITION-IF" if hit.is_true() => return Some(Ok(Value::Int(i as i64))),
                         _ => {}
                     }
@@ -789,10 +674,7 @@ impl Interp {
                 for i in 0..items.len() {
                     let mut pos = idx.len();
                     for (k, j) in idx.iter().enumerate() {
-                        match self
-                            .apply(c, &a[1], vec![items[i].clone(), items[*j].clone()])
-                            .await
-                        {
+                        match self.apply(c, &a[1], vec![items[i].clone(), items[*j].clone()]).await {
                             Ok(v) if v.is_true() => {
                                 pos = k;
                                 break;
@@ -803,11 +685,7 @@ impl Interp {
                     }
                     idx.insert(pos, i);
                 }
-                Some(Ok(if name == "VL-SORT" {
-                    Value::list(idx.iter().map(|i| items[*i].clone()).collect())
-                } else {
-                    Value::list(idx.iter().map(|i| Value::Int(*i as i64)).collect())
-                }))
+                Some(Ok(if name == "VL-SORT" { Value::list(idx.iter().map(|i| items[*i].clone()).collect()) } else { Value::list(idx.iter().map(|i| Value::Int(*i as i64)).collect()) }))
             }
             "VL-CATCH-ALL-APPLY" => {
                 if let Some(e) = need(2) {
@@ -816,23 +694,14 @@ impl Interp {
                 let args = a[1].to_vec().unwrap_or_default();
                 match self.apply(c, &a[0], args).await {
                     Ok(v) => Some(Ok(v)),
-                    Err(LErr::Msg(m)) => {
-                        Some(Ok(Value::cons(Value::sym("VL-ERROR"), Value::str(&m))))
-                    }
-                    Err(LErr::Cancel) => Some(Ok(Value::cons(
-                        Value::sym("VL-ERROR"),
-                        Value::str("Function cancelled"),
-                    ))),
+                    Err(LErr::Msg(m)) => Some(Ok(Value::cons(Value::sym("VL-ERROR"), Value::str(&m)))),
+                    Err(LErr::Cancel) => Some(Ok(Value::cons(Value::sym("VL-ERROR"), Value::str("Function cancelled")))),
                     Err(e) => Some(Err(e)),
                 }
             }
-            "VL-CATCH-ALL-ERROR-P" => Some(Ok(Value::bool(
-                matches!(a.first(), Some(Value::Cons(c)) if matches!(&c.0, Value::Sym(s) if &**s == "VL-ERROR")),
-            ))),
+            "VL-CATCH-ALL-ERROR-P" => Some(Ok(Value::bool(matches!(a.first(), Some(Value::Cons(c)) if matches!(&c.0, Value::Sym(s) if &**s == "VL-ERROR"))))),
             "VL-CATCH-ALL-ERROR-MESSAGE" => Some(Ok(match a.first() {
-                Some(Value::Cons(c)) if matches!(&c.0, Value::Sym(s) if &**s == "VL-ERROR") => {
-                    c.1.clone()
-                }
+                Some(Value::Cons(c)) if matches!(&c.0, Value::Sym(s) if &**s == "VL-ERROR") => c.1.clone(),
                 _ => Value::Nil,
             })),
             _ => None,

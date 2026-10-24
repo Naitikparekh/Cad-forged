@@ -30,10 +30,7 @@ mod web {
         static HOOK: RefCell<Option<(cadforge_engine::app::Handle, std::rc::Rc<RefCell<Option<[f32; 4]>>>)>> = const { RefCell::new(None) };
     }
 
-    pub fn install_hook(
-        h: cadforge_engine::app::Handle,
-        rect: std::rc::Rc<RefCell<Option<[f32; 4]>>>,
-    ) {
+    pub fn install_hook(h: cadforge_engine::app::Handle, rect: std::rc::Rc<RefCell<Option<[f32; 4]>>>) {
         HOOK.with(|x| *x.borrow_mut() = Some((h, rect)));
     }
 
@@ -93,13 +90,9 @@ mod web {
     pub fn world_to_page(x: f64, y: f64) -> Vec<f64> {
         HOOK.with(|c| {
             let c = c.borrow();
-            let Some((h, rect)) = c.as_ref() else {
-                return vec![];
-            };
+            let Some((h, rect)) = c.as_ref() else { return vec![] };
             let a = h.borrow();
-            let (Some(ed), Some(r)) = (a.editor(), *rect.borrow()) else {
-                return vec![];
-            };
+            let (Some(ed), Some(r)) = (a.editor(), *rect.borrow()) else { return vec![] };
             let s = ed.view.to_screen(cadforge_core::geom::pt(x, y));
             vec![r[0] as f64 + s.x, r[1] as f64 + s.y]
         })
@@ -111,37 +104,20 @@ mod web {
         console_error_panic_hook_set();
         let window = web_sys::window().ok_or("no window")?;
         let document = window.document().ok_or("no document")?;
-        let canvas = document
-            .get_element_by_id(&canvas_id)
-            .ok_or("canvas not found")?
-            .dyn_into::<web_sys::HtmlCanvasElement>()?;
+        let canvas = document.get_element_by_id(&canvas_id).ok_or("canvas not found")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
         // leaving or hiding the page may be the last chance to keep unsaved work
         for event in ["pagehide", "visibilitychange"] {
             let always = event == "pagehide";
             let cb = Closure::<dyn FnMut()>::new(move || {
-                if always
-                    || web_sys::window()
-                        .and_then(|w| w.document())
-                        .map_or(true, |d| d.hidden())
-                {
+                if always || web_sys::window().and_then(|w| w.document()).map_or(true, |d| d.hidden()) {
                     autosave_now();
                 }
             });
-            let target: &web_sys::EventTarget = if always {
-                window.as_ref()
-            } else {
-                document.as_ref()
-            };
+            let target: &web_sys::EventTarget = if always { window.as_ref() } else { document.as_ref() };
             let _ = target.add_event_listener_with_callback(event, cb.as_ref().unchecked_ref());
             cb.forget();
         }
-        eframe::WebRunner::new()
-            .start(
-                canvas,
-                eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(CadForgeApp::new(cc)))),
-            )
-            .await
+        eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|cc| Ok(Box::new(CadForgeApp::new(cc))))).await
     }
 
     fn console_error_panic_hook_set() {
