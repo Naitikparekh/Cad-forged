@@ -30,7 +30,7 @@ fn kinds(d: &cadforge_core::drawing::Drawing) -> Vec<&'static str> {
 fn the_default_is_an_autocad_2004_dwg() {
     let s = drawing();
     s.cmd("-SAVEAS");
-    assert!(s.prompt().contains("2000/2004/DXF/CadForge"), "{}", s.prompt());
+    assert!(s.prompt().contains("2000/2004/DXF/Template/CadForge"), "{}", s.prompt());
     s.enter();
     assert!(s.prompt().contains("Drawing1.dwg"), "{}", s.prompt());
     s.ty("plan").enter();
