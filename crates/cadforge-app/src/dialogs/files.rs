@@ -25,10 +25,27 @@ impl FileBrowserState {
             "lin" => vec!["lin", "txt"],
             "plotstyle" => vec!["ctb", "stb"],
             "pat" => vec!["pat", "txt"],
-            _ => vec!["json", "cadforge", "dxf"],
+            _ => vec!["dwg", "dxf", "json", "cadforge"],
         };
         let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), "lin" => "Load Linetypes".into(), "plotstyle" => "Load Plot Style Table".into(), "pat" => "Load Hatch Patterns".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
+        FileBrowserState {
+            title: match purpose {
+                "import" => "Import".into(),
+                "script" => "Select Script".into(),
+                "image" => "Select Image File".into(),
+                "lisp" => "Load Application".into(),
+                "lin" => "Load Linetypes".into(),
+                "plotstyle" => "Load Plot Style Table".into(),
+                "pat" => "Load Hatch Patterns".into(),
+                _ => "Open Drawing".into(),
+            },
+            purpose,
+            dir,
+            entries: vec![],
+            sel: None,
+            exts,
+            loaded: false,
+        }
     }
 
     fn reload(&mut self) {
@@ -40,12 +57,20 @@ impl FileBrowserState {
                     continue;
                 }
                 let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
-                if is_dir || self.exts.iter().any(|x| name.to_lowercase().ends_with(&format!(".{x}"))) {
+                if is_dir
+                    || self
+                        .exts
+                        .iter()
+                        .any(|x| name.to_lowercase().ends_with(&format!(".{x}")))
+                {
                     self.entries.push((name, is_dir));
                 }
             }
         }
-        self.entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase())));
+        self.entries.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
+        });
         self.loaded = true;
     }
 }
@@ -76,39 +101,61 @@ impl CadForgeApp {
         });
         let mut open_dir: Option<String> = None;
         let mut dbl = false;
-        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-            for (name, is_dir) in &s.entries {
-                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
-                let sel = s.sel.as_deref() == Some(name.as_str());
-                if sel {
-                    ui.painter().rect_filled(r, CornerRadius::same(2), t.accent_soft);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
-                }
-                let label = if *is_dir { format!("📁 {name}") } else { name.clone() };
-                ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
-                if resp.clicked() {
-                    s.sel = Some(name.clone());
-                }
-                if resp.double_clicked() {
-                    if *is_dir {
-                        open_dir = Some(name.clone());
+        egui::ScrollArea::vertical()
+            .max_height(300.0)
+            .show(ui, |ui| {
+                for (name, is_dir) in &s.entries {
+                    let (r, resp) =
+                        ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                    let sel = s.sel.as_deref() == Some(name.as_str());
+                    if sel {
+                        ui.painter()
+                            .rect_filled(r, CornerRadius::same(2), t.accent_soft);
+                    } else if resp.hovered() {
+                        ui.painter().rect_filled(r, CornerRadius::same(2), t.hover);
+                    }
+                    let label = if *is_dir {
+                        format!("📁 {name}")
                     } else {
-                        dbl = true;
+                        name.clone()
+                    };
+                    ui.painter().text(
+                        r.left_center() + vec2(8.0, 0.0),
+                        egui::Align2::LEFT_CENTER,
+                        label,
+                        egui::FontId::proportional(12.5),
+                        t.text,
+                    );
+                    if resp.clicked() {
+                        s.sel = Some(name.clone());
+                    }
+                    if resp.double_clicked() {
+                        if *is_dir {
+                            open_dir = Some(name.clone());
+                        } else {
+                            dbl = true;
+                        }
                     }
                 }
-            }
-            if s.entries.is_empty() {
-                ui.label(RichText::new("No matching files in this folder.").color(t.text3));
-            }
-        });
+                if s.entries.is_empty() {
+                    ui.label(RichText::new("No matching files in this folder.").color(t.text3));
+                }
+            });
         if let Some(d) = open_dir {
             s.dir = s.dir.join(d);
             s.sel = None;
             s.loaded = false;
         }
-        let ok_enabled = s.sel.as_ref().is_some_and(|n| s.entries.iter().any(|e| &e.0 == n && !e.1));
-        let o = self.ok_cancel(ui, if ok_enabled { Some("Open") } else { None }, Some("Cancel"), &[]);
+        let ok_enabled = s
+            .sel
+            .as_ref()
+            .is_some_and(|n| s.entries.iter().any(|e| &e.0 == n && !e.1));
+        let o = self.ok_cancel(
+            ui,
+            if ok_enabled { Some("Open") } else { None },
+            Some("Cancel"),
+            &[],
+        );
         if dbl && ok_enabled {
             return Out::Ok;
         }
@@ -121,10 +168,16 @@ impl CadForgeApp {
         match std::fs::read(&path) {
             Ok(bytes) => {
                 self.save_dir = s.dir.clone();
-                self.inbox.borrow_mut().push(Picked { purpose: s.purpose, name, bytes });
+                self.inbox.borrow_mut().push(Picked {
+                    purpose: s.purpose,
+                    name,
+                    bytes,
+                });
             }
             Err(e) => {
-                self.h.borrow_mut().log(&format!("Could not read {}: {e}", path.display()), "error");
+                self.h
+                    .borrow_mut()
+                    .log(&format!("Could not read {}: {e}", path.display()), "error");
                 self.toast(&format!("Could not read {name}: {e}"));
             }
         }

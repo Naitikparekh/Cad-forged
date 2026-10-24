@@ -10,7 +10,8 @@ use cadforge_core::drawing::Drawing;
 use cadforge_core::style::Layer;
 
 fn layer_name_of(c: &Ctx, id: u64) -> Option<String> {
-    c.entity_by_id(id).map(|e| c.doc(|d| d.layer_of(&e).name.clone()))
+    c.entity_by_id(id)
+        .map(|e| c.doc(|d| d.layer_of(&e).name.clone()))
 }
 
 fn valid_layer_name(n: &str) -> bool {
@@ -47,8 +48,13 @@ fn restore_layers(d: &mut Drawing, saved: &[Layer]) -> bool {
     d.change(|d| {
         let cur = d.cur.layer.to_lowercase();
         for s in saved {
-            let Some(l) = d.layer_mut(&s.name) else { continue };
-            *l = Layer { name: l.name.clone(), ..s.clone() };
+            let Some(l) = d.layer_mut(&s.name) else {
+                continue;
+            };
+            *l = Layer {
+                name: l.name.clone(),
+                ..s.clone()
+            };
             if l.frozen && l.name.to_lowercase() == cur {
                 l.frozen = false;
                 kept_thawed = true;
@@ -60,7 +66,11 @@ fn restore_layers(d: &mut Drawing, saved: &[Layer]) -> bool {
 
 async fn layerp(st: Shared, c: Ctx, _a: Args) -> CmdResult<()> {
     let id = c.ed(|e| e.id);
-    let saved = st.borrow_mut().docs.get_mut(&id).and_then(|d| d.history.pop());
+    let saved = st
+        .borrow_mut()
+        .docs
+        .get_mut(&id)
+        .and_then(|d| d.history.pop());
     let Some(saved) = saved else {
         c.log_error("No previous layer settings to restore.");
         return Ok(());
@@ -86,11 +96,18 @@ fn merge_layers(d: &mut Drawing, sources: &[String], target: &str) -> usize {
     let low: Vec<String> = sources.iter().map(|s| s.to_lowercase()).collect();
     let mut moved = 0;
     d.change(|d| {
-        for e in d.all_entities_mut().filter(|e| low.contains(&e.layer.to_lowercase())) {
+        for e in d
+            .all_entities_mut()
+            .filter(|e| low.contains(&e.layer.to_lowercase()))
+        {
             e.layer = target.to_string();
             moved += 1;
         }
-        for s in d.solids.iter_mut().filter(|s| low.contains(&s.layer.to_lowercase())) {
+        for s in d
+            .solids
+            .iter_mut()
+            .filter(|s| low.contains(&s.layer.to_lowercase()))
+        {
             s.layer = target.to_string();
             moved += 1;
         }
@@ -103,14 +120,25 @@ fn merge_layers(d: &mut Drawing, sources: &[String], target: &str) -> usize {
 }
 
 fn quoted(names: &[String]) -> String {
-    names.iter().map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")
+    names
+        .iter()
+        .map(|n| format!("\"{n}\""))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 async fn laymrg(c: Ctx, _a: Args) -> CmdResult<()> {
     let mut sources: Vec<String> = vec![];
     loop {
-        let opts: &[&str] = if sources.is_empty() { &["Name"] } else { &["Name", "Undo"] };
-        match c.entity(ps("Select object on layer to merge or").options(opts)).await? {
+        let opts: &[&str] = if sources.is_empty() {
+            &["Name"]
+        } else {
+            &["Name", "Undo"]
+        };
+        match c
+            .entity(ps("Select object on layer to merge or").options(opts))
+            .await?
+        {
             EntR::Entity { id, .. } => {
                 if let Some(n) = layer_name_of(&c, id) {
                     if n == "0" {
@@ -142,13 +170,19 @@ async fn laymrg(c: Ctx, _a: Args) -> CmdResult<()> {
         return Ok(());
     }
     let target = loop {
-        match c.entity(ps("Select object on target layer or").options(&["Name"])).await? {
+        match c
+            .entity(ps("Select object on target layer or").options(&["Name"]))
+            .await?
+        {
             EntR::Entity { id, .. } => {
                 if let Some(n) = layer_name_of(&c, id) {
                     break n;
                 }
             }
-            EntR::Kw(_) => match ask_layers(&c, "Enter name of target layer or [?]").await?.as_slice() {
+            EntR::Kw(_) => match ask_layers(&c, "Enter name of target layer or [?]")
+                .await?
+                .as_slice()
+            {
                 [n] => break n.clone(),
                 [] => {}
                 _ => c.log_error("Enter the name of a single target layer."),
@@ -161,12 +195,20 @@ async fn laymrg(c: Ctx, _a: Args) -> CmdResult<()> {
         c.log("Nothing to merge: the selected objects are already on that layer.");
         return Ok(());
     }
-    let q = format!("Merge layer{} {} to layer \"{target}\"?", if sources.len() == 1 { "" } else { "s" }, quoted(&sources));
+    let q = format!(
+        "Merge layer{} {} to layer \"{target}\"?",
+        if sources.len() == 1 { "" } else { "s" },
+        quoted(&sources)
+    );
     if !confirm(&c, &q).await? {
         return Ok(());
     }
     let moved = c.doc_mut(|d| merge_layers(d, &sources, &target));
-    c.log(&format!("{} merged to layer \"{target}\" ({} moved).", plural(sources.len(), "layer"), plural(moved, "object")));
+    c.log(&format!(
+        "{} merged to layer \"{target}\" ({} moved).",
+        plural(sources.len(), "layer"),
+        plural(moved, "object")
+    ));
     c.ed(|e| e.prune());
     Ok(())
 }
@@ -174,14 +216,27 @@ async fn laymrg(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn laytrans(c: Ctx, _a: Args) -> CmdResult<()> {
     let mut map: Vec<(String, String)> = vec![];
     loop {
-        let k = c.keyword(ps("Enter an option").options(&["Map", "List", "Remove", "Translate"]).default_str("Translate")).await?;
+        let k = c
+            .keyword(
+                ps("Enter an option")
+                    .options(&["Map", "List", "Remove", "Translate"])
+                    .default_str("Translate"),
+            )
+            .await?;
         match k.kw() {
             Some("Map") => {
-                let from = ask_layers(&c, "Enter name of layer(s) to translate (wildcards allowed)").await?;
+                let from = ask_layers(
+                    &c,
+                    "Enter name of layer(s) to translate (wildcards allowed)",
+                )
+                .await?;
                 if from.is_empty() {
                     continue;
                 }
-                let to = c.string(ps("Enter name of the layer to translate to")).await?.text;
+                let to = c
+                    .string(ps("Enter name of the layer to translate to"))
+                    .await?
+                    .text;
                 if !valid_layer_name(&to) {
                     c.log_error("Invalid layer name.");
                     continue;
@@ -196,9 +251,15 @@ async fn laytrans(c: Ctx, _a: Args) -> CmdResult<()> {
                 }
             }
             Some("List") if map.is_empty() => c.log("No layer mappings defined."),
-            Some("List") => c.log(&map.iter().map(|(a, b)| format!("  {a} -> {b}")).collect::<Vec<_>>().join("\n")),
+            Some("List") => c.log(
+                &map.iter()
+                    .map(|(a, b)| format!("  {a} -> {b}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
             Some("Remove") => {
-                let names = ask_layers(&c, "Enter name of layer(s) whose mapping to remove").await?;
+                let names =
+                    ask_layers(&c, "Enter name of layer(s) whose mapping to remove").await?;
                 map.retain(|(s, _)| !names.contains(s));
             }
             _ => break,
@@ -242,7 +303,14 @@ async fn laytrans(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- LAYWALK
 
 fn objects_on(d: &Drawing, layer: &str) -> usize {
-    d.entities().iter().filter(|e| e.layer.eq_ignore_ascii_case(layer)).count() + d.solids.iter().filter(|s| s.layer.eq_ignore_ascii_case(layer)).count()
+    d.entities()
+        .iter()
+        .filter(|e| e.layer.eq_ignore_ascii_case(layer))
+        .count()
+        + d.solids
+            .iter()
+            .filter(|s| s.layer.eq_ignore_ascii_case(layer))
+            .count()
 }
 
 /// Switch off every layer except `shown`.
@@ -263,8 +331,18 @@ async fn walk(c: &Ctx, names: &[String]) -> CmdResult<()> {
     loop {
         show_only(c, &shown);
         let n: usize = c.doc(|d| shown.iter().map(|s| objects_on(d, s)).sum());
-        c.log(&format!("Layer {}: {} displayed.", quoted(&shown), plural(n, "object")));
-        let k = c.keyword(ps("Enter an option").options(&["Next", "Previous", "Go", "eXit"]).default_str("Next")).await?;
+        c.log(&format!(
+            "Layer {}: {} displayed.",
+            quoted(&shown),
+            plural(n, "object")
+        ));
+        let k = c
+            .keyword(
+                ps("Enter an option")
+                    .options(&["Next", "Previous", "Go", "eXit"])
+                    .default_str("Next"),
+            )
+            .await?;
         match k.kw() {
             Some("Next") => {
                 i = (i + 1) % names.len();
@@ -287,12 +365,19 @@ async fn walk(c: &Ctx, names: &[String]) -> CmdResult<()> {
 
 /// Display one layer at a time; the layers' on/off states come back when the command ends.
 async fn laywalk(c: Ctx, _a: Args) -> CmdResult<()> {
-    let names: Vec<String> = c.doc(|d| d.layers.iter().filter(|l| !l.frozen).map(|l| l.name.clone()).collect());
+    let names: Vec<String> = c.doc(|d| {
+        d.layers
+            .iter()
+            .filter(|l| !l.frozen)
+            .map(|l| l.name.clone())
+            .collect()
+    });
     if names.is_empty() {
         c.log_error("There are no thawed layers to walk through.");
         return Ok(());
     }
-    let saved: Vec<(String, bool)> = c.doc(|d| d.layers.iter().map(|l| (l.name.clone(), l.on)).collect());
+    let saved: Vec<(String, bool)> =
+        c.doc(|d| d.layers.iter().map(|l| (l.name.clone(), l.on)).collect());
     let res = walk(&c, &names).await;
     c.doc_mut(|d| {
         d.change(|d| {
@@ -310,26 +395,63 @@ async fn laywalk(c: Ctx, _a: Args) -> CmdResult<()> {
 // ---------------------------------------------------------------- viewport overrides, layer manager
 
 async fn layerclose(c: Ctx, _a: Args) -> CmdResult<()> {
-    c.app(|a| a.emit(Event::Palette { name: "layers".into(), show: Some(false) }));
+    c.app(|a| {
+        a.emit(Event::Palette {
+            name: "layers".into(),
+            show: Some(false),
+        })
+    });
     Ok(())
 }
 
 /// LAYERPMODE: remember layer-table changes for LAYERP (on) or not (off).
 async fn layerpmode(c: Ctx, _a: Args) -> CmdResult<()> {
     let cur = c.pref("LAYERPMODE") != 0.0;
-    let r = c.keyword(ps("Enter mode [ON/OFF]").options(&["ON", "OFF"]).default_str(if cur { "ON" } else { "OFF" })).await?;
+    let r = c
+        .keyword(
+            ps("Enter mode [ON/OFF]")
+                .options(&["ON", "OFF"])
+                .default_str(if cur { "ON" } else { "OFF" }),
+        )
+        .await?;
     let on = r.kw() == Some("ON");
     c.setvar("LAYERPMODE", if on { 1.0 } else { 0.0 })?;
-    c.log(&format!("Layer previous tracking is {}.", if on { "on" } else { "off" }));
+    c.log(&format!(
+        "Layer previous tracking is {}.",
+        if on { "on" } else { "off" }
+    ));
     Ok(())
 }
 
 pub(super) fn register(r: &mut Registry, st: &Shared) {
     let s = st.clone();
-    r.define(def("Layers", "LAYERP", run(move |c, a| layerp(s.clone(), c, a))).title("Layer Previous").icon("layers").desc("Undoes the last change or set of changes made to layer settings."));
-    r.define(def("Layers", "LAYERPMODE", run(layerpmode)).title("Layer Previous Mode").icon("layers").desc("Turns the tracking of layer settings (for LAYERP) on or off.").transparent());
+    r.define(
+        def("Layers", "LAYERP", run(move |c, a| layerp(s.clone(), c, a)))
+            .title("Layer Previous")
+            .icon("layers")
+            .desc("Undoes the last change or set of changes made to layer settings."),
+    );
+    r.define(
+        def("Layers", "LAYERPMODE", run(layerpmode))
+            .title("Layer Previous Mode")
+            .icon("layers")
+            .desc("Turns the tracking of layer settings (for LAYERP) on or off.")
+            .transparent(),
+    );
     r.define(def("Layers", "LAYMRG", run(laymrg)).title("Layer Merge").icon("layers").desc("Merges selected layers into a target layer, removing the previous layers from the drawing."));
     r.define(def("Layers", "LAYTRANS", run(laytrans)).title("Layer Translator").icon("layers").desc("Changes layers to the layer names you specify and merges layers that map to the same name."));
-    r.define(def("Layers", "LAYWALK", run(laywalk)).title("Layer Walk").icon("layers").desc("Displays objects on selected layers and hides objects on all other layers."));
-    r.define(def("Utilities", "LAYERCLOSE", run(layerclose)).title("Close Layer Manager").icon("layers").desc("Closes the Layer Properties Manager.").transparent().once());
+    r.define(
+        def("Layers", "LAYWALK", run(laywalk))
+            .title("Layer Walk")
+            .icon("layers")
+            .desc("Displays objects on selected layers and hides objects on all other layers."),
+    );
+    r.define(
+        def("Utilities", "LAYERCLOSE", run(layerclose))
+            .title("Close Layer Manager")
+            .icon("layers")
+            .desc("Closes the Layer Properties Manager.")
+            .transparent()
+            .once(),
+    );
 }

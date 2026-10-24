@@ -33,7 +33,9 @@ fn apply_scale(c: &Ctx, n: f64, rel: Option<NumRel>) {
         if let (Some(NumRel::Xp), Some(m)) = (rel, e.mspace.as_ref()) {
             // inside a layout viewport nXP sets the viewport scale: n sheet units per model unit
             let f = m.paper_view.scale * n / e.view.scale;
-            let centre = e.mspace_centre().unwrap_or(Pt::new(e.view.w / 2.0, e.view.h / 2.0));
+            let centre = e
+                .mspace_centre()
+                .unwrap_or(Pt::new(e.view.w / 2.0, e.view.h / 2.0));
             e.view.zoom_at(centre.x, centre.y, f);
             e.sync_mspace_view();
         } else if rel.is_some() {
@@ -82,7 +84,16 @@ async fn zoom(c: Ctx, args: Args) -> CmdResult<()> {
     let r: PointR = match mode.as_deref() {
         None => {
             let r = c
-                .point(ps("Specify corner of window, enter a scale factor (nX or nXP), or").options(&["All", "Center", "Dynamic", "Extents", "Previous", "Scale", "Window", "Object"]).allow_enter().accept_number().no_ortho())
+                .point(
+                    ps("Specify corner of window, enter a scale factor (nX or nXP), or")
+                        .options(&[
+                            "All", "Center", "Dynamic", "Extents", "Previous", "Scale", "Window",
+                            "Object",
+                        ])
+                        .allow_enter()
+                        .accept_number()
+                        .no_ortho(),
+                )
                 .await?;
             if matches!(r, PointR::Enter(None)) {
                 c.dialog(DialogReq::Realtime("zoom")).await?;
@@ -101,22 +112,36 @@ async fn zoom(c: Ctx, args: Args) -> CmdResult<()> {
         return Ok(());
     }
     if let PointR::Pt(p) = r {
-        let Some(b) = c.corner(p, ps("Specify opposite corner")).await?.pt() else { return Ok(()) };
+        let Some(b) = c.corner(p, ps("Specify opposite corner")).await?.pt() else {
+            return Ok(());
+        };
         zoom_rect(&c, rect_of(p, b), 0.0);
         return Ok(());
     }
     match r.kw() {
         Some("All") | Some("Extents") => extents(&c),
         Some("Dynamic") | Some("Window") => {
-            let Some(a) = c.point(ps("Specify first corner")).await?.pt() else { return Ok(()) };
-            let Some(b) = c.corner(a, ps("Specify opposite corner")).await?.pt() else { return Ok(()) };
+            let Some(a) = c.point(ps("Specify first corner")).await?.pt() else {
+                return Ok(());
+            };
+            let Some(b) = c.corner(a, ps("Specify opposite corner")).await?.pt() else {
+                return Ok(());
+            };
             zoom_rect(&c, rect_of(a, b), 0.0);
         }
         Some("Previous") => previous(&c),
         Some("Center") => {
-            let Some(p) = c.point(ps("Specify center point")).await?.pt() else { return Ok(()) };
+            let Some(p) = c.point(ps("Specify center point")).await?.pt() else {
+                return Ok(());
+            };
             let (vh, vs) = c.view(|v| (v.h, v.scale));
-            let h = c.number(ps("Enter magnification or height").default_num(vh / vs).min(1e-12)).await?;
+            let h = c
+                .number(
+                    ps("Enter magnification or height")
+                        .default_num(vh / vs)
+                        .min(1e-12),
+                )
+                .await?;
             let Some(hv) = h.value() else { return Ok(()) };
             c.view(|v| {
                 v.push();
@@ -126,7 +151,13 @@ async fn zoom(c: Ctx, args: Args) -> CmdResult<()> {
             c.emit();
         }
         Some("Scale") => {
-            let s = c.number(ps("Enter a scale factor (nX or nXP)").default_num(1.0).min(1e-9)).await?;
+            let s = c
+                .number(
+                    ps("Enter a scale factor (nX or nXP)")
+                        .default_num(1.0)
+                        .min(1e-9),
+                )
+                .await?;
             if let Some(v) = s.value().filter(|v| *v != 0.0) {
                 apply_scale(&c, v, Some(NumRel::X));
             }
@@ -165,8 +196,20 @@ async fn pan(c: Ctx, args: Args) -> CmdResult<()> {
 }
 
 async fn pan_disp(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(a) = c.point(ps("Specify base point or displacement")).await?.pt() else { return Ok(()) };
-    let Some(b) = c.point(ps("Specify second point").base(a).allow_enter()).await?.pt() else { return Ok(()) };
+    let Some(a) = c
+        .point(ps("Specify base point or displacement"))
+        .await?
+        .pt()
+    else {
+        return Ok(());
+    };
+    let Some(b) = c
+        .point(ps("Specify second point").base(a).allow_enter())
+        .await?
+        .pt()
+    else {
+        return Ok(());
+    };
     let d = b - a;
     c.view(|v| v.target = V3::new(v.target.x - d.x, v.target.y - d.y, v.target.z));
     c.emit();
@@ -185,18 +228,37 @@ async fn redraw(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn named_view(c: Ctx, _a: Args) -> CmdResult<()> {
-    let r = c.keyword(ps("Enter an option [?/Delete/Orthographic/Restore/Save/sEttings/Window]").options(&["?", "Delete", "Restore", "Save", "Window"]).allow_enter()).await?;
-    let Some(kw) = r.kw().map(str::to_string) else { return Ok(()) };
+    let r = c
+        .keyword(
+            ps("Enter an option [?/Delete/Orthographic/Restore/Save/sEttings/Window]")
+                .options(&["?", "Delete", "Restore", "Save", "Window"])
+                .allow_enter(),
+        )
+        .await?;
+    let Some(kw) = r.kw().map(str::to_string) else {
+        return Ok(());
+    };
     if kw == "?" {
         let names: Vec<String> = c.doc(|d| d.views.keys().cloned().collect());
-        c.log(&if names.is_empty() { "No named views.".to_string() } else { names.join("\n") });
+        c.log(&if names.is_empty() {
+            "No named views.".to_string()
+        } else {
+            names.join("\n")
+        });
         return Ok(());
     }
     if kw == "Window" {
-        c.sub_forced("ZOOM", Args::none().with("mode", ArgVal::Str("window".into()))).await;
+        c.sub_forced(
+            "ZOOM",
+            Args::none().with("mode", ArgVal::Str("window".into())),
+        )
+        .await;
         return Ok(());
     }
-    let n = c.string(ps(&format!("Enter view name to {}", kw.to_lowercase()))).await?.text;
+    let n = c
+        .string(ps(&format!("Enter view name to {}", kw.to_lowercase())))
+        .await?
+        .text;
     if n.is_empty() {
         return Ok(());
     }
@@ -233,7 +295,12 @@ async fn named_view(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn orbit(c: Ctx, args: Args) -> CmdResult<()> {
-    let pts: Vec<V3> = c.doc(|d| d.solids.iter().flat_map(|s| s.vertices.iter().copied()).collect());
+    let pts: Vec<V3> = c.doc(|d| {
+        d.solids
+            .iter()
+            .flat_map(|s| s.vertices.iter().copied())
+            .collect()
+    });
     if let Some(p) = args.str("preset") {
         c.view(|v| {
             v.push();
@@ -258,13 +325,49 @@ async fn orbit(c: Ctx, args: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dv("ZOOM", run(zoom)).aliases(&["Z"]).title("Zoom").icon("zoom").desc("Increases or decreases the magnification of the view in the current viewport."));
-    r.define(dv("PAN", run(pan)).aliases(&["P"]).title("Pan").icon("pan").desc("Shifts the view in the current viewport."));
-    r.define(dv("-PAN", run(pan_disp)).title("Pan by displacement").icon("pan").desc("Shifts the view by a specified displacement."));
-    r.define(dv("REGEN", run(regen)).aliases(&["RE"]).title("Regen").desc("Regenerates the drawing and redraws the current viewport."));
-    r.define(dv("REGENALL", run(regen)).aliases(&["REA"]).title("Regen All").desc("Regenerates the drawing and redraws all viewports."));
-    r.define(dv("REDRAW", run(redraw)).aliases(&["R"]).title("Redraw").desc("Refreshes the display in the current viewport."));
-    let mut v = dv("-VIEW", run(named_view)).aliases(&["VIEW", "V"]).title("Named View").icon("view").desc("Saves and restores named views.");
+    r.define(
+        dv("ZOOM", run(zoom))
+            .aliases(&["Z"])
+            .title("Zoom")
+            .icon("zoom")
+            .desc("Increases or decreases the magnification of the view in the current viewport."),
+    );
+    r.define(
+        dv("PAN", run(pan))
+            .aliases(&["P"])
+            .title("Pan")
+            .icon("pan")
+            .desc("Shifts the view in the current viewport."),
+    );
+    r.define(
+        dv("-PAN", run(pan_disp))
+            .title("Pan by displacement")
+            .icon("pan")
+            .desc("Shifts the view by a specified displacement."),
+    );
+    r.define(
+        dv("REGEN", run(regen))
+            .aliases(&["RE"])
+            .title("Regen")
+            .desc("Regenerates the drawing and redraws the current viewport."),
+    );
+    r.define(
+        dv("REGENALL", run(regen))
+            .aliases(&["REA"])
+            .title("Regen All")
+            .desc("Regenerates the drawing and redraws all viewports."),
+    );
+    r.define(
+        dv("REDRAW", run(redraw))
+            .aliases(&["R"])
+            .title("Redraw")
+            .desc("Refreshes the display in the current viewport."),
+    );
+    let mut v = dv("-VIEW", run(named_view))
+        .aliases(&["VIEW", "V"])
+        .title("Named View")
+        .icon("view")
+        .desc("Saves and restores named views.");
     v.transparent = false;
     r.define(v);
     r.define(dv("3DORBIT", run(orbit)).aliases(&["3DO", "ORBIT"]).title("Orbit").icon("orbit").desc("Rotates the view in 3D space, but constrained to horizontal and vertical orbit only."));

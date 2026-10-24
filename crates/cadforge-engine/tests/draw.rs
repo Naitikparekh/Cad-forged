@@ -93,7 +93,15 @@ fn circle_centre_radius_by_click_typed_radius_diameter_2p_3p() {
     s.play("CIRCLE", &[Type("2p"), Click(0., 20.), Click(10., 20.)]);
     near(circ(&s.ent(3)).1, 5.);
     near(circ(&s.ent(3)).0.x, 5.);
-    s.play("CIRCLE", &[Type("3p"), Click(10., 40.), Click(0., 50.), Click(-10., 40.)]);
+    s.play(
+        "CIRCLE",
+        &[
+            Type("3p"),
+            Click(10., 40.),
+            Click(0., 50.),
+            Click(-10., 40.),
+        ],
+    );
     near(circ(&s.ent(4)).1, 10.);
     near(circ(&s.ent(4)).0.y, 40.);
     // default radius is remembered
@@ -107,7 +115,10 @@ fn circle_centre_radius_by_click_typed_radius_diameter_2p_3p() {
 #[test]
 fn rectang_with_fillet_option_produces_a_rounded_closed_polyline() {
     let s = Sim::new();
-    s.play("REC", &[Type("f"), Type("2"), Click(0., 0.), Click(20., 10.)]);
+    s.play(
+        "REC",
+        &[Type("f"), Type("2"), Click(0., 0.), Click(20., 10.)],
+    );
     match &s.ent(0).kind {
         Kind::Pline { v, closed } => {
             assert!(*closed);
@@ -116,7 +127,18 @@ fn rectang_with_fillet_option_produces_a_rounded_closed_polyline() {
         }
         k => panic!("{k:?}"),
     }
-    s.play("REC", &[Type("f"), Type("0"), Click(50., 0.), Type("d"), Type("10"), Type("6"), Click(60., 10.)]);
+    s.play(
+        "REC",
+        &[
+            Type("f"),
+            Type("0"),
+            Click(50., 0.),
+            Type("d"),
+            Type("10"),
+            Type("6"),
+            Click(60., 10.),
+        ],
+    );
     match &s.ent(1).kind {
         Kind::Pline { v, .. } => near(pline_area(v).abs(), 60.),
         k => panic!("{k:?}"),
@@ -145,7 +167,10 @@ fn polygon_ellipse_and_arc_three_point_start_center_end() {
     let (_, r, a0, a1) = arc(&s.ent(2));
     near(r, 10.);
     near(sweep_ccw(a0, a1), PI);
-    s.play("ARC", &[Type("c"), Click(0., 0.), Click(5., 0.), Click(0., 9.)]);
+    s.play(
+        "ARC",
+        &[Type("c"), Click(0., 0.), Click(5., 0.), Click(0., 9.)],
+    );
     let (_, r, a0, a1) = arc(&s.ent(3));
     near(r, 5.);
     near(a0, 0.);
@@ -175,7 +200,10 @@ fn pline_with_an_arc_segment_undo_and_close() {
 #[test]
 fn spline_point_xline_and_donut_create_objects() {
     let s = Sim::new();
-    s.play("SPL", &[Click(0., 0.), Click(5., 5.), Click(10., 0.), Enter]);
+    s.play(
+        "SPL",
+        &[Click(0., 0.), Click(5., 5.), Click(10., 0.), Enter],
+    );
     match &s.ent(0).kind {
         Kind::Spline { fit, .. } => assert_eq!(fit.len(), 3),
         k => panic!("{k:?}"),

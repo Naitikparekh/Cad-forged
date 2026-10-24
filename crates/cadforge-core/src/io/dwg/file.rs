@@ -53,13 +53,21 @@ impl<'a> DwgFile<'a> {
             None => {
                 let tag = String::from_utf8_lossy(data.get(0..6).unwrap_or(b"")).to_string();
                 return Err(if tag.starts_with("AC") {
-                    format!("DWG version {tag} is not supported (R13 to 2018 are: AC1012 to AC1032).")
+                    format!(
+                        "DWG version {tag} is not supported (R13 to 2018 are: AC1012 to AC1032)."
+                    )
                 } else {
                     "This is not a DWG file.".into()
                 });
             }
         };
-        let mut f = DwgFile { ver, maint: 0, data, sections: HashMap::new(), records: HashMap::new() };
+        let mut f = DwgFile {
+            ver,
+            maint: 0,
+            data,
+            sections: HashMap::new(),
+            records: HashMap::new(),
+        };
         match ver {
             Ver::R13 | Ver::R14 | Ver::R2000 => f.header15()?,
             Ver::R2007 => f.header21()?,
@@ -120,7 +128,9 @@ impl<'a> DwgFile<'a> {
             *b ^= (seed >> 16) as u8;
         }
         if &h[0..11] != b"AcFssFcAJMB" {
-            return Err("This DWG file's header does not decrypt: the file is damaged or not a DWG.".into());
+            return Err(
+                "This DWG file's header does not decrypt: the file is damaged or not a DWG.".into(),
+            );
         }
         let section_map_id = rl(&h, 0x5C)?;
         let page_map_addr = rll(&h, 0x54)? as usize + 0x100;
@@ -153,7 +163,11 @@ impl<'a> DwgFile<'a> {
             let max_size = rl(&smap, p + 12)? as u64;
             let compressed = rl(&smap, p + 20)? == 2;
             let raw_name = smap.get(p + 32..p + 96).ok_or(BAD)?;
-            let name: String = raw_name.iter().take_while(|&&c| c != 0).map(|&c| c as char).collect();
+            let name: String = raw_name
+                .iter()
+                .take_while(|&&c| c != 0)
+                .map(|&c| c as char)
+                .collect();
             p += 96;
             let mut out: Vec<u8> = Vec::new();
             for _ in 0..page_count.min(100_000) {
@@ -165,9 +179,13 @@ impl<'a> DwgFile<'a> {
                 while (out.len() as u64) < offset && max_size > 0 && out.len() < (1 << 31) {
                     out.resize(out.len() + max_size as usize, 0);
                 }
-                let Some(&seek) = pages.get(&num) else { continue };
+                let Some(&seek) = pages.get(&num) else {
+                    continue;
+                };
                 let data_at = seek + 32;
-                let raw = d.get(data_at..data_at.checked_add(csize).ok_or(BAD)?).ok_or(BAD)?;
+                let raw = d
+                    .get(data_at..data_at.checked_add(csize).ok_or(BAD)?)
+                    .ok_or(BAD)?;
                 if compressed {
                     let page = decompress18(raw, max_size.max(0x7400) as usize * 2)?;
                     out.extend_from_slice(&page);
@@ -196,10 +214,19 @@ impl<'a> DwgFile<'a> {
         }
         let meta = decompress21(&dec, 32, comp_len as usize, 0x110)?;
         let m = |k: usize| rll(&meta, k * 8);
-        let (pages_map_offset, pages_map_size_c, pages_map_size_u, pages_map_cf) = (m(7)?, m(10)?, m(11)?, m(3)?);
-        let (sections_map_size_c, sections_map_id, sections_map_size_u, sections_map_cf) = (m(22)?, m(24)?, m(25)?, m(27)?);
+        let (pages_map_offset, pages_map_size_c, pages_map_size_u, pages_map_cf) =
+            (m(7)?, m(10)?, m(11)?, m(3)?);
+        let (sections_map_size_c, sections_map_id, sections_map_size_u, sections_map_cf) =
+            (m(22)?, m(24)?, m(25)?, m(27)?);
 
-        let pmap = page_buffer(d, pages_map_offset, pages_map_size_c, pages_map_size_u, pages_map_cf, 0xEF)?;
+        let pmap = page_buffer(
+            d,
+            pages_map_offset,
+            pages_map_size_c,
+            pages_map_size_u,
+            pages_map_cf,
+            0xEF,
+        )?;
         let mut pages: HashMap<i64, (u64, u64)> = HashMap::new();
         let mut off = 0u64;
         let mut i = 0;
@@ -211,7 +238,14 @@ impl<'a> DwgFile<'a> {
             i += 16;
         }
         let (smap_at, _) = *pages.get(&(sections_map_id as i64)).ok_or(BAD)?;
-        let smap = page_buffer(d, smap_at, sections_map_size_c, sections_map_size_u, sections_map_cf, 239)?;
+        let smap = page_buffer(
+            d,
+            smap_at,
+            sections_map_size_c,
+            sections_map_size_u,
+            sections_map_cf,
+            239,
+        )?;
         let mut p = 0;
         while p + 64 <= smap.len() {
             let max_size = rll(&smap, p + 8)?;
@@ -222,7 +256,11 @@ impl<'a> DwgFile<'a> {
             let mut name = String::new();
             if name_len > 0 {
                 let raw = smap.get(p..p + name_len).ok_or(BAD)?;
-                let units: Vec<u16> = raw.chunks(2).filter(|c| c.len() == 2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                let units: Vec<u16> = raw
+                    .chunks(2)
+                    .filter(|c| c.len() == 2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .collect();
                 name = String::from_utf16_lossy(&units).replace('\0', "");
                 p += name_len;
             }
@@ -236,9 +274,14 @@ impl<'a> DwgFile<'a> {
                 if (out.len() as u64) < poff && poff - (out.len() as u64) < (1 << 31) {
                     out.resize(poff as usize, 0);
                 }
-                let Some(&(seek, psize)) = pages.get(&page_id) else { continue };
+                let Some(&(seek, psize)) = pages.get(&page_id) else {
+                    continue;
+                };
                 let at = (seek as usize).checked_add(0x480).ok_or(BAD)?;
-                let mut bytes = d.get(at..at.checked_add(psize as usize).ok_or(BAD)?).ok_or(BAD)?.to_vec();
+                let mut bytes = d
+                    .get(at..at.checked_add(psize as usize).ok_or(BAD)?)
+                    .ok_or(BAD)?
+                    .to_vec();
                 if encoding == 4 {
                     let v = (csize + 7) & !7;
                     let factor = v.div_ceil(251);
@@ -260,7 +303,9 @@ impl<'a> DwgFile<'a> {
 
     /// The object map: handle -> offset of the object (in [`objects`](Self::objects)).
     pub fn handle_map(&self) -> R<Vec<(u64, usize)>> {
-        let d = self.section("AcDb:Handles").ok_or("The DWG file has no object map.")?;
+        let d = self
+            .section("AcDb:Handles")
+            .ok_or("The DWG file has no object map.")?;
         let mut b = Bits::new(d, self.ver);
         let mut out = vec![];
         loop {
@@ -295,7 +340,9 @@ impl<'a> DwgFile<'a> {
 
     fn read_classes(&self) -> R<HashMap<u16, (String, bool)>> {
         let mut out = HashMap::new();
-        let Some(d) = self.section("AcDb:Classes") else { return Ok(out) };
+        let Some(d) = self.section("AcDb:Classes") else {
+            return Ok(out);
+        };
         let mut b = Bits::new(d, self.ver);
         b.skip_bytes(16)?; // sentinel
         let size = b.rl()? as usize;
@@ -362,7 +409,9 @@ impl<'a> DwgFile<'a> {
 fn system_page(d: &[u8], at: usize) -> R<Vec<u8>> {
     let usize_ = rl(d, at + 4)? as usize;
     let csize = rl(d, at + 8)? as usize;
-    let raw = d.get(at + 20..(at + 20).checked_add(csize).ok_or(BAD)?).ok_or(BAD)?;
+    let raw = d
+        .get(at + 20..(at + 20).checked_add(csize).ok_or(BAD)?)
+        .ok_or(BAD)?;
     let mut out = decompress18(raw, usize_.max(16) * 2)?;
     out.truncate(usize_);
     Ok(out)
@@ -398,7 +447,9 @@ fn page_buffer(d: &[u8], offset: u64, comp: u64, uncomp: u64, cf: u64, block: us
     let factor = total.div_ceil(block);
     let len = factor * 255;
     let at = (offset as usize).checked_add(0x480).ok_or(BAD)?;
-    let raw = d.get(at..at.checked_add(len).ok_or(BAD)?.min(d.len())).ok_or(BAD)?;
+    let raw = d
+        .get(at..at.checked_add(len).ok_or(BAD)?.min(d.len()))
+        .ok_or(BAD)?;
     let data = deinterleave(raw, total, factor, block);
     decompress21(&data, 0, comp as usize, uncomp as usize)
 }

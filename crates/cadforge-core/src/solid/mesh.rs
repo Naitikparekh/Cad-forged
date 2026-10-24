@@ -14,14 +14,29 @@ pub type Loop = Vec<Pt>;
 fn loop_of_entity(e: &Entity, tol: f64) -> Option<Loop> {
     match &e.kind {
         Kind::Circle { c, r } => {
-            let n = (TAU / (2.0 * (1.0 - tol / r.max(tol * 2.0)).max(0.0).acos())).ceil().clamp(24.0, 256.0) as usize;
-            Some((0..n).map(|i| pt(c.x + r * (TAU * i as f64 / n as f64).cos(), c.y + r * (TAU * i as f64 / n as f64).sin())).collect())
+            let n = (TAU / (2.0 * (1.0 - tol / r.max(tol * 2.0)).max(0.0).acos()))
+                .ceil()
+                .clamp(24.0, 256.0) as usize;
+            Some(
+                (0..n)
+                    .map(|i| {
+                        pt(
+                            c.x + r * (TAU * i as f64 / n as f64).cos(),
+                            c.y + r * (TAU * i as f64 / n as f64).sin(),
+                        )
+                    })
+                    .collect(),
+            )
         }
         Kind::Ellipse(el) => {
             if !ellipse_is_full(el) {
                 return None;
             }
-            Some((0..96).map(|i| ellipse_point(el, TAU * i as f64 / 96.0)).collect())
+            Some(
+                (0..96)
+                    .map(|i| ellipse_point(el, TAU * i as f64 / 96.0))
+                    .collect(),
+            )
         }
         Kind::Pline { v, closed: true } => Some(dedupe(&tess_segs(&pline_segs(v, true), tol))),
         Kind::Spline { fit, closed: true } => {
@@ -48,7 +63,11 @@ fn dedupe(pts: &[Pt]) -> Loop {
 
 /// Join open entities (lines, arcs, polylines) end to end into closed loops. `Err` carries the loops found so far.
 fn chain_open(entities: &[&Entity], doc: &Drawing, tol: f64) -> Result<Vec<Loop>, Vec<Loop>> {
-    let paths: Vec<Vec<Seg>> = entities.iter().map(|e| segs_of(e, doc).to_vec()).filter(|p| !p.is_empty()).collect();
+    let paths: Vec<Vec<Seg>> = entities
+        .iter()
+        .map(|e| segs_of(e, doc).to_vec())
+        .filter(|p| !p.is_empty())
+        .collect();
     let mut loops = vec![];
     let eps = 1e-6;
     let mut used = vec![false; paths.len()];
@@ -110,7 +129,13 @@ pub fn profile_loops(entities: &[&Entity], doc: &Drawing, tol: f64) -> ProfileRe
     for e in entities {
         match loop_of_entity(e, tol) {
             Some(l) if l.len() >= 3 => loops.push(l),
-            _ if matches!(e.kind, Kind::Line { .. } | Kind::Arc { .. } | Kind::Pline { .. }) => open.push(e),
+            _ if matches!(
+                e.kind,
+                Kind::Line { .. } | Kind::Arc { .. } | Kind::Pline { .. }
+            ) =>
+            {
+                open.push(e)
+            }
             _ => {}
         }
     }
@@ -118,13 +143,22 @@ pub fn profile_loops(entities: &[&Entity], doc: &Drawing, tol: f64) -> ProfileRe
         match chain_open(&open, doc, tol) {
             Err(found) => {
                 loops.extend(found);
-                return ProfileResult { loops, error: Some("The selected lines and arcs do not form a closed outline.".into()) };
+                return ProfileResult {
+                    loops,
+                    error: Some("The selected lines and arcs do not form a closed outline.".into()),
+                };
             }
             Ok(l) => loops.extend(l.into_iter().filter(|l| l.len() >= 3)),
         }
     }
     if loops.is_empty() {
-        return ProfileResult { loops, error: Some("Select closed polylines, circles, ellipses or a closed chain of lines and arcs.".into()) };
+        return ProfileResult {
+            loops,
+            error: Some(
+                "Select closed polylines, circles, ellipses or a closed chain of lines and arcs."
+                    .into(),
+            ),
+        };
     }
     ProfileResult { loops, error: None }
 }
@@ -143,15 +177,27 @@ pub fn group_loops(loops: &[Loop]) -> Vec<Group> {
         parents: Vec<usize>,
         depth: usize,
     }
-    let mut items: Vec<It> = loops.iter().map(|l| {
-        let area = polygon_area(l);
-        It { pts: l.clone(), area, abs: area.abs(), parents: vec![], depth: 0 }
-    }).collect();
+    let mut items: Vec<It> = loops
+        .iter()
+        .map(|l| {
+            let area = polygon_area(l);
+            It {
+                pts: l.clone(),
+                area,
+                abs: area.abs(),
+                parents: vec![],
+                depth: 0,
+            }
+        })
+        .collect();
     items.sort_by(|a, b| b.abs.total_cmp(&a.abs));
     for i in 0..items.len() {
         let mut parents = vec![];
         for o in 0..items.len() {
-            if o != i && items[o].abs > items[i].abs && point_in_polygon(items[i].pts[0], &items[o].pts) {
+            if o != i
+                && items[o].abs > items[i].abs
+                && point_in_polygon(items[i].pts[0], &items[o].pts)
+            {
                 parents.push(o);
             }
         }
@@ -162,17 +208,33 @@ pub fn group_loops(loops: &[Loop]) -> Vec<Group> {
     let mut group_of: HashMap<usize, usize> = HashMap::new();
     for (i, it) in items.iter().enumerate() {
         if it.depth % 2 == 0 {
-            let outer = if it.area >= 0.0 { it.pts.clone() } else { it.pts.iter().rev().copied().collect() };
+            let outer = if it.area >= 0.0 {
+                it.pts.clone()
+            } else {
+                it.pts.iter().rev().copied().collect()
+            };
             group_of.insert(i, groups.len());
-            groups.push(Group { outer, holes: vec![] });
+            groups.push(Group {
+                outer,
+                holes: vec![],
+            });
         }
     }
     for it in items.iter() {
         if it.depth % 2 == 1 {
-            let mut cands: Vec<usize> = it.parents.iter().copied().filter(|&p| items[p].depth + 1 == it.depth).collect();
+            let mut cands: Vec<usize> = it
+                .parents
+                .iter()
+                .copied()
+                .filter(|&p| items[p].depth + 1 == it.depth)
+                .collect();
             cands.sort_by(|a, b| items[*a].abs.total_cmp(&items[*b].abs));
             if let Some(g) = cands.first().and_then(|o| group_of.get(o)) {
-                groups[*g].holes.push(if it.area <= 0.0 { it.pts.clone() } else { it.pts.iter().rev().copied().collect() });
+                groups[*g].holes.push(if it.area <= 0.0 {
+                    it.pts.clone()
+                } else {
+                    it.pts.iter().rev().copied().collect()
+                });
             }
         }
     }
@@ -197,7 +259,13 @@ fn offset_ring(ring: &[Pt], d: f64) -> Loop {
 }
 
 /// Extrude planar loops (even-odd holes) from z = `start_z` by `height` (negative extrudes downwards).
-pub fn extrude_loops(loops: &[Loop], height: f64, start_z: f64, name: &str, taper: f64) -> Result<Solid, String> {
+pub fn extrude_loops(
+    loops: &[Loop],
+    height: f64,
+    start_z: f64,
+    name: &str,
+    taper: f64,
+) -> Result<Solid, String> {
     if !height.is_finite() || height == 0.0 {
         return Err("The extrusion height must not be zero.".into());
     }
@@ -205,7 +273,11 @@ pub fn extrude_loops(loops: &[Loop], height: f64, start_z: f64, name: &str, tape
     if groups.is_empty() {
         return Err("There is no closed outline to extrude.".into());
     }
-    let (z0, z1) = if height > 0.0 { (start_z, start_z + height) } else { (start_z + height, start_z) };
+    let (z0, z1) = if height > 0.0 {
+        (start_z, start_z + height)
+    } else {
+        (start_z + height, start_z)
+    };
     let h = height.abs();
     let k = rad(taper).tan();
     let mut vertices: Vec<V3> = vec![];
@@ -221,7 +293,11 @@ pub fn extrude_loops(loops: &[Loop], height: f64, start_z: f64, name: &str, tape
             if ri > 0 {
                 hole_starts.push(flat.len() / 2);
             }
-            let top = if taper != 0.0 { offset_ring(ring, (if ri == 0 { -1.0 } else { 1.0 }) * k * h) } else { (*ring).clone() }; // positive taper narrows the solid
+            let top = if taper != 0.0 {
+                offset_ring(ring, (if ri == 0 { -1.0 } else { 1.0 }) * k * h)
+            } else {
+                (*ring).clone()
+            }; // positive taper narrows the solid
             let (mut b, mut t) = (vec![], vec![]);
             for p in ring.iter() {
                 b.push(vertices.len() as u32);
@@ -239,12 +315,17 @@ pub fn extrude_loops(loops: &[Loop], height: f64, start_z: f64, name: &str, tape
             }
         }
         // caps
-        let tri = earcutr::earcut(&flat, &hole_starts, 2).map_err(|e| format!("Triangulation failed: {e:?}"))?;
+        let tri = earcutr::earcut(&flat, &hole_starts, 2)
+            .map_err(|e| format!("Triangulation failed: {e:?}"))?;
         let idx_bottom: Vec<u32> = bottoms.iter().flatten().copied().collect();
         let idx_top: Vec<u32> = tops.iter().flatten().copied().collect();
         for t in tri.chunks_exact(3) {
             let (a, mut b, mut c) = (t[0], t[1], t[2]);
-            let (pa, pb, pc) = (pt(flat[a * 2], flat[a * 2 + 1]), pt(flat[b * 2], flat[b * 2 + 1]), pt(flat[c * 2], flat[c * 2 + 1]));
+            let (pa, pb, pc) = (
+                pt(flat[a * 2], flat[a * 2 + 1]),
+                pt(flat[b * 2], flat[b * 2 + 1]),
+                pt(flat[c * 2], flat[c * 2 + 1]),
+            );
             if (pb.x - pa.x) * (pc.y - pa.y) - (pb.y - pa.y) * (pc.x - pa.x) < 0.0 {
                 std::mem::swap(&mut b, &mut c); // make CCW
             }
@@ -278,17 +359,67 @@ fn orient(mut s: Solid) -> Solid {
 
 pub fn box_mesh(x0: f64, y0: f64, z0: f64, w: f64, d: f64, h: f64, name: &str) -> Solid {
     let (x1, y1, z1) = (x0 + w, y0 + d, z0 + h);
-    let v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
-    let f: [[u32; 3]; 12] = [[0, 3, 2], [0, 2, 1], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
-    orient(Solid::from_mesh(name, Mesh { vertices: v.iter().map(|p| V3::new(p[0], p[1], p[2])).collect(), faces: f.to_vec() }))
+    let v = [
+        [x0, y0, z0],
+        [x1, y0, z0],
+        [x1, y1, z0],
+        [x0, y1, z0],
+        [x0, y0, z1],
+        [x1, y0, z1],
+        [x1, y1, z1],
+        [x0, y1, z1],
+    ];
+    let f: [[u32; 3]; 12] = [
+        [0, 3, 2],
+        [0, 2, 1],
+        [4, 5, 6],
+        [4, 6, 7],
+        [0, 1, 5],
+        [0, 5, 4],
+        [1, 2, 6],
+        [1, 6, 5],
+        [2, 3, 7],
+        [2, 7, 6],
+        [3, 0, 4],
+        [3, 4, 7],
+    ];
+    orient(Solid::from_mesh(
+        name,
+        Mesh {
+            vertices: v.iter().map(|p| V3::new(p[0], p[1], p[2])).collect(),
+            faces: f.to_vec(),
+        },
+    ))
 }
 
 /// Wedge: the sloped face rises from the front (y = y0) edge at z = z0; the high end is at x = x0 + w.
 pub fn wedge_mesh(x0: f64, y0: f64, z0: f64, w: f64, d: f64, h: f64, name: &str) -> Solid {
     let (x1, y1, z1) = (x0 + w, y0 + d, z0 + h);
-    let v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x1, y0, z1], [x1, y1, z1]];
-    let f: [[u32; 3]; 8] = [[0, 3, 2], [0, 2, 1], [1, 2, 5], [1, 5, 4], [0, 1, 4], [3, 5, 2], [0, 4, 5], [0, 5, 3]];
-    orient(Solid::from_mesh(name, Mesh { vertices: v.iter().map(|p| V3::new(p[0], p[1], p[2])).collect(), faces: f.to_vec() }))
+    let v = [
+        [x0, y0, z0],
+        [x1, y0, z0],
+        [x1, y1, z0],
+        [x0, y1, z0],
+        [x1, y0, z1],
+        [x1, y1, z1],
+    ];
+    let f: [[u32; 3]; 8] = [
+        [0, 3, 2],
+        [0, 2, 1],
+        [1, 2, 5],
+        [1, 5, 4],
+        [0, 1, 4],
+        [3, 5, 2],
+        [0, 4, 5],
+        [0, 5, 3],
+    ];
+    orient(Solid::from_mesh(
+        name,
+        Mesh {
+            vertices: v.iter().map(|p| V3::new(p[0], p[1], p[2])).collect(),
+            faces: f.to_vec(),
+        },
+    ))
 }
 
 pub fn cylinder_mesh(cx: f64, cy: f64, z0: f64, r: f64, h: f64, seg: usize, name: &str) -> Solid {
@@ -296,7 +427,16 @@ pub fn cylinder_mesh(cx: f64, cy: f64, z0: f64, r: f64, h: f64, seg: usize, name
 }
 
 /// Cone or frustum: radius `r1` at z0 and `r2` at z0 + h (`r2` = 0 gives an apex).
-pub fn cone_mesh(cx: f64, cy: f64, z0: f64, r1: f64, r2: f64, h: f64, seg: usize, name: &str) -> Solid {
+pub fn cone_mesh(
+    cx: f64,
+    cy: f64,
+    z0: f64,
+    r1: f64,
+    r2: f64,
+    h: f64,
+    seg: usize,
+    name: &str,
+) -> Solid {
     let mut vertices: Vec<V3> = vec![];
     let mut faces: Vec<[u32; 3]> = vec![];
     let ring = |r: f64, z: f64, vertices: &mut Vec<V3>| -> Vec<u32> {
@@ -306,23 +446,28 @@ pub fn cone_mesh(cx: f64, cy: f64, z0: f64, r1: f64, r2: f64, h: f64, seg: usize
             return vec![s];
         }
         for i in 0..seg {
-            vertices.push(V3::new(cx + r * (TAU * i as f64 / seg as f64).cos(), cy + r * (TAU * i as f64 / seg as f64).sin(), z));
+            vertices.push(V3::new(
+                cx + r * (TAU * i as f64 / seg as f64).cos(),
+                cy + r * (TAU * i as f64 / seg as f64).sin(),
+                z,
+            ));
         }
         (0..seg as u32).map(|i| s + i).collect()
     };
     let bot = ring(r1, z0, &mut vertices);
     let top = ring(r2, z0 + h, &mut vertices);
-    let cap = |idx: &[u32], up: bool, centre: f64, vertices: &mut Vec<V3>, faces: &mut Vec<[u32; 3]>| {
-        if idx.len() == 1 {
-            return;
-        }
-        let c = vertices.len() as u32;
-        vertices.push(V3::new(cx, cy, centre));
-        for i in 0..seg {
-            let (a, b) = (idx[i], idx[(i + 1) % seg]);
-            faces.push(if up { [c, a, b] } else { [c, b, a] });
-        }
-    };
+    let cap =
+        |idx: &[u32], up: bool, centre: f64, vertices: &mut Vec<V3>, faces: &mut Vec<[u32; 3]>| {
+            if idx.len() == 1 {
+                return;
+            }
+            let c = vertices.len() as u32;
+            vertices.push(V3::new(cx, cy, centre));
+            for i in 0..seg {
+                let (a, b) = (idx[i], idx[(i + 1) % seg]);
+                faces.push(if up { [c, a, b] } else { [c, b, a] });
+            }
+        };
     for i in 0..seg {
         let j = (i + 1) % seg;
         if bot.len() == 1 {
@@ -347,7 +492,11 @@ pub fn sphere_mesh(cx: f64, cy: f64, cz: f64, r: f64, seg: usize, name: &str) ->
         let phi = -PI / 2.0 + PI * k as f64 / rings as f64;
         for i in 0..seg {
             let th = TAU * i as f64 / seg as f64;
-            vertices.push(V3::new(cx + r * phi.cos() * th.cos(), cy + r * phi.cos() * th.sin(), cz + r * phi.sin()));
+            vertices.push(V3::new(
+                cx + r * phi.cos() * th.cos(),
+                cy + r * phi.cos() * th.sin(),
+                cz + r * phi.sin(),
+            ));
         }
     }
     vertices.push(V3::new(cx, cy, cz + r));
@@ -371,18 +520,32 @@ pub fn sphere_mesh(cx: f64, cy: f64, cz: f64, r: f64, seg: usize, name: &str) ->
 // ---------------------------------------------------------------- measurements
 
 fn tri_vol(a: V3, b: V3, c: V3) -> f64 {
-    (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) + a.z * (b.x * c.y - b.y * c.x)) / 6.0
+    (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) + a.z * (b.x * c.y - b.y * c.x))
+        / 6.0
 }
 
 pub fn mesh_volume(m: &Mesh) -> f64 {
-    m.faces.iter().map(|f| tri_vol(m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize])).sum()
+    m.faces
+        .iter()
+        .map(|f| {
+            tri_vol(
+                m.vertices[f[0] as usize],
+                m.vertices[f[1] as usize],
+                m.vertices[f[2] as usize],
+            )
+        })
+        .sum()
 }
 
 pub fn mesh_area(m: &Mesh) -> f64 {
     m.faces
         .iter()
         .map(|f| {
-            let (a, b, c) = (m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize]);
+            let (a, b, c) = (
+                m.vertices[f[0] as usize],
+                m.vertices[f[1] as usize],
+                m.vertices[f[2] as usize],
+            );
             b.sub(a).cross(c.sub(a)).len() / 2.0
         })
         .sum()
@@ -395,7 +558,10 @@ pub struct Bounds3 {
 }
 
 pub fn mesh_bounds(vertices: &[V3]) -> Bounds3 {
-    let mut b = Bounds3 { min: V3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY), max: V3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY) };
+    let mut b = Bounds3 {
+        min: V3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY),
+        max: V3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY),
+    };
     for p in vertices {
         b.min = V3::new(b.min.x.min(p.x), b.min.y.min(p.y), b.min.z.min(p.z));
         b.max = V3::new(b.max.x.max(p.x), b.max.y.max(p.y), b.max.z.max(p.z));
@@ -406,7 +572,11 @@ pub fn mesh_bounds(vertices: &[V3]) -> Bounds3 {
 pub fn mesh_centroid(m: &Mesh) -> V3 {
     let (mut vol, mut c) = (0.0, V3::new(0.0, 0.0, 0.0));
     for f in &m.faces {
-        let (a, b, d) = (m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize]);
+        let (a, b, d) = (
+            m.vertices[f[0] as usize],
+            m.vertices[f[1] as usize],
+            m.vertices[f[2] as usize],
+        );
         let v = tri_vol(a, b, d);
         vol += v;
         c = c.add(a.add(b).add(d).scale(v / 4.0));
@@ -426,7 +596,8 @@ pub fn is_watertight(m: &Mesh) -> bool {
             *dir.entry((a, b)).or_insert(0) += 1;
         }
     }
-    dir.iter().all(|(&(a, b), &n)| n == 1 && dir.get(&(b, a)) == Some(&1))
+    dir.iter()
+        .all(|(&(a, b), &n)| n == 1 && dir.get(&(b, a)) == Some(&1))
 }
 
 // ---------------------------------------------------------------- transforms
@@ -444,21 +615,65 @@ pub mod m3 {
     }
     pub fn rotate_z(a: f64, c: Pt) -> M3 {
         let (co, si) = (a.cos(), a.sin());
-        [co, -si, 0.0, c.x - co * c.x + si * c.y, si, co, 0.0, c.y - si * c.x - co * c.y, 0.0, 0.0, 1.0, 0.0]
+        [
+            co,
+            -si,
+            0.0,
+            c.x - co * c.x + si * c.y,
+            si,
+            co,
+            0.0,
+            c.y - si * c.x - co * c.y,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+        ]
     }
     pub fn scale(s: f64, c: V3) -> M3 {
-        [s, 0.0, 0.0, c.x * (1.0 - s), 0.0, s, 0.0, c.y * (1.0 - s), 0.0, 0.0, s, c.z * (1.0 - s)]
+        [
+            s,
+            0.0,
+            0.0,
+            c.x * (1.0 - s),
+            0.0,
+            s,
+            0.0,
+            c.y * (1.0 - s),
+            0.0,
+            0.0,
+            s,
+            c.z * (1.0 - s),
+        ]
     }
     pub fn mirror_xy(a: Pt, b: Pt) -> M3 {
         let d = unit(b - a);
         let (c2, s2) = (d.x * d.x - d.y * d.y, 2.0 * d.x * d.y);
-        [c2, s2, 0.0, a.x - c2 * a.x - s2 * a.y, s2, -c2, 0.0, a.y - s2 * a.x + c2 * a.y, 0.0, 0.0, 1.0, 0.0]
+        [
+            c2,
+            s2,
+            0.0,
+            a.x - c2 * a.x - s2 * a.y,
+            s2,
+            -c2,
+            0.0,
+            a.y - s2 * a.x + c2 * a.y,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+        ]
     }
     pub fn apply(m: &M3, p: V3) -> V3 {
-        V3::new(m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3], m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7], m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11])
+        V3::new(
+            m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3],
+            m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7],
+            m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11],
+        )
     }
     pub fn det(m: &M3) -> f64 {
-        m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8])
+        m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8])
+            + m[2] * (m[4] * m[9] - m[5] * m[8])
     }
 }
 
@@ -491,8 +706,21 @@ pub fn to_obj(solids: &[&Solid]) -> String {
     let mut out = vec!["# CadForge solids (drawing units)".to_string()];
     let mut off = 1;
     for (n, s) in solids.iter().enumerate() {
-        let name = if s.name.is_empty() { format!("solid{}", n + 1) } else { s.name.clone() };
-        out.push(format!("o {}", name.chars().map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect::<String>()));
+        let name = if s.name.is_empty() {
+            format!("solid{}", n + 1)
+        } else {
+            s.name.clone()
+        };
+        out.push(format!(
+            "o {}",
+            name.chars()
+                .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                })
+                .collect::<String>()
+        ));
         for p in &s.vertices {
             out.push(format!("v {} {} {}", p.x, p.y, p.z));
         }
@@ -508,7 +736,11 @@ pub fn to_stl(solids: &[&Solid]) -> String {
     let mut out = vec!["solid CadForge".to_string()];
     for s in solids {
         for f in &s.faces {
-            let (a, b, c) = (s.vertices[f[0] as usize], s.vertices[f[1] as usize], s.vertices[f[2] as usize]);
+            let (a, b, c) = (
+                s.vertices[f[0] as usize],
+                s.vertices[f[1] as usize],
+                s.vertices[f[2] as usize],
+            );
             let n = b.sub(a).cross(c.sub(a));
             let l = if n.len() == 0.0 { 1.0 } else { n.len() };
             let n = n.scale(1.0 / l);

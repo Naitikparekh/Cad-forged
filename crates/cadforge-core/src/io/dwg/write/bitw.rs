@@ -174,7 +174,10 @@ impl BitW {
 
     /// TV: text (R2000: a BS length and the code-page bytes; CadForge only writes ASCII, other characters as \U+XXXX).
     pub fn tv(&mut self, s: &str) {
-        let b: Vec<u8> = s.chars().map(|c| if (c as u32) < 0x100 { c as u8 } else { b'?' }).collect();
+        let b: Vec<u8> = s
+            .chars()
+            .map(|c| if (c as u32) < 0x100 { c as u8 } else { b'?' })
+            .collect();
         self.bs(b.len().min(i16::MAX as usize) as i16);
         self.bytes(&b[..b.len().min(i16::MAX as usize)]);
     }
@@ -223,7 +226,11 @@ const fn crc_table() -> [u16; 256] {
         let mut c = i as u16;
         let mut k = 0;
         while k < 8 {
-            c = if c & 1 != 0 { (c >> 1) ^ 0xA001 } else { c >> 1 };
+            c = if c & 1 != 0 {
+                (c >> 1) ^ 0xA001
+            } else {
+                c >> 1
+            };
             k += 1;
         }
         t[i] = c;
@@ -277,9 +284,23 @@ mod tests {
         w.rd(1.5);
         let mut r = Bits::new(&w.buf, Ver::R2000);
         assert!(r.bit().unwrap());
-        assert_eq!([r.bs().unwrap(), r.bs().unwrap(), r.bs().unwrap(), r.bs().unwrap()], [0, 7, 256, -5]);
-        assert_eq!([r.bl().unwrap(), r.bl().unwrap(), r.bl().unwrap()], [0, 200, 70000]);
-        assert_eq!([r.bd().unwrap(), r.bd().unwrap(), r.bd().unwrap()], [0.0, 1.0, 2.5]);
+        assert_eq!(
+            [
+                r.bs().unwrap(),
+                r.bs().unwrap(),
+                r.bs().unwrap(),
+                r.bs().unwrap()
+            ],
+            [0, 7, 256, -5]
+        );
+        assert_eq!(
+            [r.bl().unwrap(), r.bl().unwrap(), r.bl().unwrap()],
+            [0, 200, 70000]
+        );
+        assert_eq!(
+            [r.bd().unwrap(), r.bd().unwrap(), r.bd().unwrap()],
+            [0.0, 1.0, 2.5]
+        );
         assert_eq!(r.dd(3.0).unwrap(), 3.25);
         assert_eq!(r.dd(3.0).unwrap(), 3.0);
         assert_eq!(r.dd(1e10 + 1.0).unwrap(), 1e10);
@@ -315,7 +336,14 @@ mod tests {
     #[test]
     fn crc_matches_autocad() {
         // the file header of the AutoCAD 2000 sample: CRC of its first 0x4F bytes is stored right after them
-        let d = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dwg/samples/sample_AC1015.dwg")).unwrap();
-        assert_eq!(crc16(0xC0C1, &d[..0x4F]), u16::from_le_bytes([d[0x4F], d[0x50]]));
+        let d = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/dwg/samples/sample_AC1015.dwg"
+        ))
+        .unwrap();
+        assert_eq!(
+            crc16(0xC0C1, &d[..0x4F]),
+            u16::from_le_bytes([d[0x4F], d[0x50]])
+        );
     }
 }

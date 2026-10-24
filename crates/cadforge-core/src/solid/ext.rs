@@ -22,7 +22,11 @@ pub struct Welder {
 
 impl Welder {
     pub fn add(&mut self, p: V3) -> u32 {
-        let key = ((p.x * 1e7).round() as i64, (p.y * 1e7).round() as i64, (p.z * 1e7).round() as i64);
+        let key = (
+            (p.x * 1e7).round() as i64,
+            (p.y * 1e7).round() as i64,
+            (p.z * 1e7).round() as i64,
+        );
         let verts = &mut self.vertices;
         *self.map.entry(key).or_insert_with(|| {
             verts.push(p);
@@ -50,7 +54,10 @@ impl Welder {
     }
 
     pub fn finish(self) -> Mesh {
-        Mesh { vertices: self.vertices, faces: self.faces }
+        Mesh {
+            vertices: self.vertices,
+            faces: self.faces,
+        }
     }
 }
 
@@ -65,7 +72,11 @@ pub fn orient_outward(m: &mut Mesh) {
 
 /// Unit normal of a triangle (zero vector for degenerate triangles).
 pub fn tri_normal(m: &Mesh, f: &[u32; 3]) -> V3 {
-    let (a, b, c) = (m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize]);
+    let (a, b, c) = (
+        m.vertices[f[0] as usize],
+        m.vertices[f[1] as usize],
+        m.vertices[f[2] as usize],
+    );
     let n = b.sub(a).cross(c.sub(a));
     let l = n.len();
     if l < 1e-300 {
@@ -82,7 +93,10 @@ pub fn segments_for(r: f64) -> usize {
 
 /// Every ring of the groups in order: each outer ring followed by its holes.
 pub fn rings_of(groups: &[Group]) -> Vec<&Loop> {
-    groups.iter().flat_map(|g| std::iter::once(&g.outer).chain(g.holes.iter())).collect()
+    groups
+        .iter()
+        .flat_map(|g| std::iter::once(&g.outer).chain(g.holes.iter()))
+        .collect()
 }
 
 /// Split triangle edges at any other point lying on them, so regions that share an outline also share its vertices.
@@ -94,11 +108,13 @@ fn split_at_points(tris: Vec<[usize; 3]>, p: &[Pt]) -> Vec<[usize; 3]> {
             let (a, b) = (t[e], t[(e + 1) % 3]);
             let d = p[b] - p[a];
             let l2 = dot(d, d);
-            (0..p.len()).filter(|&k| k != a && k != b).find(|&k| {
-                let (w, u) = (p[k] - p[a], dot(p[k] - p[a], d) / l2);
-                u > 1e-9 && u < 1.0 - 1e-9 && cross(d, w).abs() < 1e-7 * l2.sqrt()
-            })
-            .map(|k| (e, k))
+            (0..p.len())
+                .filter(|&k| k != a && k != b)
+                .find(|&k| {
+                    let (w, u) = (p[k] - p[a], dot(p[k] - p[a], d) / l2);
+                    u > 1e-9 && u < 1.0 - 1e-9 && cross(d, w).abs() < 1e-7 * l2.sqrt()
+                })
+                .map(|k| (e, k))
         });
         match hit {
             Some((e, k)) => {
@@ -127,12 +143,23 @@ pub fn region_tris(groups: &[Group]) -> Result<Vec<[usize; 3]>, String> {
                 pts.push(*p);
             }
         }
-        let tri = earcutr::earcut(&flat, &holes, 2).map_err(|e| format!("Triangulation failed: {e:?}"))?;
+        let tri = earcutr::earcut(&flat, &holes, 2)
+            .map_err(|e| format!("Triangulation failed: {e:?}"))?;
         let ccw: Vec<[usize; 3]> = tri
             .chunks_exact(3)
-            .map(|t| if cross(pts[t[1]] - pts[t[0]], pts[t[2]] - pts[t[0]]) < 0.0 { [t[0], t[2], t[1]] } else { [t[0], t[1], t[2]] })
+            .map(|t| {
+                if cross(pts[t[1]] - pts[t[0]], pts[t[2]] - pts[t[0]]) < 0.0 {
+                    [t[0], t[2], t[1]]
+                } else {
+                    [t[0], t[1], t[2]]
+                }
+            })
             .collect();
-        out.extend(split_at_points(ccw, &pts).into_iter().map(|t| [base + t[0], base + t[1], base + t[2]]));
+        out.extend(
+            split_at_points(ccw, &pts)
+                .into_iter()
+                .map(|t| [base + t[0], base + t[1], base + t[2]]),
+        );
         base += pts.len();
     }
     Ok(out)

@@ -36,7 +36,11 @@ fn edit(c: &Ctx, ids: &[u64], f: impl Fn(&mut InsertData)) {
     c.doc_mut(|d| {
         d.change(|d| {
             for id in ids {
-                if let Some(Entity { kind: Kind::Insert(i), .. }) = d.by_id_mut(*id) {
+                if let Some(Entity {
+                    kind: Kind::Insert(i),
+                    ..
+                }) = d.by_id_mut(*id)
+                {
                     f(i);
                 }
             }
@@ -46,13 +50,26 @@ fn edit(c: &Ctx, ids: &[u64], f: impl Fn(&mut InsertData)) {
 }
 
 async fn xclip(c: Ctx, _a: Args) -> CmdResult<()> {
-    let sel = c.select(ps("Select objects").filter(|e| matches!(e.kind, Kind::Insert(_)))).await?;
-    let ids: Vec<u64> = sel.ents.iter().copied().filter(|i| matches!(c.entity_by_id(*i).map(|e| e.kind), Some(Kind::Insert(_)))).collect();
+    let sel = c
+        .select(ps("Select objects").filter(|e| matches!(e.kind, Kind::Insert(_))))
+        .await?;
+    let ids: Vec<u64> = sel
+        .ents
+        .iter()
+        .copied()
+        .filter(|i| matches!(c.entity_by_id(*i).map(|e| e.kind), Some(Kind::Insert(_))))
+        .collect();
     if ids.is_empty() {
         c.log_error("Select block references or external references.");
         return Ok(());
     }
-    let r = c.keyword(ps("Enter clipping option [ON/OFF/Delete/generate Polyline/New boundary]").options(&["ON", "OFF", "Delete", "generate Polyline", "New boundary"]).default_str("New boundary")).await?;
+    let r = c
+        .keyword(
+            ps("Enter clipping option [ON/OFF/Delete/generate Polyline/New boundary]")
+                .options(&["ON", "OFF", "Delete", "generate Polyline", "New boundary"])
+                .default_str("New boundary"),
+        )
+        .await?;
     match r.kw().unwrap_or("New boundary") {
         "ON" => edit(&c, &ids, |i| i.clip_off = false),
         "OFF" => edit(&c, &ids, |i| i.clip_off = true),
@@ -61,7 +78,14 @@ async fn xclip(c: Ctx, _a: Args) -> CmdResult<()> {
             i.clip_off = false;
         }),
         "generate Polyline" => {
-            let Some(Entity { kind: Kind::Insert(i), layer, .. }) = c.entity_by_id(ids[0]) else { return Ok(()) };
+            let Some(Entity {
+                kind: Kind::Insert(i),
+                layer,
+                ..
+            }) = c.entity_by_id(ids[0])
+            else {
+                return Ok(());
+            };
             if i.clip.len() < 3 {
                 c.log_error("The reference has no clipping boundary.");
                 return Ok(());
@@ -71,10 +95,24 @@ async fn xclip(c: Ctx, _a: Args) -> CmdResult<()> {
             c.add(e);
         }
         _ => {
-            let k = c.keyword(ps("Specify clipping boundary [Select polyline/Polygonal/Rectangular]").options(&["Select polyline", "Polygonal", "Rectangular"]).default_str("Rectangular")).await?;
+            let k = c
+                .keyword(
+                    ps("Specify clipping boundary [Select polyline/Polygonal/Rectangular]")
+                        .options(&["Select polyline", "Polygonal", "Rectangular"])
+                        .default_str("Rectangular"),
+                )
+                .await?;
             let poly: Vec<Pt> = match k.kw().unwrap_or("Rectangular") {
                 "Select polyline" => {
-                    let Some(id) = c.pick_entity(ps("Select a closed polyline").filter(|e| matches!(&e.kind, Kind::Pline { closed: true, .. }))).await? else { return Ok(()) };
+                    let Some(id) = c
+                        .pick_entity(
+                            ps("Select a closed polyline")
+                                .filter(|e| matches!(&e.kind, Kind::Pline { closed: true, .. })),
+                        )
+                        .await?
+                    else {
+                        return Ok(());
+                    };
                     match c.entity_by_id(id).map(|e| e.kind) {
                         Some(Kind::Pline { v, .. }) => {
                             if v.iter().any(|q| q.b != 0.0) {
@@ -87,10 +125,19 @@ async fn xclip(c: Ctx, _a: Args) -> CmdResult<()> {
                     }
                 }
                 "Polygonal" => {
-                    let Some(first) = c.point(ps("Specify first point")).await?.pt() else { return Ok(()) };
+                    let Some(first) = c.point(ps("Specify first point")).await?.pt() else {
+                        return Ok(());
+                    };
                     let mut pts = vec![first];
                     loop {
-                        let r = c.point(ps("Specify next point or [Undo]").options(&["Undo"]).base(*pts.last().expect("a point")).allow_enter()).await?;
+                        let r = c
+                            .point(
+                                ps("Specify next point or [Undo]")
+                                    .options(&["Undo"])
+                                    .base(*pts.last().expect("a point"))
+                                    .allow_enter(),
+                            )
+                            .await?;
                         match (r.kw(), r.pt()) {
                             (Some("Undo"), _) => {
                                 if pts.len() > 1 {
@@ -104,9 +151,19 @@ async fn xclip(c: Ctx, _a: Args) -> CmdResult<()> {
                     pts
                 }
                 _ => {
-                    let Some(a) = c.point(ps("Specify first corner point")).await?.pt() else { return Ok(()) };
-                    let Some(b) = c.corner(a, ps("Specify opposite corner point")).await?.pt() else { return Ok(()) };
-                    vec![pt(a.x.min(b.x), a.y.min(b.y)), pt(a.x.max(b.x), a.y.min(b.y)), pt(a.x.max(b.x), a.y.max(b.y)), pt(a.x.min(b.x), a.y.max(b.y))]
+                    let Some(a) = c.point(ps("Specify first corner point")).await?.pt() else {
+                        return Ok(());
+                    };
+                    let Some(b) = c.corner(a, ps("Specify opposite corner point")).await?.pt()
+                    else {
+                        return Ok(());
+                    };
+                    vec![
+                        pt(a.x.min(b.x), a.y.min(b.y)),
+                        pt(a.x.max(b.x), a.y.min(b.y)),
+                        pt(a.x.max(b.x), a.y.max(b.y)),
+                        pt(a.x.min(b.x), a.y.max(b.y)),
+                    ]
                 }
             };
             if !is_convex(&poly) {

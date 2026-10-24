@@ -21,11 +21,23 @@ fn with_picture() -> (Sim, String) {
 }
 
 fn image_entity(s: &Sim) -> (u64, ImageData) {
-    s.ents().into_iter().find_map(|e| if let Kind::Image(i) = e.kind { Some((e.id, i)) } else { None }).expect("an image")
+    s.ents()
+        .into_iter()
+        .find_map(|e| {
+            if let Kind::Image(i) = e.kind {
+                Some((e.id, i))
+            } else {
+                None
+            }
+        })
+        .expect("an image")
 }
 
 fn attach(s: &Sim, key: &str) {
-    s.cmd_args("IMAGEATTACH", Args::none().with("name", ArgVal::Str(key.into())));
+    s.cmd_args(
+        "IMAGEATTACH",
+        Args::none().with("name", ArgVal::Str(key.into())),
+    );
 }
 
 #[test]
@@ -34,7 +46,11 @@ fn imageattach_places_scales_and_rotates_the_picture() {
     attach(&s, &key);
     assert_eq!(s.prompt(), "Specify insertion point <0,0>:");
     s.click(10., 20.);
-    assert!(s.prompt().starts_with("Specify scale factor"), "{}", s.prompt());
+    assert!(
+        s.prompt().starts_with("Specify scale factor"),
+        "{}",
+        s.prompt()
+    );
     s.ty("0.5");
     assert!(s.prompt().starts_with("Specify rotation angle"));
     s.ty("90");
@@ -63,7 +79,11 @@ fn imageattach_without_a_file_asks_the_host() {
     let s = Sim::new();
     s.h.borrow_mut().ui.dialogs = true;
     s.cmd("IMAGEATTACH");
-    let asked = s.h.borrow_mut().take_events().into_iter().any(|e| matches!(e, Event::UiAction { name, .. } if name == "IMAGEATTACH"));
+    let asked =
+        s.h.borrow_mut()
+            .take_events()
+            .into_iter()
+            .any(|e| matches!(e, Event::UiAction { name, .. } if name == "IMAGEATTACH"));
     assert!(asked);
     let headless = Sim::new();
     headless.cmd("IMAGEATTACH");
@@ -77,7 +97,11 @@ fn imageclip_rectangle_is_aligned_with_the_picture_and_can_be_toggled() {
     s.click(0., 0.).ty("1").ty("0");
     // rotate the picture 90 degrees afterwards so that "aligned with the picture" differs from "aligned with the screen"
     let (id, _) = image_entity(&s);
-    s.doc_mut(|d| d.modify(id, |e| transform_entity(e, &mat::rotate(std::f64::consts::FRAC_PI_2, Pt::ZERO))));
+    s.doc_mut(|d| {
+        d.modify(id, |e| {
+            transform_entity(e, &mat::rotate(std::f64::consts::FRAC_PI_2, Pt::ZERO))
+        })
+    });
     // the picture now spans x in [-50, 0], y in [0, 100]
     s.cmd("IMAGECLIP").click(-25., 50.);
     assert!(s.prompt().starts_with("Enter image clipping option"));
@@ -85,9 +109,25 @@ fn imageclip_rectangle_is_aligned_with_the_picture_and_can_be_toggled() {
     s.click(-10., 10.).click(-30., 40.);
     let (_, i) = image_entity(&s);
     assert_eq!(i.clip.len(), 4);
-    let (xs, ys): (Vec<f64>, Vec<f64>) = (i.clip.iter().map(|q| q.x).collect(), i.clip.iter().map(|q| q.y).collect());
-    let ext = |v: &[f64]| (v.iter().cloned().fold(f64::MAX, f64::min), v.iter().cloned().fold(f64::MIN, f64::max));
-    assert_eq!((ext(&xs).0.round(), ext(&xs).1.round(), ext(&ys).0.round(), ext(&ys).1.round()), (-30.0, -10.0, 10.0, 40.0));
+    let (xs, ys): (Vec<f64>, Vec<f64>) = (
+        i.clip.iter().map(|q| q.x).collect(),
+        i.clip.iter().map(|q| q.y).collect(),
+    );
+    let ext = |v: &[f64]| {
+        (
+            v.iter().cloned().fold(f64::MAX, f64::min),
+            v.iter().cloned().fold(f64::MIN, f64::max),
+        )
+    };
+    assert_eq!(
+        (
+            ext(&xs).0.round(),
+            ext(&xs).1.round(),
+            ext(&ys).0.round(),
+            ext(&ys).1.round()
+        ),
+        (-30.0, -10.0, 10.0, 40.0)
+    );
     s.cmd("IMAGECLIP").click(-20., 20.).ty("OFF");
     assert!(image_entity(&s).1.clip_off);
     s.cmd("IMAGECLIP").click(-20., 20.).ty("ON");
@@ -115,12 +155,26 @@ fn imageadjust_sets_brightness_contrast_and_fade() {
     let (s, key) = with_picture();
     attach(&s, &key);
     s.click(0., 0.).ty("1").ty("0");
-    s.cmd("IMAGEADJUST").click(50., 25.).enter().ty("70").ty("30").ty("15");
+    s.cmd("IMAGEADJUST")
+        .click(50., 25.)
+        .enter()
+        .ty("70")
+        .ty("30")
+        .ty("15");
     let (_, i) = image_entity(&s);
     assert_eq!((i.brightness, i.contrast, i.fade), (70, 30, 15));
-    s.cmd("IMAGEADJUST").click(50., 25.).enter().ty("500").enter().enter();
+    s.cmd("IMAGEADJUST")
+        .click(50., 25.)
+        .enter()
+        .ty("500")
+        .enter()
+        .enter();
     let (_, i) = image_entity(&s);
-    assert_eq!((i.brightness, i.fade), (100, 15), "values are clamped; Enter keeps the current one");
+    assert_eq!(
+        (i.brightness, i.fade),
+        (100, 15),
+        "values are clamped; Enter keeps the current one"
+    );
 }
 
 #[test]
@@ -159,9 +213,17 @@ fn objects_move_copy_and_grip_like_any_entity() {
     attach(&s, &key);
     s.click(0., 0.).ty("1").ty("0");
     let (id, _) = image_entity(&s);
-    s.select_ids(&[id]).cmd("MOVE").click(0., 0.).click(30., 30.);
+    s.select_ids(&[id])
+        .cmd("MOVE")
+        .click(0., 0.)
+        .click(30., 30.);
     near(image_entity(&s).1.p.x, 30.0);
-    s.cmd("COPY").click(50., 55.).enter().click(0., 0.).click(200., 0.).enter();
+    s.cmd("COPY")
+        .click(50., 55.)
+        .enter()
+        .click(0., 0.)
+        .click(200., 0.)
+        .enter();
     assert_eq!(s.n(), 2);
     // a corner grip resizes about the opposite corner and keeps the proportions
     let e = s.doc(|d| d.by_id(id).unwrap().clone());
@@ -177,7 +239,22 @@ fn wblock_carries_the_pictures() {
     let (s, key) = with_picture();
     attach(&s, &key);
     s.click(0., 0.).ty("1").ty("0");
-    s.cmd("WBLOCK").click(50., 25.).enter().click(0., 0.).ty("pic");
-    let (_, dxf) = s.h.borrow_mut().take_events().into_iter().find_map(|e| if let Event::SaveFile { name, data, .. } = e { Some((name, String::from_utf8(data).unwrap())) } else { None }).expect("file");
+    s.cmd("WBLOCK")
+        .click(50., 25.)
+        .enter()
+        .click(0., 0.)
+        .ty("pic");
+    let (_, dxf) =
+        s.h.borrow_mut()
+            .take_events()
+            .into_iter()
+            .find_map(|e| {
+                if let Event::SaveFile { name, data, .. } = e {
+                    Some((name, String::from_utf8(data).unwrap()))
+                } else {
+                    None
+                }
+            })
+            .expect("file");
     assert!(dxf.contains("IMAGEDEF") && dxf.contains("plan.png"));
 }

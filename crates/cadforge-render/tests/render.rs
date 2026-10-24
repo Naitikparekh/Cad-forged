@@ -14,10 +14,24 @@ fn scene_renders_sample() {
     let mut view = View::new();
     view.w = 1000.0;
     view.h = 700.0;
-    let b = doc.model.entities.iter().fold(None, |a, e| cadforge_core::geom::Bounds::union_opt(a, cadforge_core::entities::bounds_of(e, &doc)));
+    let b = doc.model.entities.iter().fold(None, |a, e| {
+        cadforge_core::geom::Bounds::union_opt(a, cadforge_core::entities::bounds_of(e, &doc))
+    });
     view.fit(b, 0.06);
-    let ops = render_scene(&doc, &view, 1000.0, 700.0, Theme::DARK, Prefs::default(), &Highlight::default(), None);
-    let strokes = ops.iter().filter(|o| matches!(o, Op::Stroke { .. })).count();
+    let ops = render_scene(
+        &doc,
+        &view,
+        1000.0,
+        700.0,
+        Theme::DARK,
+        Prefs::default(),
+        &Highlight::default(),
+        None,
+    );
+    let strokes = ops
+        .iter()
+        .filter(|o| matches!(o, Op::Stroke { .. }))
+        .count();
     let texts = ops.iter().filter(|o| matches!(o, Op::Text { .. })).count();
     assert!(strokes > 20, "strokes {strokes}");
     assert!(texts >= 5, "texts {texts}");
@@ -94,18 +108,35 @@ fn pdf_is_well_formed() {
     let r = export_vector(&doc, &o, None).unwrap();
     // byte offsets are what the xref table records, so keep the data as bytes (the header has non-ASCII bytes)
     let d = &r.data;
-    let find = |needle: &str, from: usize| -> Option<usize> { d[from..].windows(needle.len()).position(|w| w == needle.as_bytes()).map(|i| i + from) };
+    let find = |needle: &str, from: usize| -> Option<usize> {
+        d[from..]
+            .windows(needle.len())
+            .position(|w| w == needle.as_bytes())
+            .map(|i| i + from)
+    };
     assert!(d.starts_with(b"%PDF-1.4"));
     assert!(d.ends_with(b"%%EOF\n"));
     let sx = find("startxref\n", 0).unwrap() + "startxref\n".len();
-    let xref: usize = std::str::from_utf8(&d[sx..(sx + 12).min(d.len())]).unwrap().lines().next().unwrap().parse().unwrap();
-    assert!(d[xref..].starts_with(b"xref"), "startxref points at the xref table");
+    let xref: usize = std::str::from_utf8(&d[sx..(sx + 12).min(d.len())])
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(
+        d[xref..].starts_with(b"xref"),
+        "startxref points at the xref table"
+    );
     let mut at = xref;
     let mut entries = 0;
     while let Some(i) = find(" 00000 n", at) {
         let off: usize = std::str::from_utf8(&d[i - 10..i]).unwrap().parse().unwrap();
         let head = std::str::from_utf8(&d[off..off + 8]).unwrap();
-        assert!(head.chars().next().unwrap().is_ascii_digit() && head.contains(" 0 obj"), "xref entry {head:?}");
+        assert!(
+            head.chars().next().unwrap().is_ascii_digit() && head.contains(" 0 obj"),
+            "xref entry {head:?}"
+        );
         entries += 1;
         at = i + 1;
     }
@@ -146,7 +177,11 @@ fn non_plot_layers_skipped_and_lineweights_follow_option() {
     let mut hidden = Layer::new("Hidden");
     hidden.plot = false;
     d.layers.push(hidden);
-    d.add(Entity::line(pt(0.0, 0.0), pt(100.0, 0.0)).on_layer("0").with_lw(50));
+    d.add(
+        Entity::line(pt(0.0, 0.0), pt(100.0, 0.0))
+            .on_layer("0")
+            .with_lw(50),
+    );
     d.add(Entity::line(pt(0.0, 10.0), pt(100.0, 10.0)).on_layer("Hidden"));
     let mut o = default_plot_options(&d);
     o.format = PlotFormat::Svg;

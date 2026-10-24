@@ -13,7 +13,12 @@ pub struct TextEditState {
 
 impl TextEditState {
     pub fn new(spec: TextEditSpec) -> TextEditState {
-        TextEditState { text: spec.initial.unwrap_or_default(), multi: spec.multi, prompt: spec.prompt, focused: false }
+        TextEditState {
+            text: spec.initial.unwrap_or_default(),
+            multi: spec.multi,
+            prompt: spec.prompt,
+            focused: false,
+        }
     }
 }
 
@@ -24,9 +29,18 @@ impl CadForgeApp {
             ui.label(RichText::new(&s.prompt).color(t.text2));
         }
         let r = if s.multi {
-            ui.add(egui::TextEdit::multiline(&mut s.text).desired_width(f32::INFINITY).desired_rows(6).font(egui::FontId::proportional(13.0)))
+            ui.add(
+                egui::TextEdit::multiline(&mut s.text)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(6)
+                    .font(egui::FontId::proportional(13.0)),
+            )
         } else {
-            ui.add(egui::TextEdit::singleline(&mut s.text).desired_width(f32::INFINITY).font(egui::FontId::proportional(13.0)))
+            ui.add(
+                egui::TextEdit::singleline(&mut s.text)
+                    .desired_width(f32::INFINITY)
+                    .font(egui::FontId::proportional(13.0)),
+            )
         };
         if !s.focused {
             r.request_focus();
@@ -36,8 +50,12 @@ impl CadForgeApp {
             return Out::Ok;
         }
         if s.multi {
-            self.note(ui, "Press Ctrl+Enter or OK to place the text. Use Enter for a new line.");
-            if r.has_focus() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter)) {
+            self.note(
+                ui,
+                "Press Ctrl+Enter or OK to place the text. Use Enter for a new line.",
+            );
+            if r.has_focus() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter))
+            {
                 return Out::Ok;
             }
         }

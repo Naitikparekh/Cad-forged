@@ -4,7 +4,13 @@ use super::value::*;
 /// A real as AutoLISP prints it: six significant digits, always with a decimal point or an exponent.
 pub fn fmt_real(x: f64) -> String {
     if !x.is_finite() {
-        return if x.is_nan() { "nan".into() } else if x > 0.0 { "inf".into() } else { "-inf".into() };
+        return if x.is_nan() {
+            "nan".into()
+        } else if x > 0.0 {
+            "inf".into()
+        } else {
+            "-inf".into()
+        };
     }
     if x == 0.0 {
         return "0.0".into();
@@ -14,14 +20,22 @@ pub fn fmt_real(x: f64) -> String {
         let s = format!("{:.5e}", x); // d.ddddde[-]x
         let (m, e) = s.split_once('e').unwrap_or((&s, "0"));
         let m = m.trim_end_matches('0');
-        let m = if m.ends_with('.') { format!("{m}0") } else { m.to_string() };
+        let m = if m.ends_with('.') {
+            format!("{m}0")
+        } else {
+            m.to_string()
+        };
         let e: i32 = e.parse().unwrap_or(0);
         return format!("{m}e{}{:03}", if e < 0 { '-' } else { '+' }, e.abs());
     }
     // six significant digits
     let digits = 6 - 1 - a.log10().floor() as i32;
     let s = format!("{:.*}", digits.clamp(0, 15) as usize, x);
-    let s = if s.contains('.') { s.trim_end_matches('0').to_string() } else { s };
+    let s = if s.contains('.') {
+        s.trim_end_matches('0').to_string()
+    } else {
+        s
+    };
     if s.ends_with('.') {
         format!("{s}0")
     } else if s.contains('.') {
@@ -63,7 +77,11 @@ fn show(v: &Value, quote: bool, out: &mut String) {
         Value::Sym(s) => out.push_str(s),
         Value::Ename(e) => out.push_str(&format!("<Entity name: {e:x}>")),
         Value::Sel(s) => out.push_str(&format!("<Selection set: {}>", s.borrow().len())),
-        Value::Fun(f) => out.push_str(&format!("#<SUBR @{:p} {}>", std::rc::Rc::as_ptr(f), f.name.as_deref().unwrap_or("LAMBDA"))),
+        Value::Fun(f) => out.push_str(&format!(
+            "#<SUBR @{:p} {}>",
+            std::rc::Rc::as_ptr(f),
+            f.name.as_deref().unwrap_or("LAMBDA")
+        )),
         Value::Cons(_) => {
             out.push('(');
             let mut cur = v.clone();
@@ -183,7 +201,8 @@ pub fn angtos(a: f64, mode: i64, prec: usize) -> String {
             let mut d = deg.trunc();
             let mut m = ((deg - d) * 60.0).trunc();
             let sec_val = ((deg - d) * 60.0 - m) * 60.0;
-            let mut sec = (sec_val * 10f64.powi(prec.saturating_sub(4) as i32)).round() / 10f64.powi(prec.saturating_sub(4) as i32);
+            let mut sec = (sec_val * 10f64.powi(prec.saturating_sub(4) as i32)).round()
+                / 10f64.powi(prec.saturating_sub(4) as i32);
             if sec >= 60.0 {
                 sec -= 60.0;
                 m += 1.0;
@@ -197,12 +216,22 @@ pub fn angtos(a: f64, mode: i64, prec: usize) -> String {
                 s.push_str(&format!("{}'", m as i64));
             }
             if prec >= 3 {
-                s.push_str(&format!("{}\"", if prec > 4 { format!("{:.*}", prec - 4, sec) } else { format!("{}", sec as i64) }));
+                s.push_str(&format!(
+                    "{}\"",
+                    if prec > 4 {
+                        format!("{:.*}", prec - 4, sec)
+                    } else {
+                        format!("{}", sec as i64)
+                    }
+                ));
             }
             s
         }
         2 => format!("{}g", group_decimals(deg * 400.0 / 360.0, prec)),
-        3 => format!("{}r", group_decimals(a.rem_euclid(std::f64::consts::TAU), prec)),
+        3 => format!(
+            "{}r",
+            group_decimals(a.rem_euclid(std::f64::consts::TAU), prec)
+        ),
         4 => {
             let (ns, ew, ang) = if deg <= 90.0 {
                 ("N", "E", 90.0 - deg)
@@ -242,7 +271,9 @@ pub fn distof(s: &str, mode: i64) -> Option<f64> {
         3 | 4 => {
             let neg = t.starts_with('-');
             let t = t.trim_start_matches('-');
-            let (feet, inch) = t.split_once('\'').map_or((0.0, t), |(f, r)| (f.parse().unwrap_or(0.0), r.trim_start_matches('-')));
+            let (feet, inch) = t.split_once('\'').map_or((0.0, t), |(f, r)| {
+                (f.parse().unwrap_or(0.0), r.trim_start_matches('-'))
+            });
             let inch = inch.trim_end_matches('"').trim();
             let v = parse_mixed(inch)?;
             Some((if neg { -1.0 } else { 1.0 }) * (feet * 12.0 + v))

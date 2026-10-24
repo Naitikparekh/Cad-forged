@@ -97,25 +97,64 @@ pub const LIGHT: Tokens = Tokens {
 pub fn install_fonts(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
     let add = |fonts: &mut FontDefinitions, name: &str, bytes: &'static [u8]| {
-        fonts.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
+        fonts
+            .font_data
+            .insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
     };
-    add(&mut fonts, "inter", include_bytes!("../assets/fonts/Inter-Regular.otf"));
-    add(&mut fonts, "inter-semibold", include_bytes!("../assets/fonts/Inter-SemiBold.otf"));
-    add(&mut fonts, "liberation", include_bytes!("../assets/fonts/LiberationSans-Regular.ttf"));
-    add(&mut fonts, "liberation-bold", include_bytes!("../assets/fonts/LiberationSans-Bold.ttf"));
-    add(&mut fonts, "dejavu", include_bytes!("../assets/fonts/DejaVuSans.ttf"));
+    add(
+        &mut fonts,
+        "inter",
+        include_bytes!("../assets/fonts/Inter-Regular.otf"),
+    );
+    add(
+        &mut fonts,
+        "inter-semibold",
+        include_bytes!("../assets/fonts/Inter-SemiBold.otf"),
+    );
+    add(
+        &mut fonts,
+        "liberation",
+        include_bytes!("../assets/fonts/LiberationSans-Regular.ttf"),
+    );
+    add(
+        &mut fonts,
+        "liberation-bold",
+        include_bytes!("../assets/fonts/LiberationSans-Bold.ttf"),
+    );
+    add(
+        &mut fonts,
+        "dejavu",
+        include_bytes!("../assets/fonts/DejaVuSans.ttf"),
+    );
     let prop = fonts.families.entry(FontFamily::Proportional).or_default();
     prop.insert(0, "inter".to_owned());
     prop.push("dejavu".to_owned());
-    fonts.families.insert(FontFamily::Name("bold".into()), vec!["inter-semibold".into(), "dejavu".into()]);
-    fonts.families.insert(FontFamily::Name("cad".into()), vec!["liberation".into(), "dejavu".into()]);
-    fonts.families.insert(FontFamily::Name("cadbold".into()), vec!["liberation-bold".into(), "dejavu".into()]);
-    fonts.families.entry(FontFamily::Monospace).or_default().push("dejavu".to_owned());
+    fonts.families.insert(
+        FontFamily::Name("bold".into()),
+        vec!["inter-semibold".into(), "dejavu".into()],
+    );
+    fonts.families.insert(
+        FontFamily::Name("cad".into()),
+        vec!["liberation".into(), "dejavu".into()],
+    );
+    fonts.families.insert(
+        FontFamily::Name("cadbold".into()),
+        vec!["liberation-bold".into(), "dejavu".into()],
+    );
+    fonts
+        .families
+        .entry(FontFamily::Monospace)
+        .or_default()
+        .push("dejavu".to_owned());
     ctx.set_fonts(fonts);
 }
 
 pub fn apply(ctx: &egui::Context, t: &Tokens) {
-    let mut v = if t.dark { egui::Visuals::dark() } else { egui::Visuals::light() };
+    let mut v = if t.dark {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
     v.panel_fill = t.chrome;
     v.window_fill = t.ribbon;
     v.extreme_bg_color = t.input;
@@ -126,7 +165,13 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     v.selection.stroke = egui::Stroke::new(1.0, t.accent2);
     v.hyperlink_color = t.accent2;
     let r = egui::CornerRadius::same(2);
-    for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+    for w in [
+        &mut v.widgets.noninteractive,
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
+    ] {
         w.corner_radius = r;
     }
     v.widgets.noninteractive.bg_fill = t.chrome2;
@@ -146,16 +191,34 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     v.widgets.active.fg_stroke = egui::Stroke::new(1.0, t.text);
     v.widgets.open.bg_fill = t.accent_soft;
     v.widgets.open.weak_bg_fill = t.accent_soft;
-    ctx.set_visuals_of(if t.dark { egui::Theme::Dark } else { egui::Theme::Light }, v);
-    ctx.set_theme(if t.dark { egui::Theme::Dark } else { egui::Theme::Light });
+    ctx.set_visuals_of(
+        if t.dark {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        },
+        v,
+    );
+    ctx.set_theme(if t.dark {
+        egui::Theme::Dark
+    } else {
+        egui::Theme::Light
+    });
     ctx.all_styles_mut(|s| {
         s.spacing.item_spacing = egui::vec2(6.0, 4.0);
         s.spacing.button_padding = egui::vec2(8.0, 3.0);
         s.spacing.interact_size.y = 20.0;
-        s.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(12.5));
-        s.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(12.5));
-        s.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(11.0));
-        s.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::monospace(12.5));
-        s.text_styles.insert(egui::TextStyle::Heading, egui::FontId::new(15.0, FontFamily::Name("bold".into())));
+        s.text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(12.5));
+        s.text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(12.5));
+        s.text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(11.0));
+        s.text_styles
+            .insert(egui::TextStyle::Monospace, egui::FontId::monospace(12.5));
+        s.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(15.0, FontFamily::Name("bold".into())),
+        );
     });
 }

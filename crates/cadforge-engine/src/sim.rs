@@ -61,7 +61,14 @@ impl Sim {
     }
 
     pub fn shift_click(&self, x: f64, y: f64) -> &Sim {
-        self.click_mods(x, y, Mods { shift: true, ..Mods::default() })
+        self.click_mods(
+            x,
+            y,
+            Mods {
+                shift: true,
+                ..Mods::default()
+            },
+        )
     }
 
     pub fn mv(&self, x: f64, y: f64) -> &Sim {
@@ -147,24 +154,50 @@ impl Sim {
 
     /// The prompt message without options/default.
     pub fn message(&self) -> String {
-        self.h.borrow().pending().map(|p| p.spec.message.clone()).unwrap_or_default()
+        self.h
+            .borrow()
+            .pending()
+            .map(|p| p.spec.message.clone())
+            .unwrap_or_default()
     }
 
     pub fn select_ids(&self, ids: &[u64]) -> &Sim {
-        self.h.borrow_mut().editor_mut().expect("editor").select(ids.iter().copied());
+        self.h
+            .borrow_mut()
+            .editor_mut()
+            .expect("editor")
+            .select(ids.iter().copied());
         self
     }
 
     pub fn selected(&self) -> Vec<u64> {
-        self.h.borrow().editor().expect("editor").sel.iter().copied().collect()
+        self.h
+            .borrow()
+            .editor()
+            .expect("editor")
+            .sel
+            .iter()
+            .copied()
+            .collect()
     }
 
     pub fn log_text(&self) -> String {
-        self.h.borrow().history.iter().map(|l| l.text.clone()).collect::<Vec<_>>().join("\n")
+        self.h
+            .borrow()
+            .history
+            .iter()
+            .map(|l| l.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn last_log(&self) -> String {
-        self.h.borrow().history.last().map(|l| l.text.clone()).unwrap_or_default()
+        self.h
+            .borrow()
+            .history
+            .last()
+            .map(|l| l.text.clone())
+            .unwrap_or_default()
     }
 
     pub fn undo(&self) {
@@ -186,7 +219,9 @@ impl Sim {
     /// Name of the innermost running command.
     pub fn running(&self) -> Option<String> {
         let a = self.h.borrow();
-        a.top_task().and_then(|t| a.rt.tasks.get(&t)).map(|t| t.def.name.clone())
+        a.top_task()
+            .and_then(|t| a.rt.tasks.get(&t))
+            .map(|t| t.def.name.clone())
     }
 
     pub fn with_view<R>(&self, f: impl FnOnce(&mut crate::view::View) -> R) -> R {
@@ -202,7 +237,11 @@ impl Sim {
     }
 
     pub fn set_visual_style(&self, name: &str) {
-        self.h.borrow_mut().editor_mut().expect("editor").visual_style = name.into();
+        self.h
+            .borrow_mut()
+            .editor_mut()
+            .expect("editor")
+            .visual_style = name.into();
     }
 
     pub fn solids(&self) -> Vec<cadforge_core::solid::Solid> {
@@ -210,11 +249,17 @@ impl Sim {
     }
 
     pub fn history_has(&self, needle: &str) -> bool {
-        self.h.borrow().history.iter().any(|l| l.text.contains(needle))
+        self.h
+            .borrow()
+            .history
+            .iter()
+            .any(|l| l.text.contains(needle))
     }
 
     pub fn solid_at(&self, x: f64, y: f64) -> Option<u64> {
-        self.h.borrow().solid_at(pt(x, y), &crate::runtime::Mods::default())
+        self.h
+            .borrow()
+            .solid_at(pt(x, y), &crate::runtime::Mods::default())
     }
 
     pub fn set_sel(&self, ids: &[u64]) {
@@ -222,7 +267,12 @@ impl Sim {
     }
 
     pub fn selected_solid_count(&self) -> usize {
-        self.h.borrow().editor().expect("editor").selected_solids().len()
+        self.h
+            .borrow()
+            .editor()
+            .expect("editor")
+            .selected_solids()
+            .len()
     }
 
     pub fn view_scale(&self) -> f64 {

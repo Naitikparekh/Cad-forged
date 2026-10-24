@@ -81,7 +81,12 @@ fn ucs_save_restore_prev_delete_and_object() {
 #[test]
 fn three_point_ucs_and_ortho_follow_the_ucs_axes() {
     let s = Sim::new();
-    s.cmd("UCS").ty("New").ty("3point").ty("0,0").ty("10,10").ty("-10,10");
+    s.cmd("UCS")
+        .ty("New")
+        .ty("3point")
+        .ty("0,0")
+        .ty("10,10")
+        .ty("-10,10");
     near(s.doc(|d| d.ucs.angle), std::f64::consts::FRAC_PI_4);
     s.setvar("ORTHOMODE", 1.0);
     s.cmd("LINE").ty("0,0");

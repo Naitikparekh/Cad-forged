@@ -8,7 +8,13 @@ use cadforge_engine::runtime::Args;
 use cadforge_engine::sim::Sim;
 
 fn file(s: &Sim) -> Option<(String, Vec<u8>)> {
-    s.h.borrow_mut().take_events().into_iter().find_map(|e| if let Event::SaveFile { name, data, mime } = e { (mime == "application/dxf").then_some((name, data)) } else { None })
+    s.h.borrow_mut().take_events().into_iter().find_map(|e| {
+        if let Event::SaveFile { name, data, mime } = e {
+            (mime == "application/dxf").then_some((name, data))
+        } else {
+            None
+        }
+    })
 }
 
 fn drawing() -> Sim {
@@ -19,7 +25,19 @@ fn drawing() -> Sim {
 }
 
 fn lines_of(bytes: &[u8]) -> Vec<(Pt, Pt)> {
-    read_dxf_bytes(bytes, "x").unwrap().model.entities.iter().filter_map(|e| if let Kind::Line { a, b } = &e.kind { Some((*a, *b)) } else { None }).collect()
+    read_dxf_bytes(bytes, "x")
+        .unwrap()
+        .model
+        .entities
+        .iter()
+        .filter_map(|e| {
+            if let Kind::Line { a, b } = &e.kind {
+                Some((*a, *b))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[test]
@@ -48,7 +66,10 @@ fn the_default_is_a_text_dxf() {
 #[test]
 fn the_menu_passes_the_format_as_an_argument() {
     let s = drawing();
-    s.cmd_args("-DXFOUT", Args::none().with("format", ArgVal::Str("Binary".into())));
+    s.cmd_args(
+        "-DXFOUT",
+        Args::none().with("format", ArgVal::Str("Binary".into())),
+    );
     let (_, data) = file(&s).expect("file");
     assert!(is_binary_dxf(&data));
     assert!(!s.busy(), "no prompt when the format is given");

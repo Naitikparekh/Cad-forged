@@ -26,32 +26,64 @@ struct Source {
 
 impl Source {
     fn of(d: &Drawing) -> Source {
-        Source { base: d.base, entities: d.model.entities.clone(), blocks: d.blocks.clone(), layers: d.layers.clone() }
+        Source {
+            base: d.base,
+            entities: d.model.entities.clone(),
+            blocks: d.blocks.clone(),
+            layers: d.layers.clone(),
+        }
     }
 }
 
 /// Drawing name without directory or extension, which is how an xref block is named.
 fn stem(path: &str) -> String {
     let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
-    let cut = [".cadforge.json", ".json", ".dxf", ".dwg"].iter().find_map(|e| file.len().checked_sub(e.len()).filter(|&i| file.get(i..).is_some_and(|t| t.eq_ignore_ascii_case(e))));
+    let cut = [".cadforge.json", ".json", ".dxf", ".dwg"]
+        .iter()
+        .find_map(|e| {
+            file.len()
+                .checked_sub(e.len())
+                .filter(|&i| file.get(i..).is_some_and(|t| t.eq_ignore_ascii_case(e)))
+        });
     file[..cut.unwrap_or(file.len())].to_string()
 }
 
 /// Open drawings other than the active one (and block editors): editor id and file name or drawing name.
 fn open_drawings(c: &Ctx) -> Vec<(u64, String)> {
     c.app(|a| {
-        let editors = a.editors.iter().enumerate().filter(|(i, e)| Some(*i) != a.active && !e.doc.name.starts_with("*BlockEdit:"));
-        editors.map(|(_, e)| (e.id, e.doc.file_name.clone().unwrap_or_else(|| e.doc.name.clone()))).collect()
+        let editors = a
+            .editors
+            .iter()
+            .enumerate()
+            .filter(|(i, e)| Some(*i) != a.active && !e.doc.name.starts_with("*BlockEdit:"));
+        editors
+            .map(|(_, e)| {
+                (
+                    e.id,
+                    e.doc
+                        .file_name
+                        .clone()
+                        .unwrap_or_else(|| e.doc.name.clone()),
+                )
+            })
+            .collect()
     })
 }
 
 fn find_open(c: &Ctx, path: &str) -> Option<(u64, String)> {
     let want = stem(path);
-    open_drawings(c).into_iter().find(|(_, p)| stem(p).eq_ignore_ascii_case(&want))
+    open_drawings(c)
+        .into_iter()
+        .find(|(_, p)| stem(p).eq_ignore_ascii_case(&want))
 }
 
 fn source_of(c: &Ctx, id: u64) -> Option<Source> {
-    c.app(|a| a.editors.iter().find(|e| e.id == id).map(|e| Source::of(&e.doc)))
+    c.app(|a| {
+        a.editors
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| Source::of(&e.doc))
+    })
 }
 
 /// Blocks (transitively) referenced by the model-space entities of the source.
@@ -100,11 +132,25 @@ fn load(d: &mut Drawing, name: &str, info: XrefInfo, src: &Source) {
             .collect()
     };
     let main = dependent(&src.entities);
-    let nested: Vec<(String, Pt, Vec<Entity>)> = used_blocks(src).into_iter().map(|n| (format!("{pre}{n}"), src.blocks[&n].base, dependent(&src.blocks[&n].entities))).collect();
+    let nested: Vec<(String, Pt, Vec<Entity>)> = used_blocks(src)
+        .into_iter()
+        .map(|n| {
+            (
+                format!("{pre}{n}"),
+                src.blocks[&n].base,
+                dependent(&src.blocks[&n].entities),
+            )
+        })
+        .collect();
     d.change(|d| {
         for l in layers {
             if d.layer(&format!("{pre}{l}")).is_none() {
-                let mut layer = src.layers.iter().find(|x| x.name.eq_ignore_ascii_case(&l)).cloned().unwrap_or_else(|| Layer::new(&l));
+                let mut layer = src
+                    .layers
+                    .iter()
+                    .find(|x| x.name.eq_ignore_ascii_case(&l))
+                    .cloned()
+                    .unwrap_or_else(|| Layer::new(&l));
                 layer.name = format!("{pre}{l}");
                 d.layers.push(layer);
             }
@@ -154,9 +200,29 @@ fn unload(d: &mut Drawing, name: &str) {
 /// Turn an xref into an ordinary block, renaming its dependent blocks and layers to `NAME$n$symbol`.
 fn bind(d: &mut Drawing, name: &str) {
     let pre = format!("{name}|");
-    let fresh = |rest: &str, taken: &dyn Fn(&str) -> bool| (0..).map(|i| format!("{name}${i}${rest}")).find(|n| !taken(n)).expect("endless range");
-    let blocks: Vec<(String, String)> = d.blocks.keys().filter_map(|n| n.strip_prefix(&pre).map(|r| (n.clone(), fresh(r, &|x| d.blocks.contains_key(x))))).collect();
-    let layers: Vec<(String, String)> = d.layers.iter().filter_map(|l| l.name.strip_prefix(&pre).map(|r| (l.name.clone(), fresh(r, &|x| d.layer(x).is_some())))).collect();
+    let fresh = |rest: &str, taken: &dyn Fn(&str) -> bool| {
+        (0..)
+            .map(|i| format!("{name}${i}${rest}"))
+            .find(|n| !taken(n))
+            .expect("endless range")
+    };
+    let blocks: Vec<(String, String)> = d
+        .blocks
+        .keys()
+        .filter_map(|n| {
+            n.strip_prefix(&pre)
+                .map(|r| (n.clone(), fresh(r, &|x| d.blocks.contains_key(x))))
+        })
+        .collect();
+    let layers: Vec<(String, String)> = d
+        .layers
+        .iter()
+        .filter_map(|l| {
+            l.name
+                .strip_prefix(&pre)
+                .map(|r| (l.name.clone(), fresh(r, &|x| d.layer(x).is_some())))
+        })
+        .collect();
     d.change(|d| {
         for (old, new) in &blocks {
             if let Some(mut b) = d.blocks.shift_remove(old) {
@@ -187,16 +253,43 @@ fn bind(d: &mut Drawing, name: &str) {
 
 /// Names of the xref blocks matching a comma-separated list of wildcard patterns.
 fn xref_names(d: &Drawing, spec: &str) -> Vec<String> {
-    let pats: Vec<&str> = spec.split(',').map(str::trim).filter(|p| !p.is_empty()).collect();
-    d.blocks.values().filter(|b| b.xref.is_some() && pats.iter().any(|p| wildcard_match(p, &b.name))).map(|b| b.name.clone()).collect()
+    let pats: Vec<&str> = spec
+        .split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    d.blocks
+        .values()
+        .filter(|b| b.xref.is_some() && pats.iter().any(|p| wildcard_match(p, &b.name)))
+        .map(|b| b.name.clone())
+        .collect()
 }
 
 fn list_xrefs(c: &Ctx) {
     let rows: Vec<String> = c.doc(|d| {
-        let xrefs = d.blocks.values().filter_map(|b| b.xref.as_ref().map(|x| (&b.name, x)));
-        xrefs.map(|(n, x)| format!("{n:<16} {:<9} {:<8} {}", if x.loaded { "Loaded" } else { "Unloaded" }, if x.overlay { "Overlay" } else { "Attach" }, x.path)).collect()
+        let xrefs = d
+            .blocks
+            .values()
+            .filter_map(|b| b.xref.as_ref().map(|x| (&b.name, x)));
+        xrefs
+            .map(|(n, x)| {
+                format!(
+                    "{n:<16} {:<9} {:<8} {}",
+                    if x.loaded { "Loaded" } else { "Unloaded" },
+                    if x.overlay { "Overlay" } else { "Attach" },
+                    x.path
+                )
+            })
+            .collect()
     });
-    c.log(&if rows.is_empty() { "No xrefs found.".to_string() } else { format!("Xref Name        Status    Type     Path\n{}", rows.join("\n")) });
+    c.log(&if rows.is_empty() {
+        "No xrefs found.".to_string()
+    } else {
+        format!(
+            "Xref Name        Status    Type     Path\n{}",
+            rows.join("\n")
+        )
+    });
 }
 
 /// Ask for xref names (wildcards and commas allowed; `?` lists them); empty when none match.
@@ -217,12 +310,27 @@ async fn ask_xrefs(c: &Ctx, message: &str) -> CmdResult<Vec<String>> {
 
 /// Reload an xref from its open source drawing; reports and returns false when that drawing is not open.
 fn reload(c: &Ctx, name: &str) -> bool {
-    let Some(info) = c.doc(|d| d.blocks.get(name).and_then(|b| b.xref.clone())) else { return false };
-    let Some(src) = find_open(c, &info.path).and_then(|(id, _)| source_of(c, id)) else {
-        c.log_error(&format!("Cannot reload \"{name}\": drawing \"{}\" is not open.", info.path));
+    let Some(info) = c.doc(|d| d.blocks.get(name).and_then(|b| b.xref.clone())) else {
         return false;
     };
-    c.doc_mut(|d| load(d, name, XrefInfo { loaded: true, ..info }, &src));
+    let Some(src) = find_open(c, &info.path).and_then(|(id, _)| source_of(c, id)) else {
+        c.log_error(&format!(
+            "Cannot reload \"{name}\": drawing \"{}\" is not open.",
+            info.path
+        ));
+        return false;
+    };
+    c.doc_mut(|d| {
+        load(
+            d,
+            name,
+            XrefInfo {
+                loaded: true,
+                ..info
+            },
+            &src,
+        )
+    });
     true
 }
 
@@ -234,28 +342,54 @@ async fn attach(c: &Ctx, overlay: Option<bool>) -> CmdResult<()> {
         return Ok(());
     };
     let (id, path) = loop {
-        let t = c.string(ps_def("Enter name of drawing to attach or [?]", &first)).await?.text;
+        let t = c
+            .string(ps_def("Enter name of drawing to attach or [?]", &first))
+            .await?
+            .text;
         match t.as_str() {
             "" => return Ok(()),
-            "?" => c.log(&open.iter().map(|(_, p)| stem(p)).collect::<Vec<_>>().join("\n")),
-            _ => match find_open(c, &t) {
-                Some(found) => break found,
-                None => {
-                    c.log_error(&format!("Drawing \"{t}\" is not open. Open it first; xrefs attach open drawings."));
-                    return Ok(());
+            "?" => c.log(
+                &open
+                    .iter()
+                    .map(|(_, p)| stem(p))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+            _ => {
+                match find_open(c, &t) {
+                    Some(found) => break found,
+                    None => {
+                        c.log_error(&format!("Drawing \"{t}\" is not open. Open it first; xrefs attach open drawings."));
+                        return Ok(());
+                    }
                 }
-            },
+            }
         }
     };
     let overlay = match overlay {
         Some(o) => o,
-        None => c.keyword(ps("Enter reference type").options(&["Attach", "Overlay"]).default_str("Attach")).await?.kw() == Some("Overlay"),
+        None => {
+            c.keyword(
+                ps("Enter reference type")
+                    .options(&["Attach", "Overlay"])
+                    .default_str("Attach"),
+            )
+            .await?
+            .kw()
+                == Some("Overlay")
+        }
     };
     let name = stem(&path);
-    let existing = c.doc(|d| d.blocks.get(&name).map(|b| b.xref.as_ref().map(|x| x.loaded)));
+    let existing = c.doc(|d| {
+        d.blocks
+            .get(&name)
+            .map(|b| b.xref.as_ref().map(|x| x.loaded))
+    });
     match existing {
         Some(None) => {
-            c.log_error(&format!("A block named \"{name}\" already exists and is not an external reference."));
+            c.log_error(&format!(
+                "A block named \"{name}\" already exists and is not an external reference."
+            ));
             return Ok(());
         }
         Some(Some(true)) => {}
@@ -263,13 +397,33 @@ async fn attach(c: &Ctx, overlay: Option<bool>) -> CmdResult<()> {
             reload(c, &name);
         }
         None => {
-            let Some(src) = source_of(c, id) else { return Ok(()) };
-            c.doc_mut(|d| load(d, &name, XrefInfo { path, overlay, loaded: true }, &src));
+            let Some(src) = source_of(c, id) else {
+                return Ok(());
+            };
+            c.doc_mut(|d| {
+                load(
+                    d,
+                    &name,
+                    XrefInfo {
+                        path,
+                        overlay,
+                        loaded: true,
+                    },
+                    &src,
+                )
+            });
         }
     }
-    c.sub_forced("INSERT", Args::none().with("name", ArgVal::Str(name.clone()))).await;
+    c.sub_forced(
+        "INSERT",
+        Args::none().with("name", ArgVal::Str(name.clone())),
+    )
+    .await;
     // cancelling the insertion point leaves nothing attached
-    let placed = c.doc(|d| d.all_entities().any(|e| matches!(&e.kind, Kind::Insert(i) if i.name == name)));
+    let placed = c.doc(|d| {
+        d.all_entities()
+            .any(|e| matches!(&e.kind, Kind::Insert(i) if i.name == name))
+    });
     if existing.is_none() && !placed {
         c.doc_mut(|d| detach(d, &name));
     }
@@ -277,8 +431,16 @@ async fn attach(c: &Ctx, overlay: Option<bool>) -> CmdResult<()> {
 }
 
 async fn xref(c: Ctx, _a: Args) -> CmdResult<()> {
-    let options = ["?", "Bind", "Detach", "Path", "Unload", "Reload", "Overlay", "Attach"];
-    let k = c.keyword(ps("Enter an option").options(&options).default_str("Attach")).await?;
+    let options = [
+        "?", "Bind", "Detach", "Path", "Unload", "Reload", "Overlay", "Attach",
+    ];
+    let k = c
+        .keyword(
+            ps("Enter an option")
+                .options(&options)
+                .default_str("Attach"),
+        )
+        .await?;
     match k.kw() {
         Some("?") => list_xrefs(&c),
         Some("Bind") => {
@@ -341,7 +503,28 @@ async fn xbind(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(db("XREF", run(xref)).aliases(&["XR", "-XR", "-XREF"]).title("External References").icon("insert").desc("Attaches, detaches, binds and manages external references."));
-    r.define(db("XATTACH", run(|c, _a| async move { attach(&c, None).await })).aliases(&["XA"]).title("Attach Xref").icon("insert").desc("Inserts a drawing as an external reference."));
-    r.define(db("XBIND", run(xbind)).aliases(&["XB", "-XB", "-XBIND"]).title("Bind Xref").icon("insert").desc("Binds external references to the current drawing."));
+    r.define(
+        db("XREF", run(xref))
+            .aliases(&["XR", "-XR", "-XREF"])
+            .title("External References")
+            .icon("insert")
+            .desc("Attaches, detaches, binds and manages external references."),
+    );
+    r.define(
+        db(
+            "XATTACH",
+            run(|c, _a| async move { attach(&c, None).await }),
+        )
+        .aliases(&["XA"])
+        .title("Attach Xref")
+        .icon("insert")
+        .desc("Inserts a drawing as an external reference."),
+    );
+    r.define(
+        db("XBIND", run(xbind))
+            .aliases(&["XB", "-XB", "-XBIND"])
+            .title("Bind Xref")
+            .icon("insert")
+            .desc("Binds external references to the current drawing."),
+    );
 }

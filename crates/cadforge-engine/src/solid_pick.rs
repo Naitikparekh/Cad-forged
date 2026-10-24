@@ -22,13 +22,27 @@ fn bary(p: Pt, a: &Projected, b: &Projected, c: &Projected) -> Option<[f64; 3]> 
 fn seg_hit(p: Pt, a: &Projected, b: &Projected) -> (f64, f64) {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     let l = dx * dx + dy * dy;
-    let t = if l < 1e-12 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / l).clamp(0.0, 1.0) };
-    ((p.x - a.x - dx * t).hypot(p.y - a.y - dy * t), a.depth + (b.depth - a.depth) * t)
+    let t = if l < 1e-12 {
+        0.0
+    } else {
+        (((p.x - a.x) * dx + (p.y - a.y) * dy) / l).clamp(0.0, 1.0)
+    };
+    (
+        (p.x - a.x - dx * t).hypot(p.y - a.y - dy * t),
+        a.depth + (b.depth - a.depth) * t,
+    )
 }
 
 /// Nearest solid under screen point `sp`. With `interior` false (wireframe) only edges within `aperture` pixels
 /// count. Returns (solid id, depth).
-pub fn pick_solid(solids: &[Solid], view: &View, sp: Pt, aperture: f64, interior: bool, is_visible: &dyn Fn(&Solid) -> bool) -> Option<(u64, f64)> {
+pub fn pick_solid(
+    solids: &[Solid],
+    view: &View,
+    sp: Pt,
+    aperture: f64,
+    interior: bool,
+    is_visible: &dyn Fn(&Solid) -> bool,
+) -> Option<(u64, f64)> {
     let mut best: Option<(u64, f64)> = None;
     for s in solids {
         if !is_visible(s) {
@@ -40,7 +54,9 @@ pub fn pick_solid(solids: &[Solid], view: &View, sp: Pt, aperture: f64, interior
             let mut depth: Option<f64> = None;
             let w = if interior { bary(sp, a, b, c) } else { None };
             match w {
-                Some(w) if w[0] >= -1e-9 && w[1] >= -1e-9 && w[2] >= -1e-9 => depth = Some(w[0] * a.depth + w[1] * b.depth + w[2] * c.depth),
+                Some(w) if w[0] >= -1e-9 && w[1] >= -1e-9 && w[2] >= -1e-9 => {
+                    depth = Some(w[0] * a.depth + w[1] * b.depth + w[2] * c.depth)
+                }
                 _ => {
                     for (p, q) in [(a, b), (b, c), (c, a)] {
                         let (d, dep) = seg_hit(sp, p, q);
@@ -62,12 +78,21 @@ pub fn pick_solid(solids: &[Solid], view: &View, sp: Pt, aperture: f64, interior
 
 /// Screen-space bounding box of a solid.
 pub fn solid_screen_bounds(solid: &Solid, view: &View) -> Bounds {
-    let p: Vec<Pt> = project(solid, view).iter().map(|q| Pt { x: q.x, y: q.y }).collect();
+    let p: Vec<Pt> = project(solid, view)
+        .iter()
+        .map(|q| Pt { x: q.x, y: q.y })
+        .collect();
     Bounds::of_points(&p)
 }
 
 /// Solids inside (window) or touching (crossing) a screen rectangle.
-pub fn solids_in_screen_rect(solids: &[Solid], view: &View, rect: &Bounds, crossing: bool, is_visible: &dyn Fn(&Solid) -> bool) -> Vec<u64> {
+pub fn solids_in_screen_rect(
+    solids: &[Solid],
+    view: &View,
+    rect: &Bounds,
+    crossing: bool,
+    is_visible: &dyn Fn(&Solid) -> bool,
+) -> Vec<u64> {
     solids
         .iter()
         .filter(|s| {

@@ -38,9 +38,18 @@ pub struct Path {
 /// Editable path of a line/arc/circle/pline, or `None` for entities that cannot be edited parametrically.
 pub fn path_of(e: &Entity, doc: &Drawing) -> Option<Path> {
     match &e.kind {
-        Kind::Line { .. } | Kind::Arc { .. } => Some(Path { segs: segs_of(e, doc).to_vec(), closed: false }),
-        Kind::Circle { .. } => Some(Path { segs: segs_of(e, doc).to_vec(), closed: true }),
-        Kind::Pline { closed, .. } => Some(Path { segs: segs_of(e, doc).to_vec(), closed: *closed }),
+        Kind::Line { .. } | Kind::Arc { .. } => Some(Path {
+            segs: segs_of(e, doc).to_vec(),
+            closed: false,
+        }),
+        Kind::Circle { .. } => Some(Path {
+            segs: segs_of(e, doc).to_vec(),
+            closed: true,
+        }),
+        Kind::Pline { closed, .. } => Some(Path {
+            segs: segs_of(e, doc).to_vec(),
+            closed: *closed,
+        }),
         _ => None,
     }
 }
@@ -54,11 +63,19 @@ pub struct PathHit {
 }
 
 pub fn path_nearest(path: &Path, p: Pt) -> PathHit {
-    let mut best = PathHit { u: 0.0, pt: p, d: f64::INFINITY };
+    let mut best = PathHit {
+        u: 0.0,
+        pt: p,
+        d: f64::INFINITY,
+    };
     for (i, s) in path.segs.iter().enumerate() {
         let (q, t, d) = s.nearest(p);
         if d < best.d {
-            best = PathHit { u: i as f64 + t, pt: q, d };
+            best = PathHit {
+                u: i as f64 + t,
+                pt: q,
+                d,
+            };
         }
     }
     best
@@ -91,7 +108,11 @@ pub fn path_slice(path: &Path, u0: f64, u1: f64) -> Vec<Seg> {
         return slice_linear(&path.segs, u0, u1);
     }
     if !path.closed {
-        return slice_linear(&path.segs, u1, u0).iter().rev().map(|s| s.reverse()).collect();
+        return slice_linear(&path.segs, u1, u0)
+            .iter()
+            .rev()
+            .map(|s| s.reverse())
+            .collect();
     }
     let mut v = slice_linear(&path.segs, u0, n);
     v.extend(slice_linear(&path.segs, 0.0, u1));
@@ -102,7 +123,17 @@ pub fn path_slice(path: &Path, u0: f64, u1: f64) -> Vec<Seg> {
 pub fn merge_segs(segs: &[Seg]) -> Vec<Seg> {
     let mut out: Vec<Seg> = vec![];
     for s in segs {
-        if let (Some(Seg::A { c: lc, r: lr, a0: la0, sw: lsw, full }), Seg::A { c, r, sw, .. }) = (out.last().copied(), s) {
+        if let (
+            Some(Seg::A {
+                c: lc,
+                r: lr,
+                a0: la0,
+                sw: lsw,
+                full,
+            }),
+            Seg::A { c, r, sw, .. },
+        ) = (out.last().copied(), s)
+        {
             let last = out.last().copied().expect("last exists");
             if same_pt(lc, *c, 1e-9)
                 && (lr - r).abs() < 1e-9
@@ -110,7 +141,13 @@ pub fn merge_segs(segs: &[Seg]) -> Vec<Seg> {
                 && same_pt(last.end(), s.start(), 1e-7)
                 && lsw.abs() + sw.abs() <= TAU + 1e-9
             {
-                *out.last_mut().expect("last exists") = Seg::A { c: lc, r: lr, a0: la0, sw: lsw + sw, full };
+                *out.last_mut().expect("last exists") = Seg::A {
+                    c: lc,
+                    r: lr,
+                    a0: la0,
+                    sw: lsw + sw,
+                    full,
+                };
                 continue;
             }
         }
@@ -138,15 +175,24 @@ pub fn entity_from_segs(segs: &[Seg], template: &Entity, closed: bool) -> Option
 
 /// Is an entity of a type that TRIM/EXTEND/BREAK/JOIN can edit as a path?
 pub fn is_path_entity(e: &Entity) -> bool {
-    matches!(e.kind, Kind::Line { .. } | Kind::Arc { .. } | Kind::Circle { .. } | Kind::Pline { .. })
+    matches!(
+        e.kind,
+        Kind::Line { .. } | Kind::Arc { .. } | Kind::Circle { .. } | Kind::Pline { .. }
+    )
 }
 
 /// Cutting/boundary geometry of any entity.
 pub fn edge_segs(e: &Entity, doc: &Drawing) -> Vec<Seg> {
     match e.kind {
-        Kind::Line { .. } | Kind::Arc { .. } | Kind::Circle { .. } | Kind::Pline { .. } | Kind::Ellipse(_) | Kind::Spline { .. } | Kind::Xline { .. } | Kind::Ray { .. } | Kind::Leader { .. } => {
-            segs_of(e, doc).to_vec()
-        }
+        Kind::Line { .. }
+        | Kind::Arc { .. }
+        | Kind::Circle { .. }
+        | Kind::Pline { .. }
+        | Kind::Ellipse(_)
+        | Kind::Spline { .. }
+        | Kind::Xline { .. }
+        | Kind::Ray { .. }
+        | Kind::Leader { .. } => segs_of(e, doc).to_vec(),
         _ => vec![],
     }
 }

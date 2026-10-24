@@ -32,7 +32,11 @@ async fn block(c: Ctx, args: Args) -> CmdResult<()> {
     }
     if name == "?" {
         let names: Vec<String> = c.doc(|d| d.blocks.keys().cloned().collect());
-        c.log(&if names.is_empty() { "No blocks defined.".to_string() } else { names.join("\n") });
+        c.log(&if names.is_empty() {
+            "No blocks defined.".to_string()
+        } else {
+            names.join("\n")
+        });
         return Ok(());
     }
     if !valid_name(&name) {
@@ -40,7 +44,15 @@ async fn block(c: Ctx, args: Args) -> CmdResult<()> {
         return Ok(());
     }
     if c.doc(|d| d.blocks.contains_key(&name)) {
-        let y = c.keyword(ps(&format!("Block \"{name}\" already exists. Redefine it? [Yes/No]")).options(&["Yes", "No"]).default_str("No")).await?;
+        let y = c
+            .keyword(
+                ps(&format!(
+                    "Block \"{name}\" already exists. Redefine it? [Yes/No]"
+                ))
+                .options(&["Yes", "No"])
+                .default_str("No"),
+            )
+            .await?;
         if y.kw() != Some("Yes") {
             return Ok(());
         }
@@ -81,7 +93,10 @@ async fn block(c: Ctx, args: Args) -> CmdResult<()> {
         }
     });
     c.clear_sel();
-    c.log(&format!("Block \"{name}\" defined with {n} object{}.", if n == 1 { "" } else { "s" }));
+    c.log(&format!(
+        "Block \"{name}\" defined with {n} object{}.",
+        if n == 1 { "" } else { "s" }
+    ));
     Ok(())
 }
 
@@ -90,10 +105,24 @@ async fn insert(c: Ctx, args: Args) -> CmdResult<()> {
     let names: Vec<String> = c.doc(|d| d.blocks.keys().cloned().collect());
     let mut name = args.str("name").map(str::to_string);
     if name.is_none() {
-        match c.dialog(DialogReq::Insert { names: names.clone() }).await? {
+        match c
+            .dialog(DialogReq::Insert {
+                names: names.clone(),
+            })
+            .await?
+        {
             Some(DialogReply::Text(t)) => name = Some(t),
             Some(_) => return Ok(()),
-            None => name = Some(c.string(match names.first() { Some(n) => ps("Enter block name or [?]").default_str(n), None => ps("Enter block name or [?]") }).await?.text),
+            None => {
+                name = Some(
+                    c.string(match names.first() {
+                        Some(n) => ps("Enter block name or [?]").default_str(n),
+                        None => ps("Enter block name or [?]"),
+                    })
+                    .await?
+                    .text,
+                )
+            }
         }
     }
     let name = name.unwrap_or_default();
@@ -101,14 +130,26 @@ async fn insert(c: Ctx, args: Args) -> CmdResult<()> {
         return Ok(());
     }
     if name == "?" {
-        c.log(&if names.is_empty() { "No blocks defined.".to_string() } else { names.join("\n") });
+        c.log(&if names.is_empty() {
+            "No blocks defined.".to_string()
+        } else {
+            names.join("\n")
+        });
         return Ok(());
     }
-    let Some(key) = names.iter().find(|n| n.to_lowercase() == name.to_lowercase()).cloned() else {
+    let Some(key) = names
+        .iter()
+        .find(|n| n.to_lowercase() == name.to_lowercase())
+        .cloned()
+    else {
         c.log_error(&format!("Block \"{name}\" not found."));
         return Ok(());
     };
-    let (mut sx, mut sy, mut rot) = (args.num("scale").unwrap_or(mem_scale), args.num("scale").unwrap_or(mem_scale), args.num("rotation").unwrap_or(mem_rot));
+    let (mut sx, mut sy, mut rot) = (
+        args.num("scale").unwrap_or(mem_scale),
+        args.num("scale").unwrap_or(mem_scale),
+        args.num("rotation").unwrap_or(mem_rot),
+    );
     loop {
         let (k2, s1, s2, r1) = (key.clone(), sx, sy, rot);
         let make = move |p: Pt| -> Entity {
@@ -121,10 +162,22 @@ async fn insert(c: Ctx, args: Args) -> CmdResult<()> {
             e
         };
         let m2 = make.clone();
-        let r = c.point(ps("Specify insertion point").options(&["Basepoint", "Scale", "X", "Y", "Rotate"]).preview(move |_, p| vec![pv(m2(p))])).await?;
+        let r = c
+            .point(
+                ps("Specify insertion point")
+                    .options(&["Basepoint", "Scale", "X", "Y", "Rotate"])
+                    .preview(move |_, p| vec![pv(m2(p))]),
+            )
+            .await?;
         match r.kw() {
             Some("Scale") => {
-                let s = c.number(ps("Specify scale factor for XYZ axes").default_num(sx).nonzero()).await?;
+                let s = c
+                    .number(
+                        ps("Specify scale factor for XYZ axes")
+                            .default_num(sx)
+                            .nonzero(),
+                    )
+                    .await?;
                 if let Some(v) = s.value().filter(|v| *v != 0.0) {
                     sx = v;
                     sy = v;
@@ -132,21 +185,27 @@ async fn insert(c: Ctx, args: Args) -> CmdResult<()> {
                 continue;
             }
             Some("X") => {
-                let s = c.number(ps("Specify X scale factor").default_num(sx).nonzero()).await?;
+                let s = c
+                    .number(ps("Specify X scale factor").default_num(sx).nonzero())
+                    .await?;
                 if let Some(v) = s.value().filter(|v| *v != 0.0) {
                     sx = v;
                 }
                 continue;
             }
             Some("Y") => {
-                let s = c.number(ps("Specify Y scale factor").default_num(sy).nonzero()).await?;
+                let s = c
+                    .number(ps("Specify Y scale factor").default_num(sy).nonzero())
+                    .await?;
                 if let Some(v) = s.value().filter(|v| *v != 0.0) {
                     sy = v;
                 }
                 continue;
             }
             Some("Rotate") => {
-                let s = c.angle(ps("Specify rotation angle").default_num(rot)).await?;
+                let s = c
+                    .angle(ps("Specify rotation angle").default_num(rot))
+                    .await?;
                 if let Some(v) = s.value() {
                     rot = v;
                 }
@@ -175,10 +234,19 @@ async fn wblock(c: Ctx, _a: Args) -> CmdResult<()> {
     if sel.ents.is_empty() {
         return Ok(());
     }
-    let Some(base) = c.point(ps("Specify insertion base point")).await?.pt() else { return Ok(()) };
+    let Some(base) = c.point(ps("Specify insertion base point")).await?.pt() else {
+        return Ok(());
+    };
     let shifted = transformed_clones(&c.entities(&sel.ents), &mat::translate(-base.x, -base.y));
-    let typed = c.string(ps("Enter file name").default_str("Block")).await?.text;
-    let name = typed.trim().trim_end_matches(".dxf").trim_end_matches(".DXF").to_string();
+    let typed = c
+        .string(ps("Enter file name").default_str("Block"))
+        .await?
+        .text;
+    let name = typed
+        .trim()
+        .trim_end_matches(".dxf")
+        .trim_end_matches(".DXF")
+        .to_string();
     if name.is_empty() {
         return Ok(());
     }
@@ -211,7 +279,17 @@ async fn wblock(c: Ctx, _a: Args) -> CmdResult<()> {
             out.add(e);
         }
         // pictures used by the objects or by the blocks they insert
-        let pics: Vec<String> = out.all_entities().chain(out.blocks.values().flat_map(|b| b.entities.iter())).filter_map(|e| if let Kind::Image(i) = &e.kind { Some(i.name.clone()) } else { None }).collect();
+        let pics: Vec<String> = out
+            .all_entities()
+            .chain(out.blocks.values().flat_map(|b| b.entities.iter()))
+            .filter_map(|e| {
+                if let Kind::Image(i) = &e.kind {
+                    Some(i.name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
         for n in pics {
             if let Some(def) = d.images.get(&n) {
                 out.images.insert(n, def.clone());
@@ -221,8 +299,19 @@ async fn wblock(c: Ctx, _a: Args) -> CmdResult<()> {
     });
     let text = cadforge_core::io::write_dxf(&out);
     c.app(|a| {
-        a.emit(Event::SaveFile { name: format!("{name}.dxf"), data: text.into_bytes(), mime: "application/dxf".into() });
-        a.log(&format!("Wrote {} object{} to {name}.dxf.", shifted.len(), if shifted.len() == 1 { "" } else { "s" }), "info");
+        a.emit(Event::SaveFile {
+            name: format!("{name}.dxf"),
+            data: text.into_bytes(),
+            mime: "application/dxf".into(),
+        });
+        a.log(
+            &format!(
+                "Wrote {} object{} to {name}.dxf.",
+                shifted.len(),
+                if shifted.len() == 1 { "" } else { "s" }
+            ),
+            "info",
+        );
     });
     Ok(())
 }
@@ -283,8 +372,18 @@ async fn purge(c: Ctx, _a: Args) -> CmdResult<()> {
         for l in &d.layouts {
             walk(&l.entities, d, &mut used);
         }
-        let blocks = d.blocks.keys().filter(|n| !used.contains(*n)).cloned().collect();
-        let layers = d.layers.iter().filter(|l| l.name != "0" && l.name != d.cur.layer && !d.layer_usage(&l.name)).map(|l| l.name.clone()).collect();
+        let blocks = d
+            .blocks
+            .keys()
+            .filter(|n| !used.contains(*n))
+            .cloned()
+            .collect();
+        let layers = d
+            .layers
+            .iter()
+            .filter(|l| l.name != "0" && l.name != d.cur.layer && !d.layer_usage(&l.name))
+            .map(|l| l.name.clone())
+            .collect();
         (blocks, layers)
     });
     if unused_blocks.is_empty() && unused_layers.is_empty() {
@@ -305,12 +404,21 @@ async fn purge(c: Ctx, _a: Args) -> CmdResult<()> {
     for n in &unused_layers {
         c.log(&format!("Deleting layer \"{n}\"."));
     }
-    c.log(&format!("{} items purged.", unused_blocks.len() + unused_layers.len()));
+    c.log(&format!(
+        "{} items purged.",
+        unused_blocks.len() + unused_layers.len()
+    ));
     Ok(())
 }
 
 async fn rename(c: Ctx, _a: Args) -> CmdResult<()> {
-    let k = c.keyword(ps("Enter object type to rename [Block/LAyer/LType/Style]").options(&["Block", "LAyer"]).default_str("LAyer")).await?;
+    let k = c
+        .keyword(
+            ps("Enter object type to rename [Block/LAyer/LType/Style]")
+                .options(&["Block", "LAyer"])
+                .default_str("LAyer"),
+        )
+        .await?;
     let is_block = k.kw() == Some("Block");
     let what = if is_block { "block" } else { "layer" };
     let old = c.string(ps(&format!("Enter old {what} name"))).await?.text;
@@ -350,11 +458,53 @@ async fn rename(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(db("BLOCK", run(block)).aliases(&["B"]).title("Create Block").icon("block").desc("Creates a block definition from selected objects."));
-    r.define(db("INSERT", run(insert)).aliases(&["I", "-INSERT"]).title("Insert Block").icon("insert").desc("Inserts a block or drawing into the current drawing."));
-    r.define(db("WBLOCK", run(wblock)).aliases(&["W"]).title("Write Block").icon("wblock").desc("Writes objects or a block to a new drawing file."));
-    r.define(db("GROUP", run(group)).aliases(&["G"]).title("Group").icon("group").desc("Creates and manages saved sets of objects called groups."));
-    r.define(db("UNGROUP", run(ungroup)).aliases(&["UG"]).title("Ungroup").icon("ungroup").desc("Dissolves a group."));
-    r.define(db("PURGE", run(purge)).aliases(&["PU"]).title("Purge").icon("purge").desc("Removes unused items, such as block definitions and layers, from the drawing."));
-    r.define(db("-RENAME", run(rename)).aliases(&["REN", "RENAME"]).title("Rename").icon("rename").desc("Changes the names assigned to items such as layers and blocks."));
+    r.define(
+        db("BLOCK", run(block))
+            .aliases(&["B"])
+            .title("Create Block")
+            .icon("block")
+            .desc("Creates a block definition from selected objects."),
+    );
+    r.define(
+        db("INSERT", run(insert))
+            .aliases(&["I", "-INSERT"])
+            .title("Insert Block")
+            .icon("insert")
+            .desc("Inserts a block or drawing into the current drawing."),
+    );
+    r.define(
+        db("WBLOCK", run(wblock))
+            .aliases(&["W"])
+            .title("Write Block")
+            .icon("wblock")
+            .desc("Writes objects or a block to a new drawing file."),
+    );
+    r.define(
+        db("GROUP", run(group))
+            .aliases(&["G"])
+            .title("Group")
+            .icon("group")
+            .desc("Creates and manages saved sets of objects called groups."),
+    );
+    r.define(
+        db("UNGROUP", run(ungroup))
+            .aliases(&["UG"])
+            .title("Ungroup")
+            .icon("ungroup")
+            .desc("Dissolves a group."),
+    );
+    r.define(
+        db("PURGE", run(purge))
+            .aliases(&["PU"])
+            .title("Purge")
+            .icon("purge")
+            .desc("Removes unused items, such as block definitions and layers, from the drawing."),
+    );
+    r.define(
+        db("-RENAME", run(rename))
+            .aliases(&["REN", "RENAME"])
+            .title("Rename")
+            .icon("rename")
+            .desc("Changes the names assigned to items such as layers and blocks."),
+    );
 }

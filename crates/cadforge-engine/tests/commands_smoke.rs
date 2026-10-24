@@ -16,7 +16,12 @@ fn types(s: &Sim) -> Vec<&'static str> {
 }
 
 fn square(s: &Sim) -> Vec<u64> {
-    vec![s.add(Entity::line(p(0., 0.), p(10., 0.))), s.add(Entity::line(p(10., 0.), p(10., 10.))), s.add(Entity::line(p(10., 10.), p(0., 10.))), s.add(Entity::line(p(0., 10.), p(0., 0.)))]
+    vec![
+        s.add(Entity::line(p(0., 0.), p(10., 0.))),
+        s.add(Entity::line(p(10., 0.), p(10., 10.))),
+        s.add(Entity::line(p(10., 10.), p(0., 10.))),
+        s.add(Entity::line(p(0., 10.), p(0., 0.))),
+    ]
 }
 
 #[test]
@@ -24,7 +29,11 @@ fn boundary_traces_a_closed_polyline_around_the_picked_point() {
     let s = Sim::new();
     square(&s);
     s.cmd("BOUNDARY").click(5., 5.).enter();
-    let plines: Vec<Entity> = s.ents().into_iter().filter(|e| matches!(e.kind, Kind::Pline { .. })).collect();
+    let plines: Vec<Entity> = s
+        .ents()
+        .into_iter()
+        .filter(|e| matches!(e.kind, Kind::Pline { .. }))
+        .collect();
     assert_eq!(plines.len(), 1, "{}", s.log_text());
     assert!(matches!(&plines[0].kind, Kind::Pline { closed: true, v } if v.len() == 4));
 }
@@ -42,14 +51,34 @@ fn divide_and_measure_place_points_along_an_object() {
     let s = Sim::new();
     s.add(Entity::line(p(0., 0.), p(12., 0.)));
     s.cmd("DIVIDE").click(6., 0.).ty("4");
-    let pts: Vec<f64> = s.ents().iter().filter_map(|e| if let Kind::Point { p } = &e.kind { Some(p.x) } else { None }).collect();
+    let pts: Vec<f64> = s
+        .ents()
+        .iter()
+        .filter_map(|e| {
+            if let Kind::Point { p } = &e.kind {
+                Some(p.x)
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(pts.len(), 3, "{}", s.log_text());
     near(pts[0], 3.0);
     near(pts[2], 9.0);
     let m = Sim::new();
     m.add(Entity::line(p(0., 0.), p(10., 0.)));
     m.cmd("MEASURE").click(5., 0.).ty("3");
-    let marks: Vec<f64> = m.ents().iter().filter_map(|e| if let Kind::Point { p } = &e.kind { Some(p.x) } else { None }).collect();
+    let marks: Vec<f64> = m
+        .ents()
+        .iter()
+        .filter_map(|e| {
+            if let Kind::Point { p } = &e.kind {
+                Some(p.x)
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(marks.len(), 3);
     near(marks[1], 6.0);
 }
@@ -57,11 +86,23 @@ fn divide_and_measure_place_points_along_an_object() {
 #[test]
 fn explode_breaks_polylines_and_blocks_into_their_parts() {
     let s = Sim::new();
-    let id = s.add(Entity::pline_pts(&[p(0., 0.), p(10., 0.), p(10., 10.), p(0., 10.)], true));
+    let id = s.add(Entity::pline_pts(
+        &[p(0., 0.), p(10., 0.), p(10., 10.), p(0., 10.)],
+        true,
+    ));
     s.set_sel(&[id]);
     s.cmd("EXPLODE");
     assert_eq!(types(&s), vec!["line", "line", "line", "line"]);
-    s.doc_mut(|d| d.define_block("B", p(0., 0.), vec![Entity::circle(p(0., 0.), 1.), Entity::line(p(0., 0.), p(5., 0.))]));
+    s.doc_mut(|d| {
+        d.define_block(
+            "B",
+            p(0., 0.),
+            vec![
+                Entity::circle(p(0., 0.), 1.),
+                Entity::line(p(0., 0.), p(5., 0.)),
+            ],
+        )
+    });
     let ins = s.add(Entity::insert("B", p(50., 50.)));
     s.set_sel(&[ins]);
     s.cmd("EXPLODE");
@@ -75,7 +116,9 @@ fn fillet_joins_two_lines_with_and_without_a_radius() {
     s.add(Entity::line(p(10., 5.), p(10., 20.)));
     s.cmd("FILLET").click(8., 0.).click(10., 12.);
     // radius 0: the lines are trimmed / extended to meet at the corner
-    let Kind::Line { b, .. } = s.ent(0).kind else { panic!() };
+    let Kind::Line { b, .. } = s.ent(0).kind else {
+        panic!()
+    };
     near(b.x, 10.0);
     near(b.y, 0.0);
     let t = Sim::new();
@@ -83,7 +126,13 @@ fn fillet_joins_two_lines_with_and_without_a_radius() {
     t.add(Entity::line(p(0., 0.), p(10., 0.)));
     t.add(Entity::line(p(10., 0.), p(10., 10.)));
     t.cmd("FILLET").click(8., 0.).click(10., 8.);
-    assert!(t.ents().iter().any(|e| matches!(e.kind, Kind::Arc { r, .. } if (r - 2.0).abs() < 1e-9)), "{}", t.log_text());
+    assert!(
+        t.ents()
+            .iter()
+            .any(|e| matches!(e.kind, Kind::Arc { r, .. } if (r - 2.0).abs() < 1e-9)),
+        "{}",
+        t.log_text()
+    );
 }
 
 #[test]
@@ -95,7 +144,10 @@ fn join_merges_collinear_lines_and_chains_into_a_polyline() {
     s.cmd("JOIN");
     assert_eq!(s.n(), 1, "{}", s.log_text());
     let t = Sim::new();
-    let ids = [t.add(Entity::line(p(0., 0.), p(5., 0.))), t.add(Entity::line(p(5., 0.), p(5., 5.)))];
+    let ids = [
+        t.add(Entity::line(p(0., 0.), p(5., 0.))),
+        t.add(Entity::line(p(5., 0.), p(5., 5.))),
+    ];
     t.set_sel(&ids);
     t.cmd("JOIN");
     assert_eq!(types(&t), vec!["pline"]);
@@ -106,18 +158,29 @@ fn lengthen_offset_and_stretch_change_geometry() {
     let s = Sim::new();
     let id = s.add(Entity::line(p(0., 0.), p(10., 0.)));
     s.cmd("LENGTHEN").ty("DElta").ty("5").click(9., 0.).enter();
-    let Kind::Line { b, .. } = s.ent(0).kind else { panic!() };
+    let Kind::Line { b, .. } = s.ent(0).kind else {
+        panic!()
+    };
     near(b.x, 15.0);
     let o = Sim::new();
     o.add(Entity::line(p(0., 0.), p(10., 0.)));
     o.cmd("OFFSET").ty("3").click(5., 0.).click(5., 10.);
     assert_eq!(o.n(), 2);
-    let Kind::Line { a, .. } = o.ent(1).kind else { panic!() };
+    let Kind::Line { a, .. } = o.ent(1).kind else {
+        panic!()
+    };
     near(a.y, 3.0);
     let t = Sim::new();
     t.add(Entity::line(p(0., 0.), p(10., 0.)));
-    t.cmd("STRETCH").click(12., 5.).click(7., -5.).enter().click(0., 0.).click(0., 4.);
-    let Kind::Line { a, b } = t.ent(0).kind else { panic!() };
+    t.cmd("STRETCH")
+        .click(12., 5.)
+        .click(7., -5.)
+        .enter()
+        .click(0., 0.)
+        .click(0., 4.);
+    let Kind::Line { a, b } = t.ent(0).kind else {
+        panic!()
+    };
     assert_eq!((a, b), (p(0., 0.), p(10., 4.)), "{}", t.log_text());
     let _ = id;
 }
@@ -166,7 +229,12 @@ fn ray_and_array_create_geometry() {
     let a = Sim::new();
     let id = a.add(Entity::circle(p(0., 0.), 1.));
     a.set_sel(&[id]);
-    a.cmd("ARRAY").ty("Rectangular").ty("2").ty("3").ty("10").ty("10");
+    a.cmd("ARRAY")
+        .ty("Rectangular")
+        .ty("2")
+        .ty("3")
+        .ty("10")
+        .ty("10");
     assert_eq!(a.n(), 6, "{}", a.log_text());
 }
 
@@ -186,7 +254,10 @@ fn id_and_measuregeom_report_values() {
     let s = Sim::new();
     s.cmd("ID").click(3., 4.);
     assert!(s.history_has("X = 3"), "{}", s.log_text());
-    s.cmd("MEASUREGEOM").ty("Distance").click(0., 0.).click(3., 4.);
+    s.cmd("MEASUREGEOM")
+        .ty("Distance")
+        .click(0., 0.)
+        .click(3., 4.);
     assert!(s.history_has("5"), "{}", s.log_text());
 }
 
@@ -210,10 +281,20 @@ fn text_and_leaders_can_be_created_and_edited() {
     let s = Sim::new();
     let id = s.add(Entity::text(p(0., 0.), 2.5, "OLD"));
     s.cmd("TEXTEDIT").click(1., 1.).ty("NEW");
-    assert!(matches!(&s.doc(|d| d.by_id(id).unwrap().kind.clone()), Kind::Text(t) if t.s == "NEW"), "{}", s.log_text());
+    assert!(
+        matches!(&s.doc(|d| d.by_id(id).unwrap().kind.clone()), Kind::Text(t) if t.s == "NEW"),
+        "{}",
+        s.log_text()
+    );
     let m = Sim::new();
     m.cmd("MLEADER").click(10., 10.).click(20., 20.).ty("NOTE");
-    assert!(m.ents().iter().any(|e| matches!(e.kind, Kind::Leader { .. })), "{}", m.log_text());
+    assert!(
+        m.ents()
+            .iter()
+            .any(|e| matches!(e.kind, Kind::Leader { .. })),
+        "{}",
+        m.log_text()
+    );
 }
 
 #[test]
@@ -222,17 +303,38 @@ fn dimension_commands_make_dimensions() {
     s.add(Entity::line(p(0., 0.), p(30., 0.)));
     s.add(Entity::line(p(0., 0.), p(0., 30.)));
     s.add(Entity::circle(p(60., 20.), 8.));
-    s.cmd("DIMALIGNED").click(0., 0.).click(30., 0.).click(15., -8.);
+    s.cmd("DIMALIGNED")
+        .click(0., 0.)
+        .click(30., 0.)
+        .click(15., -8.);
     s.cmd("DIMRADIUS").click(68., 20.).click(75., 30.);
     s.cmd("DIMDIAMETER").click(60., 28.).click(70., 35.);
-    s.cmd("DIMANGULAR").click(15., 0.).click(0., 15.).click(10., 10.);
-    let dims: Vec<Entity> = s.ents().into_iter().filter(|e| matches!(e.kind, Kind::Dim(_))).collect();
+    s.cmd("DIMANGULAR")
+        .click(15., 0.)
+        .click(0., 15.)
+        .click(10., 10.);
+    let dims: Vec<Entity> = s
+        .ents()
+        .into_iter()
+        .filter(|e| matches!(e.kind, Kind::Dim(_)))
+        .collect();
     assert_eq!(dims.len(), 4, "{}", s.log_text());
     // a baseline and a continued dimension build on the first one
-    s.cmd("DIMLINEAR").click(0., 0.).click(10., 0.).click(5., -12.);
+    s.cmd("DIMLINEAR")
+        .click(0., 0.)
+        .click(10., 0.)
+        .click(5., -12.);
     s.cmd("DIMCONTINUE").click(20., 0.).enter().enter();
     s.cmd("DIMBASELINE").click(30., 0.).enter().enter();
-    assert!(s.ents().iter().filter(|e| matches!(e.kind, Kind::Dim(_))).count() >= 6, "{}", s.log_text());
+    assert!(
+        s.ents()
+            .iter()
+            .filter(|e| matches!(e.kind, Kind::Dim(_)))
+            .count()
+            >= 6,
+        "{}",
+        s.log_text()
+    );
     s.cmd("DIM").click(0., 0.);
     s.esc();
 }
@@ -245,7 +347,11 @@ fn purge_removes_unused_layers_and_blocks() {
         d.define_block("LOOSE", p(0., 0.), vec![Entity::line(p(0., 0.), p(1., 1.))]);
     });
     s.cmd("PURGE").ty("All").ty("*").ty("No");
-    assert!(s.doc(|d| d.layer("Unused").is_none() && !d.blocks.contains_key("LOOSE")), "{}", s.log_text());
+    assert!(
+        s.doc(|d| d.layer("Unused").is_none() && !d.blocks.contains_key("LOOSE")),
+        "{}",
+        s.log_text()
+    );
 }
 
 #[test]
@@ -257,7 +363,8 @@ fn layer_commands_change_layer_state() {
     });
     let a = s.add(Entity::line(p(0., 0.), p(1., 0.)).on_layer("A"));
     s.add(Entity::line(p(0., 5.), p(1., 5.)).on_layer("B"));
-    let state = |s: &Sim, n: &str| s.doc(|d| d.layer(n).map(|l| (l.on, l.frozen, l.locked)).unwrap());
+    let state =
+        |s: &Sim, n: &str| s.doc(|d| d.layer(n).map(|l| (l.on, l.frozen, l.locked)).unwrap());
     s.cmd("LAYOFF").click(0.5, 0.);
     assert!(!state(&s, "A").0, "{}", s.log_text());
     s.cmd("LAYON");
@@ -275,18 +382,32 @@ fn layer_commands_change_layer_state() {
     // LAYCUR moves the selection onto the current layer, LAYMCH onto the layer of a destination object
     s.set_sel(&[a]);
     s.cmd("LAYCUR");
-    assert_eq!(s.doc(|d| d.by_id(a).unwrap().layer.clone()), "B", "{}", s.log_text());
+    assert_eq!(
+        s.doc(|d| d.by_id(a).unwrap().layer.clone()),
+        "B",
+        "{}",
+        s.log_text()
+    );
     s.doc_mut(|d| d.by_id_mut(a).unwrap().layer = "0".into());
     s.set_sel(&[a]);
     s.cmd("LAYMCH").click(0.5, 5.);
-    assert_eq!(s.doc(|d| d.by_id(a).unwrap().layer.clone()), "B", "{}", s.log_text());
+    assert_eq!(
+        s.doc(|d| d.by_id(a).unwrap().layer.clone()),
+        "B",
+        "{}",
+        s.log_text()
+    );
     // LAYDEL removes the layer and what is on it
     s.doc_mut(|d| {
         d.add_layer("Gone").unwrap();
     });
     let g = s.add(Entity::line(p(0., 9.), p(1., 9.)).on_layer("Gone"));
     s.cmd("LAYDEL").click(0.5, 9.).ty("Yes");
-    assert!(s.doc(|d| d.layer("Gone").is_none() && d.by_id(g).is_none()), "{}", s.log_text());
+    assert!(
+        s.doc(|d| d.layer("Gone").is_none() && d.by_id(g).is_none()),
+        "{}",
+        s.log_text()
+    );
 }
 
 #[test]

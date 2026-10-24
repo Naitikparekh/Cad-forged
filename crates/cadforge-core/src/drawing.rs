@@ -85,11 +85,28 @@ impl Paper {
             "ANSI D" => (863.6, 558.8),
             _ => (297.0, 210.0),
         };
-        let name = if matches!(name, "A0" | "A1" | "A2" | "A3" | "Letter" | "Legal" | "Tabloid" | "ANSI C" | "ANSI D") { name } else { "A4" };
-        if landscape {
-            Paper { w: a, h: b, name: name.into(), landscape }
+        let name = if matches!(
+            name,
+            "A0" | "A1" | "A2" | "A3" | "Letter" | "Legal" | "Tabloid" | "ANSI C" | "ANSI D"
+        ) {
+            name
         } else {
-            Paper { w: b, h: a, name: name.into(), landscape }
+            "A4"
+        };
+        if landscape {
+            Paper {
+                w: a,
+                h: b,
+                name: name.into(),
+                landscape,
+            }
+        } else {
+            Paper {
+                w: b,
+                h: a,
+                name: name.into(),
+                landscape,
+            }
         }
     }
 }
@@ -110,10 +127,24 @@ pub struct NamedView {
 
 impl NamedView {
     pub fn from_state(s: &ViewState) -> NamedView {
-        NamedView { cx: s.cx, cy: s.cy, scale: s.scale, cz: Some(s.cz), yaw: Some(s.yaw), pitch: Some(s.pitch) }
+        NamedView {
+            cx: s.cx,
+            cy: s.cy,
+            scale: s.scale,
+            cz: Some(s.cz),
+            yaw: Some(s.yaw),
+            pitch: Some(s.pitch),
+        }
     }
     pub fn to_state(&self) -> ViewState {
-        ViewState { cx: self.cx, cy: self.cy, cz: self.cz.unwrap_or(0.0), scale: self.scale, yaw: self.yaw.unwrap_or(0.0), pitch: self.pitch.unwrap_or(std::f64::consts::FRAC_PI_2) }
+        ViewState {
+            cx: self.cx,
+            cy: self.cy,
+            cz: self.cz.unwrap_or(0.0),
+            scale: self.scale,
+            yaw: self.yaw.unwrap_or(0.0),
+            pitch: self.pitch.unwrap_or(std::f64::consts::FRAC_PI_2),
+        }
     }
 }
 
@@ -149,7 +180,12 @@ pub struct Current {
 
 impl Default for Current {
     fn default() -> Current {
-        Current { layer: "0".into(), color: None, ltype: None, lw: None }
+        Current {
+            layer: "0".into(),
+            color: None,
+            ltype: None,
+            lw: None,
+        }
     }
 }
 
@@ -258,6 +294,9 @@ pub struct Drawing {
     pub view: Option<ViewState>,
     pub dirty: bool,
     pub file_name: Option<String>,
+    /// The DWG version a save as DWG writes: AutoCAD 2000 (`Ver::R2000`) when the drawing came from a 2000 or older
+    /// file or Save As chose it, otherwise AutoCAD 2004 (`None`).
+    pub dwg_version: Option<crate::io::dwg::Ver>,
     /// Entities skipped / paper-space objects ignored by the last DXF import.
     pub skipped: std::collections::BTreeMap<String, usize>,
     pub paper_skipped: usize,
@@ -309,6 +348,7 @@ impl Clone for Drawing {
         d.view = self.view;
         d.dirty = self.dirty;
         d.file_name = self.file_name.clone();
+        d.dwg_version = self.dwg_version;
         d
     }
 }
@@ -336,6 +376,7 @@ impl Drawing {
             view: None,
             dirty: false,
             file_name: None,
+            dwg_version: None,
             skipped: Default::default(),
             paper_skipped: 0,
             layer_iso: None,
@@ -405,13 +446,22 @@ impl Drawing {
         if ents.len() < crate::spatial::MIN_ENTITIES {
             return (0..ents.len()).collect();
         }
-        let key = if space != MODEL && self.layouts.iter().any(|l| l.name == space) { space } else { MODEL };
+        let key = if space != MODEL && self.layouts.iter().any(|l| l.name == space) {
+            space
+        } else {
+            MODEL
+        };
         let cached = self.caches.borrow().spatial.get(key).cloned();
         let idx = match cached {
             Some(i) if i.len() == ents.len() => i,
             _ => {
-                let i = Rc::new(crate::spatial::SpatialIndex::build(ents.len(), |k| crate::entities::bounds_of(&ents[k], self)));
-                self.caches.borrow_mut().spatial.insert(key.to_string(), i.clone());
+                let i = Rc::new(crate::spatial::SpatialIndex::build(ents.len(), |k| {
+                    crate::entities::bounds_of(&ents[k], self)
+                }));
+                self.caches
+                    .borrow_mut()
+                    .spatial
+                    .insert(key.to_string(), i.clone());
                 i
             }
         };
@@ -437,7 +487,9 @@ impl Drawing {
     }
 
     pub fn layout(&self, name: &str) -> Option<&Layout> {
-        self.layouts.iter().find(|l| l.name.eq_ignore_ascii_case(name))
+        self.layouts
+            .iter()
+            .find(|l| l.name.eq_ignore_ascii_case(name))
     }
 
     /// Layout names in tab order.
@@ -461,19 +513,32 @@ impl Drawing {
 
     /// A viewport covering the sheet inside a 10 mm margin.
     pub fn default_viewport(paper: &Paper) -> Entity {
-        Entity::new(Kind::Viewport(crate::entities::ViewportData::new(crate::geom::pt(paper.w / 2.0, paper.h / 2.0), paper.w - 20.0, paper.h - 20.0)))
+        Entity::new(Kind::Viewport(crate::entities::ViewportData::new(
+            crate::geom::pt(paper.w / 2.0, paper.h / 2.0),
+            paper.w - 20.0,
+            paper.h - 20.0,
+        )))
     }
 
     /// Add an empty layout (A4 landscape, or the paper of the last layout) with one viewport.
     pub fn add_layout(&mut self, name: &str) -> Result<(), String> {
         let name = name.trim().to_string();
         self.check_layout_name(&name)?;
-        let paper = self.layouts.last().map(|l| l.paper.clone()).unwrap_or_else(|| Paper::named("A4", true));
+        let paper = self
+            .layouts
+            .last()
+            .map(|l| l.paper.clone())
+            .unwrap_or_else(|| Paper::named("A4", true));
         self.change(|d| {
             let mut vp = Drawing::default_viewport(&paper);
             vp.id = d.next_id;
             d.next_id += 1;
-            d.layouts.push(Layout { name, paper, entities: vec![vp], fresh: false });
+            d.layouts.push(Layout {
+                name,
+                paper,
+                entities: vec![vp],
+                fresh: false,
+            });
         });
         Ok(())
     }
@@ -488,7 +553,11 @@ impl Drawing {
         }
         let was_active = self.space.eq_ignore_ascii_case(old);
         self.change(|d| {
-            if let Some(l) = d.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(old)) {
+            if let Some(l) = d
+                .layouts
+                .iter_mut()
+                .find(|l| l.name.eq_ignore_ascii_case(old))
+            {
                 l.name = new.clone();
             }
         });
@@ -499,7 +568,11 @@ impl Drawing {
     }
 
     pub fn delete_layout(&mut self, name: &str) -> Result<(), String> {
-        let Some(i) = self.layouts.iter().position(|l| l.name.eq_ignore_ascii_case(name)) else {
+        let Some(i) = self
+            .layouts
+            .iter()
+            .position(|l| l.name.eq_ignore_ascii_case(name))
+        else {
             return Err(format!("There is no layout named \"{name}\"."));
         };
         let was_active = self.space == self.layouts[i].name;
@@ -514,7 +587,10 @@ impl Drawing {
 
     /// Copy a layout (entities get new ids).
     pub fn copy_layout(&mut self, from: &str, to: &str) -> Result<(), String> {
-        let src = self.layout(from).cloned().ok_or_else(|| format!("There is no layout named \"{from}\"."))?;
+        let src = self
+            .layout(from)
+            .cloned()
+            .ok_or_else(|| format!("There is no layout named \"{from}\"."))?;
         let to = to.trim().to_string();
         self.check_layout_name(&to)?;
         self.change(|d| {
@@ -523,7 +599,12 @@ impl Drawing {
                 e.id = d.next_id;
                 d.next_id += 1;
             }
-            d.layouts.push(Layout { name: to, paper: src.paper.clone(), entities: ents, fresh: false });
+            d.layouts.push(Layout {
+                name: to,
+                paper: src.paper.clone(),
+                entities: ents,
+                fresh: false,
+            });
         });
         Ok(())
     }
@@ -535,13 +616,24 @@ impl Drawing {
         }
         let paper = Paper::named("A4", true);
         for n in ["Layout1", "Layout2"] {
-            self.layouts.push(Layout { name: n.into(), paper: paper.clone(), entities: vec![], fresh: true });
+            self.layouts.push(Layout {
+                name: n.into(),
+                paper: paper.clone(),
+                entities: vec![],
+                fresh: true,
+            });
         }
     }
 
     /// Give a never-shown default layout its viewport.
     pub fn realize_layout(&mut self, name: &str) {
-        let Some(i) = self.layouts.iter().position(|l| l.name.eq_ignore_ascii_case(name) && l.fresh) else { return };
+        let Some(i) = self
+            .layouts
+            .iter()
+            .position(|l| l.name.eq_ignore_ascii_case(name) && l.fresh)
+        else {
+            return;
+        };
         let vp = Drawing::default_viewport(&self.layouts[i].paper);
         let lname = self.layouts[i].name.clone();
         let dirty = self.dirty;
@@ -568,7 +660,11 @@ impl Drawing {
 
     /// Set what a viewport shows (no undo step: it follows zoom and pan inside the viewport).
     pub fn set_viewport_view(&mut self, layout: &str, vp: u64, vc: Pt, scale: f64) {
-        if let Some(l) = self.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(layout)) {
+        if let Some(l) = self
+            .layouts
+            .iter_mut()
+            .find(|l| l.name.eq_ignore_ascii_case(layout))
+        {
             for e in l.entities.iter_mut().filter(|e| e.id == vp) {
                 if let Kind::Viewport(v) = &mut e.kind {
                     v.vc = vc;
@@ -581,14 +677,31 @@ impl Drawing {
 
     /// Change a viewport of `layout` (works while that viewport is active too) as one undo step. Returns false when the
     /// viewport does not exist.
-    pub fn edit_viewport(&mut self, layout: &str, vp: u64, f: impl FnOnce(&mut crate::entities::ViewportData)) -> bool {
-        let found = self.layout(layout).is_some_and(|l| l.entities.iter().any(|e| e.id == vp && matches!(e.kind, Kind::Viewport(_))));
+    pub fn edit_viewport(
+        &mut self,
+        layout: &str,
+        vp: u64,
+        f: impl FnOnce(&mut crate::entities::ViewportData),
+    ) -> bool {
+        let found = self.layout(layout).is_some_and(|l| {
+            l.entities
+                .iter()
+                .any(|e| e.id == vp && matches!(e.kind, Kind::Viewport(_)))
+        });
         if !found {
             return false;
         }
         self.will_change();
-        if let Some(l) = self.layouts.iter_mut().find(|l| l.name.eq_ignore_ascii_case(layout)) {
-            if let Some(Entity { kind: Kind::Viewport(v), .. }) = l.entities.iter_mut().find(|e| e.id == vp) {
+        if let Some(l) = self
+            .layouts
+            .iter_mut()
+            .find(|l| l.name.eq_ignore_ascii_case(layout))
+        {
+            if let Some(Entity {
+                kind: Kind::Viewport(v),
+                ..
+            }) = l.entities.iter_mut().find(|e| e.id == vp)
+            {
                 f(v);
             }
         }
@@ -679,7 +792,8 @@ impl Drawing {
     pub fn remove_all(&mut self, ids: &[u64]) {
         self.will_change();
         let sp = self.space.clone();
-        self.space_entities_mut(&sp).retain(|e| !ids.contains(&e.id));
+        self.space_entities_mut(&sp)
+            .retain(|e| !ids.contains(&e.id));
         self.touch();
     }
 
@@ -688,7 +802,9 @@ impl Drawing {
         self.will_change();
         let sp = self.space.clone();
         let arr = self.space_entities_mut(&sp);
-        let Some(i) = arr.iter().position(|e| e.id == id) else { return false };
+        let Some(i) = arr.iter().position(|e| e.id == id) else {
+            return false;
+        };
         let old = &arr[i];
         next.id = id;
         if next.layer.is_empty() {
@@ -770,8 +886,13 @@ impl Drawing {
         self.will_change();
         let sp = self.space.clone();
         let arr = self.space_entities_mut(&sp);
-        let (moved, rest): (Vec<Entity>, Vec<Entity>) = arr.drain(..).partition(|e| ids.contains(&e.id));
-        *arr = if front { rest.into_iter().chain(moved).collect() } else { moved.into_iter().chain(rest).collect() };
+        let (moved, rest): (Vec<Entity>, Vec<Entity>) =
+            arr.drain(..).partition(|e| ids.contains(&e.id));
+        *arr = if front {
+            rest.into_iter().chain(moved).collect()
+        } else {
+            moved.into_iter().chain(rest).collect()
+        };
         self.touch();
     }
 
@@ -828,7 +949,10 @@ impl Drawing {
 
     pub fn is_visible(&self, e: &Entity) -> bool {
         let l = self.layer_of(e);
-        l.on && !l.frozen && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&e.id)) && (self.active_vp_frozen.is_empty() || !self.active_vp_frozen.contains(&l.name.to_lowercase()))
+        l.on && !l.frozen
+            && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&e.id))
+            && (self.active_vp_frozen.is_empty()
+                || !self.active_vp_frozen.contains(&l.name.to_lowercase()))
     }
 
     /// Like [`Drawing::is_visible`] but without the active viewport's frozen layers: the sheet draws each viewport with its
@@ -851,15 +975,26 @@ impl Drawing {
             Some((layout, id)) => self
                 .layout(layout)
                 .and_then(|l| l.entities.iter().find(|e| e.id == *id))
-                .and_then(|e| if let Kind::Viewport(v) = &e.kind { Some(v) } else { None })
-                .map(|v| v.layers.iter().filter(|o| o.frozen).map(|o| o.layer.to_lowercase()).collect())
+                .and_then(|e| {
+                    if let Kind::Viewport(v) = &e.kind {
+                        Some(v)
+                    } else {
+                        None
+                    }
+                })
+                .map(|v| {
+                    v.layers
+                        .iter()
+                        .filter(|o| o.frozen)
+                        .map(|o| o.layer.to_lowercase())
+                        .collect()
+                })
                 .unwrap_or_default(),
         };
         if frozen != self.active_vp_frozen {
             self.active_vp_frozen = frozen;
         }
     }
-
 
     pub fn is_locked(&self, e: &Entity) -> bool {
         self.layer_of(e).locked
@@ -883,16 +1018,21 @@ impl Drawing {
         if let Some(l) = self.layer(name) {
             return l.name.clone();
         }
-        self.add_layer(name).map(|l| l.name.clone()).unwrap_or_else(|_| name.to_string())
+        self.add_layer(name)
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|_| name.to_string())
     }
 
     pub fn layer_usage(&self, name: &str) -> bool {
         let k = name.to_lowercase();
-        self.all_entities().any(|e| e.layer.to_lowercase() == k) || self.solids.iter().any(|s| s.layer.to_lowercase() == k)
+        self.all_entities().any(|e| e.layer.to_lowercase() == k)
+            || self.solids.iter().any(|s| s.layer.to_lowercase() == k)
     }
 
     pub fn delete_layer(&mut self, name: &str) -> Result<bool, String> {
-        let Some(l) = self.layer(name) else { return Ok(false) };
+        let Some(l) = self.layer(name) else {
+            return Ok(false);
+        };
         let lname = l.name.clone();
         if lname == "0" || lname.eq_ignore_ascii_case("defpoints") {
             return Err(format!("Layer \"{lname}\" cannot be deleted."));
@@ -901,7 +1041,9 @@ impl Drawing {
             return Err("The current layer cannot be deleted.".into());
         }
         if self.layer_usage(&lname) {
-            return Err(format!("Layer \"{lname}\" contains objects and cannot be deleted."));
+            return Err(format!(
+                "Layer \"{lname}\" contains objects and cannot be deleted."
+            ));
         }
         self.will_change();
         self.layers.retain(|l| l.name != lname);
@@ -910,7 +1052,9 @@ impl Drawing {
     }
 
     pub fn rename_layer(&mut self, old: &str, new: &str) -> Result<(), String> {
-        let Some(l) = self.layer(old) else { return Err("That layer cannot be renamed.".into()) };
+        let Some(l) = self.layer(old) else {
+            return Err("That layer cannot be renamed.".into());
+        };
         if l.name == "0" {
             return Err("That layer cannot be renamed.".into());
         }
@@ -943,9 +1087,14 @@ impl Drawing {
     }
 
     pub fn set_current_layer(&mut self, name: &str) -> Result<(), String> {
-        let Some(l) = self.layer(name) else { return Err(format!("Layer \"{name}\" not found.")) };
+        let Some(l) = self.layer(name) else {
+            return Err(format!("Layer \"{name}\" not found."));
+        };
         if l.frozen {
-            return Err(format!("Layer \"{}\" is frozen and cannot be made current.", l.name));
+            return Err(format!(
+                "Layer \"{}\" is frozen and cannot be made current.",
+                l.name
+            ));
         }
         self.cur.layer = l.name.clone();
         Ok(())
@@ -1001,7 +1150,9 @@ impl Drawing {
     }
 
     pub fn solid_visible(&self, s: &Solid) -> bool {
-        let l = self.layer(if s.layer.is_empty() { "0" } else { &s.layer }).unwrap_or(&self.layers[0]);
+        let l = self
+            .layer(if s.layer.is_empty() { "0" } else { &s.layer })
+            .unwrap_or(&self.layers[0]);
         l.on && !l.frozen && (self.hidden_objs.is_empty() || !self.hidden_objs.contains(&s.id))
     }
 
@@ -1017,7 +1168,15 @@ impl Drawing {
                 self.next_id = e.id + 1;
             }
         }
-        self.blocks.insert(name.to_string(), Block { name: name.to_string(), base, entities, xref: None });
+        self.blocks.insert(
+            name.to_string(),
+            Block {
+                name: name.to_string(),
+                base,
+                entities,
+                xref: None,
+            },
+        );
         self.touch();
     }
 
@@ -1040,7 +1199,10 @@ impl Drawing {
     pub fn end_command(&mut self, label: &str) {
         if self.cmd_active && self.rev != self.cmd_rev {
             if let Some(snap) = self.pre.take() {
-                self.undo_stack.push(UndoStep { snap, label: label.into() });
+                self.undo_stack.push(UndoStep {
+                    snap,
+                    label: label.into(),
+                });
                 self.redo_stack.clear();
                 self.trim_undo();
             }
@@ -1056,14 +1218,19 @@ impl Drawing {
     /// Push an undo step right now (for changes made outside a command).
     pub fn checkpoint(&mut self, label: &str) {
         let snap = self.snapshot();
-        self.undo_stack.push(UndoStep { snap, label: label.into() });
+        self.undo_stack.push(UndoStep {
+            snap,
+            label: label.into(),
+        });
         self.redo_stack.clear();
         self.trim_undo();
     }
 
     fn trim_undo(&mut self) {
         let mut bytes: usize = self.undo_stack.iter().map(|s| s.snap.json.len()).sum();
-        while self.undo_stack.len() > MAX_UNDO || (bytes > MAX_UNDO_BYTES && self.undo_stack.len() > 1) {
+        while self.undo_stack.len() > MAX_UNDO
+            || (bytes > MAX_UNDO_BYTES && self.undo_stack.len() > 1)
+        {
             bytes -= self.undo_stack.remove(0).snap.json.len();
         }
     }
@@ -1081,7 +1248,10 @@ impl Drawing {
             next_id: self.next_id,
             base: self.base,
         };
-        Snapshot { json: serde_json::to_string(&s).expect("snapshot serialises"), plot: self.plot_styles.clone() }
+        Snapshot {
+            json: serde_json::to_string(&s).expect("snapshot serialises"),
+            plot: self.plot_styles.clone(),
+        }
     }
 
     fn restore(&mut self, snap: &Snapshot) {
@@ -1117,7 +1287,12 @@ impl Drawing {
 
     /// Labels of the most recent undo steps, newest first.
     pub fn undo_labels(&self, n: usize) -> Vec<String> {
-        self.undo_stack.iter().rev().take(n).map(|s| s.label.clone()).collect()
+        self.undo_stack
+            .iter()
+            .rev()
+            .take(n)
+            .map(|s| s.label.clone())
+            .collect()
     }
 
     pub fn undo_label(&self) -> Option<&str> {
@@ -1131,7 +1306,10 @@ impl Drawing {
     pub fn undo(&mut self) -> Option<String> {
         let step = self.undo_stack.pop()?;
         let now = self.snapshot();
-        self.redo_stack.push(UndoStep { snap: now, label: step.label.clone() });
+        self.redo_stack.push(UndoStep {
+            snap: now,
+            label: step.label.clone(),
+        });
         self.restore(&step.snap);
         Some(step.label)
     }
@@ -1139,7 +1317,10 @@ impl Drawing {
     pub fn redo(&mut self) -> Option<String> {
         let step = self.redo_stack.pop()?;
         let now = self.snapshot();
-        self.undo_stack.push(UndoStep { snap: now, label: step.label.clone() });
+        self.undo_stack.push(UndoStep {
+            snap: now,
+            label: step.label.clone(),
+        });
         self.restore(&step.snap);
         Some(step.label)
     }
@@ -1177,7 +1358,8 @@ impl Drawing {
     }
 
     pub fn from_json_str(text: &str, name: Option<&str>) -> Result<Drawing, String> {
-        let v: Value = serde_json::from_str(text).map_err(|e| format!("Not a CadForge drawing ({e})."))?;
+        let v: Value =
+            serde_json::from_str(text).map_err(|e| format!("Not a CadForge drawing ({e})."))?;
         Drawing::from_json(&v, name)
     }
 
@@ -1214,8 +1396,14 @@ impl Drawing {
             if m.get("cur").map_or(true, Value::is_null) {
                 m.insert("cur".into(), serde_json::json!({ "layer": "0" }));
             }
-            if m.get("layers").and_then(Value::as_array).map_or(true, |a| a.is_empty()) {
-                m.insert("layers".into(), serde_json::to_value(vec![Layer::new("0")]).expect("layer"));
+            if m.get("layers")
+                .and_then(Value::as_array)
+                .map_or(true, |a| a.is_empty())
+            {
+                m.insert(
+                    "layers".into(),
+                    serde_json::to_value(vec![Layer::new("0")]).expect("layer"),
+                );
             }
             m.entry("nextId").or_insert(Value::from(1));
             if m.get("view").is_some_and(Value::is_null) {
@@ -1223,7 +1411,8 @@ impl Drawing {
             }
             m.entry("view").or_insert(Value::Null);
         }
-        let f: File = serde_json::from_value(o).map_err(|e| format!("Invalid CadForge drawing: {e}."))?;
+        let f: File =
+            serde_json::from_value(o).map_err(|e| format!("Invalid CadForge drawing: {e}."))?;
         let mut d = Drawing::new(name.unwrap_or(&f.name));
         d.settings = f.settings;
         d.layers = f.layers;
@@ -1246,7 +1435,12 @@ impl Drawing {
             let _ = d.define_pattern(def);
         }
         d.next_id = f.next_id.max(1);
-        let max_id = d.all_entities().map(|e| e.id).chain(d.solids.iter().map(|s| s.id)).max().unwrap_or(0);
+        let max_id = d
+            .all_entities()
+            .map(|e| e.id)
+            .chain(d.solids.iter().map(|s| s.id))
+            .max()
+            .unwrap_or(0);
         if max_id >= d.next_id {
             d.next_id = max_id + 1;
         }
@@ -1287,8 +1481,22 @@ impl Drawing {
 
     /// Names of the pictures no entity (in any space or block) refers to.
     pub fn unused_images(&self) -> Vec<String> {
-        let used: std::collections::HashSet<&str> = self.all_entities().chain(self.blocks.values().flat_map(|b| b.entities.iter())).filter_map(|e| if let Kind::Image(i) = &e.kind { Some(i.name.as_str()) } else { None }).collect();
-        self.images.keys().filter(|k| !used.contains(k.as_str())).cloned().collect()
+        let used: std::collections::HashSet<&str> = self
+            .all_entities()
+            .chain(self.blocks.values().flat_map(|b| b.entities.iter()))
+            .filter_map(|e| {
+                if let Kind::Image(i) = &e.kind {
+                    Some(i.name.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.images
+            .keys()
+            .filter(|k| !used.contains(k.as_str()))
+            .cloned()
+            .collect()
     }
 
     /// Structural sanity check run on every load.
@@ -1311,7 +1519,11 @@ impl Drawing {
                 _ => true,
             };
             if !ok {
-                return Err(format!("Invalid {} entity (id {}).", kind_name(&e.kind), e.id));
+                return Err(format!(
+                    "Invalid {} entity (id {}).",
+                    kind_name(&e.kind),
+                    e.id
+                ));
             }
         }
         for s in &self.solids {
@@ -1325,7 +1537,10 @@ impl Drawing {
 
     /// Import a version-1 CadForge project (flat entities, `points[]` arrays, group-based blocks).
     pub fn from_legacy(old: &Value, name: Option<&str>) -> Result<Drawing, String> {
-        let (Some(layers), Some(entities)) = (old.get("layers").and_then(Value::as_array), old.get("entities").and_then(Value::as_array)) else {
+        let (Some(layers), Some(entities)) = (
+            old.get("layers").and_then(Value::as_array),
+            old.get("entities").and_then(Value::as_array),
+        ) else {
             return Err("Not a CadForge drawing.".into());
         };
         let mut d = Drawing::new(name.unwrap_or("Drawing1"));
@@ -1334,7 +1549,11 @@ impl Drawing {
             .filter_map(|l| {
                 let n = l.get("name")?.as_str()?;
                 let mut layer = Layer::new(n);
-                if let Some(c) = l.get("color").and_then(Value::as_str).and_then(Color::from_hex) {
+                if let Some(c) = l
+                    .get("color")
+                    .and_then(Value::as_str)
+                    .and_then(Color::from_hex)
+                {
                     layer.color = c;
                 }
                 layer.on = l.get("visible").and_then(Value::as_bool).unwrap_or(true);
@@ -1347,15 +1566,29 @@ impl Drawing {
         d.cur.layer = d.layers[0].name.clone();
 
         fn p(v: &Value) -> Option<Pt> {
-            Some(Pt { x: v.get("x")?.as_f64()?, y: v.get("y")?.as_f64()? })
+            Some(Pt {
+                x: v.get("x")?.as_f64()?,
+                y: v.get("y")?.as_f64()?,
+            })
         }
         fn conv(o: &Value) -> Option<Entity> {
-            let pts: Vec<Pt> = o.get("points").and_then(Value::as_array).map(|a| a.iter().filter_map(p).collect()).unwrap_or_default();
+            let pts: Vec<Pt> = o
+                .get("points")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(p).collect())
+                .unwrap_or_default();
             let mut e = match o.get("type")?.as_str()? {
                 "line" => Entity::line(*pts.first()?, *pts.get(1)?),
                 "circle" => Entity::circle(p(o.get("center")?)?, o.get("radius")?.as_f64()?),
-                "polyline" => Entity::pline_pts(&pts, o.get("closed").and_then(Value::as_bool).unwrap_or(false)),
-                "text" => Entity::text(*pts.first()?, o.get("height")?.as_f64()?, o.get("text")?.as_str()?),
+                "polyline" => Entity::pline_pts(
+                    &pts,
+                    o.get("closed").and_then(Value::as_bool).unwrap_or(false),
+                ),
+                "text" => Entity::text(
+                    *pts.first()?,
+                    o.get("height")?.as_f64()?,
+                    o.get("text")?.as_str()?,
+                ),
                 _ => return None,
             };
             if let Some(l) = o.get("layer").and_then(Value::as_str) {
@@ -1375,16 +1608,27 @@ impl Drawing {
         }
         if let Some(bs) = old.get("blocks").and_then(Value::as_object) {
             for (bn, b) in bs {
-                let items: Vec<Entity> = b.get("items").and_then(Value::as_array).map(|a| a.iter().filter_map(conv).collect()).unwrap_or_default();
+                let items: Vec<Entity> = b
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(conv).collect())
+                    .unwrap_or_default();
                 d.define_block(bn, Pt { x: 0.0, y: 0.0 }, items);
             }
         }
         if let Some(ss) = old.get("solids").and_then(Value::as_array) {
             for s in ss {
                 let mut s = s.clone();
-                if let Some(feats) = s.pointer_mut("/extrusionProgram/features").and_then(Value::as_array_mut) {
+                if let Some(feats) = s
+                    .pointer_mut("/extrusionProgram/features")
+                    .and_then(Value::as_array_mut)
+                {
                     for f in feats.iter_mut() {
-                        let mapped = f.get("profile").and_then(Value::as_str).and_then(|u| uuid_map.get(u)).copied();
+                        let mapped = f
+                            .get("profile")
+                            .and_then(Value::as_str)
+                            .and_then(|u| uuid_map.get(u))
+                            .copied();
                         if let (Some(id), Some(fo)) = (mapped, f.as_object_mut()) {
                             fo.insert("profile".into(), serde_json::json!([id]));
                         }
@@ -1401,8 +1645,22 @@ impl Drawing {
         if let Some(ls) = old.get("layouts").and_then(Value::as_object) {
             for (vn, l) in ls {
                 if let Some(v) = l.get("view") {
-                    if let (Some(x), Some(y), Some(s)) = (v.get("x").and_then(Value::as_f64), v.get("y").and_then(Value::as_f64), v.get("scale").and_then(Value::as_f64)) {
-                        d.views.insert(vn.clone(), NamedView { cx: x, cy: y, scale: s, cz: None, yaw: None, pitch: None });
+                    if let (Some(x), Some(y), Some(s)) = (
+                        v.get("x").and_then(Value::as_f64),
+                        v.get("y").and_then(Value::as_f64),
+                        v.get("scale").and_then(Value::as_f64),
+                    ) {
+                        d.views.insert(
+                            vn.clone(),
+                            NamedView {
+                                cx: x,
+                                cy: y,
+                                scale: s,
+                                cz: None,
+                                yaw: None,
+                                pitch: None,
+                            },
+                        );
                     }
                 }
             }
@@ -1532,7 +1790,10 @@ mod tests {
             "format": "cadforge", "version": 2, "layers": [{"name": "0"}],
             "model": {"entities": [{"id": 1, "type": "circle", "layer": "0", "c": {"x": 0, "y": 0}, "r": -1}]}
         });
-        assert!(Drawing::from_json(&v, None).err().unwrap().contains("circle"));
+        assert!(Drawing::from_json(&v, None)
+            .err()
+            .unwrap()
+            .contains("circle"));
     }
 
     #[test]

@@ -99,7 +99,9 @@ async fn eval_command(c: Ctx, a: Args) -> CmdResult<()> {
     let mut src = a.str("source").unwrap_or("").to_string();
     let mut depth = 1;
     while reader::unbalanced(&src) {
-        let more = c.string(ps(&format!("{depth}>")).allow_enter().raw()).await?;
+        let more = c
+            .string(ps(&format!("{depth}>")).allow_enter().raw())
+            .await?;
         src.push('\n');
         src.push_str(&more.text);
         depth += 1;
@@ -132,7 +134,12 @@ async fn eval_command(c: Ctx, a: Args) -> CmdResult<()> {
 
 async fn vlisp(c: Ctx, _a: Args) -> CmdResult<()> {
     if c.app(|a| a.ui.dialogs) {
-        c.app(|a| a.emit(Event::UiAction { name: "VLISP".into(), args: Args::none() }));
+        c.app(|a| {
+            a.emit(Event::UiAction {
+                name: "VLISP".into(),
+                args: Args::none(),
+            })
+        });
     } else {
         c.log("Type AutoLISP expressions at the command line, e.g. (+ 1 2).");
     }
@@ -162,24 +169,70 @@ async fn actstop(c: Ctx, a: Args) -> CmdResult<()> {
     }
     let name = match a.str("name") {
         Some(n) => n.to_string(),
-        None => c.string(ps("Enter a name for the action macro").default_str("Macro1")).await?.text,
+        None => {
+            c.string(ps("Enter a name for the action macro").default_str("Macro1"))
+                .await?
+                .text
+        }
     };
     let name = name.trim().trim_end_matches(".scr").to_string();
-    let name = if name.is_empty() { "Macro1".to_string() } else { name };
+    let name = if name.is_empty() {
+        "Macro1".to_string()
+    } else {
+        name
+    };
     let n = lines.iter().filter(|l| !l.is_empty()).count();
     let mut text = lines.join("\r\n");
     text.push_str("\r\n");
     c.app(|app| {
-        app.emit(Event::SaveFile { name: format!("{name}.scr"), data: text.into_bytes(), mime: "text/plain".into() });
-        app.log(&format!("Recorded {n} step{} to {name}.scr. Replay it with SCRIPT.", if n == 1 { "" } else { "s" }), "info");
+        app.emit(Event::SaveFile {
+            name: format!("{name}.scr"),
+            data: text.into_bytes(),
+            mime: "text/plain".into(),
+        });
+        app.log(
+            &format!(
+                "Recorded {n} step{} to {name}.scr. Replay it with SCRIPT.",
+                if n == 1 { "" } else { "s" }
+            ),
+            "info",
+        );
     });
     Ok(())
 }
 
 /// `(load "file")` cannot read the file system of a browser; routines are loaded with APPLOAD.
 pub(crate) fn register(r: &mut Registry) {
-    r.define(def("Utilities", "ACTRECORD", run(actrecord)).aliases(&["RECORD"]).title("Record Action Macro").icon("script").desc("Starts the Action Recorder: records the commands you run so they can be replayed.").once());
-    r.define(def("Utilities", "ACTSTOP", run(actstop)).title("Stop Recording").icon("script").desc("Stops the Action Recorder and saves the macro as a script file.").once());
-    r.define(def("Utilities", "_LISP", run(eval_command)).title("Evaluate AutoLISP").desc("Evaluates AutoLISP expressions.").silent().once());
-    r.define(def("Utilities", "VLISP", run(vlisp)).aliases(&["VLIDE"]).title("Visual LISP Console").icon("script").desc("Opens the AutoLISP console where routines can be typed, run and loaded.").once());
+    r.define(
+        def("Utilities", "ACTRECORD", run(actrecord))
+            .aliases(&["RECORD"])
+            .title("Record Action Macro")
+            .icon("script")
+            .desc(
+                "Starts the Action Recorder: records the commands you run so they can be replayed.",
+            )
+            .once(),
+    );
+    r.define(
+        def("Utilities", "ACTSTOP", run(actstop))
+            .title("Stop Recording")
+            .icon("script")
+            .desc("Stops the Action Recorder and saves the macro as a script file.")
+            .once(),
+    );
+    r.define(
+        def("Utilities", "_LISP", run(eval_command))
+            .title("Evaluate AutoLISP")
+            .desc("Evaluates AutoLISP expressions.")
+            .silent()
+            .once(),
+    );
+    r.define(
+        def("Utilities", "VLISP", run(vlisp))
+            .aliases(&["VLIDE"])
+            .title("Visual LISP Console")
+            .icon("script")
+            .desc("Opens the AutoLISP console where routines can be typed, run and loaded.")
+            .once(),
+    );
 }

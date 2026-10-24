@@ -116,7 +116,11 @@ pub const OS_BITS: [(&str, u32); 14] = [
 ];
 
 pub fn os_bit(code: &str) -> u32 {
-    OS_BITS.iter().find(|(c, _)| *c == code).map(|(_, b)| *b).unwrap_or(0)
+    OS_BITS
+        .iter()
+        .find(|(c, _)| *c == code)
+        .map(|(_, b)| *b)
+        .unwrap_or(0)
 }
 
 pub fn os_full(code: &str) -> &'static str {
@@ -195,7 +199,11 @@ pub fn parse_override(text: &str) -> Option<Override> {
 /// Result of interpreting typed text as a point or a bare number.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Input {
-    Point { pt: Pt, z: Option<f64>, polar: Option<(f64, f64)> },
+    Point {
+        pt: Pt,
+        z: Option<f64>,
+        polar: Option<(f64, f64)>,
+    },
     Number(f64),
 }
 
@@ -223,10 +231,18 @@ pub fn parse_input(text: &str, o: InputOpts) -> Option<Input> {
         t = r.trim();
     }
     let rel = !force_abs && (force_rel || (o.relative_default && o.base.is_some()));
-    let origin = if rel { o.base.unwrap_or(pt(0.0, 0.0)) } else { o.ucs.origin };
+    let origin = if rel {
+        o.base.unwrap_or(pt(0.0, 0.0))
+    } else {
+        o.ucs.origin
+    };
     let u = o.ucs;
     if force_rel && t.is_empty() {
-        return Some(Input::Point { pt: origin, z: None, polar: None }); // "@" alone = last point
+        return Some(Input::Point {
+            pt: origin,
+            z: None,
+            polar: None,
+        }); // "@" alone = last point
     }
     // x,y[,z]
     if let Some((x, n)) = scan_number(t) {
@@ -237,11 +253,19 @@ pub fn parse_input(text: &str, o: InputOpts) -> Option<Input> {
                 let after = skip_ws(&r[n2..]);
                 let v = u.vec_to_wcs(pt(x, y));
                 if after.is_empty() {
-                    return Some(Input::Point { pt: pt(origin.x + v.x, origin.y + v.y), z: None, polar: None });
+                    return Some(Input::Point {
+                        pt: pt(origin.x + v.x, origin.y + v.y),
+                        z: None,
+                        polar: None,
+                    });
                 }
                 if let Some(zr) = after.strip_prefix(',') {
                     if let Some(z) = full_number(skip_ws(zr)) {
-                        return Some(Input::Point { pt: pt(origin.x + v.x, origin.y + v.y), z: Some(z), polar: None });
+                        return Some(Input::Point {
+                            pt: pt(origin.x + v.x, origin.y + v.y),
+                            z: Some(z),
+                            polar: None,
+                        });
                     }
                 }
             }
@@ -249,7 +273,11 @@ pub fn parse_input(text: &str, o: InputOpts) -> Option<Input> {
             if let Some(a) = full_number(skip_ws(r)) {
                 let wa = rad(a) + u.angle;
                 let p = pt(origin.x + x * wa.cos(), origin.y + x * wa.sin());
-                return Some(Input::Point { pt: p, z: None, polar: Some((x, wa)) });
+                return Some(Input::Point {
+                    pt: p,
+                    z: None,
+                    polar: Some((x, wa)),
+                });
             }
         }
     }
@@ -271,11 +299,17 @@ fn strip_paren(label: &str) -> &str {
 /// Abbreviation of an option label: its capital letters and digits (`Ttr` -> `T`, `eXit` -> `X`, `3P` -> `3P`).
 pub fn option_key(label: &str) -> String {
     let main = strip_paren(label);
-    let caps: String = main.chars().filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit()).collect();
+    let caps: String = main
+        .chars()
+        .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        .collect();
     if !caps.is_empty() {
         caps
     } else {
-        main.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default()
+        main.chars()
+            .next()
+            .map(|c| c.to_uppercase().collect())
+            .unwrap_or_default()
     }
 }
 
@@ -289,16 +323,24 @@ pub fn match_option<'a, S: AsRef<str>>(input: &str, options: &'a [S]) -> Option<
     if t.is_empty() {
         return None;
     }
-    if let Some(o) = options.iter().find(|o| option_name(o.as_ref()).to_lowercase() == t) {
+    if let Some(o) = options
+        .iter()
+        .find(|o| option_name(o.as_ref()).to_lowercase() == t)
+    {
         return Some(o);
     }
-    if let Some(o) = options.iter().find(|o| option_key(o.as_ref()).to_lowercase() == t) {
+    if let Some(o) = options
+        .iter()
+        .find(|o| option_key(o.as_ref()).to_lowercase() == t)
+    {
         return Some(o);
     }
     if full_number(&t).is_some() && !t.contains('e') {
         return None; // a number is never an abbreviation ("2" is not 2Point)
     }
-    let mut prefixed = options.iter().filter(|o| option_name(o.as_ref()).to_lowercase().starts_with(&t));
+    let mut prefixed = options
+        .iter()
+        .filter(|o| option_name(o.as_ref()).to_lowercase().starts_with(&t));
     match (prefixed.next(), prefixed.next()) {
         (Some(o), None) => Some(o),
         _ => None,
@@ -310,7 +352,14 @@ pub fn options_text<S: AsRef<str>>(options: &[S]) -> String {
     if options.is_empty() {
         String::new()
     } else {
-        format!(" [{}]", options.iter().map(|o| o.as_ref()).collect::<Vec<_>>().join("/"))
+        format!(
+            " [{}]",
+            options
+                .iter()
+                .map(|o| o.as_ref())
+                .collect::<Vec<_>>()
+                .join("/")
+        )
     }
 }
 
@@ -333,19 +382,103 @@ mod tests {
     #[test]
     fn points() {
         let base = Some(pt(10.0, 10.0));
-        assert_eq!(parse_input("1,2", InputOpts::default()), Some(Input::Point { pt: pt(1.0, 2.0), z: None, polar: None }));
-        assert_eq!(parse_input("@5,5", InputOpts { base, relative_default: false, ..InputOpts::default() }), Some(Input::Point { pt: pt(15.0, 15.0), z: None, polar: None }));
-        assert_eq!(parse_input("5,5", InputOpts { base, relative_default: true, ..InputOpts::default() }), Some(Input::Point { pt: pt(15.0, 15.0), z: None, polar: None }));
-        assert_eq!(parse_input("#5,5", InputOpts { base, relative_default: true, ..InputOpts::default() }), Some(Input::Point { pt: pt(5.0, 5.0), z: None, polar: None }));
-        assert_eq!(parse_input("@", InputOpts { base, relative_default: false, ..InputOpts::default() }), Some(Input::Point { pt: pt(10.0, 10.0), z: None, polar: None }));
-        match parse_input("@10<90", InputOpts { base, relative_default: false, ..InputOpts::default() }) {
-            Some(Input::Point { pt: p, polar: Some((d, _)), .. }) => {
+        assert_eq!(
+            parse_input("1,2", InputOpts::default()),
+            Some(Input::Point {
+                pt: pt(1.0, 2.0),
+                z: None,
+                polar: None
+            })
+        );
+        assert_eq!(
+            parse_input(
+                "@5,5",
+                InputOpts {
+                    base,
+                    relative_default: false,
+                    ..InputOpts::default()
+                }
+            ),
+            Some(Input::Point {
+                pt: pt(15.0, 15.0),
+                z: None,
+                polar: None
+            })
+        );
+        assert_eq!(
+            parse_input(
+                "5,5",
+                InputOpts {
+                    base,
+                    relative_default: true,
+                    ..InputOpts::default()
+                }
+            ),
+            Some(Input::Point {
+                pt: pt(15.0, 15.0),
+                z: None,
+                polar: None
+            })
+        );
+        assert_eq!(
+            parse_input(
+                "#5,5",
+                InputOpts {
+                    base,
+                    relative_default: true,
+                    ..InputOpts::default()
+                }
+            ),
+            Some(Input::Point {
+                pt: pt(5.0, 5.0),
+                z: None,
+                polar: None
+            })
+        );
+        assert_eq!(
+            parse_input(
+                "@",
+                InputOpts {
+                    base,
+                    relative_default: false,
+                    ..InputOpts::default()
+                }
+            ),
+            Some(Input::Point {
+                pt: pt(10.0, 10.0),
+                z: None,
+                polar: None
+            })
+        );
+        match parse_input(
+            "@10<90",
+            InputOpts {
+                base,
+                relative_default: false,
+                ..InputOpts::default()
+            },
+        ) {
+            Some(Input::Point {
+                pt: p,
+                polar: Some((d, _)),
+                ..
+            }) => {
                 assert!((p.x - 10.0).abs() < 1e-9 && (p.y - 20.0).abs() < 1e-9 && d == 10.0);
             }
             o => panic!("{o:?}"),
         }
-        assert_eq!(parse_input("1, 2, 3", InputOpts::default()), Some(Input::Point { pt: pt(1.0, 2.0), z: Some(3.0), polar: None }));
-        assert_eq!(parse_input("42", InputOpts::default()), Some(Input::Number(42.0)));
+        assert_eq!(
+            parse_input("1, 2, 3", InputOpts::default()),
+            Some(Input::Point {
+                pt: pt(1.0, 2.0),
+                z: Some(3.0),
+                polar: None
+            })
+        );
+        assert_eq!(
+            parse_input("42", InputOpts::default()),
+            Some(Input::Number(42.0))
+        );
         assert_eq!(parse_input("#42", InputOpts::default()), None);
         assert_eq!(parse_input("hello", InputOpts::default()), None);
     }
@@ -362,7 +495,14 @@ mod tests {
 
     #[test]
     fn options() {
-        let opts = ["Close", "Undo", "Width", "2Point", "Ttr (tan tan radius)", "eXit"];
+        let opts = [
+            "Close",
+            "Undo",
+            "Width",
+            "2Point",
+            "Ttr (tan tan radius)",
+            "eXit",
+        ];
         assert_eq!(match_option("c", &opts), Some(&"Close"));
         assert_eq!(match_option("UNDO", &opts), Some(&"Undo"));
         assert_eq!(match_option("x", &opts), Some(&"eXit"));

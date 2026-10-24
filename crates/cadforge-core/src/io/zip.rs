@@ -5,7 +5,11 @@ fn crc32_table() -> [u32; 256] {
     for (i, slot) in t.iter_mut().enumerate() {
         let mut c = i as u32;
         for _ in 0..8 {
-            c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
         }
         *slot = c;
     }
@@ -15,7 +19,9 @@ fn crc32_table() -> [u32; 256] {
 /// CRC-32 (IEEE) of `data`.
 pub fn crc32(data: &[u8]) -> u32 {
     let t = crc32_table();
-    !data.iter().fold(!0u32, |c, b| t[((c ^ *b as u32) & 0xFF) as usize] ^ (c >> 8))
+    !data.iter().fold(!0u32, |c, b| {
+        t[((c ^ *b as u32) & 0xFF) as usize] ^ (c >> 8)
+    })
 }
 
 /// A ZIP archive holding the given (path, bytes) files, stored uncompressed. Dated 1980-01-01 so the output is

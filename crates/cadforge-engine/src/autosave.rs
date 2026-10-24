@@ -44,14 +44,26 @@ pub struct AutoSavePlan {
 }
 
 fn file_safe(name: &str) -> String {
-    let s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    let s: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     s.chars().take(40).collect()
 }
 
 impl App {
     /// Work out what to write and what to delete. `force` ignores the timer (used when the page is about to close).
     pub fn autosave_tick(&mut self, force: bool) -> AutoSavePlan {
-        let mut plan = AutoSavePlan { write: vec![], remove: std::mem::take(&mut self.autosave.orphans) };
+        let mut plan = AutoSavePlan {
+            write: vec![],
+            remove: std::mem::take(&mut self.autosave.orphans),
+        };
         // saved drawings no longer need their recovery file
         for ed in &self.editors {
             if !ed.doc.dirty {
@@ -79,14 +91,28 @@ impl App {
             if !ed.doc.dirty {
                 continue;
             }
-            if self.autosave.written.get(&ed.id).is_some_and(|(_, rev)| *rev == ed.doc.rev) {
+            if self
+                .autosave
+                .written
+                .get(&ed.id)
+                .is_some_and(|(_, rev)| *rev == ed.doc.rev)
+            {
                 continue;
             }
             let key = match self.autosave.written.get(&ed.id) {
                 Some((k, _)) => k.clone(),
-                None => format!("{}-{}-{}", file_safe(&self.autosave.salt), ed.id, file_safe(&ed.doc.name)),
+                None => format!(
+                    "{}-{}-{}",
+                    file_safe(&self.autosave.salt),
+                    ed.id,
+                    file_safe(&ed.doc.name)
+                ),
             };
-            plan.write.push(AutoSaveFile { key: key.clone(), name: ed.doc.name.clone(), json: ed.doc.to_json_string() });
+            plan.write.push(AutoSaveFile {
+                key: key.clone(),
+                name: ed.doc.name.clone(),
+                json: ed.doc.to_json_string(),
+            });
             self.autosave.written.insert(ed.id, (key, ed.doc.rev));
         }
         plan
@@ -101,14 +127,24 @@ impl App {
         let id = self.add_drawing(doc);
         if let Some(ed) = self.editors.iter_mut().find(|e| e.id == id) {
             ed.doc.dirty = true;
-            self.autosave.written.insert(id, (key.to_string(), ed.doc.rev));
+            self.autosave
+                .written
+                .insert(id, (key.to_string(), ed.doc.rev));
         }
         Ok(name)
     }
 
     /// Recovery files that exist for the open drawings, newest pass first (for DRAWINGRECOVERY).
     pub fn autosave_status(&self) -> Vec<(String, String)> {
-        self.editors.iter().filter_map(|e| self.autosave.written.get(&e.id).map(|(k, _)| (e.doc.name.clone(), k.clone()))).collect()
+        self.editors
+            .iter()
+            .filter_map(|e| {
+                self.autosave
+                    .written
+                    .get(&e.id)
+                    .map(|(k, _)| (e.doc.name.clone(), k.clone()))
+            })
+            .collect()
     }
 }
 
@@ -137,10 +173,17 @@ mod tests {
     fn nothing_is_written_before_the_interval_or_for_clean_drawings() {
         let mut a = app();
         a.now = 0.0;
-        assert_eq!(a.autosave_tick(false), AutoSavePlan::default(), "first pass only starts the clock");
+        assert_eq!(
+            a.autosave_tick(false),
+            AutoSavePlan::default(),
+            "first pass only starts the clock"
+        );
         draw(&mut a);
         a.now = 9.0 * 60_000.0;
-        assert!(a.autosave_tick(false).write.is_empty(), "SAVETIME is 10 minutes");
+        assert!(
+            a.autosave_tick(false).write.is_empty(),
+            "SAVETIME is 10 minutes"
+        );
         a.now = 10.0 * 60_000.0;
         let plan = a.autosave_tick(false);
         assert_eq!(plan.write.len(), 1);
@@ -164,12 +207,18 @@ mod tests {
         let first = a.autosave_tick(false);
         assert_eq!(first.write.len(), 1);
         a.now = 20.0 * 60_000.0;
-        assert!(a.autosave_tick(false).write.is_empty(), "unchanged since the last pass");
+        assert!(
+            a.autosave_tick(false).write.is_empty(),
+            "unchanged since the last pass"
+        );
         a.editor_mut().unwrap().doc.touch();
         a.now = 30.0 * 60_000.0;
         let again = a.autosave_tick(false);
         assert_eq!(again.write.len(), 1);
-        assert_eq!(again.write[0].key, first.write[0].key, "the same recovery file is rewritten");
+        assert_eq!(
+            again.write[0].key, first.write[0].key,
+            "the same recovery file is rewritten"
+        );
     }
 
     #[test]
@@ -201,7 +250,11 @@ mod tests {
         draw(&mut a);
         a.now = 60.0 * 60_000.0;
         assert!(a.autosave_tick(false).write.is_empty());
-        assert_eq!(a.autosave_tick(true).write.len(), 1, "forced (page closing)");
+        assert_eq!(
+            a.autosave_tick(true).write.len(),
+            1,
+            "forced (page closing)"
+        );
     }
 
     #[test]
@@ -224,8 +277,14 @@ mod tests {
         b.now = 0.0;
         b.autosave_tick(false);
         b.now = 11.0 * 60_000.0;
-        assert!(b.autosave_tick(false).remove.is_empty(), "the file stays while the drawing is unsaved");
-        assert_eq!(b.autosave_status(), vec![("Drawing1 (recovered)".to_string(), file.key.clone())]);
+        assert!(
+            b.autosave_tick(false).remove.is_empty(),
+            "the file stays while the drawing is unsaved"
+        );
+        assert_eq!(
+            b.autosave_status(),
+            vec![("Drawing1 (recovered)".to_string(), file.key.clone())]
+        );
         // saving removes it
         b.editor_mut().unwrap().doc.dirty = false;
         assert_eq!(b.autosave_tick(false).remove, vec![file.key]);

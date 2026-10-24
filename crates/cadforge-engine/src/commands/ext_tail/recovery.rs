@@ -9,7 +9,9 @@ async fn drawingrecovery(c: Ctx, _a: Args) -> CmdResult<()> {
     if minutes > 0.0 {
         c.log(&format!("Autosave is on: unsaved changes are kept every {} minute{} (system variable SAVETIME).", super::trim_num(minutes), if minutes == 1.0 { "" } else { "s" }));
     } else {
-        c.log("Autosave is off (SAVETIME is 0). Set SAVETIME to a number of minutes to turn it on.");
+        c.log(
+            "Autosave is off (SAVETIME is 0). Set SAVETIME to a number of minutes to turn it on.",
+        );
     }
     let files = c.app(|a| a.autosave_status());
     if files.is_empty() {
@@ -24,5 +26,11 @@ async fn drawingrecovery(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(def("File", "DRAWINGRECOVERY", run(drawingrecovery)).title("Drawing Recovery").icon("save").desc("Shows whether autosave is on and which open drawings have a recovery file.").once());
+    r.define(
+        def("File", "DRAWINGRECOVERY", run(drawingrecovery))
+            .title("Drawing Recovery")
+            .icon("save")
+            .desc("Shows whether autosave is on and which open drawings have a recovery file.")
+            .once(),
+    );
 }

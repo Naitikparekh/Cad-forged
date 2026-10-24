@@ -27,9 +27,15 @@ fn box_by_two_corners_and_height_cube_length_center_and_undo() {
     assert!(so[0].id > 0);
     s.play("BOX", &[Click(50., 0.), Type("C"), Type("10")]);
     near(vol(&s.solids()[1]), 1000., 1e-6);
-    s.play("BOX", &[Click(80., 0.), Type("L"), Type("4"), Type("5"), Type("6")]);
+    s.play(
+        "BOX",
+        &[Click(80., 0.), Type("L"), Type("4"), Type("5"), Type("6")],
+    );
     near(vol(&s.solids()[2]), 120., 1e-6);
-    s.play("BOX", &[Type("Center"), Click(100., 0.), Click(105., 4.), Type("2")]);
+    s.play(
+        "BOX",
+        &[Type("Center"), Click(100., 0.), Click(105., 4.), Type("2")],
+    );
     near(vol(&s.solids()[3]), 10. * 8. * 2., 1e-6);
     s.cmd("U");
     assert_eq!(s.solids().len(), 3); // undo covers solids
@@ -40,12 +46,18 @@ fn cylinder_cone_sphere_and_wedge() {
     let s = Sim::new();
     s.play("CYLINDER", &[Click(0., 0.), Type("5"), Type("10")]);
     near(vol(&s.solids()[0]), PI * 25. * 10., 4.);
-    s.play("CYLINDER", &[Click(20., 0.), Type("D"), Type("10"), Type("-4")]);
+    s.play(
+        "CYLINDER",
+        &[Click(20., 0.), Type("D"), Type("10"), Type("-4")],
+    );
     let b = mesh_bounds(&s.solids()[1].vertices);
     assert!(b.max.z <= 1e-9 && b.min.z < -3.9);
     s.play("CONE", &[Click(40., 0.), Type("6"), Type("12")]);
     near(vol(&s.solids()[2]), PI * 36. * 12. / 3., 5.);
-    s.play("CONE", &[Click(60., 0.), Type("6"), Type("T"), Type("3"), Type("12")]);
+    s.play(
+        "CONE",
+        &[Click(60., 0.), Type("6"), Type("T"), Type("3"), Type("12")],
+    );
     near(vol(&s.solids()[3]), PI * 12. / 3. * (36. + 18. + 9.), 6.);
     s.play("SPHERE", &[Click(80., 0.), Type("10")]);
     near(vol(&s.solids()[4]) / (4. / 3. * PI * 1000.), 1., 0.02);
@@ -56,14 +68,20 @@ fn cylinder_cone_sphere_and_wedge() {
 #[test]
 fn extrude_a_closed_polyline_a_circle_and_a_chain_of_lines_taper_errors() {
     let s = Sim::new();
-    s.add(Entity::pline_pts(&[p(0., 0.), p(10., 0.), p(10., 20.), p(0., 20.)], true));
+    s.add(Entity::pline_pts(
+        &[p(0., 0.), p(10., 0.), p(10., 20.), p(0., 20.)],
+        true,
+    ));
     s.add(Entity::circle(p(50., 10.), 5.));
     s.cmd("EXTRUDE").click(5., 0.).enter(); // pick the polyline edge, then Enter
     s.ty("30");
     assert!(!s.busy());
     assert_eq!(s.solids().len(), 1);
     near(vol(&s.solids()[0]), 6000., 1e-6);
-    assert_eq!(s.solids()[0].program.as_ref().unwrap().features[0].profile, vec![1]);
+    assert_eq!(
+        s.solids()[0].program.as_ref().unwrap().features[0].profile,
+        vec![1]
+    );
     s.cmd("EXTRUDE").click(55., 10.).enter().ty("10");
     near(vol(&s.solids()[1]), PI * 25. * 10., 5.);
     // lines forming a closed outline
@@ -83,8 +101,16 @@ fn extrude_a_closed_polyline_a_circle_and_a_chain_of_lines_taper_errors() {
     assert!(t.history_has("closed"));
     // taper
     let u = Sim::new();
-    u.add(Entity::pline_pts(&[p(0., 0.), p(20., 0.), p(20., 20.), p(0., 20.)], true));
-    u.cmd("EXTRUDE").click(10., 0.).enter().ty("T").ty("10").ty("10");
+    u.add(Entity::pline_pts(
+        &[p(0., 0.), p(20., 0.), p(20., 20.), p(0., 20.)],
+        true,
+    ));
+    u.cmd("EXTRUDE")
+        .click(10., 0.)
+        .enter()
+        .ty("T")
+        .ty("10")
+        .ty("10");
     assert!(!u.busy());
     assert_eq!(u.solids().len(), 1);
     let so = u.solids();
@@ -107,7 +133,11 @@ fn union_subtract_and_intersect_pick_solids_on_screen() {
     assert!(!ids.contains(&s.solids()[0].id));
     s.cmd("U");
     assert_eq!(s.solids().len(), 2);
-    s.cmd("SUBTRACT").click(2., 5.).enter().click(13., 5.).enter();
+    s.cmd("SUBTRACT")
+        .click(2., 5.)
+        .enter()
+        .click(13., 5.)
+        .enter();
     assert!(!s.busy());
     assert_eq!(s.solids().len(), 1);
     near(vol(&s.solids()[0]), 500., 1e-4);
@@ -170,7 +200,10 @@ fn move_copy_rotate_scale_and_mirror_act_on_solids() {
 #[test]
 fn presspull_massprop_updateextrusion_and_subtractive_extrusions() {
     let s = Sim::new();
-    s.add(Entity::pline_pts(&[p(0., 0.), p(40., 0.), p(40., 40.), p(0., 40.)], true));
+    s.add(Entity::pline_pts(
+        &[p(0., 0.), p(40., 0.), p(40., 40.), p(0., 40.)],
+        true,
+    ));
     s.add(Entity::circle(p(20., 20.), 5.));
     s.cmd("PRESSPULL").click(5., 5.).ty("8"); // area with a circular hole
     near(vol(&s.solids()[0]), (1600. - PI * 25.) * 8., 4.);
@@ -179,28 +212,44 @@ fn presspull_massprop_updateextrusion_and_subtractive_extrusions() {
     assert!(s.history_has("Volume:"));
     // extrude a circle as a subtractive feature through the plate, then edit the circle and update
     let hole = s.add(Entity::circle(p(10., 10.), 3.));
-    s.cmd_args("EXTRUDE", Args::none().with("op", ArgVal::Str("subtract".into())));
+    s.cmd_args(
+        "EXTRUDE",
+        Args::none().with("op", ArgVal::Str("subtract".into())),
+    );
     s.click(13., 10.).enter().ty("20").click(5., 5.).enter();
     assert!(!s.busy());
     let v1 = vol(&s.solids()[0]);
     assert!(v1 < (1600. - PI * 25.) * 8. - 150., "drilled {v1}");
     let prog = s.solids()[0].program.clone().unwrap();
     assert_eq!(prog.features.len(), 1);
-    assert!(prog.base.is_some(), "the plate before the cut is kept as the base");
+    assert!(
+        prog.base.is_some(),
+        "the plate before the cut is kept as the base"
+    );
     s.doc_mut(|d| {
         d.change(|d| {
-            if let Some(Entity { kind: Kind::Circle { r, .. }, .. }) = d.by_id_mut(hole) {
+            if let Some(Entity {
+                kind: Kind::Circle { r, .. },
+                ..
+            }) = d.by_id_mut(hole)
+            {
                 *r = 5.;
             }
         })
     });
     s.set_sel(&[s.solids()[0].id]);
     s.cmd("UPDATEEXTRUSION");
-    assert!(vol(&s.solids()[0]) < v1 - 100., "a larger hole removes more material");
+    assert!(
+        vol(&s.solids()[0]) < v1 - 100.,
+        "a larger hole removes more material"
+    );
     s.doc_mut(|d| d.remove(hole));
     s.set_sel(&[s.solids()[0].id]);
     s.cmd("UPDATEEXTRUSION");
-    assert!(s.history_has("deleted"), "missing source outline is reported");
+    assert!(
+        s.history_has("deleted"),
+        "missing source outline is reported"
+    );
 }
 
 #[test]

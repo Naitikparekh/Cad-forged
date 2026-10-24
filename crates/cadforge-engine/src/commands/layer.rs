@@ -71,7 +71,12 @@ fn layer_names_of(c: &Ctx, ids: &[u64]) -> Vec<String> {
 
 async fn layer(c: Ctx, _a: Args) -> CmdResult<()> {
     if c.app(|a| a.ui.dialogs) {
-        c.app(|a| a.emit(crate::app::Event::Palette { name: "layers".into(), show: Some(true) }));
+        c.app(|a| {
+            a.emit(crate::app::Event::Palette {
+                name: "layers".into(),
+                show: Some(true),
+            })
+        });
         Ok(())
     } else {
         c.sub_forced("-LAYER", Args::none()).await;
@@ -87,7 +92,25 @@ async fn need(c: &Ctx, prompt: &str, default: Option<&str>) -> CmdResult<String>
     Ok(c.string(spec).await?.text)
 }
 
-const LAYER_OPTS: [&str; 17] = ["?", "Make", "Set", "New", "Rename", "ON", "OFF", "Color", "Ltype", "LWeight", "Plot", "Freeze", "Thaw", "LOck", "Unlock", "stAte", "Description"];
+const LAYER_OPTS: [&str; 17] = [
+    "?",
+    "Make",
+    "Set",
+    "New",
+    "Rename",
+    "ON",
+    "OFF",
+    "Color",
+    "Ltype",
+    "LWeight",
+    "Plot",
+    "Freeze",
+    "Thaw",
+    "LOck",
+    "Unlock",
+    "stAte",
+    "Description",
+];
 
 async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
     let cur = c.doc(|d| d.cur.layer.clone());
@@ -96,7 +119,17 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
             let lines: Vec<String> = c.doc(|d| {
                 d.layers
                     .iter()
-                    .map(|l| format!("{:<24} {} {} {}  {}  {}", l.name, if l.on { "On " } else { "Off" }, if l.frozen { "Frozen" } else { "Thawed" }, if l.locked { "Locked" } else { "Unlocked" }, describe_color(Some(l.color)), l.ltype))
+                    .map(|l| {
+                        format!(
+                            "{:<24} {} {} {}  {}  {}",
+                            l.name,
+                            if l.on { "On " } else { "Off" },
+                            if l.frozen { "Frozen" } else { "Thawed" },
+                            if l.locked { "Locked" } else { "Unlocked" },
+                            describe_color(Some(l.color)),
+                            l.ltype
+                        )
+                    })
                     .collect()
             });
             for l in lines {
@@ -104,7 +137,12 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
             }
         }
         "Make" => {
-            let n = need(c, "Enter name for new layer (becomes the current layer)", Some(&cur)).await?;
+            let n = need(
+                c,
+                "Enter name for new layer (becomes the current layer)",
+                Some(&cur),
+            )
+            .await?;
             if !n.is_empty() {
                 c.doc_mut(|d| -> Result<(), String> {
                     let name = d.ensure_layer(&n);
@@ -173,7 +211,11 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
             });
         }
         "LWeight" => {
-            let w: f64 = need(c, "Enter lineweight in millimeters (0.00 to 2.11)", None).await?.trim().parse().unwrap_or(f64::NAN);
+            let w: f64 = need(c, "Enter lineweight in millimeters (0.00 to 2.11)", None)
+                .await?
+                .trim()
+                .parse()
+                .unwrap_or(f64::NAN);
             let hw = (w * 100.0).round() as i32;
             if !LINEWEIGHTS.contains(&hw) {
                 return Err("Invalid lineweight.".into());
@@ -190,10 +232,25 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
             });
         }
         "stAte" => {
-            let k = c.keyword(ps("Enter an option [?/Save/Restore/Delete]").options(&["?", "Save", "Restore", "Delete"])).await?;
+            let k = c
+                .keyword(
+                    ps("Enter an option [?/Save/Restore/Delete]")
+                        .options(&["?", "Save", "Restore", "Delete"]),
+                )
+                .await?;
             if k.kw() == Some("?") {
-                let names: Vec<String> = c.doc(|d| d.settings.layer_states.as_ref().map(|s| s.keys().cloned().collect()).unwrap_or_default());
-                c.log(&if names.is_empty() { "No layer states.".to_string() } else { names.join("\n") });
+                let names: Vec<String> = c.doc(|d| {
+                    d.settings
+                        .layer_states
+                        .as_ref()
+                        .map(|s| s.keys().cloned().collect())
+                        .unwrap_or_default()
+                });
+                c.log(&if names.is_empty() {
+                    "No layer states.".to_string()
+                } else {
+                    names.join("\n")
+                });
                 return Ok(());
             }
             let n = need(c, "Enter layer state name", None).await?;
@@ -201,12 +258,22 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
                 Some("Save") => c.doc_mut(|d| {
                     d.change(|d| {
                         let layers = d.layers.clone();
-                        d.settings.layer_states.get_or_insert_with(Default::default).insert(n.clone(), layers);
+                        d.settings
+                            .layer_states
+                            .get_or_insert_with(Default::default)
+                            .insert(n.clone(), layers);
                     })
                 }),
                 Some("Restore") => {
-                    let st = c.doc(|d| d.settings.layer_states.as_ref().and_then(|s| s.get(&n).cloned()));
-                    let Some(st) = st else { return Err("Layer state not found.".into()) };
+                    let st = c.doc(|d| {
+                        d.settings
+                            .layer_states
+                            .as_ref()
+                            .and_then(|s| s.get(&n).cloned())
+                    });
+                    let Some(st) = st else {
+                        return Err("Layer state not found.".into());
+                    };
                     c.doc_mut(|d| {
                         d.change(|d| {
                             for s in st {
@@ -227,7 +294,12 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
             }
         }
         verb => {
-            let n = need(c, &format!("Enter name list of layer(s) to {verb}"), Some(&cur)).await?;
+            let n = need(
+                c,
+                &format!("Enter name list of layer(s) to {verb}"),
+                Some(&cur),
+            )
+            .await?;
             let names = c.doc(|d| match_layers(d, &n));
             if names.is_empty() {
                 return Err(format!("No layer matched \"{n}\".").into());
@@ -267,7 +339,9 @@ async fn layer_option(c: &Ctx, kw: &str) -> CmdResult<()> {
 async fn layer_cmdline(c: Ctx, _a: Args) -> CmdResult<()> {
     loop {
         let r = c.keyword(ps("Enter an option [?/Make/Set/New/Rename/ON/OFF/Color/Ltype/LWeight/Plot/Freeze/Thaw/LOck/Unlock/stAte/Description]").options(&LAYER_OPTS).allow_enter()).await?;
-        let Some(kw) = r.kw().map(str::to_string) else { return Ok(()) };
+        let Some(kw) = r.kw().map(str::to_string) else {
+            return Ok(());
+        };
         match layer_option(&c, &kw).await {
             Err(CmdError::Msg(m)) => c.log_error(&m),
             Err(e) => return Err(e),
@@ -296,26 +370,35 @@ fn all_layer_names(c: &Ctx) -> Vec<String> {
 
 async fn pick_layer(c: &Ctx, prompt: &str) -> CmdResult<Option<String>> {
     // the layer commands act on the layer of the picked object, so a locked layer must not hide it
-    let Some(id) = c.pick_entity(ps(prompt).allow_locked()).await? else { return Ok(None) };
-    Ok(c.entity_by_id(id).map(|e| c.doc(|d| d.layer_of(&e).name.clone())))
+    let Some(id) = c.pick_entity(ps(prompt).allow_locked()).await? else {
+        return Ok(None);
+    };
+    Ok(c.entity_by_id(id)
+        .map(|e| c.doc(|d| d.layer_of(&e).name.clone())))
 }
 
 async fn laymcur(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(n) = pick_layer(&c, "Select object whose layer will become current").await? else { return Ok(()) };
+    let Some(n) = pick_layer(&c, "Select object whose layer will become current").await? else {
+        return Ok(());
+    };
     c.doc_mut(|d| d.set_current_layer(&n))?;
     c.log(&format!("{n} is now the current layer."));
     Ok(())
 }
 
 async fn layoff(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(n) = pick_layer(&c, "Select an object on the layer to be turned off").await? else { return Ok(()) };
+    let Some(n) = pick_layer(&c, "Select an object on the layer to be turned off").await? else {
+        return Ok(());
+    };
     set_layers(&c, &[n], |l| l.on = false);
     c.ed(|e| e.prune());
     Ok(())
 }
 
 async fn layfrz(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(n) = pick_layer(&c, "Select an object on the layer to be frozen").await? else { return Ok(()) };
+    let Some(n) = pick_layer(&c, "Select an object on the layer to be frozen").await? else {
+        return Ok(());
+    };
     if c.doc(|d| d.cur.layer == n) {
         c.log_error("The current layer cannot be frozen.");
         return Ok(());
@@ -340,15 +423,25 @@ async fn layulk(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn layiso(c: Ctx, _a: Args) -> CmdResult<()> {
-    let sel = c.select(ps("Select objects on the layer(s) to be isolated")).await?;
-    let keep: BTreeSet<String> = layer_names_of(&c, &sel.ents).into_iter().map(|n| n.to_lowercase()).collect();
+    let sel = c
+        .select(ps("Select objects on the layer(s) to be isolated"))
+        .await?;
+    let keep: BTreeSet<String> = layer_names_of(&c, &sel.ents)
+        .into_iter()
+        .map(|n| n.to_lowercase())
+        .collect();
     if keep.is_empty() {
         return Ok(());
     }
     let fade = c.pref("LAYLOCKFADECTL") > 0.0;
     let cur = c.doc(|d| d.cur.layer.clone());
     c.doc_mut(|d| {
-        d.layer_iso = Some(d.layers.iter().map(|l| (l.name.clone(), l.on, l.locked)).collect());
+        d.layer_iso = Some(
+            d.layers
+                .iter()
+                .map(|l| (l.name.clone(), l.on, l.locked))
+                .collect(),
+        );
         d.change(|d| {
             for l in d.layers.iter_mut() {
                 if !keep.contains(&l.name.to_lowercase()) && l.name != cur {
@@ -361,8 +454,18 @@ async fn layiso(c: Ctx, _a: Args) -> CmdResult<()> {
             }
         })
     });
-    let names: Vec<String> = c.doc(|d| d.layers.iter().filter(|l| keep.contains(&l.name.to_lowercase())).map(|l| l.name.clone()).collect());
-    c.log(&format!("Layer{} {} isolated.", if keep.len() == 1 { "" } else { "s" }, names.join(", ")));
+    let names: Vec<String> = c.doc(|d| {
+        d.layers
+            .iter()
+            .filter(|l| keep.contains(&l.name.to_lowercase()))
+            .map(|l| l.name.clone())
+            .collect()
+    });
+    c.log(&format!(
+        "Layer{} {} isolated.",
+        if keep.len() == 1 { "" } else { "s" },
+        names.join(", ")
+    ));
     c.ed(|e| e.clear_sel());
     Ok(())
 }
@@ -387,7 +490,9 @@ async fn layuniso(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn laycur(c: Ctx, _a: Args) -> CmdResult<()> {
-    let sel = c.select(ps("Select objects to be changed to the current layer")).await?;
+    let sel = c
+        .select(ps("Select objects to be changed to the current layer"))
+        .await?;
     if sel.ents.is_empty() {
         return Ok(());
     }
@@ -403,7 +508,11 @@ async fn laycur(c: Ctx, _a: Args) -> CmdResult<()> {
             }
         })
     });
-    c.log(&format!("{} object{} changed to layer {cur}.", sel.ents.len(), if sel.ents.len() == 1 { "" } else { "s" }));
+    c.log(&format!(
+        "{} object{} changed to layer {cur}.",
+        sel.ents.len(),
+        if sel.ents.len() == 1 { "" } else { "s" }
+    ));
     Ok(())
 }
 
@@ -412,8 +521,15 @@ async fn laymch(c: Ctx, _a: Args) -> CmdResult<()> {
     if sel.ents.is_empty() {
         return Ok(());
     }
-    let Some(dest) = c.pick_entity(ps("Select object on destination layer")).await? else { return Ok(()) };
-    let Some(de) = c.entity_by_id(dest) else { return Ok(()) };
+    let Some(dest) = c
+        .pick_entity(ps("Select object on destination layer"))
+        .await?
+    else {
+        return Ok(());
+    };
+    let Some(de) = c.entity_by_id(dest) else {
+        return Ok(());
+    };
     let layer = de.layer.clone();
     c.doc_mut(|d| {
         d.change(|d| {
@@ -428,21 +544,41 @@ async fn laymch(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 async fn laydel(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(id) = c.pick_entity(ps("Select object on the layer to be deleted")).await? else { return Ok(()) };
-    let Some(e) = c.entity_by_id(id) else { return Ok(()) };
+    let Some(id) = c
+        .pick_entity(ps("Select object on the layer to be deleted"))
+        .await?
+    else {
+        return Ok(());
+    };
+    let Some(e) = c.entity_by_id(id) else {
+        return Ok(());
+    };
     let name = e.layer.clone();
     if name == "0" || c.doc(|d| d.cur.layer == name) {
         c.log_error(&format!("Layer {name} cannot be deleted."));
         return Ok(());
     }
-    let yes = c.keyword(ps(&format!("Delete layer \"{name}\" and all of its objects? [Yes/No]")).options(&["Yes", "No"]).default_str("No")).await?;
+    let yes = c
+        .keyword(
+            ps(&format!(
+                "Delete layer \"{name}\" and all of its objects? [Yes/No]"
+            ))
+            .options(&["Yes", "No"])
+            .default_str("No"),
+        )
+        .await?;
     if yes.kw() != Some("Yes") {
         return Ok(());
     }
     let low = name.to_lowercase();
     c.doc_mut(|d| {
         d.change(|d| {
-            let ids: Vec<u64> = d.entities().iter().filter(|x| x.layer.to_lowercase() == low).map(|x| x.id).collect();
+            let ids: Vec<u64> = d
+                .entities()
+                .iter()
+                .filter(|x| x.layer.to_lowercase() == low)
+                .map(|x| x.id)
+                .collect();
             d.remove_all(&ids);
             d.layers.retain(|l| l.name.to_lowercase() != low);
         })
@@ -456,14 +592,22 @@ async fn laydel(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn color(c: Ctx, args: Args) -> CmdResult<()> {
     if !args.flag("cmdline") {
         let cur = c.doc(|d| d.cur.color);
-        if let Some(r) = c.dialog(DialogReq::Color { value: cur, allow_by_layer: true }).await? {
+        if let Some(r) = c
+            .dialog(DialogReq::Color {
+                value: cur,
+                allow_by_layer: true,
+            })
+            .await?
+        {
             if let DialogReply::Color(v) = r {
                 c.doc_mut(|d| d.cur.color = v);
             }
             return Ok(());
         }
     }
-    let r = c.string(ps("Enter default object color [Truecolor/COlorbook]").default_str("BYLAYER")).await?;
+    let r = c
+        .string(ps("Enter default object color [Truecolor/COlorbook]").default_str("BYLAYER"))
+        .await?;
     let v = parse_color(&r.text)?;
     c.doc_mut(|d| d.cur.color = v);
     Ok(())
@@ -473,7 +617,9 @@ async fn linetype(c: Ctx, _a: Args) -> CmdResult<()> {
     if c.dialog(DialogReq::Linetype).await?.is_some() {
         return Ok(());
     }
-    let t = c.string(ps("Enter linetype name").default_str("BYLAYER")).await?;
+    let t = c
+        .string(ps("Enter linetype name").default_str("BYLAYER"))
+        .await?;
     if t.text.eq_ignore_ascii_case("bylayer") {
         c.doc_mut(|d| d.cur.ltype = None);
     } else {
@@ -487,7 +633,9 @@ async fn lweight(c: Ctx, _a: Args) -> CmdResult<()> {
     if c.dialog(DialogReq::Lweight).await?.is_some() {
         return Ok(());
     }
-    let v = c.number(ps("Enter lineweight in mm (0.00-2.11), or -1 for ByLayer").default_num(-1.0)).await?;
+    let v = c
+        .number(ps("Enter lineweight in mm (0.00-2.11), or -1 for ByLayer").default_num(-1.0))
+        .await?;
     let Some(x) = v.value() else { return Ok(()) };
     if x == -1.0 {
         c.doc_mut(|d| d.cur.lw = None);
@@ -503,7 +651,13 @@ async fn lweight(c: Ctx, _a: Args) -> CmdResult<()> {
 
 async fn ltscale(c: Ctx, _a: Args) -> CmdResult<()> {
     let cur = c.doc(|d| d.settings.ltscale);
-    let v = c.number(ps("Enter new linetype scale factor").default_num(cur).min(1e-9)).await?;
+    let v = c
+        .number(
+            ps("Enter new linetype scale factor")
+                .default_num(cur)
+                .min(1e-9),
+        )
+        .await?;
     if let Some(x) = v.value().filter(|x| *x != 0.0) {
         c.setvar("LTSCALE", x)?;
     }
@@ -511,22 +665,134 @@ async fn ltscale(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(dl("LAYER", run(layer)).aliases(&["LA"]).title("Layer Properties").icon("layers").desc("Manages layers and layer properties."));
-    r.define(dl("-LAYER", run(layer_cmdline)).title("Layer (command line)").icon("layers").desc("Manages layers from the command line."));
-    r.define(dl("LAYMCUR", run(laymcur)).title("Make Current").icon("laymcur").desc("Sets the current layer to that of a selected object."));
-    r.define(dl("LAYOFF", run(layoff)).title("Layer Off").icon("layoff").desc("Turns off the layer of selected objects."));
-    r.define(dl("LAYON", run(|c, _a| async move { let n = all_layer_names(&c); set_layers(&c, &n, |l| l.on = true); Ok(()) })).title("Turn All Layers On").icon("layon").desc("Turns on all layers in the drawing."));
-    r.define(dl("LAYFRZ", run(layfrz)).title("Layer Freeze").icon("layfrz").desc("Freezes the layer of selected objects."));
-    r.define(dl("LAYTHW", run(|c, _a| async move { let n = all_layer_names(&c); set_layers(&c, &n, |l| l.frozen = false); Ok(()) })).title("Thaw All Layers").icon("laythw").desc("Thaws all layers in the drawing."));
-    r.define(dl("LAYLCK", run(laylck)).title("Layer Lock").icon("laylck").desc("Locks the layer of a selected object."));
-    r.define(dl("LAYULK", run(layulk)).title("Layer Unlock").icon("layulk").desc("Unlocks the layer of a selected object."));
-    r.define(dl("LAYISO", run(layiso)).title("Layer Isolate").icon("layiso").desc("Hides or locks all layers except those of the selected objects."));
-    r.define(dl("LAYUNISO", run(layuniso)).title("Layer Unisolate").icon("layuniso").desc("Restores layers hidden or locked by LAYISO."));
-    r.define(dl("LAYCUR", run(laycur)).title("Change to Current Layer").icon("laycur").desc("Changes the layer of selected objects to the current layer."));
-    r.define(dl("LAYMCH", run(laymch)).aliases(&["LAYMATCH"]).title("Match Layer").icon("laymatch").desc("Changes the layer of selected objects to match the layer of a destination object."));
-    r.define(dl("LAYDEL", run(laydel)).title("Layer Delete").icon("laydel").desc("Deletes the layers of selected objects and the objects on them."));
-    r.define(dl("COLOR", run(color)).aliases(&["COL"]).title("Color").icon("color").desc("Sets the color for new objects."));
-    r.define(dl("LINETYPE", run(linetype)).aliases(&["LT", "LTYPE"]).title("Linetype").icon("linetype").desc("Loads, sets, and modifies linetypes."));
-    r.define(dl("LWEIGHT", run(lweight)).aliases(&["LW", "LINEWEIGHT"]).title("Lineweight").icon("lweight").desc("Sets the current lineweight, lineweight display options, and lineweight units."));
-    r.define(dl("LTSCALE", run(ltscale)).aliases(&["LTS"]).title("Linetype Scale").icon("ltscale").desc("Sets the global linetype scale factor."));
+    r.define(
+        dl("LAYER", run(layer))
+            .aliases(&["LA"])
+            .title("Layer Properties")
+            .icon("layers")
+            .desc("Manages layers and layer properties."),
+    );
+    r.define(
+        dl("-LAYER", run(layer_cmdline))
+            .title("Layer (command line)")
+            .icon("layers")
+            .desc("Manages layers from the command line."),
+    );
+    r.define(
+        dl("LAYMCUR", run(laymcur))
+            .title("Make Current")
+            .icon("laymcur")
+            .desc("Sets the current layer to that of a selected object."),
+    );
+    r.define(
+        dl("LAYOFF", run(layoff))
+            .title("Layer Off")
+            .icon("layoff")
+            .desc("Turns off the layer of selected objects."),
+    );
+    r.define(
+        dl(
+            "LAYON",
+            run(|c, _a| async move {
+                let n = all_layer_names(&c);
+                set_layers(&c, &n, |l| l.on = true);
+                Ok(())
+            }),
+        )
+        .title("Turn All Layers On")
+        .icon("layon")
+        .desc("Turns on all layers in the drawing."),
+    );
+    r.define(
+        dl("LAYFRZ", run(layfrz))
+            .title("Layer Freeze")
+            .icon("layfrz")
+            .desc("Freezes the layer of selected objects."),
+    );
+    r.define(
+        dl(
+            "LAYTHW",
+            run(|c, _a| async move {
+                let n = all_layer_names(&c);
+                set_layers(&c, &n, |l| l.frozen = false);
+                Ok(())
+            }),
+        )
+        .title("Thaw All Layers")
+        .icon("laythw")
+        .desc("Thaws all layers in the drawing."),
+    );
+    r.define(
+        dl("LAYLCK", run(laylck))
+            .title("Layer Lock")
+            .icon("laylck")
+            .desc("Locks the layer of a selected object."),
+    );
+    r.define(
+        dl("LAYULK", run(layulk))
+            .title("Layer Unlock")
+            .icon("layulk")
+            .desc("Unlocks the layer of a selected object."),
+    );
+    r.define(
+        dl("LAYISO", run(layiso))
+            .title("Layer Isolate")
+            .icon("layiso")
+            .desc("Hides or locks all layers except those of the selected objects."),
+    );
+    r.define(
+        dl("LAYUNISO", run(layuniso))
+            .title("Layer Unisolate")
+            .icon("layuniso")
+            .desc("Restores layers hidden or locked by LAYISO."),
+    );
+    r.define(
+        dl("LAYCUR", run(laycur))
+            .title("Change to Current Layer")
+            .icon("laycur")
+            .desc("Changes the layer of selected objects to the current layer."),
+    );
+    r.define(
+        dl("LAYMCH", run(laymch))
+            .aliases(&["LAYMATCH"])
+            .title("Match Layer")
+            .icon("laymatch")
+            .desc(
+                "Changes the layer of selected objects to match the layer of a destination object.",
+            ),
+    );
+    r.define(
+        dl("LAYDEL", run(laydel))
+            .title("Layer Delete")
+            .icon("laydel")
+            .desc("Deletes the layers of selected objects and the objects on them."),
+    );
+    r.define(
+        dl("COLOR", run(color))
+            .aliases(&["COL"])
+            .title("Color")
+            .icon("color")
+            .desc("Sets the color for new objects."),
+    );
+    r.define(
+        dl("LINETYPE", run(linetype))
+            .aliases(&["LT", "LTYPE"])
+            .title("Linetype")
+            .icon("linetype")
+            .desc("Loads, sets, and modifies linetypes."),
+    );
+    r.define(
+        dl("LWEIGHT", run(lweight))
+            .aliases(&["LW", "LINEWEIGHT"])
+            .title("Lineweight")
+            .icon("lweight")
+            .desc("Sets the current lineweight, lineweight display options, and lineweight units."),
+    );
+    r.define(
+        dl("LTSCALE", run(ltscale))
+            .aliases(&["LTS"])
+            .title("Linetype Scale")
+            .icon("ltscale")
+            .desc("Sets the global linetype scale factor."),
+    );
 }

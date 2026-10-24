@@ -37,7 +37,12 @@ fn db(name: &str, f: RunFn) -> CommandDef {
 
 /// The name of the block called `text` (case-insensitive).
 fn block_key(c: &Ctx, text: &str) -> Option<String> {
-    c.doc(|d| d.blocks.keys().find(|n| n.eq_ignore_ascii_case(text)).cloned())
+    c.doc(|d| {
+        d.blocks
+            .keys()
+            .find(|n| n.eq_ignore_ascii_case(text))
+            .cloned()
+    })
 }
 
 /// Re-register `name` so that the block references it creates are completed with attribute values.
@@ -50,7 +55,13 @@ fn with_attributes(r: &mut Registry, name: &str) {
         async move {
             let seen: HashSet<u64> = c.doc(|d| d.entities().iter().map(|e| e.id).collect());
             let res = inner(c.clone(), a).await;
-            let fresh: Vec<u64> = c.doc(|d| d.entities().iter().filter(|e| matches!(e.kind, Kind::Insert(_)) && !seen.contains(&e.id)).map(|e| e.id).collect());
+            let fresh: Vec<u64> = c.doc(|d| {
+                d.entities()
+                    .iter()
+                    .filter(|e| matches!(e.kind, Kind::Insert(_)) && !seen.contains(&e.id))
+                    .map(|e| e.id)
+                    .collect()
+            });
             for id in &fresh {
                 // cancelling an attribute prompt cancels the insertion; after a cancelled INSERT the defaults are used
                 if let Err(e) = attrs::fill_attributes(&c, *id, res.is_ok()).await {
@@ -66,7 +77,9 @@ fn with_attributes(r: &mut Registry, name: &str) {
 
 async fn base(c: Ctx, _a: Args) -> CmdResult<()> {
     let cur = c.doc(|d| d.base);
-    let Some(p) = c.point(ps("Enter base point").default_pt(cur)).await?.pt() else { return Ok(()) };
+    let Some(p) = c.point(ps("Enter base point").default_pt(cur)).await?.pt() else {
+        return Ok(());
+    };
     c.doc_mut(|d| d.change(|d| d.base = p));
     Ok(())
 }
@@ -74,7 +87,12 @@ async fn base(c: Ctx, _a: Args) -> CmdResult<()> {
 pub fn register(r: &mut Registry) {
     with_attributes(r, "INSERT");
     with_attributes(r, "BLOCK");
-    r.define(db("BASE", run(base)).title("Base").icon("block").desc("Sets the insertion base point for the current drawing."));
+    r.define(
+        db("BASE", run(base))
+            .title("Base")
+            .icon("block")
+            .desc("Sets the insertion base point for the current drawing."),
+    );
     attrs::register(r);
     bedit::register(r);
     refedit::register(r);

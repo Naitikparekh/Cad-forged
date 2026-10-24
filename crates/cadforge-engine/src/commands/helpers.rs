@@ -47,7 +47,12 @@ pub fn apply_transform(doc: &mut Drawing, ids: &[u64], solid_ids: &[u64], m: &Ma
 
 /// Add transformed copies to the drawing, remapping group ids so copies form their own groups.
 /// Returns the new entity ids and solid ids.
-pub fn add_copies(doc: &mut Drawing, entities: &[Entity], solids: &[Solid], m: &Mat) -> (Vec<u64>, Vec<u64>) {
+pub fn add_copies(
+    doc: &mut Drawing,
+    entities: &[Entity],
+    solids: &[Solid],
+    m: &Mat,
+) -> (Vec<u64>, Vec<u64>) {
     let mut group_map: HashMap<String, String> = HashMap::new();
     let mut out = vec![];
     for e in entities {
@@ -55,7 +60,10 @@ pub fn add_copies(doc: &mut Drawing, entities: &[Entity], solids: &[Solid], m: &
         transform_entity(&mut c, m);
         if let Some(g) = c.grp.clone() {
             let n = group_map.len();
-            let ng = group_map.entry(g).or_insert_with(|| format!("G{}_{}", doc.next_id, n)).clone();
+            let ng = group_map
+                .entry(g)
+                .or_insert_with(|| format!("G{}_{}", doc.next_id, n))
+                .clone();
             c.grp = Some(ng);
         }
         out.push(doc.add(c));
@@ -76,7 +84,11 @@ pub fn pt_str(p: Pt, prec: usize) -> String {
 /// Number with at most `prec` decimals (no trailing zeros), like JS `+x.toFixed(prec)`.
 pub fn num(v: f64, prec: usize) -> String {
     let s = format!("{:.*}", prec, v);
-    let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
+    let s = if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        s
+    };
     if s == "-0" {
         "0".into()
     } else {
@@ -101,7 +113,10 @@ pub fn rect_verts(a: Pt, b: Pt, rot: f64) -> Vec<Vertex> {
     let v = pt(-u.y, u.x);
     let d = b - a;
     let (w, h) = (dot(d, u), dot(d, v));
-    [a, a + u * w, b, a + v * h].iter().map(|p| Vertex::new(p.x, p.y, 0.0)).collect()
+    [a, a + u * w, b, a + v * h]
+        .iter()
+        .map(|p| Vertex::new(p.x, p.y, 0.0))
+        .collect()
 }
 
 /// Rubber-band preview of a polyline under construction.

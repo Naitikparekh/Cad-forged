@@ -76,7 +76,10 @@ impl Value {
 
     /// A proper list.
     pub fn list(items: Vec<Value>) -> Value {
-        items.into_iter().rev().fold(Value::Nil, |tail, x| Value::cons(x, tail))
+        items
+            .into_iter()
+            .rev()
+            .fold(Value::Nil, |tail, x| Value::cons(x, tail))
     }
 
     /// A point as `(x y 0.0)`.
@@ -180,13 +183,17 @@ impl Value {
         match (self, o) {
             (Value::Nil, Value::Nil) | (Value::T, Value::T) => true,
             (Value::Int(a), Value::Int(b)) => a == b,
-            (Value::Int(_) | Value::Real(_), Value::Int(_) | Value::Real(_)) => self.as_f64() == o.as_f64(),
+            (Value::Int(_) | Value::Real(_), Value::Int(_) | Value::Real(_)) => {
+                self.as_f64() == o.as_f64()
+            }
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Sym(a), Value::Sym(b)) => a == b,
             (Value::Ename(a), Value::Ename(b)) => a == b,
             (Value::Sel(a), Value::Sel(b)) => Rc::ptr_eq(a, b),
             (Value::Fun(a), Value::Fun(b)) => Rc::ptr_eq(a, b),
-            (Value::Cons(a), Value::Cons(b)) => Rc::ptr_eq(a, b) || (a.0.equal(&b.0) && a.1.equal(&b.1)),
+            (Value::Cons(a), Value::Cons(b)) => {
+                Rc::ptr_eq(a, b) || (a.0.equal(&b.0) && a.1.equal(&b.1))
+            }
             _ => false,
         }
     }

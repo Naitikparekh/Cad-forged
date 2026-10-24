@@ -56,15 +56,25 @@ pub enum Event {
     Regen,
     HatchSession,
     /// Show / hide / toggle (`None`) a UI palette by name.
-    Palette { name: String, show: Option<bool> },
+    Palette {
+        name: String,
+        show: Option<bool>,
+    },
     /// A command delegates to the host UI (open/save/plot/settings dialogs...).
-    UiAction { name: String, args: Args },
+    UiAction {
+        name: String,
+        args: Args,
+    },
     /// Write these entities to a new drawing file (WBLOCK).
     Export(Vec<Entity>),
     /// Export solids as `obj` / `stl`.
     ExportMesh(String),
     /// Hand a generated file (CSV extracts, images...) to the host: download in the browser, write next to the drawing natively.
-    SaveFile { name: String, data: Vec<u8>, mime: String },
+    SaveFile {
+        name: String,
+        data: Vec<u8>,
+        mime: String,
+    },
     /// A command asked for a modal dialog (see [`App::pending`]).
     Dialog,
 }
@@ -179,7 +189,11 @@ impl App {
         self.sysvars.get(name, self.doc())
     }
 
-    pub fn setvar(&mut self, name: &str, v: impl Into<crate::sysvars::Value>) -> Result<(), String> {
+    pub fn setvar(
+        &mut self,
+        name: &str,
+        v: impl Into<crate::sysvars::Value>,
+    ) -> Result<(), String> {
         let i = self.active.unwrap_or(0);
         let doc = self.editors.get_mut(i).map(|e| &mut e.doc);
         self.sysvars.set(name, v, doc)
@@ -200,7 +214,10 @@ impl App {
     }
 
     pub fn log(&mut self, text: &str, kind: &str) {
-        self.history.push(LogLine { text: text.to_string(), kind: kind.into() });
+        self.history.push(LogLine {
+            text: text.to_string(),
+            kind: kind.into(),
+        });
         if self.history.len() > 2000 {
             let n = self.history.len() - 2000;
             self.history.drain(..n);
@@ -212,13 +229,20 @@ impl App {
 
     pub fn new_drawing(&mut self, name: Option<&str>, imperial: bool) -> u64 {
         self.counter += 1;
-        let mut doc = Drawing::new(&name.map(str::to_string).unwrap_or_else(|| format!("Drawing{}", self.counter)));
+        let mut doc = Drawing::new(
+            &name
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("Drawing{}", self.counter)),
+        );
         if imperial {
             let st = &mut doc.settings;
             st.units.ins_units = 1;
             st.units.precision = 4;
             st.text_height = 0.2;
-            let d = st.dim_styles.get_mut("Standard").expect("Standard dim style");
+            let d = st
+                .dim_styles
+                .get_mut("Standard")
+                .expect("Standard dim style");
             d.txt = 0.18;
             d.asz = 0.18;
             d.exo = 0.0625;
@@ -281,7 +305,11 @@ impl App {
 
     /// Feed lines to the command line one at a time (SCRIPT), skipping `;` comments.
     pub fn queue_script(&mut self, lines: Vec<String>) {
-        self.script.extend(lines.into_iter().filter(|l| !l.trim_start().starts_with(';')));
+        self.script.extend(
+            lines
+                .into_iter()
+                .filter(|l| !l.trim_start().starts_with(';')),
+        );
     }
 
     pub(crate) fn next_script_line(&mut self) -> Option<String> {
@@ -379,7 +407,13 @@ impl Handle {
                     }
                 }
             };
-            let fut = self.0.borrow_mut().rt.tasks.get_mut(&id).and_then(|t| t.fut.take());
+            let fut = self
+                .0
+                .borrow_mut()
+                .rt
+                .tasks
+                .get_mut(&id)
+                .and_then(|t| t.fut.take());
             let Some(mut fut) = fut else { continue };
             match fut.as_mut().poll(&mut cx) {
                 Poll::Pending => {

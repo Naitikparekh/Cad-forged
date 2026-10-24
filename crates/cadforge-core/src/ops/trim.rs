@@ -30,9 +30,19 @@ fn cut_params(path: &Path, cut_segs: &[Seg], extend_cutters: bool) -> Vec<f64> {
 
 /// Trim the part of `target` under `pick` back to the nearest cutting edges.
 /// Returns the entities that should take the target's place (possibly none).
-pub fn trim(target: &Entity, pick: Pt, cutters: &[&Entity], doc: &Drawing, extend_cutters: bool) -> Result<Vec<Entity>, String> {
+pub fn trim(
+    target: &Entity,
+    pick: Pt,
+    cutters: &[&Entity],
+    doc: &Drawing,
+    extend_cutters: bool,
+) -> Result<Vec<Entity>, String> {
     let path = path_of(target, doc).ok_or("That object cannot be trimmed.")?;
-    let cut_segs: Vec<Seg> = cutters.iter().filter(|c| c.id != target.id || target.id == 0).flat_map(|c| edge_segs(c, doc)).collect();
+    let cut_segs: Vec<Seg> = cutters
+        .iter()
+        .filter(|c| c.id != target.id || target.id == 0)
+        .flat_map(|c| edge_segs(c, doc))
+        .collect();
     let cuts = cut_params(&path, &cut_segs, extend_cutters);
     let n = path.segs.len() as f64;
     let up = path_nearest(&path, pick).u;
@@ -62,8 +72,17 @@ pub fn trim(target: &Entity, pick: Pt, cutters: &[&Entity], doc: &Drawing, exten
     if cuts.len() < 2 {
         return Err("A closed object needs at least two cutting points.".into());
     }
-    let prev = cuts.iter().rev().find(|&&u| u < up - EPS).copied().unwrap_or(*cuts.last().expect("cuts"));
-    let next = cuts.iter().find(|&&u| u > up + EPS).copied().unwrap_or(cuts[0]);
+    let prev = cuts
+        .iter()
+        .rev()
+        .find(|&&u| u < up - EPS)
+        .copied()
+        .unwrap_or(*cuts.last().expect("cuts"));
+    let next = cuts
+        .iter()
+        .find(|&&u| u > up + EPS)
+        .copied()
+        .unwrap_or(cuts[0]);
     let rest = path_slice(&path, next, prev); // from the next cut around to the previous cut
     Ok(mk(merge_segs(&rest)).into_iter().collect())
 }
@@ -95,7 +114,13 @@ fn reversed(segs: &[Seg]) -> Vec<Seg> {
 }
 
 /// Extend the end of `target` nearest `pick` to the closest boundary.
-pub fn extend(target: &Entity, pick: Pt, boundaries: &[&Entity], doc: &Drawing, extend_boundaries: bool) -> Result<Vec<Entity>, String> {
+pub fn extend(
+    target: &Entity,
+    pick: Pt,
+    boundaries: &[&Entity],
+    doc: &Drawing,
+    extend_boundaries: bool,
+) -> Result<Vec<Entity>, String> {
     let ok = match &target.kind {
         Kind::Line { .. } | Kind::Arc { .. } => true,
         Kind::Pline { closed, .. } => !closed,
@@ -105,17 +130,30 @@ pub fn extend(target: &Entity, pick: Pt, boundaries: &[&Entity], doc: &Drawing, 
         return Err("That object cannot be extended.".into());
     }
     let path = path_of(target, doc).ok_or("That object cannot be extended.")?;
-    let near_start = dist(pick, path.segs[0].start()) < dist(pick, path.segs[path.segs.len() - 1].end());
+    let near_start =
+        dist(pick, path.segs[0].start()) < dist(pick, path.segs[path.segs.len() - 1].end());
     let mut segs = path.segs.clone();
     if near_start {
         segs = reversed(&segs);
     }
     let last = *segs.last().expect("path has segments");
-    let bounds: Vec<Seg> = boundaries.iter().filter(|b| b.id != target.id || target.id == 0).flat_map(|b| edge_segs(b, doc)).collect();
-    let (t, p) = *extension_hits(&last, &bounds, extend_boundaries).first().ok_or("No boundary in the extension direction.")?;
+    let bounds: Vec<Seg> = boundaries
+        .iter()
+        .filter(|b| b.id != target.id || target.id == 0)
+        .flat_map(|b| edge_segs(b, doc))
+        .collect();
+    let (t, p) = *extension_hits(&last, &bounds, extend_boundaries)
+        .first()
+        .ok_or("No boundary in the extension direction.")?;
     let ext = match last {
         Seg::L { a, .. } => Seg::line(a, p),
-        Seg::A { c, r, a0, sw, full } => Seg::A { c, r, a0, sw: sw * t, full },
+        Seg::A { c, r, a0, sw, full } => Seg::A {
+            c,
+            r,
+            a0,
+            sw: sw * t,
+            full,
+        },
     };
     *segs.last_mut().expect("path has segments") = ext;
     if near_start {
@@ -161,7 +199,13 @@ pub fn split_at(target: &Entity, p: Pt, doc: &Drawing) -> Result<Vec<Entity>, St
     if u < 1e-7 || u > n - 1e-7 {
         return Err("The point is at an end of the object.".into());
     }
-    Ok([entity_from_segs(&slice_linear(&path.segs, 0.0, u), target, false), entity_from_segs(&slice_linear(&path.segs, u, n), target, false)].into_iter().flatten().collect())
+    Ok([
+        entity_from_segs(&slice_linear(&path.segs, 0.0, u), target, false),
+        entity_from_segs(&slice_linear(&path.segs, u, n), target, false),
+    ]
+    .into_iter()
+    .flatten()
+    .collect())
 }
 
 pub struct JoinResult {
@@ -174,7 +218,15 @@ pub struct JoinResult {
 
 /// JOIN: chain connected lines, arcs and polylines. Returns one entity per chain.
 pub fn join(entities: &[&Entity], doc: &Drawing, tol: f64) -> JoinResult {
-    let items: Vec<(usize, Path)> = entities.iter().enumerate().filter_map(|(i, e)| path_of(e, doc).filter(|p| !p.closed && !p.segs.is_empty()).map(|p| (i, p))).collect();
+    let items: Vec<(usize, Path)> = entities
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| {
+            path_of(e, doc)
+                .filter(|p| !p.closed && !p.segs.is_empty())
+                .map(|p| (i, p))
+        })
+        .collect();
     let mut used = vec![false; items.len()];
     let mut results = vec![];
     for si in 0..items.len() {
@@ -216,7 +268,9 @@ pub fn join(entities: &[&Entity], doc: &Drawing, tol: f64) -> JoinResult {
         // merge collinear lines / co-circular arcs
         let mut merged: Vec<Seg> = vec![];
         for s in &segs {
-            if let (Some(Seg::L { a: la, b: lb, .. }), Seg::L { a, b, .. }) = (merged.last().copied(), s) {
+            if let (Some(Seg::L { a: la, b: lb, .. }), Seg::L { a, b, .. }) =
+                (merged.last().copied(), s)
+            {
                 let (d1, d2) = (lb - la, *b - *a);
                 if cross(d1, d2).abs() < 1e-9 * len(d1) * len(d2) && dot(d1, d2) > 0.0 {
                     *merged.last_mut().expect("last exists") = Seg::line(la, *b);
@@ -227,7 +281,11 @@ pub fn join(entities: &[&Entity], doc: &Drawing, tol: f64) -> JoinResult {
         }
         let arc_merged = merge_segs(&merged);
         let template = entities[items[si].0];
-        let closed = arc_merged.len() > 1 && dist(arc_merged[0].start(), arc_merged[arc_merged.len() - 1].end()) <= tol;
+        let closed = arc_merged.len() > 1
+            && dist(
+                arc_merged[0].start(),
+                arc_merged[arc_merged.len() - 1].end(),
+            ) <= tol;
         if let [Seg::A { c, r, sw, .. }] = arc_merged[..] {
             if sw.abs() >= TAU - 1e-9 {
                 results.push(inherit_props(template, Entity::circle(c, r)));
@@ -236,7 +294,16 @@ pub fn join(entities: &[&Entity], doc: &Drawing, tol: f64) -> JoinResult {
         }
         results.extend(entity_from_segs(&arc_merged, template, closed));
     }
-    JoinResult { results, sources: items.iter().map(|i| i.0).collect(), used: items.iter().enumerate().filter(|(k, _)| used[*k]).map(|(_, i)| i.0).collect() }
+    JoinResult {
+        results,
+        sources: items.iter().map(|i| i.0).collect(),
+        used: items
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| used[*k])
+            .map(|(_, i)| i.0)
+            .collect(),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -250,8 +317,17 @@ pub enum LengthenMode {
 }
 
 /// LENGTHEN the end nearest `pick` of a line/arc/open polyline.
-pub fn lengthen(target: &Entity, pick: Pt, mode: LengthenMode, value: f64, doc: &Drawing) -> Result<Vec<Entity>, String> {
-    let ok = matches!(target.kind, Kind::Line { .. } | Kind::Arc { .. } | Kind::Pline { .. });
+pub fn lengthen(
+    target: &Entity,
+    pick: Pt,
+    mode: LengthenMode,
+    value: f64,
+    doc: &Drawing,
+) -> Result<Vec<Entity>, String> {
+    let ok = matches!(
+        target.kind,
+        Kind::Line { .. } | Kind::Arc { .. } | Kind::Pline { .. }
+    );
     let path = match path_of(target, doc) {
         Some(p) if ok && !p.closed => p,
         _ => return Err("That object cannot be lengthened.".into()),
@@ -279,7 +355,13 @@ pub fn lengthen(target: &Entity, pick: Pt, mode: LengthenMode, value: f64, doc: 
             if nsw.abs() > TAU {
                 return Err("The arc would exceed a full circle.".into());
             }
-            Seg::A { c, r, a0, sw: nsw, full }
+            Seg::A {
+                c,
+                r,
+                a0,
+                sw: nsw,
+                full,
+            }
         }
     };
     *segs.last_mut().expect("segments") = ext;

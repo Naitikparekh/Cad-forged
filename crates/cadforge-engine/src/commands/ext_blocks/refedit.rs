@@ -47,12 +47,17 @@ async fn refedit(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         _ => None,
     }) {
         Some(id) => id,
-        None => match c.pick_entity(ps("Select reference").filter(|e| matches!(e.kind, Kind::Insert(_)))).await? {
+        None => match c
+            .pick_entity(ps("Select reference").filter(|e| matches!(e.kind, Kind::Insert(_))))
+            .await?
+        {
             Some(id) => id,
             None => return Ok(()),
         },
     };
-    let Some(insert) = c.entity_by_id(id) else { return Ok(()) };
+    let Some(insert) = c.entity_by_id(id) else {
+        return Ok(());
+    };
     let Kind::Insert(ins) = &insert.kind else {
         c.log_error("Select a block reference.");
         return Ok(());
@@ -63,7 +68,9 @@ async fn refedit(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
     };
     let block = c.doc(|d| d.blocks[&key].clone());
     if block.xref.is_some() {
-        c.log_error(&format!("\"{key}\" is an external reference; open its drawing with XOPEN to edit it."));
+        c.log_error(&format!(
+            "\"{key}\" is an external reference; open its drawing with XOPEN to edit it."
+        ));
         return Ok(());
     }
     let matrix = insert_matrix(ins, block.base);
@@ -82,7 +89,14 @@ async fn refedit(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         e.sel.clear();
         e.select(ids.iter().copied());
     });
-    sessions.borrow_mut().push(Session { editor: here, block: key.clone(), insert, index, ids, matrix });
+    sessions.borrow_mut().push(Session {
+        editor: here,
+        block: key.clone(),
+        insert,
+        index,
+        ids,
+        matrix,
+    });
     c.log(&format!("Editing reference \"{key}\": {n} object{} in the working set. Edit them, then use REFCLOSE.", if n == 1 { "" } else { "s" }));
     c.emit();
     Ok(())
@@ -106,9 +120,23 @@ async fn refclose(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         c.log("The reference was restored by UNDO; the edit session was closed.");
         return Ok(());
     }
-    let save = c.keyword(ps("Enter option [Save/Discard]").options(&["Save", "Discard"]).default_str("Save")).await?.kw() != Some("Discard");
+    let save = c
+        .keyword(
+            ps("Enter option [Save/Discard]")
+                .options(&["Save", "Discard"])
+                .default_str("Save"),
+        )
+        .await?
+        .kw()
+        != Some("Discard");
     let s = sessions.borrow_mut().remove(si);
-    let present: Vec<u64> = c.doc(|d| s.ids.iter().copied().filter(|i| d.by_id(*i).is_some()).collect());
+    let present: Vec<u64> = c.doc(|d| {
+        s.ids
+            .iter()
+            .copied()
+            .filter(|i| d.by_id(*i).is_some())
+            .collect()
+    });
     let working: Vec<Entity> = c.entities(&present);
     let inverse = mat::invert(&s.matrix);
     c.doc_mut(|d| {
@@ -125,7 +153,16 @@ async fn refclose(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         })
     });
     c.ed(|e| e.sel.clear());
-    c.log(&if save { format!("Block \"{}\" redefined from {} object{}.", s.block, working.len(), if working.len() == 1 { "" } else { "s" }) } else { "Changes discarded.".to_string() });
+    c.log(&if save {
+        format!(
+            "Block \"{}\" redefined from {} object{}.",
+            s.block,
+            working.len(),
+            if working.len() == 1 { "" } else { "s" }
+        )
+    } else {
+        "Changes discarded.".to_string()
+    });
     c.emit();
     Ok(())
 }
@@ -136,9 +173,21 @@ async fn refset(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
         c.log_error("No reference is being edited. Start with REFEDIT.");
         return Ok(());
     };
-    let k = c.keyword(ps("Enter an option [Add/Remove]").options(&["Add", "Remove"]).default_str("Add")).await?;
+    let k = c
+        .keyword(
+            ps("Enter an option [Add/Remove]")
+                .options(&["Add", "Remove"])
+                .default_str("Add"),
+        )
+        .await?;
     let add = k.kw() != Some("Remove");
-    let sel = c.select(ps(if add { "Select objects to add to the working set" } else { "Select objects to remove from the working set" })).await?;
+    let sel = c
+        .select(ps(if add {
+            "Select objects to add to the working set"
+        } else {
+            "Select objects to remove from the working set"
+        }))
+        .await?;
     let mut n = 0;
     {
         let mut all = sessions.borrow_mut();
@@ -154,7 +203,15 @@ async fn refset(c: Ctx, _a: Args, sessions: Sessions) -> CmdResult<()> {
             }
         }
     }
-    c.log(&format!("{n} object{} {}.", if n == 1 { "" } else { "s" }, if add { "added to the working set" } else { "removed from the working set" }));
+    c.log(&format!(
+        "{n} object{} {}.",
+        if n == 1 { "" } else { "s" },
+        if add {
+            "added to the working set"
+        } else {
+            "removed from the working set"
+        }
+    ));
     Ok(())
 }
 
@@ -165,12 +222,21 @@ async fn xopen(c: Ctx, _a: Args) -> CmdResult<()> {
         _ => None,
     }) {
         Some(id) => id,
-        None => match c.pick_entity(ps("Select xref").filter(|e| matches!(e.kind, Kind::Insert(_)))).await? {
+        None => match c
+            .pick_entity(ps("Select xref").filter(|e| matches!(e.kind, Kind::Insert(_))))
+            .await?
+        {
             Some(id) => id,
             None => return Ok(()),
         },
     };
-    let Some(Entity { kind: Kind::Insert(ins), .. }) = c.entity_by_id(id) else { return Ok(()) };
+    let Some(Entity {
+        kind: Kind::Insert(ins),
+        ..
+    }) = c.entity_by_id(id)
+    else {
+        return Ok(());
+    };
     let Some(block) = c.doc(|d| d.blocks.get(&ins.name).cloned()) else {
         c.log_error("The block is not defined.");
         return Ok(());
@@ -179,11 +245,29 @@ async fn xopen(c: Ctx, _a: Args) -> CmdResult<()> {
         c.log_error(&format!("\"{}\" is an ordinary block, not an external reference. BEDIT opens block definitions.", block.name));
         return Ok(());
     };
-    let want = info.path.rsplit(['/', '\\']).next().unwrap_or(&info.path).to_lowercase();
+    let want = info
+        .path
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(&info.path)
+        .to_lowercase();
     let open = c.app(|a| {
         a.editors.iter().position(|e| {
-            let n = e.doc.file_name.clone().unwrap_or_else(|| e.doc.name.clone()).to_lowercase();
-            let stem = |s: &str| s.rsplit(['/', '\\']).next().unwrap_or(s).split('.').next().unwrap_or(s).to_string();
+            let n = e
+                .doc
+                .file_name
+                .clone()
+                .unwrap_or_else(|| e.doc.name.clone())
+                .to_lowercase();
+            let stem = |s: &str| {
+                s.rsplit(['/', '\\'])
+                    .next()
+                    .unwrap_or(s)
+                    .split('.')
+                    .next()
+                    .unwrap_or(s)
+                    .to_string()
+            };
             !e.doc.name.starts_with("*BlockEdit:") && stem(&n) == stem(&want)
         })
     });
@@ -221,7 +305,10 @@ async fn xopen(c: Ctx, _a: Args) -> CmdResult<()> {
                 a.add_drawing(d);
             });
             c.ed(|e| e.zoom_extents(0.1));
-            c.log(&format!("{} is not open; showing a copy of the reference contents.", info.path));
+            c.log(&format!(
+                "{} is not open; showing a copy of the reference contents.",
+                info.path
+            ));
         }
     }
     Ok(())
@@ -230,8 +317,24 @@ async fn xopen(c: Ctx, _a: Args) -> CmdResult<()> {
 pub(super) fn register(r: &mut Registry) {
     let sessions = Sessions::default();
     let (a, b, d) = (sessions.clone(), sessions.clone(), sessions);
-    r.define(db("REFEDIT", run(move |c, x| refedit(c, x, a.clone()))).title("Edit Reference").icon("refedit").desc("Selects a reference for editing in place."));
-    r.define(db("REFCLOSE", run(move |c, x| refclose(c, x, b.clone()))).title("Close Reference").icon("refedit").desc("Saves back or discards changes made during in-place editing of a reference.").once());
+    r.define(
+        db("REFEDIT", run(move |c, x| refedit(c, x, a.clone())))
+            .title("Edit Reference")
+            .icon("refedit")
+            .desc("Selects a reference for editing in place."),
+    );
+    r.define(
+        db("REFCLOSE", run(move |c, x| refclose(c, x, b.clone())))
+            .title("Close Reference")
+            .icon("refedit")
+            .desc("Saves back or discards changes made during in-place editing of a reference.")
+            .once(),
+    );
     r.define(db("REFSET", run(move |c, x| refset(c, x, d.clone()))).title("Edit Working Set").icon("refedit").desc("Adds or removes objects from the working set during in-place editing of a reference."));
-    r.define(db("XOPEN", run(xopen)).title("Open Xref").icon("xref").desc("Opens a selected drawing reference (xref) in a new window."));
+    r.define(
+        db("XOPEN", run(xopen))
+            .title("Open Xref")
+            .icon("xref")
+            .desc("Opens a selected drawing reference (xref) in a new window."),
+    );
 }

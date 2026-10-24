@@ -12,8 +12,16 @@ use cadforge_core::view::View;
 
 pub const UNIT_MM: f64 = 0.1;
 
-pub const PAPERS: [(&str, f64, f64); 8] =
-    [("A4", 297.0, 210.0), ("A3", 420.0, 297.0), ("A2", 594.0, 420.0), ("A1", 841.0, 594.0), ("A0", 1189.0, 841.0), ("Letter", 279.4, 215.9), ("Legal", 355.6, 215.9), ("Tabloid", 431.8, 279.4)];
+pub const PAPERS: [(&str, f64, f64); 8] = [
+    ("A4", 297.0, 210.0),
+    ("A3", 420.0, 297.0),
+    ("A2", 594.0, 420.0),
+    ("A1", 841.0, 594.0),
+    ("A0", 1189.0, 841.0),
+    ("Letter", 279.4, 215.9),
+    ("Legal", 355.6, 215.9),
+    ("Tabloid", 431.8, 279.4),
+];
 
 /// Millimetres per drawing unit for `$INSUNITS` values.
 pub fn mm_per_insunit(u: i32) -> f64 {
@@ -99,7 +107,11 @@ pub fn default_plot_options(doc: &Drawing) -> PlotOptions {
 
 /// Page size in mm for the options.
 pub fn page_size(o: &PlotOptions) -> (f64, f64) {
-    let (a, b) = PAPERS.iter().find(|p| p.0 == o.paper).map(|p| (p.1, p.2)).unwrap_or((297.0, 210.0));
+    let (a, b) = PAPERS
+        .iter()
+        .find(|p| p.0 == o.paper)
+        .map(|p| (p.1, p.2))
+        .unwrap_or((297.0, 210.0));
     if o.landscape {
         (a.max(b), a.min(b))
     } else {
@@ -140,14 +152,28 @@ pub struct PlotLayout {
 }
 
 /// Work out the world → sheet mapping. Fails when there is nothing to plot.
-pub fn plot_layout(doc: &Drawing, o: &PlotOptions, view_bounds: Option<Bounds>) -> Result<PlotLayout, String> {
+pub fn plot_layout(
+    doc: &Drawing,
+    o: &PlotOptions,
+    view_bounds: Option<Bounds>,
+) -> Result<PlotLayout, String> {
     if let Some(name) = &o.layout {
         // a layout plots as it is laid out: the sheet is its paper, drawn 1:1 in millimetres
-        let l = doc.layout(name).ok_or_else(|| format!("There is no layout named \"{name}\"."))?;
+        let l = doc
+            .layout(name)
+            .ok_or_else(|| format!("There is no layout named \"{name}\"."))?;
         let page = (l.paper.w, l.paper.h);
         let bounds = Bounds::new(0.0, 0.0, page.0, page.1);
         let world_m = [10.0, 0.0, 0.0, -10.0, 0.0, 10.0 * page.1];
-        return Ok(PlotLayout { page, bounds, mm_per_unit: 1.0, world_m, fits: true, w: (page.0 * 10.0).round(), h: (page.1 * 10.0).round() });
+        return Ok(PlotLayout {
+            page,
+            bounds,
+            mm_per_unit: 1.0,
+            world_m,
+            fits: true,
+            w: (page.0 * 10.0).round(),
+            h: (page.1 * 10.0).round(),
+        });
     }
     let page = page_size(o);
     let bounds = plot_bounds(doc, o, view_bounds).ok_or("There is nothing to plot.")?;
@@ -158,20 +184,55 @@ pub fn plot_layout(doc: &Drawing, o: &PlotOptions, view_bounds: Option<Bounds>) 
         None => (pw / bw).min(ph / bh),
         Some(f) => mm_per_insunit(doc.settings.units.ins_units) * f,
     };
-    let ox = if o.center { (page.0 - bw * s) / 2.0 } else { o.margin + o.offset_x };
-    let oy = if o.center { (page.1 - bh * s) / 2.0 } else { o.margin + o.offset_y };
-    let world_m = [10.0 * s, 0.0, 0.0, -10.0 * s, 10.0 * (ox - s * bounds.min_x), 10.0 * (page.1 - oy + s * bounds.min_y)];
+    let ox = if o.center {
+        (page.0 - bw * s) / 2.0
+    } else {
+        o.margin + o.offset_x
+    };
+    let oy = if o.center {
+        (page.1 - bh * s) / 2.0
+    } else {
+        o.margin + o.offset_y
+    };
+    let world_m = [
+        10.0 * s,
+        0.0,
+        0.0,
+        -10.0 * s,
+        10.0 * (ox - s * bounds.min_x),
+        10.0 * (page.1 - oy + s * bounds.min_y),
+    ];
     let fits = bw * s <= pw + 1e-6 && bh * s <= ph + 1e-6;
-    Ok(PlotLayout { page, bounds, mm_per_unit: s, world_m, fits, w: (page.0 * 10.0).round(), h: (page.1 * 10.0).round() })
+    Ok(PlotLayout {
+        page,
+        bounds,
+        mm_per_unit: s,
+        world_m,
+        fits,
+        w: (page.0 * 10.0).round(),
+        h: (page.1 * 10.0).round(),
+    })
 }
 
 /// Render the sheet into draw operations (device unit 0.1 mm, y down, origin top-left).
 pub fn render_plot(doc: &Drawing, o: &PlotOptions, layout: &PlotLayout) -> Vec<Op> {
     let view = View::new();
-    let prefs = Prefs { lw_display: true, lock_fade: 0.0, transparency: true, fill: true, grid: false, ucs_icon: false, ..Prefs::default() };
+    let prefs = Prefs {
+        lw_display: true,
+        lock_fade: 0.0,
+        transparency: true,
+        fill: true,
+        grid: false,
+        ucs_icon: false,
+        ..Prefs::default()
+    };
     let mut rc = Renderer::new(doc, &view, layout.w, layout.h, Theme::PAPER, prefs);
     rc.world = layout.world_m;
-    rc.plot_styles = if o.use_styles { doc.plot_styles.as_deref() } else { None };
+    rc.plot_styles = if o.use_styles {
+        doc.plot_styles.as_deref()
+    } else {
+        None
+    };
     rc.mono = o.mono && rc.plot_styles.is_none();
     rc.lw_mode = LwMode::Plot(o.lineweights);
     rc.tol = 0.08;
@@ -195,19 +256,37 @@ pub struct VectorPlot {
 }
 
 /// Vector export (PDF or SVG).
-pub fn export_vector(doc: &Drawing, o: &PlotOptions, view_bounds: Option<Bounds>) -> Result<VectorPlot, String> {
+pub fn export_vector(
+    doc: &Drawing,
+    o: &PlotOptions,
+    view_bounds: Option<Bounds>,
+) -> Result<VectorPlot, String> {
     let layout = plot_layout(doc, o, view_bounds)?;
     let ops = render_plot(doc, o, &layout);
     let page = (layout.w, layout.h);
     Ok(match o.format {
-        PlotFormat::Svg => VectorPlot { data: write_svg(&ops, page, UNIT_MM, &o.title).into_bytes(), mime: "image/svg+xml", ext: "svg", layout },
-        _ => VectorPlot { data: write_pdf(&ops, page, UNIT_MM, &o.title), mime: "application/pdf", ext: "pdf", layout },
+        PlotFormat::Svg => VectorPlot {
+            data: write_svg(&ops, page, UNIT_MM, &o.title).into_bytes(),
+            mime: "image/svg+xml",
+            ext: "svg",
+            layout,
+        },
+        _ => VectorPlot {
+            data: write_pdf(&ops, page, UNIT_MM, &o.title),
+            mime: "application/pdf",
+            ext: "pdf",
+            layout,
+        },
     })
 }
 
 /// PUBLISH: one PDF with a page per sheet. A sheet is a layout name, or `None` for model space (laid out with the
 /// options as given). Sheets with nothing to plot are skipped; the result says how many pages were written.
-pub fn publish_pdf(doc: &Drawing, base: &PlotOptions, sheets: &[Option<String>]) -> Result<(Vec<u8>, usize), String> {
+pub fn publish_pdf(
+    doc: &Drawing,
+    base: &PlotOptions,
+    sheets: &[Option<String>],
+) -> Result<(Vec<u8>, usize), String> {
     let mut rendered: Vec<(Vec<Op>, (f64, f64))> = vec![];
     for sheet in sheets {
         let mut o = base.clone();
@@ -222,6 +301,12 @@ pub fn publish_pdf(doc: &Drawing, base: &PlotOptions, sheets: &[Option<String>])
     if rendered.is_empty() {
         return Err("There is nothing to plot.".into());
     }
-    let pages: Vec<PdfPage> = rendered.iter().map(|(ops, size)| PdfPage { ops, size: *size }).collect();
-    Ok((write_pdf_pages(&pages, UNIT_MM, &base.title), rendered.len()))
+    let pages: Vec<PdfPage> = rendered
+        .iter()
+        .map(|(ops, size)| PdfPage { ops, size: *size })
+        .collect();
+    Ok((
+        write_pdf_pages(&pages, UNIT_MM, &base.title),
+        rendered.len(),
+    ))
 }

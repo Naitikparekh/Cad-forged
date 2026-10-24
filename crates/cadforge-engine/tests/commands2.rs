@@ -15,12 +15,27 @@ fn p(x: f64, y: f64) -> Pt {
 fn registry_resolves_aliases_synonyms_and_suggestions() {
     let s = Sim::new();
     let r = s.registry();
-    for (typed, name) in [("l", "LINE"), ("PL", "PLINE"), ("rec", "RECTANG"), ("bevel", "CHAMFER"), ("z", "ZOOM"), ("dli", "DIMLINEAR")] {
-        assert_eq!(r.find(typed).map(|d| d.name.clone()).as_deref(), Some(name), "{typed}");
+    for (typed, name) in [
+        ("l", "LINE"),
+        ("PL", "PLINE"),
+        ("rec", "RECTANG"),
+        ("bevel", "CHAMFER"),
+        ("z", "ZOOM"),
+        ("dli", "DIMLINEAR"),
+    ] {
+        assert_eq!(
+            r.find(typed).map(|d| d.name.clone()).as_deref(),
+            Some(name),
+            "{typed}"
+        );
     }
     assert!(r.find("nonsense").is_none());
-    assert!(r.suggest("cir", true, &[], 12).contains(&"CIRCLE".to_string()));
-    assert!(r.suggest("ine", true, &[], 12).contains(&"LINE".to_string()));
+    assert!(r
+        .suggest("cir", true, &[], 12)
+        .contains(&"CIRCLE".to_string()));
+    assert!(r
+        .suggest("ine", true, &[], 12)
+        .contains(&"LINE".to_string()));
     assert!(r.names().len() > 100, "only {} commands", r.names().len());
 }
 
@@ -28,7 +43,11 @@ fn registry_resolves_aliases_synonyms_and_suggestions() {
 fn typing_a_system_variable_name_prompts_for_a_new_value() {
     let s = Sim::new();
     s.ty("DYNMODE");
-    assert!(s.prompt().contains("Enter new value for DYNMODE <3>:"), "{}", s.prompt());
+    assert!(
+        s.prompt().contains("Enter new value for DYNMODE <3>:"),
+        "{}",
+        s.prompt()
+    );
     s.ty("1");
     assert!(!s.busy());
     assert_eq!(s.pref("DYNMODE"), 1.0);
@@ -67,7 +86,10 @@ fn layer_commands_make_color_freeze_isolate_wildcard() {
     s.ty("n").ty("A-Door,A-Window").ty("f").ty("A-*").enter();
     assert!(!s.busy());
     assert_eq!(s.doc(|d| d.cur.layer.clone()), "Walls");
-    assert_eq!(s.doc(|d| d.layer("Walls").unwrap().color), cadforge_core::style::Color::Aci(1));
+    assert_eq!(
+        s.doc(|d| d.layer("Walls").unwrap().color),
+        cadforge_core::style::Color::Aci(1)
+    );
     assert!(s.doc(|d| d.layer("A-Door").unwrap().frozen && d.layer("A-Window").unwrap().frozen));
     s.play("L", &[Click(0., 0.), Click(5., 0.), Enter]);
     assert_eq!(s.ent(0).layer, "Walls");
@@ -76,7 +98,9 @@ fn layer_commands_make_color_freeze_isolate_wildcard() {
         d.add(Entity::line(p(0., 5.), p(5., 5.)));
     });
     s.cmd("LAYISO").click(2., 0.).enter();
-    assert!(s.doc(|d| d.layer("0").unwrap().locked || !d.layer("0").unwrap().on || d.layer("0").unwrap().name == d.cur.layer));
+    assert!(s.doc(|d| d.layer("0").unwrap().locked
+        || !d.layer("0").unwrap().on
+        || d.layer("0").unwrap().name == d.cur.layer));
     s.cmd("LAYUNISO");
 }
 
@@ -116,7 +140,13 @@ fn block_insert_with_scale_and_rotation_explode_of_the_reference() {
     assert_eq!(s.doc(|d| d.blocks["Part"].entities.len()), 2);
     assert_eq!(s.n(), 1);
     assert_eq!(s.ent(0).type_name(), "insert");
-    s.cmd("I").ty("Part").ty("s").ty("2").ty("r").ty("90").click(50., 50.);
+    s.cmd("I")
+        .ty("Part")
+        .ty("s")
+        .ty("2")
+        .ty("r")
+        .ty("90")
+        .click(50., 50.);
     assert!(!s.busy());
     match &s.ent(1).kind {
         Kind::Insert(i) => {
@@ -126,20 +156,30 @@ fn block_insert_with_scale_and_rotation_explode_of_the_reference() {
         k => panic!("{k:?}"),
     }
     s.cmd("X").click(50., 50.).enter();
-    assert!(s.ents().iter().any(|e| matches!(e.kind, Kind::Circle { r, .. } if (r - 4.).abs() < 1e-9)));
+    assert!(s
+        .ents()
+        .iter()
+        .any(|e| matches!(e.kind, Kind::Circle { r, .. } if (r - 4.).abs() < 1e-9)));
 }
 
 #[test]
 fn dist_area_and_list_report_through_the_command_history() {
     let s = Sim::new();
     s.play("DI", &[Click(0., 0.), Click(3., 4.)]);
-    assert!(s.log_text().contains("Distance = 5.0000"), "{}", s.log_text());
+    assert!(
+        s.log_text().contains("Distance = 5.0000"),
+        "{}",
+        s.log_text()
+    );
     s.add(Entity::circle(p(20., 0.), 2.));
     s.play("AA", &[Type("o"), Click(22., 0.), Enter]);
     assert!(s.log_text().contains("Area = 12.5664"), "{}", s.log_text());
     s.cmd("LIST").click(22., 0.).enter();
     let log = s.log_text();
-    assert!(log.contains("CIRCLE") && log.contains("Layer: \"0\""), "{log}");
+    assert!(
+        log.contains("CIRCLE") && log.contains("Layer: \"0\""),
+        "{log}"
+    );
 }
 
 #[test]
@@ -147,13 +187,18 @@ fn dimlinear_creates_a_measured_dimension_and_text_creates_text() {
     let s = Sim::new();
     s.play("DLI", &[Click(0., 0.), Click(10., 0.), Click(5., 4.)]);
     let e = s.ent(0);
-    let Kind::Dim(d) = &e.kind else { panic!("{e:?}") };
+    let Kind::Dim(d) = &e.kind else {
+        panic!("{e:?}")
+    };
     assert_eq!(d.kind, DimType::Lin);
     near(d.ang.unwrap(), 0.);
     let geo = s.doc(|doc| dim_geometry(d, &doc.settings));
     near(geo.measured, 10.);
     assert_eq!(geo.text.s, "10.00");
-    s.play("TEXT", &[Click(0., 10.), Type("3"), Type("0"), Type("Hello"), Enter]);
+    s.play(
+        "TEXT",
+        &[Click(0., 10.), Type("3"), Type("0"), Type("Hello"), Enter],
+    );
     let t = s.ents().into_iter().find_map(|e| match e.kind {
         Kind::Text(t) => Some(t),
         _ => None,
@@ -166,7 +211,10 @@ fn dimlinear_creates_a_measured_dimension_and_text_creates_text() {
 #[test]
 fn hatch_pick_internal_point_creates_a_hatch_from_the_surrounding_closed_region() {
     let s = Sim::new();
-    s.add(Entity::pline_pts(&[p(0., 0.), p(20., 0.), p(20., 10.), p(0., 10.)], true));
+    s.add(Entity::pline_pts(
+        &[p(0., 0.), p(20., 0.), p(20., 10.), p(0., 10.)],
+        true,
+    ));
     s.cmd("H").click(5., 5.).enter();
     assert!(!s.busy());
     let h = s.ents().into_iter().find_map(|e| match e.kind {
@@ -177,7 +225,13 @@ fn hatch_pick_internal_point_creates_a_hatch_from_the_surrounding_closed_region(
     assert_eq!(h.loops.len(), 1);
     assert_eq!(h.pattern, "ANSI31");
     s.play("H", &[Click(100., 100.), Enter]); // no region there
-    assert_eq!(s.ents().iter().filter(|e| matches!(e.kind, Kind::Hatch(_))).count(), 1);
+    assert_eq!(
+        s.ents()
+            .iter()
+            .filter(|e| matches!(e.kind, Kind::Hatch(_)))
+            .count(),
+        1
+    );
 }
 
 #[test]

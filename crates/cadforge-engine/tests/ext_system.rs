@@ -39,7 +39,12 @@ fn ui_actions(s: &Sim) -> Vec<(String, Args)> {
 /// The last report line (log lines may hold several) containing `label`.
 fn row(s: &Sim, label: &str) -> String {
     let h = s.h.borrow();
-    h.history.iter().rev().flat_map(|l| l.text.lines().rev().map(str::to_string).collect::<Vec<_>>()).find(|l| l.contains(label)).unwrap_or_else(|| panic!("no line with {label:?}"))
+    h.history
+        .iter()
+        .rev()
+        .flat_map(|l| l.text.lines().rev().map(str::to_string).collect::<Vec<_>>())
+        .find(|l| l.contains(label))
+        .unwrap_or_else(|| panic!("no line with {label:?}"))
 }
 
 fn layers_on(s: &Sim) -> Vec<(String, bool)> {
@@ -60,7 +65,11 @@ fn three_layers() -> Sim {
 }
 
 fn layer_of_line_at(s: &Sim, y: f64) -> String {
-    s.ents().into_iter().find(|e| matches!(e.kind, Kind::Line { a, .. } if a.y == y)).unwrap().layer
+    s.ents()
+        .into_iter()
+        .find(|e| matches!(e.kind, Kind::Line { a, .. } if a.y == y))
+        .unwrap()
+        .layer
 }
 
 // ---------------------------------------------------------------- DISTANCE and registry
@@ -78,8 +87,20 @@ fn distance_is_the_same_command_as_dist() {
 #[test]
 fn new_commands_resolve_with_their_acad_pgp_aliases() {
     let r = Sim::new().registry();
-    for (typed, name) in [("HI", "HIDE"), ("PRE", "PREVIEW"), ("AP", "APPLOAD"), ("DV", "DVIEW"), ("SHA", "SHADEMODE"), ("VSM", "VISUALSTYLES"), ("-VP", "VPOINT")] {
-        assert_eq!(r.find(typed).map(|d| d.name.clone()).as_deref(), Some(name), "{typed}");
+    for (typed, name) in [
+        ("HI", "HIDE"),
+        ("PRE", "PREVIEW"),
+        ("AP", "APPLOAD"),
+        ("DV", "DVIEW"),
+        ("SHA", "SHADEMODE"),
+        ("VSM", "VISUALSTYLES"),
+        ("-VP", "VPOINT"),
+    ] {
+        assert_eq!(
+            r.find(typed).map(|d| d.name.clone()).as_deref(),
+            Some(name),
+            "{typed}"
+        );
     }
     for name in [
         "LIMITS",
@@ -123,7 +144,10 @@ fn new_commands_resolve_with_their_acad_pgp_aliases() {
         "PREVIEW",
     ] {
         let d = r.find(name).unwrap_or_else(|| panic!("{name} is missing"));
-        assert!(!d.title.is_empty() && !d.desc.is_empty() && !d.group.is_empty(), "{name} lacks title, description or group");
+        assert!(
+            !d.title.is_empty() && !d.desc.is_empty() && !d.group.is_empty(),
+            "{name} lacks title, description or group"
+        );
     }
 }
 
@@ -131,8 +155,19 @@ fn new_commands_resolve_with_their_acad_pgp_aliases() {
 fn wrapping_the_commands_keeps_existing_aliases_and_behaviour() {
     let s = Sim::new();
     let r = s.registry();
-    for (typed, name) in [("L", "LINE"), ("Z", "ZOOM"), ("CP", "COPY"), ("CO", "COPY"), ("E", "ERASE"), ("LTS", "LTSCALE")] {
-        assert_eq!(r.find(typed).map(|d| d.name.clone()).as_deref(), Some(name), "{typed}");
+    for (typed, name) in [
+        ("L", "LINE"),
+        ("Z", "ZOOM"),
+        ("CP", "COPY"),
+        ("CO", "COPY"),
+        ("E", "ERASE"),
+        ("LTS", "LTSCALE"),
+    ] {
+        assert_eq!(
+            r.find(typed).map(|d| d.name.clone()).as_deref(),
+            Some(name),
+            "{typed}"
+        );
     }
     assert_eq!(r.alias_of("HIDE").as_deref(), Some("HI"));
     s.play("L", &[Click(0., 0.), Click(5., 0.), Enter]);
@@ -153,7 +188,10 @@ fn limits_set_the_corners_and_report_the_defaults_in_the_prompts() {
     s.ty("100,200");
     assert!(!s.busy());
     let l = s.doc(|d| d.settings.limits);
-    assert_eq!((l.min_x, l.min_y, l.max_x, l.max_y, l.on), (10., 20., 100., 200., false));
+    assert_eq!(
+        (l.min_x, l.min_y, l.max_x, l.max_y, l.on),
+        (10., 20., 100., 200., false)
+    );
     s.undo();
     assert_eq!(s.doc(|d| d.settings.limits.max_x), 420.0, "one undo step");
 }
@@ -202,7 +240,10 @@ fn layerp_steps_back_through_layer_changes() {
     assert!(s.doc(|d| !d.layer("A").unwrap().on && d.layer("B").unwrap().frozen));
     s.cmd("LAYERP");
     assert!(!s.busy());
-    assert!(s.doc(|d| !d.layer("A").unwrap().on && !d.layer("B").unwrap().frozen), "the freeze is undone first");
+    assert!(
+        s.doc(|d| !d.layer("A").unwrap().on && !d.layer("B").unwrap().frozen),
+        "the freeze is undone first"
+    );
     s.cmd("LAYERP");
     assert!(s.doc(|d| d.layer("A").unwrap().on));
     s.cmd("LAYERP");
@@ -213,13 +254,33 @@ fn layerp_steps_back_through_layer_changes() {
 fn layerp_leaves_new_and_renamed_layers_alone_and_can_itself_be_undone() {
     let s = three_layers();
     s.cmd("-LAYER").ty("OFF").ty("A").enter();
-    s.cmd("-LAYER").ty("Color").ty("red").ty("A").ty("New").ty("C").ty("Rename").ty("B").ty("Bee").enter();
+    s.cmd("-LAYER")
+        .ty("Color")
+        .ty("red")
+        .ty("A")
+        .ty("New")
+        .ty("C")
+        .ty("Rename")
+        .ty("B")
+        .ty("Bee")
+        .enter();
     s.cmd("LAYERP");
-    assert_eq!(s.doc(|d| d.layer("A").unwrap().color), Color::Aci(7), "A's colour comes back");
+    assert_eq!(
+        s.doc(|d| d.layer("A").unwrap().color),
+        Color::Aci(7),
+        "A's colour comes back"
+    );
     assert!(s.doc(|d| !d.layer("A").unwrap().on));
-    assert!(s.doc(|d| d.layer("C").is_some() && d.layer("Bee").is_some() && d.layer("B").is_none()), "new and renamed layers stay");
+    assert!(
+        s.doc(|d| d.layer("C").is_some() && d.layer("Bee").is_some() && d.layer("B").is_none()),
+        "new and renamed layers stay"
+    );
     s.cmd("U");
-    assert_eq!(s.doc(|d| d.layer("A").unwrap().color), Color::Aci(1), "LAYERP is a single undo step");
+    assert_eq!(
+        s.doc(|d| d.layer("A").unwrap().color),
+        Color::Aci(1),
+        "LAYERP is a single undo step"
+    );
 }
 
 #[test]
@@ -253,12 +314,20 @@ fn laymrg_moves_objects_to_the_target_layer_and_deletes_the_source() {
     s.cmd("LAYMRG");
     assert_eq!(s.prompt(), "Select object on layer to merge or [Name]:");
     s.click(5., 5.); // layer A
-    assert_eq!(s.prompt(), "Select object on layer to merge or [Name/Undo]:");
+    assert_eq!(
+        s.prompt(),
+        "Select object on layer to merge or [Name/Undo]:"
+    );
     assert!(s.history_has("Selected layers: A"));
     s.enter();
     assert_eq!(s.prompt(), "Select object on target layer or [Name]:");
     s.click(5., 10.); // layer B
-    assert!(s.prompt().contains("Merge layer \"A\" to layer \"B\"? [Yes/No] <No>"), "{}", s.prompt());
+    assert!(
+        s.prompt()
+            .contains("Merge layer \"A\" to layer \"B\"? [Yes/No] <No>"),
+        "{}",
+        s.prompt()
+    );
     s.ty("y");
     assert!(!s.busy());
     assert_eq!(layer_of_line_at(&s, 5.), "B");
@@ -276,8 +345,17 @@ fn laymrg_by_name_asks_for_confirmation_and_keeps_everything_when_declined() {
     s.enter(); // default answer: No
     assert!(!s.busy());
     assert_eq!(layer_of_line_at(&s, 5.), "A");
-    s.cmd("LAYMRG").ty("name").ty("A,B").enter().ty("name").ty("0").ty("yes");
-    assert_eq!((layer_of_line_at(&s, 5.), layer_of_line_at(&s, 10.)), ("0".into(), "0".into()));
+    s.cmd("LAYMRG")
+        .ty("name")
+        .ty("A,B")
+        .enter()
+        .ty("name")
+        .ty("0")
+        .ty("yes");
+    assert_eq!(
+        (layer_of_line_at(&s, 5.), layer_of_line_at(&s, 10.)),
+        ("0".into(), "0".into())
+    );
     assert_eq!(s.doc(|d| d.layers.len()), 1);
 }
 
@@ -289,7 +367,13 @@ fn laymrg_refuses_layer_zero_and_moves_the_current_layer_to_the_target() {
     assert!(s.history_has("cannot be merged"));
     s.enter(); // nothing selected: the command ends
     assert!(!s.busy());
-    s.cmd("LAYMRG").click(5., 5.).ty("undo").click(5., 5.).enter().click(5., 10.).ty("y");
+    s.cmd("LAYMRG")
+        .click(5., 5.)
+        .ty("undo")
+        .click(5., 5.)
+        .enter()
+        .click(5., 10.)
+        .ty("y");
     assert_eq!(s.doc(|d| d.cur.layer.clone()), "B");
 }
 
@@ -305,7 +389,10 @@ fn laymrg_with_the_target_among_the_sources_has_nothing_to_merge() {
 fn laytrans_renames_and_merges_by_name_mapping() {
     let s = three_layers();
     s.cmd("LAYTRANS");
-    assert_eq!(s.prompt(), "Enter an option or [Map/List/Remove/Translate] <Translate>:");
+    assert_eq!(
+        s.prompt(),
+        "Enter an option or [Map/List/Remove/Translate] <Translate>:"
+    );
     s.ty("map").ty("A").ty("Std");
     s.ty("map").ty("B").ty("Std");
     s.ty("list");
@@ -313,7 +400,10 @@ fn laytrans_renames_and_merges_by_name_mapping() {
     s.enter(); // Translate
     assert!(!s.busy());
     assert!(s.doc(|d| d.layer("Std").is_some() && d.layer("A").is_none() && d.layer("B").is_none()));
-    assert_eq!((layer_of_line_at(&s, 5.), layer_of_line_at(&s, 10.)), ("Std".into(), "Std".into()));
+    assert_eq!(
+        (layer_of_line_at(&s, 5.), layer_of_line_at(&s, 10.)),
+        ("Std".into(), "Std".into())
+    );
     assert!(s.history_has("2 layers translated"));
     s.undo();
     assert!(s.doc(|d| d.layer("A").is_some() && d.layer("B").is_some() && d.layer("Std").is_none()));
@@ -343,15 +433,30 @@ fn laywalk_shows_one_layer_at_a_time_and_restores_the_layers_on_exit() {
     s.doc_mut(|d| d.change(|d| d.layer_mut("A").unwrap().on = false));
     let before = layers_on(&s);
     s.cmd("LAYWALK");
-    assert_eq!(layers_on(&s), [("0".into(), true), ("A".into(), false), ("B".into(), false)]);
+    assert_eq!(
+        layers_on(&s),
+        [("0".into(), true), ("A".into(), false), ("B".into(), false)]
+    );
     assert!(s.history_has("Layer \"0\": 1 object displayed."));
-    assert_eq!(s.prompt(), "Enter an option or [Next/Previous/Go/eXit] <Next>:");
+    assert_eq!(
+        s.prompt(),
+        "Enter an option or [Next/Previous/Go/eXit] <Next>:"
+    );
     s.enter(); // Next
-    assert_eq!(layers_on(&s), [("0".into(), false), ("A".into(), true), ("B".into(), false)]);
+    assert_eq!(
+        layers_on(&s),
+        [("0".into(), false), ("A".into(), true), ("B".into(), false)]
+    );
     s.ty("previous").ty("previous"); // wraps around to the last layer
-    assert_eq!(layers_on(&s), [("0".into(), false), ("A".into(), false), ("B".into(), true)]);
+    assert_eq!(
+        layers_on(&s),
+        [("0".into(), false), ("A".into(), false), ("B".into(), true)]
+    );
     s.ty("go").ty("0,A");
-    assert_eq!(layers_on(&s), [("0".into(), true), ("A".into(), true), ("B".into(), false)]);
+    assert_eq!(
+        layers_on(&s),
+        [("0".into(), true), ("A".into(), true), ("B".into(), false)]
+    );
     s.ty("x");
     assert!(!s.busy());
     assert_eq!(layers_on(&s), before);
@@ -371,7 +476,10 @@ fn laywalk_skips_frozen_layers() {
     let s = three_layers();
     s.doc_mut(|d| d.layer_mut("A").unwrap().frozen = true);
     s.cmd("LAYWALK").enter();
-    assert!(s.doc(|d| d.layer("B").unwrap().on && !d.layer("0").unwrap().on), "A is skipped: 0 -> B");
+    assert!(
+        s.doc(|d| d.layer("B").unwrap().on && !d.layer("0").unwrap().on),
+        "A is skipped: 0 -> B"
+    );
     s.ty("x");
 }
 
@@ -390,7 +498,10 @@ fn layerclose_hides_the_layer_palette() {
     let s = Sim::new();
     events(&s);
     s.cmd("LAYERCLOSE");
-    assert!(events(&s).contains(&Event::Palette { name: "layers".into(), show: Some(false) }));
+    assert!(events(&s).contains(&Event::Palette {
+        name: "layers".into(),
+        show: Some(false)
+    }));
 }
 
 // ---------------------------------------------------------------- CELTSCALE
@@ -407,7 +518,12 @@ fn celtscale_sets_the_scale_of_objects_drawn_afterwards() {
     s.play("C", &[Click(20., 0.), Type("2")]);
     assert_eq!((s.ent(0).lts, s.ent(1).lts), (None, Some(0.5)));
     // copies keep the scale of their source
-    s.cmd("CO").click(2., 0.).enter().click(0., 0.).click(0., 5.).enter();
+    s.cmd("CO")
+        .click(2., 0.)
+        .enter()
+        .click(0., 0.)
+        .click(0., 5.)
+        .enter();
     assert_eq!(s.ent(2).lts, None);
     // the scale is part of the drawing command's own undo step
     s.undo();
@@ -444,7 +560,10 @@ fn hide_shademode_and_visualstyles_set_the_visual_style() {
     s.cmd("HIDE");
     assert_eq!(style(&s), "Hidden");
     s.cmd("SHADEMODE");
-    assert_eq!(s.prompt(), "Enter option or [2D wireframe/3D wireframe/Hidden/Realistic/Conceptual] <Hidden>:");
+    assert_eq!(
+        s.prompt(),
+        "Enter option or [2D wireframe/3D wireframe/Hidden/Realistic/Conceptual] <Hidden>:"
+    );
     s.ty("3d");
     assert_eq!(style(&s), "Wireframe");
     s.cmd("SHA").ty("realistic");
@@ -510,12 +629,18 @@ fn plan_returns_to_the_top_view_and_fits_the_drawing() {
         v.scale = 0.001;
     });
     s.cmd("PLAN");
-    assert_eq!(s.prompt(), "Enter an option or [Current ucs/Ucs/World] <Current ucs>:");
+    assert_eq!(
+        s.prompt(),
+        "Enter an option or [Current ucs/Ucs/World] <Current ucs>:"
+    );
     s.enter();
     assert!(s.with_view(|v| v.is_plan()));
     near(s.with_view(|v| v.target.x), 50.0);
     assert!(s.view_scale() > 1.0, "fitted to the drawing");
-    assert!(s.with_view(|v| v.pop_previous()), "the previous view is kept");
+    assert!(
+        s.with_view(|v| v.pop_previous()),
+        "the previous view is kept"
+    );
     s.cmd("PLAN").ty("ucs").ty("Nope");
     assert!(s.history_has("There is no saved UCS named"));
 }
@@ -524,7 +649,10 @@ fn plan_returns_to_the_top_view_and_fits_the_drawing() {
 fn vpoint_sets_the_viewing_direction_from_a_vector() {
     let s = Sim::new();
     s.cmd("VPOINT");
-    assert_eq!(s.prompt(), "Specify a view point or [Rotate] <display compass and tripod>:");
+    assert_eq!(
+        s.prompt(),
+        "Specify a view point or [Rotate] <display compass and tripod>:"
+    );
     s.ty("-1,-1,1");
     assert_eq!(s.with_view(|v| v.preset_name()), "SW Isometric");
     s.cmd("VPOINT").ty("0,-1,0");
@@ -539,9 +667,18 @@ fn vpoint_sets_the_viewing_direction_from_a_vector() {
 fn vpoint_rotate_uses_the_two_angles() {
     let s = Sim::new();
     s.cmd("VPOINT").ty("rotate");
-    assert!(s.prompt().starts_with("Enter angle in XY plane from X axis"), "{}", s.prompt());
+    assert!(
+        s.prompt()
+            .starts_with("Enter angle in XY plane from X axis"),
+        "{}",
+        s.prompt()
+    );
     s.ty("-135");
-    assert!(s.prompt().starts_with("Enter angle from XY plane"), "{}", s.prompt());
+    assert!(
+        s.prompt().starts_with("Enter angle from XY plane"),
+        "{}",
+        s.prompt()
+    );
     s.ty("35.2644");
     assert_eq!(s.with_view(|v| v.preset_name()), "SW Isometric");
     s.cmd("VPOINT").ty("r").ty("-90").ty("0");
@@ -617,16 +754,37 @@ fn status_reports_the_drawing_state() {
     s.cmd("STATUS");
     let squash = |l: String| l.split_whitespace().collect::<Vec<_>>().join(" ");
     assert_eq!(squash(row(&s, "in Drawing1")), "1 object in Drawing1");
-    assert_eq!(squash(row(&s, "Model space limits")), "Model space limits are X: 0.0000 Y: 0.0000 (On)");
-    assert_eq!(squash(row(&s, "Model space uses")), "Model space uses X: 0.0000 Y: 0.0000");
-    assert_eq!(squash(row(&s, "Snap resolution")), "Snap resolution is X: 10.0000 Y: 10.0000");
-    assert_eq!(squash(row(&s, "Current space")), "Current space: Model space");
+    assert_eq!(
+        squash(row(&s, "Model space limits")),
+        "Model space limits are X: 0.0000 Y: 0.0000 (On)"
+    );
+    assert_eq!(
+        squash(row(&s, "Model space uses")),
+        "Model space uses X: 0.0000 Y: 0.0000"
+    );
+    assert_eq!(
+        squash(row(&s, "Snap resolution")),
+        "Snap resolution is X: 10.0000 Y: 10.0000"
+    );
+    assert_eq!(
+        squash(row(&s, "Current space")),
+        "Current space: Model space"
+    );
     assert_eq!(squash(row(&s, "Current layer")), "Current layer: \"0\"");
     assert_eq!(squash(row(&s, "Current color")), "Current color: ByLayer");
-    assert_eq!(squash(row(&s, "Fill")), "Fill on Grid on Ortho off Snap off Polar off");
-    assert_eq!(squash(row(&s, "Object snap modes")), "Object snap modes: Endpoint, Center, Intersection, Extension");
+    assert_eq!(
+        squash(row(&s, "Fill")),
+        "Fill on Grid on Ortho off Snap off Polar off"
+    );
+    assert_eq!(
+        squash(row(&s, "Object snap modes")),
+        "Object snap modes: Endpoint, Center, Intersection, Extension"
+    );
     assert_eq!(squash(row(&s, "Free memory")), "Free memory: not available");
-    assert!(s.log_text().contains("X:   420.0000  Y:   297.0000") && s.log_text().contains("X:   100.0000  Y:    50.0000"));
+    assert!(
+        s.log_text().contains("X:   420.0000  Y:   297.0000")
+            && s.log_text().contains("X:   100.0000  Y:    50.0000")
+    );
     s.doc_mut(|d| d.change(|d| d.model.entities.clear()));
     s.cmd("STATUS");
     assert!(s.history_has("**Nothing**"));
@@ -636,7 +794,15 @@ fn status_reports_the_drawing_state() {
 fn time_reports_the_session_clock_and_controls_the_timer() {
     let s = Sim::new();
     let at = |ms: f64| s.h.borrow_mut().now = ms;
-    let value = |label: &str| row(&s, label).split(':').skip(1).collect::<Vec<_>>().join(":").trim().to_string();
+    let value = |label: &str| {
+        row(&s, label)
+            .split(':')
+            .skip(1)
+            .collect::<Vec<_>>()
+            .join(":")
+            .trim()
+            .to_string()
+    };
     at(1000.0);
     s.cmd("TIME");
     assert_eq!(s.prompt(), "Enter option or [Display/ON/OFF/Reset]:");
@@ -652,7 +818,11 @@ fn time_reports_the_session_clock_and_controls_the_timer() {
     assert!(s.history_has("Timer is off."));
     at(100_000.0);
     s.ty("display");
-    assert_eq!(value("Elapsed timer (off)"), "0 days 00:01:05.500", "a stopped timer does not advance");
+    assert_eq!(
+        value("Elapsed timer (off)"),
+        "0 days 00:01:05.500",
+        "a stopped timer does not advance"
+    );
     s.ty("on");
     at(101_000.0);
     s.ty("display");
@@ -673,7 +843,11 @@ fn time_shows_when_the_drawing_was_last_changed() {
     s.add(Entity::line(p(0., 0.), p(1., 1.)));
     s.h.borrow_mut().now = 9000.0;
     s.cmd("TIME");
-    assert!(row(&s, "Last updated").ends_with("0 days 00:00:09.000"), "{}", s.log_text());
+    assert!(
+        row(&s, "Last updated").ends_with("0 days 00:00:09.000"),
+        "{}",
+        s.log_text()
+    );
     s.enter();
 }
 
@@ -687,12 +861,34 @@ fn dblist_lists_every_object_including_those_on_frozen_layers() {
         d.add(Entity::text(p(1., 1.), 2.5, "hello").on_layer("F"));
         d.add(Entity::insert("Gone", p(9., 9.)));
         d.layer_mut("F").unwrap().frozen = true;
-        d.layouts.push(Layout { name: "Layout1".into(), paper: Paper { w: 420., h: 297., name: "A3".into(), landscape: true }, entities: vec![Entity::point(p(7., 7.))], fresh: false });
+        d.layouts.push(Layout {
+            name: "Layout1".into(),
+            paper: Paper {
+                w: 420.,
+                h: 297.,
+                name: "A3".into(),
+                landscape: true,
+            },
+            entities: vec![Entity::point(p(7., 7.))],
+            fresh: false,
+        });
     });
     s.play("BOX", &[Click(50., 0.), Click(60., 10.), Type("5")]);
     s.cmd("DBLIST");
     let log = s.log_text();
-    for needle in ["LINE", "length 5", "CIRCLE", "radius 2", "TEXT", "\"hello\"", "Layer: \"F\"", "block \"Gone\"", "Handle = ", "at X=7  Y=7", "3D SOLID"] {
+    for needle in [
+        "LINE",
+        "length 5",
+        "CIRCLE",
+        "radius 2",
+        "TEXT",
+        "\"hello\"",
+        "Layer: \"F\"",
+        "block \"Gone\"",
+        "Handle = ",
+        "at X=7  Y=7",
+        "3D SOLID",
+    ] {
         assert!(log.contains(needle), "missing {needle:?} in\n{log}");
     }
     let t = Sim::new();
@@ -757,7 +953,11 @@ fn pasteblock_inserts_the_clipboard_as_a_block_reference() {
     assert_eq!(s.selected(), vec![s.ent(1).id]);
     s.cmd("COPYBASE").click(10., 10.).click(15., 10.).enter();
     s.cmd("PASTEBLOCK").click(0., 50.);
-    assert_eq!(s.doc(|d| d.blocks.len()), 2, "every paste gets its own block");
+    assert_eq!(
+        s.doc(|d| d.blocks.len()),
+        2,
+        "every paste gets its own block"
+    );
     s.undo();
     assert_eq!(s.doc(|d| d.blocks.len()), 1, "one undo step");
     let t = Sim::new();
@@ -798,7 +998,11 @@ fn audit_reports_dangling_references_and_fixes_them_on_request() {
     s.cmd("AUDIT");
     assert_eq!(s.prompt(), "Fix any errors detected? [Yes/No] <No>:");
     s.enter();
-    assert!(s.history_has("2 objects on undefined layer \"Ghost\""), "{}", s.log_text());
+    assert!(
+        s.history_has("2 objects on undefined layer \"Ghost\""),
+        "{}",
+        s.log_text()
+    );
     assert!(s.history_has("refers to undefined block \"NOPE\""));
     assert!(s.history_has("uses undefined linetype \"WEIRD\""));
     assert!(s.history_has("The current layer is not defined"));
@@ -808,7 +1012,9 @@ fn audit_reports_dangling_references_and_fixes_them_on_request() {
     s.cmd("AUDIT").ty("y");
     assert!(s.history_has("Total errors found 4 fixed 4"));
     assert_eq!(s.n(), 3, "the dangling block reference is erased");
-    assert!(s.doc(|d| d.layer("Ghost").is_some() && d.layer("0").unwrap().ltype == "Continuous" && d.cur.layer == "0"));
+    assert!(s.doc(|d| d.layer("Ghost").is_some()
+        && d.layer("0").unwrap().ltype == "Continuous"
+        && d.cur.layer == "0"));
     s.cmd("AUDIT").ty("y");
     assert!(s.history_has("Total errors found 0 fixed 0"));
     s.undo();

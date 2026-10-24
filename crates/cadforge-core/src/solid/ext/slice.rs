@@ -33,7 +33,11 @@ impl Plane {
 
     /// In-plane axes `(u, v)` with `u × v = n`; `u` is horizontal unless the plane is.
     pub fn basis(&self) -> (V3, V3) {
-        let u = if self.n.z.abs() > 0.999_999 { V3::new(1.0, 0.0, 0.0) } else { V3::new(0.0, 0.0, 1.0).cross(self.n).unit() };
+        let u = if self.n.z.abs() > 0.999_999 {
+            V3::new(1.0, 0.0, 0.0)
+        } else {
+            V3::new(0.0, 0.0, 1.0).cross(self.n).unit()
+        };
         (u, self.n.cross(u))
     }
 
@@ -56,8 +60,20 @@ const SIDE_TOL: f64 = 1e-7;
 /// Join unordered segments into loops. Returns the closed loops and whether every segment ended up in one.
 fn chain(segs: &[(V3, V3)], tol: f64) -> (Vec<Vec<V3>>, bool) {
     let cs = tol * 4.0;
-    let cell = |p: V3| ((p.x / cs).floor() as i64, (p.y / cs).floor() as i64, (p.z / cs).floor() as i64);
-    let end = |id: usize| if id % 2 == 0 { segs[id / 2].0 } else { segs[id / 2].1 };
+    let cell = |p: V3| {
+        (
+            (p.x / cs).floor() as i64,
+            (p.y / cs).floor() as i64,
+            (p.z / cs).floor() as i64,
+        )
+    };
+    let end = |id: usize| {
+        if id % 2 == 0 {
+            segs[id / 2].0
+        } else {
+            segs[id / 2].1
+        }
+    };
     let mut grid: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
     for id in 0..segs.len() * 2 {
         grid.entry(cell(end(id))).or_default().push(id);
@@ -69,7 +85,11 @@ fn chain(segs: &[(V3, V3)], tol: f64) -> (Vec<Vec<V3>>, bool) {
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for dz in -1..=1 {
-                    for &id in grid.get(&(c.0 + dx, c.1 + dy, c.2 + dz)).into_iter().flatten() {
+                    for &id in grid
+                        .get(&(c.0 + dx, c.1 + dy, c.2 + dz))
+                        .into_iter()
+                        .flatten()
+                    {
                         let d = end(id).sub(p).len();
                         if !used[id / 2] && d <= tol && best.map_or(true, |b| d < b.0) {
                             best = Some((d, id));
@@ -92,7 +112,9 @@ fn chain(segs: &[(V3, V3)], tol: f64) -> (Vec<Vec<V3>>, bool) {
             if cur.sub(start).len() <= tol {
                 break true;
             }
-            let Some(id) = near(cur, &used) else { break false };
+            let Some(id) = near(cur, &used) else {
+                break false;
+            };
             used[id / 2] = true;
             pts.push(cur);
             cur = end(id ^ 1);
@@ -107,13 +129,28 @@ fn chain(segs: &[(V3, V3)], tol: f64) -> (Vec<Vec<V3>>, bool) {
 }
 
 /// Add `seg` unless an equal one (in either direction) is already present.
-fn push_cut(cuts: &mut Vec<(V3, V3)>, seen: &mut std::collections::HashSet<[i64; 6]>, a: V3, b: V3) {
-    let q = |p: V3| [(p.x * 1e6).round() as i64, (p.y * 1e6).round() as i64, (p.z * 1e6).round() as i64];
+fn push_cut(
+    cuts: &mut Vec<(V3, V3)>,
+    seen: &mut std::collections::HashSet<[i64; 6]>,
+    a: V3,
+    b: V3,
+) {
+    let q = |p: V3| {
+        [
+            (p.x * 1e6).round() as i64,
+            (p.y * 1e6).round() as i64,
+            (p.z * 1e6).round() as i64,
+        ]
+    };
     let (qa, qb) = (q(a), q(b));
     if qa == qb {
         return;
     }
-    let key = if qa < qb { [qa[0], qa[1], qa[2], qb[0], qb[1], qb[2]] } else { [qb[0], qb[1], qb[2], qa[0], qa[1], qa[2]] };
+    let key = if qa < qb {
+        [qa[0], qa[1], qa[2], qb[0], qb[1], qb[2]]
+    } else {
+        [qb[0], qb[1], qb[2], qa[0], qa[1], qa[2]]
+    };
     if seen.insert(key) {
         cuts.push((a, b));
     }
@@ -121,10 +158,22 @@ fn push_cut(cuts: &mut Vec<(V3, V3)>, seen: &mut std::collections::HashSet<[i64;
 
 /// Cut segments where the mesh crosses the plane (edges lying in the plane included), and the signed vertex distances.
 fn cut_segments(m: &Mesh, pl: &Plane) -> (Vec<(V3, V3)>, Vec<f64>) {
-    let s: Vec<f64> = m.vertices.iter().map(|p| pl.dist(*p)).map(|d| if d.abs() < SIDE_TOL { 0.0 } else { d }).collect();
+    let s: Vec<f64> = m
+        .vertices
+        .iter()
+        .map(|p| pl.dist(*p))
+        .map(|d| if d.abs() < SIDE_TOL { 0.0 } else { d })
+        .collect();
     let (mut cuts, mut seen) = (vec![], std::collections::HashSet::new());
     for f in &m.faces {
-        let (sv, pv) = ([s[f[0] as usize], s[f[1] as usize], s[f[2] as usize]], [m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize]]);
+        let (sv, pv) = (
+            [s[f[0] as usize], s[f[1] as usize], s[f[2] as usize]],
+            [
+                m.vertices[f[0] as usize],
+                m.vertices[f[1] as usize],
+                m.vertices[f[2] as usize],
+            ],
+        );
         let mut on_plane: Vec<V3> = (0..3).filter(|&i| sv[i] == 0.0).map(|i| pv[i]).collect();
         for i in 0..3 {
             let j = (i + 1) % 3;
@@ -155,7 +204,14 @@ pub fn section_loops(m: &Mesh, pl: &Plane) -> Vec<Vec<V3>> {
 fn cap(loops: &[Vec<V3>], pl: &Plane) -> Result<Vec<[V3; 3]>, String> {
     let (u, v) = pl.basis();
     let o = pl.origin();
-    let flat: Vec<Vec<Pt>> = loops.iter().map(|l| l.iter().map(|p| pt(p.sub(o).dot(u), p.sub(o).dot(v))).collect()).collect();
+    let flat: Vec<Vec<Pt>> = loops
+        .iter()
+        .map(|l| {
+            l.iter()
+                .map(|p| pt(p.sub(o).dot(u), p.sub(o).dot(v)))
+                .collect()
+        })
+        .collect();
     let mut back: HashMap<(u64, u64), V3> = HashMap::new();
     for (l3, l2) in loops.iter().zip(&flat) {
         for (p3, p2) in l3.iter().zip(l2) {
@@ -163,8 +219,14 @@ fn cap(loops: &[Vec<V3>], pl: &Plane) -> Result<Vec<[V3; 3]>, String> {
         }
     }
     let groups = group_loops(&flat);
-    let pts: Vec<V3> = rings_of(&groups).iter().flat_map(|r| r.iter().map(|p| back[&(p.x.to_bits(), p.y.to_bits())])).collect();
-    Ok(region_tris(&groups)?.into_iter().map(|t| [pts[t[0]], pts[t[1]], pts[t[2]]]).collect())
+    let pts: Vec<V3> = rings_of(&groups)
+        .iter()
+        .flat_map(|r| r.iter().map(|p| back[&(p.x.to_bits(), p.y.to_bits())]))
+        .collect();
+    Ok(region_tris(&groups)?
+        .into_iter()
+        .map(|t| [pts[t[0]], pts[t[1]], pts[t[2]]])
+        .collect())
 }
 
 /// Clip the triangle to the half-space (`keep_pos` selects the side). New points are computed from the lower vertex
@@ -190,12 +252,26 @@ pub fn slice(m: &Mesh, pl: &Plane) -> Result<Sliced, String> {
     let (any_pos, any_neg) = (s.iter().any(|v| *v > 0.0), s.iter().any(|v| *v < 0.0));
     if !any_neg || !any_pos {
         let whole = Some(m.clone());
-        return Ok(if any_pos { Sliced { front: whole, back: None } } else { Sliced { front: None, back: whole } });
+        return Ok(if any_pos {
+            Sliced {
+                front: whole,
+                back: None,
+            }
+        } else {
+            Sliced {
+                front: None,
+                back: whole,
+            }
+        });
     }
     let (mut front, mut back) = (Welder::default(), Welder::default());
     for f in &m.faces {
         let sv = [s[f[0] as usize], s[f[1] as usize], s[f[2] as usize]];
-        let pv = [m.vertices[f[0] as usize], m.vertices[f[1] as usize], m.vertices[f[2] as usize]];
+        let pv = [
+            m.vertices[f[0] as usize],
+            m.vertices[f[1] as usize],
+            m.vertices[f[2] as usize],
+        ];
         let (pos, neg) = (sv.iter().any(|v| *v > 0.0), sv.iter().any(|v| *v < 0.0));
         match (pos, neg) {
             (true, false) => front.tri(pv[0], pv[1], pv[2]),
@@ -223,13 +299,18 @@ pub fn slice(m: &Mesh, pl: &Plane) -> Result<Sliced, String> {
         back.tri(t[0], t[1], t[2]);
         front.tri(t[0], t[2], t[1]);
     }
-    Ok(Sliced { front: Some(front.finish()), back: Some(back.finish()) })
+    Ok(Sliced {
+        front: Some(front.finish()),
+        back: Some(back.finish()),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solid::mesh::{box_mesh, cylinder_mesh, extrude_loops, is_watertight, mesh_volume, sphere_mesh};
+    use crate::solid::mesh::{
+        box_mesh, cylinder_mesh, extrude_loops, is_watertight, mesh_volume, sphere_mesh,
+    };
 
     fn z_plane(z: f64) -> Plane {
         Plane::new(V3::new(0.0, 0.0, z), V3::new(0.0, 0.0, 1.0)).unwrap()
@@ -240,8 +321,16 @@ mod tests {
         let b = box_mesh(0.0, 0.0, 0.0, 10.0, 10.0, 10.0, "Box").mesh();
         let s = slice(&b, &z_plane(4.0)).unwrap();
         let (f, k) = (s.front.unwrap(), s.back.unwrap());
-        assert!((mesh_volume(&f) - 600.0).abs() < 1e-6, "{}", mesh_volume(&f));
-        assert!((mesh_volume(&k) - 400.0).abs() < 1e-6, "{}", mesh_volume(&k));
+        assert!(
+            (mesh_volume(&f) - 600.0).abs() < 1e-6,
+            "{}",
+            mesh_volume(&f)
+        );
+        assert!(
+            (mesh_volume(&k) - 400.0).abs() < 1e-6,
+            "{}",
+            mesh_volume(&k)
+        );
         assert!(is_watertight(&f) && is_watertight(&k));
     }
 
@@ -250,15 +339,28 @@ mod tests {
         let b = box_mesh(0.0, 0.0, 0.0, 10.0, 10.0, 10.0, "Box").mesh();
         let pl = Plane::new(V3::new(5.0, 5.0, 5.0), V3::new(1.0, 0.7, 0.3)).unwrap();
         let s = slice(&b, &pl).unwrap();
-        let (f, k) = (mesh_volume(s.front.as_ref().unwrap()), mesh_volume(s.back.as_ref().unwrap()));
-        assert!((f + k - 1000.0).abs() < 1e-6 && (f - 500.0).abs() < 1e-6, "{f} {k}");
-        assert!(is_watertight(s.front.as_ref().unwrap()) && is_watertight(s.back.as_ref().unwrap()));
+        let (f, k) = (
+            mesh_volume(s.front.as_ref().unwrap()),
+            mesh_volume(s.back.as_ref().unwrap()),
+        );
+        assert!(
+            (f + k - 1000.0).abs() < 1e-6 && (f - 500.0).abs() < 1e-6,
+            "{f} {k}"
+        );
+        assert!(
+            is_watertight(s.front.as_ref().unwrap()) && is_watertight(s.back.as_ref().unwrap())
+        );
     }
 
     #[test]
     fn planes_through_vertices_and_missing_the_solid() {
         let b = box_mesh(0.0, 0.0, 0.0, 10.0, 10.0, 10.0, "Box").mesh();
-        let diag = Plane::through(V3::new(0.0, 0.0, 0.0), V3::new(10.0, 10.0, 0.0), V3::new(0.0, 0.0, 10.0)).unwrap();
+        let diag = Plane::through(
+            V3::new(0.0, 0.0, 0.0),
+            V3::new(10.0, 10.0, 0.0),
+            V3::new(0.0, 0.0, 10.0),
+        )
+        .unwrap();
         let s = slice(&b, &diag).unwrap();
         assert!((mesh_volume(s.front.as_ref().unwrap()) - 500.0).abs() < 1e-6);
         assert!(is_watertight(s.front.as_ref().unwrap()));
@@ -268,9 +370,25 @@ mod tests {
 
     #[test]
     fn caps_keep_holes_and_curved_solids_are_halved() {
-        let outer: Vec<Pt> = (0..48).map(|i| pt(10.0 * (TAU * i as f64 / 48.0).cos(), 10.0 * (TAU * i as f64 / 48.0).sin())).collect();
-        let inner: Vec<Pt> = (0..48).map(|i| pt(6.0 * (TAU * i as f64 / 48.0).cos(), 6.0 * (TAU * i as f64 / 48.0).sin())).collect();
-        let tube = extrude_loops(&[outer, inner], 10.0, 0.0, "Tube", 0.0).unwrap().mesh();
+        let outer: Vec<Pt> = (0..48)
+            .map(|i| {
+                pt(
+                    10.0 * (TAU * i as f64 / 48.0).cos(),
+                    10.0 * (TAU * i as f64 / 48.0).sin(),
+                )
+            })
+            .collect();
+        let inner: Vec<Pt> = (0..48)
+            .map(|i| {
+                pt(
+                    6.0 * (TAU * i as f64 / 48.0).cos(),
+                    6.0 * (TAU * i as f64 / 48.0).sin(),
+                )
+            })
+            .collect();
+        let tube = extrude_loops(&[outer, inner], 10.0, 0.0, "Tube", 0.0)
+            .unwrap()
+            .mesh();
         let total = mesh_volume(&tube);
         assert!(is_watertight(&tube), "tube");
         let s = slice(&tube, &z_plane(3.0)).unwrap();
@@ -280,7 +398,10 @@ mod tests {
         assert!(is_watertight(&f) && is_watertight(&k));
         let sph = sphere_mesh(0.0, 0.0, 0.0, 5.0, 32, "S").mesh();
         let h = slice(&sph, &z_plane(0.0)).unwrap();
-        let (a, b) = (mesh_volume(h.front.as_ref().unwrap()), mesh_volume(h.back.as_ref().unwrap()));
+        let (a, b) = (
+            mesh_volume(h.front.as_ref().unwrap()),
+            mesh_volume(h.back.as_ref().unwrap()),
+        );
         assert!((a - b).abs() / a < 0.02 && is_watertight(h.front.as_ref().unwrap()));
         let cyl = cylinder_mesh(0.0, 0.0, 0.0, 4.0, 10.0, 32, "C").mesh();
         let vert = Plane::new(V3::default(), V3::new(1.0, 0.0, 0.0)).unwrap();

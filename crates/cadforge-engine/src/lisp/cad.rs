@@ -7,7 +7,8 @@ use crate::runtime::{CmdError, PromptSpec};
 use cadforge_core::geom::{pt, Pt};
 
 fn arg(a: &[Value], i: usize) -> LResult<&Value> {
-    a.get(i).ok_or_else(|| LErr::Msg("too few arguments".into()))
+    a.get(i)
+        .ok_or_else(|| LErr::Msg("too few arguments".into()))
 }
 
 fn string<'a>(a: &'a [Value], i: usize) -> LResult<&'a str> {
@@ -67,10 +68,20 @@ fn command_token(v: &Value) -> LResult<Option<String>> {
         Value::T => "T".into(),
         Value::Sym(s) => s.to_string(),
         Value::Ename(e) => format!("<ID:{e}>"),
-        Value::Sel(s) => format!("<ID:{}>", s.borrow().iter().map(u64::to_string).collect::<Vec<_>>().join(",")),
+        Value::Sel(s) => format!(
+            "<ID:{}>",
+            s.borrow()
+                .iter()
+                .map(u64::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
         Value::Cons(_) => {
             let (x, y) = v.as_point().ok_or_else(|| bad_arg("point list", v))?;
-            let z = v.to_vec().and_then(|l| l.get(2).and_then(Value::as_f64)).unwrap_or(0.0);
+            let z = v
+                .to_vec()
+                .and_then(|l| l.get(2).and_then(Value::as_f64))
+                .unwrap_or(0.0);
             if z != 0.0 {
                 format!("{x},{y},{z}")
             } else {
@@ -96,7 +107,11 @@ async fn command(it: &Interp, c: &Ctx, a: &[Value]) -> LResult {
             continue;
         };
         i += 1;
-        let name = name.trim().trim_start_matches('_').trim_start_matches('.').to_string();
+        let name = name
+            .trim()
+            .trim_start_matches('_')
+            .trim_start_matches('.')
+            .to_string();
         if name.is_empty() {
             continue;
         }
@@ -113,13 +128,23 @@ async fn command(it: &Interp, c: &Ctx, a: &[Value]) -> LResult {
 
 /// Prompt text of a `get...` call: the string argument without leading newlines.
 fn prompt_of(a: &[Value], from: usize) -> String {
-    a.iter().skip(from).find_map(|v| v.as_str()).unwrap_or("").trim_start_matches(['\n', '\r']).trim_end().to_string()
+    a.iter()
+        .skip(from)
+        .find_map(|v| v.as_str())
+        .unwrap_or("")
+        .trim_start_matches(['\n', '\r'])
+        .trim_end()
+        .to_string()
 }
 
 fn spec(it: &Interp, a: &[Value], from: usize) -> PromptSpec {
     let ig = it.init_get.borrow().clone();
     let msg = prompt_of(a, from);
-    let mut s = PromptSpec::new(if msg.is_empty() { "Enter a value" } else { &msg });
+    let mut s = PromptSpec::new(if msg.is_empty() {
+        "Enter a value"
+    } else {
+        &msg
+    });
     if !ig.keywords.is_empty() {
         s = s.options_vec(ig.keywords.clone());
     }
@@ -173,7 +198,13 @@ pub async fn call(it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResu
             let n = string(a, 0)?;
             let ty = c.app(|app| app.sysvars.var_type(n));
             match c.var(n) {
-                Ok(crate::sysvars::Value::Num(x)) => Ok(if matches!(ty, crate::sysvars::VarType::Int) { Value::Int(x as i64) } else { Value::Real(x) }),
+                Ok(crate::sysvars::Value::Num(x)) => {
+                    Ok(if matches!(ty, crate::sysvars::VarType::Int) {
+                        Value::Int(x as i64)
+                    } else {
+                        Value::Real(x)
+                    })
+                }
                 Ok(crate::sysvars::Value::Str(s)) => Ok(Value::str(&s)),
                 Err(_) => Ok(Value::Nil),
             }
@@ -200,7 +231,10 @@ pub async fn call(it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResu
                 rest = &a[1..];
             }
             if let Some(Value::Str(k)) = rest.first() {
-                ig.keywords = k.split_whitespace().map(|w| w.split(',').next().unwrap_or(w).to_string()).collect();
+                ig.keywords = k
+                    .split_whitespace()
+                    .map(|w| w.split(',').next().unwrap_or(w).to_string())
+                    .collect();
             }
             *it.init_get.borrow_mut() = ig;
             Ok(Value::Nil)
@@ -235,7 +269,11 @@ pub async fn call(it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResu
                 sp = sp.base(b);
             }
             reset_init(it);
-            let r = if name == "GETDIST" { c.distance(sp).await } else { c.angle(sp).await };
+            let r = if name == "GETDIST" {
+                c.distance(sp).await
+            } else {
+                c.angle(sp).await
+            };
             match r {
                 Ok(MeasR::Value { value, .. }) => Ok(Value::Real(value)),
                 Ok(MeasR::Kw(k)) => Ok(Value::str(&k)),
@@ -254,21 +292,31 @@ pub async fn call(it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResu
             }
             reset_init(it);
             match c.number(sp).await {
-                Ok(NumR::Value(x)) => Ok(if name == "GETINT" { Value::Int(x.trunc() as i64) } else { Value::Real(x) }),
+                Ok(NumR::Value(x)) => Ok(if name == "GETINT" {
+                    Value::Int(x.trunc() as i64)
+                } else {
+                    Value::Real(x)
+                }),
                 Ok(NumR::Kw(k)) => Ok(Value::str(&k)),
                 Ok(NumR::Enter(_)) => Ok(Value::Nil),
                 Err(e) => Err(e.into()),
             }
         }
         "GETSTRING" => {
-            let spaces = a.first().is_some_and(|v| v.is_true() && v.as_str().is_none());
+            let spaces = a
+                .first()
+                .is_some_and(|v| v.is_true() && v.as_str().is_none());
             let mut sp = spec(it, a, 0);
             if spaces {
                 sp = sp.raw();
             }
             reset_init(it);
             match c.string(sp).await {
-                Ok(r) => Ok(if r.text.is_empty() && r.entered { Value::str("") } else { Value::str(&r.text) }),
+                Ok(r) => Ok(if r.text.is_empty() && r.entered {
+                    Value::str("")
+                } else {
+                    Value::str(&r.text)
+                }),
                 Err(e) => Err(e.into()),
             }
         }
@@ -289,15 +337,22 @@ pub async fn call(it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResu
             let sp = spec(it, a, 0);
             reset_init(it);
             match c.entity(sp).await {
-                Ok(EntR::Entity { id, pt: p, .. }) => Ok(Value::list(vec![Value::Ename(id), from_wcs(c, p)])),
+                Ok(EntR::Entity { id, pt: p, .. }) => {
+                    Ok(Value::list(vec![Value::Ename(id), from_wcs(c, p)]))
+                }
                 Ok(EntR::Kw(k)) => Ok(Value::str(&k)),
                 Ok(EntR::Enter) => Ok(Value::Nil),
                 Err(e) => Err(e.into()),
             }
         }
         "TRANS" => (|| {
-            let (x, y) = arg(a, 0)?.as_point().ok_or_else(|| bad_arg("point list", &a[0]))?;
-            let (from, to) = (arg(a, 1)?.as_i64().unwrap_or(0), arg(a, 2)?.as_i64().unwrap_or(0));
+            let (x, y) = arg(a, 0)?
+                .as_point()
+                .ok_or_else(|| bad_arg("point list", &a[0]))?;
+            let (from, to) = (
+                arg(a, 1)?.as_i64().unwrap_or(0),
+                arg(a, 2)?.as_i64().unwrap_or(0),
+            );
             let disp = a.get(3).is_some_and(Value::is_true);
             let u = c.app(|app| app.ucs());
             let p = pt(x, y);
@@ -311,15 +366,26 @@ pub async fn call(it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResu
                 (1, true) => u.vec_from_wcs(w),
                 _ => w,
             };
-            let z = arg(a, 0)?.to_vec().and_then(|l| l.get(2).and_then(Value::as_f64)).unwrap_or(0.0);
-            Ok(Value::list(vec![Value::Real(r.x), Value::Real(r.y), Value::Real(z)]))
+            let z = arg(a, 0)?
+                .to_vec()
+                .and_then(|l| l.get(2).and_then(Value::as_f64))
+                .unwrap_or(0.0);
+            Ok(Value::list(vec![
+                Value::Real(r.x),
+                Value::Real(r.y),
+                Value::Real(z),
+            ]))
         })(),
         "REDRAW" | "GRAPHSCR" | "TEXTSCR" | "VL-PROMPT" => {
             c.emit();
             Ok(Value::Nil)
         }
         "MENUCMD" | "SETFUNHELP" | "VLAX-RELEASE-OBJECT" => Ok(Value::Nil),
-        _ if name.starts_with("VLAX-") || name.starts_with("VLA-") || name.starts_with("VLR-") => Err(LErr::Msg(format!("{name} is not supported: the ActiveX / Reactor API is not available in CadForge"))),
+        _ if name.starts_with("VLAX-") || name.starts_with("VLA-") || name.starts_with("VLR-") => {
+            Err(LErr::Msg(format!(
+                "{name} is not supported: the ActiveX / Reactor API is not available in CadForge"
+            )))
+        }
         _ => return None,
     })
 }

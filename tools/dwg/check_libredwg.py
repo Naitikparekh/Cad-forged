@@ -18,7 +18,7 @@ LW = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106,
 DWG_TYPE = {'TEXT': 'TEXT', 'ATTRIB': 'ATTRIB', 'ATTDEF': 'ATTDEF', 'INSERT': 'INSERT', 'LINE': 'LINE', 'CIRCLE': 'CIRCLE',
             'ARC': 'ARC', 'POINT': 'POINT', 'ELLIPSE': 'ELLIPSE', 'SPLINE': 'SPLINE', 'RAY': 'RAY', 'XLINE': 'XLINE',
             'MTEXT': 'MTEXT', 'LEADER': 'LEADER', 'LWPOLYLINE': 'LWPOLYLINE', 'HATCH': 'HATCH', 'SOLID': 'SOLID',
-            'VIEWPORT': 'VIEWPORT', 'IMAGE': 'IMAGE', 'SEQEND': 'SEQEND'}
+            'VIEWPORT': 'VIEWPORT', 'IMAGE': 'IMAGE', 'WIPEOUT': 'WIPEOUT', 'SEQEND': 'SEQEND'}
 DIM = {0: 'DIMENSION_LINEAR', 1: 'DIMENSION_ALIGNED', 2: 'DIMENSION_ANG2LN', 3: 'DIMENSION_DIAMETER',
        4: 'DIMENSION_RADIUS', 5: 'DIMENSION_ANG3PT', 6: 'DIMENSION_ORDINATE'}
 
@@ -144,6 +144,15 @@ def main(dxf_path, json_path):
         elif t == 'INSERT':
             same('ins_pt', pt(10))
             same('rotation', math.radians(float(first(r, 50, '0'))))
+        elif t in ('IMAGE', 'WIPEOUT'):
+            same('pt0', pt(10))
+            same('uvec', pt(11))
+            same('vvec', pt(12))
+            xs = [float(v) for c, v in r['g'] if c == 14]
+            ys = [float(v) for c, v in r['g'] if c == 24]
+            got = o.get('clip_verts', [])
+            if len(got) != len(xs) or not all(near(p[0], x) and near(p[1], y) for p, x, y in zip(got, xs, ys)):
+                problems.append(f'{name}: clip {got[:3]} != {list(zip(xs, ys))[:3]}')
         elif t == 'LWPOLYLINE':
             xs = [float(v) for c, v in r['g'] if c == 10]
             ys = [float(v) for c, v in r['g'] if c == 20]

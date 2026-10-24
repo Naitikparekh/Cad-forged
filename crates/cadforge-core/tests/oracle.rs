@@ -8,7 +8,9 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> String {
-    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures").join(name);
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures")
+        .join(name);
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
 }
 
@@ -75,13 +77,24 @@ fn kind_str(k: SnapType) -> &'static str {
 }
 
 fn close(a: f64, b: f64, what: &str) {
-    assert!((a - b).abs() <= 1e-6 * 1f64.max(b.abs()), "{what}: rust {a} vs js {b}");
+    assert!(
+        (a - b).abs() <= 1e-6 * 1f64.max(b.abs()),
+        "{what}: rust {a} vs js {b}"
+    );
 }
 
 fn check(name: &str) {
     let d = Drawing::from_json_str(&fixture(&format!("{name}.cadforge.json")), None).unwrap();
-    let oracle: Vec<Value> = serde_json::from_str(&fixture(&format!("{name}.oracle.json"))).unwrap();
-    let probes = [pt(0.0, 0.0), pt(5.0, 5.0), pt(12.5, 3.25), pt(-4.0, 20.0), pt(31.0, 6.0), pt(73.0, 11.0)];
+    let oracle: Vec<Value> =
+        serde_json::from_str(&fixture(&format!("{name}.oracle.json"))).unwrap();
+    let probes = [
+        pt(0.0, 0.0),
+        pt(5.0, 5.0),
+        pt(12.5, 3.25),
+        pt(-4.0, 20.0),
+        pt(31.0, 6.0),
+        pt(73.0, 11.0),
+    ];
     for o in &oracle {
         let id = o["id"].as_u64().unwrap();
         let e = d.by_id(id).unwrap_or_else(|| panic!("entity {id}"));
@@ -90,10 +103,26 @@ fn check(name: &str) {
         let ob = &o["bounds"];
         match (b, ob.is_null()) {
             (Some(b), false) => {
-                close(b.min_x, ob["minX"].as_f64().unwrap(), &format!("{tag} minX"));
-                close(b.min_y, ob["minY"].as_f64().unwrap(), &format!("{tag} minY"));
-                close(b.max_x, ob["maxX"].as_f64().unwrap(), &format!("{tag} maxX"));
-                close(b.max_y, ob["maxY"].as_f64().unwrap(), &format!("{tag} maxY"));
+                close(
+                    b.min_x,
+                    ob["minX"].as_f64().unwrap(),
+                    &format!("{tag} minX"),
+                );
+                close(
+                    b.min_y,
+                    ob["minY"].as_f64().unwrap(),
+                    &format!("{tag} minY"),
+                );
+                close(
+                    b.max_x,
+                    ob["maxX"].as_f64().unwrap(),
+                    &format!("{tag} maxX"),
+                );
+                close(
+                    b.max_y,
+                    ob["maxY"].as_f64().unwrap(),
+                    &format!("{tag} maxY"),
+                );
             }
             (None, true) => {}
             (b, _) => panic!("{tag}: bounds rust {b:?} vs js {ob}"),
@@ -103,7 +132,11 @@ fn check(name: &str) {
         }
         // segments
         let segs = segs_of(e, &d);
-        assert_eq!(segs.len(), o["nsegs"].as_u64().unwrap() as usize, "{tag}: segment count");
+        assert_eq!(
+            segs.len(),
+            o["nsegs"].as_u64().unwrap() as usize,
+            "{tag}: segment count"
+        );
         for (i, (s, js)) in segs.iter().zip(o["segs"].as_array().unwrap()).enumerate() {
             let js = js.as_array().unwrap();
             let f = |k: usize| js[k].as_f64().unwrap();
@@ -128,8 +161,15 @@ fn check(name: &str) {
         for (p, js) in probes.iter().zip(o["pick"].as_array().unwrap()) {
             let r = pick_distance(e, *p, &d);
             match js.as_str() {
-                Some("inf") => assert!(r.is_infinite(), "{tag}: pick at {p:?} should be infinite, got {r}"),
-                _ => close(r, js.as_f64().unwrap(), &format!("{tag} pick at ({},{})", p.x, p.y)),
+                Some("inf") => assert!(
+                    r.is_infinite(),
+                    "{tag}: pick at {p:?} should be infinite, got {r}"
+                ),
+                _ => close(
+                    r,
+                    js.as_f64().unwrap(),
+                    &format!("{tag} pick at ({},{})", p.x, p.y),
+                ),
             }
         }
         // snaps
@@ -137,7 +177,11 @@ fn check(name: &str) {
         let osn = o["snaps"].as_array().unwrap();
         assert_eq!(snaps.len(), osn.len(), "{tag}: snap count");
         for (s, js) in snaps.iter().zip(osn) {
-            assert_eq!(kind_str(s.kind), js[0].as_str().unwrap(), "{tag}: snap kind");
+            assert_eq!(
+                kind_str(s.kind),
+                js[0].as_str().unwrap(),
+                "{tag}: snap kind"
+            );
             close(s.pt.x, js[1].as_f64().unwrap(), &format!("{tag} snap x"));
             close(s.pt.y, js[2].as_f64().unwrap(), &format!("{tag} snap y"));
         }
@@ -146,13 +190,26 @@ fn check(name: &str) {
         let og = o["grips"].as_array().unwrap();
         assert_eq!(grips.len(), og.len(), "{tag}: grip count");
         for (g, js) in grips.iter().zip(og) {
-            assert_eq!(g.id, js[0].as_str().unwrap_or(&js[0].to_string()), "{tag}: grip id");
+            assert_eq!(
+                g.id,
+                js[0].as_str().unwrap_or(&js[0].to_string()),
+                "{tag}: grip id"
+            );
             close(g.pt.x, js[1].as_f64().unwrap(), &format!("{tag} grip x"));
             close(g.pt.y, js[2].as_f64().unwrap(), &format!("{tag} grip y"));
         }
         // explode
-        let ex: Vec<String> = explode_entity(e, &d).unwrap_or_default().iter().map(|x| x.type_name().to_string()).collect();
-        let oex: Vec<String> = o["explode"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+        let ex: Vec<String> = explode_entity(e, &d)
+            .unwrap_or_default()
+            .iter()
+            .map(|x| x.type_name().to_string())
+            .collect();
+        let oex: Vec<String> = o["explode"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
         assert_eq!(ex, oex, "{tag}: explode result");
         // text
         let texts = texts_of(e, &d);

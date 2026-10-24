@@ -30,7 +30,8 @@ impl Editor {
     /// Activate model space (`model`) or a layout. Leaves any active viewport, remembers the view of the tab left
     /// and restores the one of the tab entered (a layout seen for the first time is fitted to its sheet).
     pub fn switch_space(&mut self, name: &str) -> Result<(), String> {
-        let target_is_model = name.eq_ignore_ascii_case(MODEL) || name.eq_ignore_ascii_case("Model");
+        let target_is_model =
+            name.eq_ignore_ascii_case(MODEL) || name.eq_ignore_ascii_case("Model");
         if !target_is_model && self.doc.layout(name).is_none() {
             return Err(format!("There is no layout named \"{name}\"."));
         }
@@ -38,7 +39,14 @@ impl Editor {
             self.leave_mspace();
         }
         self.views.insert(key(&self.doc.space), self.view.state());
-        let incoming = if target_is_model { MODEL.to_string() } else { self.doc.layout(name).map(|l| l.name.clone()).unwrap_or_default() };
+        let incoming = if target_is_model {
+            MODEL.to_string()
+        } else {
+            self.doc
+                .layout(name)
+                .map(|l| l.name.clone())
+                .unwrap_or_default()
+        };
         self.doc.realize_layout(&incoming);
         self.doc.set_space(&incoming)?;
         match self.views.get(&key(&incoming)).cloned() {
@@ -56,7 +64,9 @@ impl Editor {
 
     /// Fit the current layout's sheet into the view.
     pub fn fit_sheet(&mut self) {
-        let Some(p) = self.doc.paper_of(&self.doc.space) else { return };
+        let Some(p) = self.doc.paper_of(&self.doc.space) else {
+            return;
+        };
         let b = Bounds::new(0.0, 0.0, p.w, p.h);
         self.view.yaw = 0.0;
         self.view.pitch = std::f64::consts::FRAC_PI_2;
@@ -64,15 +74,28 @@ impl Editor {
     }
 
     fn viewport(&self, layout: &str, id: u64) -> Option<ViewportData> {
-        self.doc.layout(layout)?.entities.iter().find_map(|e| match &e.kind {
-            Kind::Viewport(v) if e.id == id => Some(v.clone()),
-            _ => None,
-        })
+        self.doc
+            .layout(layout)?
+            .entities
+            .iter()
+            .find_map(|e| match &e.kind {
+                Kind::Viewport(v) if e.id == id => Some(v.clone()),
+                _ => None,
+            })
     }
 
     /// Ids of the layout's viewports in draw order.
     pub fn viewport_ids(&self, layout: &str) -> Vec<u64> {
-        self.doc.layout(layout).map(|l| l.entities.iter().filter(|e| matches!(e.kind, Kind::Viewport(_))).map(|e| e.id).collect()).unwrap_or_default()
+        self.doc
+            .layout(layout)
+            .map(|l| {
+                l.entities
+                    .iter()
+                    .filter(|e| matches!(e.kind, Kind::Viewport(_)))
+                    .map(|e| e.id)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Topmost visible viewport of the current layout containing the sheet point `p`.
@@ -93,7 +116,9 @@ impl Editor {
             return Err("MSPACE needs a layout. Switch to a layout tab first.".into());
         }
         let layout = self.doc.space.clone();
-        let v = self.viewport(&layout, vp).ok_or("That viewport does not exist.")?;
+        let v = self
+            .viewport(&layout, vp)
+            .ok_or("That viewport does not exist.")?;
         if v.off {
             return Err("The viewport is turned off.".into());
         }
@@ -114,7 +139,11 @@ impl Editor {
         self.view = mv;
         self.doc.space = MODEL.into();
         self.doc.set_active_vp(Some((layout.clone(), vp)));
-        self.mspace = Some(MSpace { layout, vp, paper_view });
+        self.mspace = Some(MSpace {
+            layout,
+            vp,
+            paper_view,
+        });
         self.clear_sel();
         Ok(())
     }
@@ -155,7 +184,9 @@ impl Editor {
     /// locked, in which case the view snaps back).
     pub fn sync_mspace_view(&mut self) {
         let Some(m) = self.mspace.clone() else { return };
-        let Some(v) = self.viewport(&m.layout, m.vp) else { return };
+        let Some(v) = self.viewport(&m.layout, m.vp) else {
+            return;
+        };
         let mut pv = View::new();
         pv.w = self.view.w;
         pv.h = self.view.h;
@@ -179,7 +210,9 @@ impl crate::app::App {
     /// Double-click on the sheet activates the viewport under the cursor; double-click outside the active viewport
     /// returns to the sheet. Returns true when the click was consumed.
     pub fn double_click_space(&mut self, raw: Pt) -> bool {
-        let Some(ed) = self.editor_mut() else { return false };
+        let Some(ed) = self.editor_mut() else {
+            return false;
+        };
         if let Some(m) = ed.mspace.clone() {
             // `raw` is a model point; ask where it sits on the sheet
             let s = ed.view.to_screen(raw);
@@ -188,7 +221,9 @@ impl crate::app::App {
             pv.h = ed.view.h;
             pv.set_state(&m.paper_view);
             let on_sheet = pv.to_world(s.x, s.y);
-            let inside = ed.viewport(&m.layout, m.vp).is_some_and(|v| point_in_polygon(on_sheet, &v.outline()));
+            let inside = ed
+                .viewport(&m.layout, m.vp)
+                .is_some_and(|v| point_in_polygon(on_sheet, &v.outline()));
             if !inside {
                 ed.leave_mspace();
                 self.emit(crate::app::Event::Regen);
@@ -202,7 +237,13 @@ impl crate::app::App {
         }
         // a double-click on a sheet object edits it; only an empty spot inside a viewport enters it
         let ap = 6.0 / ed.view.scale.max(1e-9);
-        let hit = crate::select::pick_at(&ed.doc, raw, ap, Some(&|e: &cadforge_core::entities::Entity| !matches!(e.kind, Kind::Viewport(_))), None);
+        let hit = crate::select::pick_at(
+            &ed.doc,
+            raw,
+            ap,
+            Some(&|e: &cadforge_core::entities::Entity| !matches!(e.kind, Kind::Viewport(_))),
+            None,
+        );
         if hit.is_some() {
             return false;
         }

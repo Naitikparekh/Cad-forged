@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn corpus(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/dxf/corpus").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/dxf/corpus")
+        .join(name)
 }
 
 fn load(name: &str) -> Drawing {
@@ -31,8 +33,22 @@ fn every_dxf_version_yields_the_same_geometry() {
     for v in VERSIONS {
         let d = load(&format!("kitchen-{v}.dxf"));
         let c = counts(&d);
-        for (ty, n) in [("circle", 1), ("arc", 2), ("ellipse", 2), ("spline", 2), ("point", 1), ("xline", 1), ("ray", 1), ("leader", 1), ("pline", 2)] {
-            assert_eq!(c.get(ty).copied().unwrap_or(0), n, "{v}: {ty} count in {c:?}");
+        for (ty, n) in [
+            ("circle", 1),
+            ("arc", 2),
+            ("ellipse", 2),
+            ("spline", 2),
+            ("point", 1),
+            ("xline", 1),
+            ("ray", 1),
+            ("leader", 1),
+            ("pline", 2),
+        ] {
+            assert_eq!(
+                c.get(ty).copied().unwrap_or(0),
+                n,
+                "{v}: {ty} count in {c:?}"
+            );
         }
         // gradient hatches need R2004; the solid and trace become solid hatches
         assert_eq!(c["hatch"], if v == "R2000" { 5 } else { 6 }, "{v}: {c:?}");
@@ -47,12 +63,23 @@ fn layers_keep_their_state_and_colours() {
     let l = |n: &str| d.layer(n).unwrap_or_else(|| panic!("layer {n}"));
     assert!(!l("Off").on, "negative colour = layer off");
     assert!(l("Frozen").frozen);
-    assert_eq!(l("Rgb").color, cadforge_core::style::Color::Rgb(255, 128, 0));
+    assert_eq!(
+        l("Rgb").color,
+        cadforge_core::style::Color::Rgb(255, 128, 0)
+    );
     assert_eq!(l("Centre").ltype, "CENTER");
     assert_eq!(l("Outline").lw, 50);
     // an entity with a true colour keeps it
-    let rgb = d.model.entities.iter().find(|e| e.layer == "Rgb").expect("entity on layer Rgb");
-    assert_eq!(rgb.color, Some(cadforge_core::style::Color::Rgb(10, 200, 90)));
+    let rgb = d
+        .model
+        .entities
+        .iter()
+        .find(|e| e.layer == "Rgb")
+        .expect("entity on layer Rgb");
+    assert_eq!(
+        rgb.color,
+        Some(cadforge_core::style::Color::Rgb(10, 200, 90))
+    );
 }
 
 #[test]
@@ -75,7 +102,10 @@ fn text_is_decoded_from_ansi_and_utf8_files() {
         _ => None,
     });
     let m = m.expect("mtext");
-    assert!(m.contains("Bold") && m.contains("Line two") && m.contains('\u{B0}'), "{m:?}");
+    assert!(
+        m.contains("Bold") && m.contains("Line two") && m.contains('\u{B0}'),
+        "{m:?}"
+    );
 }
 
 fn near(a: f64, b: f64) {
@@ -97,7 +127,13 @@ fn block_attributes_arrive_with_their_values() {
         .entities
         .iter()
         .filter_map(|e| match &e.kind {
-            Kind::Insert(i) if i.name == "TAG" => Some(i.attribs.iter().map(|a| a.t.s.clone()).collect::<Vec<_>>().join(",")),
+            Kind::Insert(i) if i.name == "TAG" => Some(
+                i.attribs
+                    .iter()
+                    .map(|a| a.t.s.clone())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
             _ => None,
         })
         .collect();
@@ -120,17 +156,41 @@ fn layouts_viewports_and_sheet_sizes() {
         let l1 = d.layout("Layout1").unwrap();
         near(l1.paper.w, 420.0);
         near(l1.paper.h, 297.0);
-        let vps: Vec<&ViewportData> = l1.entities.iter().filter_map(|e| if let Kind::Viewport(v) = &e.kind { Some(v) } else { None }).collect();
-        assert_eq!(vps.len(), 1, "{v}: the sheet's own viewport is not a viewport");
+        let vps: Vec<&ViewportData> = l1
+            .entities
+            .iter()
+            .filter_map(|e| {
+                if let Kind::Viewport(v) = &e.kind {
+                    Some(v)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(
+            vps.len(),
+            1,
+            "{v}: the sheet's own viewport is not a viewport"
+        );
         near(vps[0].c.x, 210.0);
         near(vps[0].w, 300.0);
         near(vps[0].scale.expect("scale"), 200.0 / 120.0);
         near(vps[0].vc.x, 100.0);
         near(vps[0].vc.y, 60.0);
-        assert!(l1.entities.iter().any(|e| matches!(&e.kind, Kind::Text(t) if t.s == "TITLE BLOCK")));
+        assert!(l1
+            .entities
+            .iter()
+            .any(|e| matches!(&e.kind, Kind::Text(t) if t.s == "TITLE BLOCK")));
         let det = d.layout("Detail").unwrap();
         near(det.paper.w, 297.0);
-        assert_eq!(det.entities.iter().filter(|e| matches!(e.kind, Kind::Viewport(_))).count(), 2, "{v}");
+        assert_eq!(
+            det.entities
+                .iter()
+                .filter(|e| matches!(e.kind, Kind::Viewport(_)))
+                .count(),
+            2,
+            "{v}"
+        );
     }
 }
 
@@ -140,7 +200,11 @@ fn modern_annotation_and_misc_entities() {
     let c = counts(&d);
     assert_eq!(c.get("leader").copied(), Some(1), "{c:?}");
     assert_eq!(c.get("wipeout").copied(), Some(1), "{c:?}");
-    assert_eq!(c.get("spline").copied(), Some(1), "the helix is read as a spline");
+    assert_eq!(
+        c.get("spline").copied(),
+        Some(1),
+        "the helix is read as a spline"
+    );
     // MLINE (two parallel polylines sharing a group), 3DFACE and POLYLINE 3D outlines
     assert_eq!(c.get("pline").copied(), Some(4), "{c:?}");
     let leader = d.model.entities.iter().find_map(|e| match &e.kind {
@@ -150,7 +214,10 @@ fn modern_annotation_and_misc_entities() {
     let (pts, text, h) = leader.expect("leader");
     assert_eq!(text, "Note: see detail");
     near(h, 3.0);
-    assert!(pts.len() >= 2 && dist(pts[0], pt(10.0, 10.0)) < 1e-6, "{pts:?}");
+    assert!(
+        pts.len() >= 2 && dist(pts[0], pt(10.0, 10.0)) < 1e-6,
+        "{pts:?}"
+    );
     let w = d.model.entities.iter().find_map(|e| match &e.kind {
         Kind::Wipeout(w) => Some(w.pts.clone()),
         _ => None,
@@ -159,7 +226,12 @@ fn modern_annotation_and_misc_entities() {
     near(b.min_x, 60.0);
     near(b.max_x, 80.0);
     near(b.max_y, 20.0);
-    let grouped: Vec<_> = d.model.entities.iter().filter(|e| e.grp.is_some()).collect();
+    let grouped: Vec<_> = d
+        .model
+        .entities
+        .iter()
+        .filter(|e| e.grp.is_some())
+        .collect();
     assert_eq!(grouped.len(), 2, "MLINE elements share a group");
 }
 
@@ -175,8 +247,24 @@ fn header_variables_are_applied() {
 #[test]
 fn hatches_keep_islands_gradients_and_edge_paths() {
     let d = load("kitchen-R2018.dxf");
-    let hatches: Vec<&HatchData> = d.model.entities.iter().filter_map(|e| if let Kind::Hatch(h) = &e.kind { Some(h) } else { None }).collect();
-    assert!(hatches.iter().any(|h| h.pattern == "ANSI31" && h.loops.len() == 2), "pattern hatch with an island");
+    let hatches: Vec<&HatchData> = d
+        .model
+        .entities
+        .iter()
+        .filter_map(|e| {
+            if let Kind::Hatch(h) = &e.kind {
+                Some(h)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert!(
+        hatches
+            .iter()
+            .any(|h| h.pattern == "ANSI31" && h.loops.len() == 2),
+        "pattern hatch with an island"
+    );
     assert!(hatches.iter().filter(|h| h.pattern == "SOLID").count() >= 3);
     let g = hatches.iter().find_map(|h| h.gradient.clone());
     // gradient fills arrive as gradients (not plain solids) once the reader keeps them
@@ -187,7 +275,11 @@ fn hatches_keep_islands_gradients_and_edge_paths() {
 }
 
 fn have_ezdxf() -> bool {
-    Command::new("python3").args(["-I", "-c", "import ezdxf"]).output().map(|o| o.status.success()).unwrap_or(false)
+    Command::new("python3")
+        .args(["-I", "-c", "import ezdxf"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 #[test]
@@ -197,16 +289,33 @@ fn corpus_drawings_survive_our_writer_and_pass_the_ezdxf_audit() {
         return;
     }
     let tmp = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-    for name in ["kitchen-R2000.dxf", "kitchen-R2010.dxf", "kitchen-R2018.dxf", "annotation-R2018.dxf"] {
+    for name in [
+        "kitchen-R2000.dxf",
+        "kitchen-R2010.dxf",
+        "kitchen-R2018.dxf",
+        "annotation-R2018.dxf",
+    ] {
         let d = load(name);
         let out = tmp.join(format!("rt-{name}"));
         std::fs::write(&out, write_dxf(&d)).unwrap();
         let script = "import sys, ezdxf\nfrom ezdxf import recover\ndoc, aud = recover.readfile(sys.argv[1])\nassert not aud.has_errors, [e.message for e in aud.errors][:5]\nprint(len(doc.modelspace()), len(list(doc.layouts)))";
-        let r = Command::new("python3").args(["-I", "-c", script, out.to_str().unwrap()]).output().unwrap();
-        assert!(r.status.success(), "{name}: {}{}", String::from_utf8_lossy(&r.stdout), String::from_utf8_lossy(&r.stderr));
+        let r = Command::new("python3")
+            .args(["-I", "-c", script, out.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(
+            r.status.success(),
+            "{name}: {}{}",
+            String::from_utf8_lossy(&r.stdout),
+            String::from_utf8_lossy(&r.stderr)
+        );
         // and back through our reader without losing the layouts
         let back = cadforge_core::io::read_dxf(&write_dxf(&d), name).unwrap();
-        assert_eq!(back.layout_names().len(), d.layout_names().len(), "{name}: layouts survive the round trip");
+        assert_eq!(
+            back.layout_names().len(),
+            d.layout_names().len(),
+            "{name}: layouts survive the round trip"
+        );
     }
 }
 
@@ -219,7 +328,18 @@ fn our_writer_keeps_sheet_sizes_viewports_and_gradients() {
         let (a, b) = (d.layout(&name).unwrap(), back.layout(&name).unwrap());
         near(a.paper.w, b.paper.w);
         near(a.paper.h, b.paper.h);
-        let vps = |l: &cadforge_core::drawing::Layout| -> Vec<ViewportData> { l.entities.iter().filter_map(|e| if let Kind::Viewport(v) = &e.kind { Some(v.clone()) } else { None }).collect() };
+        let vps = |l: &cadforge_core::drawing::Layout| -> Vec<ViewportData> {
+            l.entities
+                .iter()
+                .filter_map(|e| {
+                    if let Kind::Viewport(v) = &e.kind {
+                        Some(v.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
         let (va, vb) = (vps(a), vps(b));
         assert_eq!(va.len(), vb.len(), "{name}: viewport count");
         for (x, y) in va.iter().zip(&vb) {
@@ -232,7 +352,13 @@ fn our_writer_keeps_sheet_sizes_viewports_and_gradients() {
         }
         assert_eq!(a.entities.len(), b.entities.len(), "{name}: entity count");
     }
-    let grads = |d: &Drawing| d.model.entities.iter().filter(|e| matches!(&e.kind, Kind::Hatch(h) if h.gradient.is_some())).count();
+    let grads = |d: &Drawing| {
+        d.model
+            .entities
+            .iter()
+            .filter(|e| matches!(&e.kind, Kind::Hatch(h) if h.gradient.is_some()))
+            .count()
+    };
     assert!(grads(&d) > 0);
     assert_eq!(grads(&d), grads(&back), "gradient hatches survive");
 }
@@ -240,7 +366,9 @@ fn our_writer_keeps_sheet_sizes_viewports_and_gradients() {
 #[test]
 fn raster_images_arrive_with_clip_and_adjustments() {
     let d = load("image-R2018.dxf");
-    let Kind::Image(i) = &d.model.entities[0].kind else { panic!("{:?}", d.model.entities) };
+    let Kind::Image(i) = &d.model.entities[0].kind else {
+        panic!("{:?}", d.model.entities)
+    };
     near(i.p.x, 100.0);
     near(i.p.y, 50.0);
     near(i.size().0, 80.0);
@@ -261,15 +389,33 @@ fn raster_images_arrive_with_clip_and_adjustments() {
 #[test]
 fn polyline_widths_arrive_from_every_dxf_form() {
     let d = load("pline-widths-R2018.dxf");
-    let plines: Vec<(&Vec<Vertex>, bool)> = d.model.entities.iter().filter_map(|e| if let Kind::Pline { v, closed } = &e.kind { Some((v, *closed)) } else { None }).collect();
+    let plines: Vec<(&Vec<Vertex>, bool)> = d
+        .model
+        .entities
+        .iter()
+        .filter_map(|e| {
+            if let Kind::Pline { v, closed } = &e.kind {
+                Some((v, *closed))
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(plines.len(), 4);
     // per-vertex start / end widths (groups 40 / 41)
     let (v, _) = plines[0];
-    assert_eq!((v[0].sw, v[0].ew, v[1].sw, v[1].ew, v[2].sw), (2.0, 6.0, 6.0, 6.0, 0.0));
+    assert_eq!(
+        (v[0].sw, v[0].ew, v[1].sw, v[1].ew, v[2].sw),
+        (2.0, 6.0, 6.0, 6.0, 0.0)
+    );
     // the constant width (group 43) applies to every edge that has none of its own
     assert!(plines[1].0.iter().all(|q| q.sw == 4.0 && q.ew == 4.0));
     // the heavy POLYLINE's header holds the default widths
-    assert!(plines[2].0.iter().all(|q| q.sw == 1.0 && q.ew == 3.0), "{:?}", plines[2].0);
+    assert!(
+        plines[2].0.iter().all(|q| q.sw == 1.0 && q.ew == 3.0),
+        "{:?}",
+        plines[2].0
+    );
     // widths and bulges together on a closed polyline
     let (v, closed) = plines[3];
     assert!(closed);
@@ -281,7 +427,19 @@ fn polyline_widths_survive_our_writer_and_the_ezdxf_audit() {
     let d = load("pline-widths-R2018.dxf");
     let text = write_dxf(&d);
     let back = cadforge_core::io::read_dxf(&text, "w.dxf").unwrap();
-    let widths = |d: &Drawing| -> Vec<Vec<(f64, f64)>> { d.model.entities.iter().filter_map(|e| if let Kind::Pline { v, .. } = &e.kind { Some(v.iter().map(|q| (q.sw, q.ew)).collect()) } else { None }).collect() };
+    let widths = |d: &Drawing| -> Vec<Vec<(f64, f64)>> {
+        d.model
+            .entities
+            .iter()
+            .filter_map(|e| {
+                if let Kind::Pline { v, .. } = &e.kind {
+                    Some(v.iter().map(|q| (q.sw, q.ew)).collect())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
     assert_eq!(widths(&back), widths(&d));
     if !have_ezdxf() {
         eprintln!("ezdxf not installed; skipping the audit");
@@ -290,7 +448,19 @@ fn polyline_widths_survive_our_writer_and_the_ezdxf_audit() {
     let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("rt-pline-widths.dxf");
     std::fs::write(&out, text).unwrap();
     let script = "import sys, ezdxf\nfrom ezdxf import recover\ndoc, aud = recover.readfile(sys.argv[1])\nassert not aud.has_errors, [e.message for e in aud.errors][:5]\nws = [tuple((float(p[2]), float(p[3])) for p in e.get_points('xyseb')) for e in doc.modelspace() if e.dxftype() == 'LWPOLYLINE']\nprint(ws[0])";
-    let r = Command::new("python3").args(["-I", "-c", script, out.to_str().unwrap()]).output().unwrap();
-    assert!(r.status.success(), "{}{}", String::from_utf8_lossy(&r.stdout), String::from_utf8_lossy(&r.stderr));
-    assert!(String::from_utf8_lossy(&r.stdout).contains("(2.0, 6.0), (6.0, 6.0), (0.0, 0.0)"), "{}", String::from_utf8_lossy(&r.stdout));
+    let r = Command::new("python3")
+        .args(["-I", "-c", script, out.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&r.stdout),
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&r.stdout).contains("(2.0, 6.0), (6.0, 6.0), (0.0, 0.0)"),
+        "{}",
+        String::from_utf8_lossy(&r.stdout)
+    );
 }

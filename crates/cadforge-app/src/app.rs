@@ -107,7 +107,10 @@ impl CadForgeApp {
         {
             let mut a = h.borrow_mut();
             a.new_drawing(None, false);
-            a.log("CadForge 2.0 — type a command, or choose one from the ribbon. Press F1 for help.", "info");
+            a.log(
+                "CadForge 2.0 — type a command, or choose one from the ribbon. Press F1 for help.",
+                "info",
+            );
         }
         h.pump();
         let rib = RibbonData::load();
@@ -123,7 +126,11 @@ impl CadForgeApp {
                 flyout: None,
                 dark: true,
                 workspace: "Drafting & Annotation".into(),
-                cmd: CmdLine { lines: 3, lines_f: 3.0, ..Default::default() },
+                cmd: CmdLine {
+                    lines: 3,
+                    lines_f: 3.0,
+                    ..Default::default()
+                },
                 show_props: false,
                 show_ribbon: true,
                 hidden_pals: None,
@@ -184,7 +191,12 @@ impl CadForgeApp {
             }
         }
         if !names.is_empty() {
-            let msg = format!("Recovered {} unsaved drawing{} from the last session: {}.", names.len(), if names.len() == 1 { "" } else { "s" }, names.join(", "));
+            let msg = format!(
+                "Recovered {} unsaved drawing{} from the last session: {}.",
+                names.len(),
+                if names.len() == 1 { "" } else { "s" },
+                names.join(", ")
+            );
             self.h.borrow_mut().log(&msg, "info");
             self.toast(&msg);
         }
@@ -211,7 +223,10 @@ impl CadForgeApp {
         self.ui.dark = dark;
         self.t = if dark { theme::DARK } else { theme::LIGHT };
         theme::apply(ctx, &self.t);
-        let _ = self.h.borrow_mut().setvar("THEME", if dark { "dark" } else { "light" });
+        let _ = self
+            .h
+            .borrow_mut()
+            .setvar("THEME", if dark { "dark" } else { "light" });
     }
 
     /// Start a command from the UI (ribbon, menu, QAT): cancels whatever is running.
@@ -224,7 +239,11 @@ impl CadForgeApp {
     }
 
     pub fn escape(&mut self) {
-        self.ui.cmd = CmdLine { past: std::mem::take(&mut self.ui.cmd.past), lines: self.ui.cmd.lines, ..Default::default() };
+        self.ui.cmd = CmdLine {
+            past: std::mem::take(&mut self.ui.cmd.past),
+            lines: self.ui.cmd.lines,
+            ..Default::default()
+        };
         if self.vp.realtime.is_some() {
             self.end_realtime();
             return;
@@ -253,8 +272,18 @@ impl CadForgeApp {
             // HIDEPALETTES / SHOWPALETTES: remember what was open and bring it back
             "hide-all" => {
                 if self.ui.hidden_pals.is_none() {
-                    self.ui.hidden_pals = Some([self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd]);
-                    (self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd) = (false, false, false, false);
+                    self.ui.hidden_pals = Some([
+                        self.ui.show_props,
+                        self.ui.show_tools,
+                        self.pal.lm_open,
+                        self.ui.show_cmd,
+                    ]);
+                    (
+                        self.ui.show_props,
+                        self.ui.show_tools,
+                        self.pal.lm_open,
+                        self.ui.show_cmd,
+                    ) = (false, false, false, false);
                 }
                 return;
             }
@@ -265,7 +294,12 @@ impl CadForgeApp {
             }
             "show-all" => {
                 if let Some([p, t, l, c]) = self.ui.hidden_pals.take() {
-                    (self.ui.show_props, self.ui.show_tools, self.pal.lm_open, self.ui.show_cmd) = (p, t, l, c);
+                    (
+                        self.ui.show_props,
+                        self.ui.show_tools,
+                        self.pal.lm_open,
+                        self.ui.show_cmd,
+                    ) = (p, t, l, c);
                 }
                 return;
             }
@@ -287,7 +321,11 @@ impl CadForgeApp {
         match session {
             Some(s) => {
                 self.ui.prev_tab = Some(self.ui.ribbon_tab.clone());
-                self.ui.ribbon_tab = if s.editing.is_some() { "hatchedit".into() } else { "hatchcreate".into() };
+                self.ui.ribbon_tab = if s.editing.is_some() {
+                    "hatchedit".into()
+                } else {
+                    "hatchcreate".into()
+                };
             }
             None => {
                 if self.ui.ribbon_tab == "hatchedit" || self.ui.ribbon_tab == "hatchcreate" {

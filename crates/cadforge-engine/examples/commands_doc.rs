@@ -14,7 +14,11 @@ fn main() {
         if d.name.starts_with('_') || d.name.starts_with("OSNAP_") {
             continue;
         }
-        let g = if d.group.is_empty() { "General".to_string() } else { d.group.clone() };
+        let g = if d.group.is_empty() {
+            "General".to_string()
+        } else {
+            d.group.clone()
+        };
         groups.entry(g).or_default().push(d.clone());
     }
     let total: usize = groups.values().map(Vec::len).sum();
@@ -27,7 +31,11 @@ fn main() {
             let mut al = aliases.get(&d.name).cloned().unwrap_or_default();
             al.sort();
             al.dedup();
-            let al = al.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(" ");
+            let al = al
+                .iter()
+                .map(|a| format!("`{a}`"))
+                .collect::<Vec<_>>()
+                .join(" ");
             let text = if d.desc.is_empty() { &d.title } else { &d.desc };
             println!("| `{}` | {al} | {} |", d.name, text.replace('|', "\\|"));
         }
@@ -38,6 +46,9 @@ fn main() {
     vars.sort_by(|a, b| a.0.cmp(&b.0));
     for (k, v) in vars {
         let t = v.text();
-        println!("| `{k}` | `{}` |", if t.is_empty() { "\"\"".to_string() } else { t });
+        println!(
+            "| `{k}` | `{}` |",
+            if t.is_empty() { "\"\"".to_string() } else { t }
+        );
     }
 }

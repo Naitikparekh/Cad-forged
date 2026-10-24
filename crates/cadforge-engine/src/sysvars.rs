@@ -152,7 +152,19 @@ const DRAWING_VARS: &[(&str, VarType)] = &[
     ("DIMTAD", VarType::Int),
 ];
 
-const READ_ONLY: &[&str] = &["DWGNAME", "CMDNAMES", "USERR1", "LASTPOINT", "LASTANGLE", "PERIMETER", "AREA", "VPOINTX", "VPOINTY", "VPOINTZ", "CTAB"];
+const READ_ONLY: &[&str] = &[
+    "DWGNAME",
+    "CMDNAMES",
+    "USERR1",
+    "LASTPOINT",
+    "LASTANGLE",
+    "PERIMETER",
+    "AREA",
+    "VPOINTX",
+    "VPOINTY",
+    "VPOINTZ",
+    "CTAB",
+];
 
 fn bad_value<T>(v: impl std::fmt::Display) -> Result<T, String> {
     Err(format!("Requires a valid value; {v} is not allowed."))
@@ -209,7 +221,11 @@ pub fn parse_color(v: &str) -> Result<Option<Color>, String> {
         }
     }
     let parts: Vec<&str> = t.split(',').collect();
-    if parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.len() <= 3 && p.bytes().all(|c| c.is_ascii_digit())) {
+    if parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.len() <= 3 && p.bytes().all(|c| c.is_ascii_digit()))
+    {
         let v: Vec<u32> = parts.iter().map(|p| p.parse().unwrap_or(999)).collect();
         if v.iter().all(|&x| x <= 255) {
             return Ok(Some(Color::Rgb(v[0] as u8, v[1] as u8, v[2] as u8)));
@@ -221,9 +237,14 @@ pub fn parse_color(v: &str) -> Result<Option<Color>, String> {
 fn cur_dim(d: &mut Drawing) -> &mut cadforge_core::style::DimStyle {
     let name = d.settings.cur_dim_style.clone();
     if !d.settings.dim_styles.contains_key(&name) {
-        d.settings.dim_styles.insert(name.clone(), Default::default());
+        d.settings
+            .dim_styles
+            .insert(name.clone(), Default::default());
     }
-    d.settings.dim_styles.get_mut(&name).expect("dim style exists")
+    d.settings
+        .dim_styles
+        .get_mut(&name)
+        .expect("dim style exists")
 }
 
 fn drawing_get(name: &str, d: &Drawing) -> Option<Value> {
@@ -261,7 +282,10 @@ fn drawing_get(name: &str, d: &Drawing) -> Option<Value> {
 
 fn drawing_set(name: &str, d: &mut Drawing, v: &Value) -> Result<(), String> {
     let text = v.text();
-    let num = || v.num().ok_or_else(|| format!("Requires a valid value; {text} is not allowed."));
+    let num = || {
+        v.num()
+            .ok_or_else(|| format!("Requires a valid value; {text} is not allowed."))
+    };
     match name {
         "LTSCALE" => d.settings.ltscale = pos(num()?)?,
         "CELTSCALE" => d.settings.celtscale = pos(num()?)?,
@@ -278,7 +302,15 @@ fn drawing_set(name: &str, d: &mut Drawing, v: &Value) -> Result<(), String> {
         "CLAYER" => d.set_current_layer(&text)?,
         "CECOLOR" => d.cur.color = parse_color(&text)?,
         "CELTYPE" => {
-            d.cur.ltype = if text.eq_ignore_ascii_case("bylayer") { None } else { Some(ltype_key(&text).map(str::to_string).ok_or_else(|| format!("Requires a valid value; {text} is not allowed."))?) }
+            d.cur.ltype = if text.eq_ignore_ascii_case("bylayer") {
+                None
+            } else {
+                Some(
+                    ltype_key(&text)
+                        .map(str::to_string)
+                        .ok_or_else(|| format!("Requires a valid value; {text} is not allowed."))?,
+                )
+            }
         }
         "CELWEIGHT" => {
             let w = num()? as i32;
@@ -327,18 +359,30 @@ pub struct Sysvars {
 
 impl Default for Sysvars {
     fn default() -> Sysvars {
-        Sysvars { prefs: pref_defaults(), changed: vec![] }
+        Sysvars {
+            prefs: pref_defaults(),
+            changed: vec![],
+        }
     }
 }
 
 impl Sysvars {
     pub fn has(&self, name: &str) -> bool {
         let u = name.to_uppercase();
-        self.prefs.contains_key(&u) || DRAWING_VARS.iter().any(|(k, _)| *k == u) || READ_ONLY.contains(&u.as_str())
+        self.prefs.contains_key(&u)
+            || DRAWING_VARS.iter().any(|(k, _)| *k == u)
+            || READ_ONLY.contains(&u.as_str())
     }
 
     pub fn names(&self) -> Vec<String> {
-        let mut v: Vec<String> = self.prefs.keys().cloned().chain(DRAWING_VARS.iter().map(|(k, _)| k.to_string())).chain(READ_ONLY.iter().map(|k| k.to_string())).filter(|k| !k.contains('_')).collect();
+        let mut v: Vec<String> = self
+            .prefs
+            .keys()
+            .cloned()
+            .chain(DRAWING_VARS.iter().map(|(k, _)| k.to_string()))
+            .chain(READ_ONLY.iter().map(|k| k.to_string()))
+            .filter(|k| !k.contains('_'))
+            .collect();
         v.sort();
         v.dedup();
         v
@@ -366,15 +410,25 @@ impl Sysvars {
     pub fn get(&self, name: &str, doc: Option<&Drawing>) -> Result<Value, String> {
         let u = name.to_uppercase();
         if DRAWING_VARS.iter().any(|(k, _)| *k == u) {
-            return doc.and_then(|d| drawing_get(&u, d)).ok_or_else(|| "No drawing is open.".to_string());
+            return doc
+                .and_then(|d| drawing_get(&u, d))
+                .ok_or_else(|| "No drawing is open.".to_string());
         }
         if let Some(v) = read_only_get(&u, doc) {
             return Ok(v);
         }
-        self.prefs.get(&u).cloned().ok_or_else(|| format!("Unknown variable name {u}."))
+        self.prefs
+            .get(&u)
+            .cloned()
+            .ok_or_else(|| format!("Unknown variable name {u}."))
     }
 
-    pub fn set(&mut self, name: &str, value: impl Into<Value>, doc: Option<&mut Drawing>) -> Result<(), String> {
+    pub fn set(
+        &mut self,
+        name: &str,
+        value: impl Into<Value>,
+        doc: Option<&mut Drawing>,
+    ) -> Result<(), String> {
         let u = name.to_uppercase();
         let value = value.into();
         if READ_ONLY.contains(&u.as_str()) {
@@ -386,7 +440,9 @@ impl Sysvars {
             } else {
                 let x = value.num().filter(|x| x.is_finite());
                 match x {
-                    Some(x) if *ty == VarType::Int && x.fract() != 0.0 => return bad_value(value.text()),
+                    Some(x) if *ty == VarType::Int && x.fract() != 0.0 => {
+                        return bad_value(value.text())
+                    }
                     Some(x) => Value::Num(x),
                     None => return bad_value(value.text()),
                 }
@@ -404,7 +460,13 @@ impl Sysvars {
                         Some(v) => v,
                         None => return bad_value(value.text()),
                     };
-                    Value::Num(if c.fract() == 0.0 && v.fract() != 0.0 && u != "LAYLOCKFADECTL" { v.round() } else { v })
+                    Value::Num(
+                        if c.fract() == 0.0 && v.fract() != 0.0 && u != "LAYLOCKFADECTL" {
+                            v.round()
+                        } else {
+                            v
+                        },
+                    )
                 }
             };
             self.prefs.insert(u.clone(), new);
@@ -509,7 +571,10 @@ mod tests {
         assert_eq!(parse_color("bylayer").unwrap(), None);
         assert_eq!(parse_color("ByBlock").unwrap(), Some(Color::ByBlock));
         assert_eq!(parse_color("40").unwrap(), Some(Color::Aci(40)));
-        assert_eq!(parse_color("#FF8000").unwrap(), Some(Color::Rgb(255, 128, 0)));
+        assert_eq!(
+            parse_color("#FF8000").unwrap(),
+            Some(Color::Rgb(255, 128, 0))
+        );
         assert!(parse_color("300").is_err());
         assert!(parse_color("1,2,300").is_err());
         assert_eq!(color_text(Some(Color::Aci(5))), "5");

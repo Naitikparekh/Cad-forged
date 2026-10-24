@@ -9,11 +9,19 @@ fn p(x: f64, y: f64) -> Pt {
 }
 
 fn pdf(s: &Sim) -> Option<(String, Vec<u8>)> {
-    s.h.borrow_mut().take_events().into_iter().find_map(|e| if let Event::SaveFile { name, data, mime } = e { (mime == "application/pdf").then_some((name, data)) } else { None })
+    s.h.borrow_mut().take_events().into_iter().find_map(|e| {
+        if let Event::SaveFile { name, data, mime } = e {
+            (mime == "application/pdf").then_some((name, data))
+        } else {
+            None
+        }
+    })
 }
 
 fn pages(data: &[u8]) -> usize {
-    String::from_utf8_lossy(data).matches("/Type /Page ").count()
+    String::from_utf8_lossy(data)
+        .matches("/Type /Page ")
+        .count()
 }
 
 fn with_two_layouts() -> Sim {
@@ -35,7 +43,12 @@ fn publish_writes_one_pdf_page_per_sheet() {
     let (name, data) = pdf(&s).unwrap_or_else(|| panic!("no PDF: {}", s.log_text()));
     assert!(name.ends_with(".pdf"), "{name}");
     assert!(data.starts_with(b"%PDF-1.4"));
-    assert_eq!(pages(&data), 1 + n_layouts, "model space plus every layout: {}", s.log_text());
+    assert_eq!(
+        pages(&data),
+        1 + n_layouts,
+        "model space plus every layout: {}",
+        s.log_text()
+    );
     assert!(s.history_has(&format!("Published {} sheets to", 1 + n_layouts)));
 
     s.cmd("PUBLISH").ty("Layouts");
@@ -59,7 +72,11 @@ fn a_drawing_without_layouts_publishes_model_space_without_asking() {
 fn nothing_to_publish_is_reported_and_no_file_is_made() {
     let s = Sim::new();
     s.cmd("PUBLISH").ty("Model");
-    assert!(s.history_has("There is nothing to plot."), "{}", s.log_text());
+    assert!(
+        s.history_has("There is nothing to plot."),
+        "{}",
+        s.log_text()
+    );
     assert!(pdf(&s).is_none());
 }
 
@@ -71,21 +88,45 @@ fn the_published_pdf_is_valid_and_pages_have_their_own_sizes() {
     let (_, data) = pdf(&s).unwrap();
     let text = String::from_utf8_lossy(&data).to_string();
     // the first layout is 420 mm wide = 1190.55 pt
-    assert!(text.contains("/MediaBox [0 0 1190.551"), "{}", &text[..text.len().min(600)]);
+    assert!(
+        text.contains("/MediaBox [0 0 1190.551"),
+        "{}",
+        &text[..text.len().min(600)]
+    );
     // every cross-reference offset points at its object
     let at = data.windows(10).rposition(|w| w == b"startxref\n").unwrap();
-    let start: usize = String::from_utf8_lossy(&data[at + 10..]).lines().next().unwrap().trim().parse().unwrap();
-    assert!(data[start..].starts_with(b"xref"), "startxref points at the table");
+    let start: usize = String::from_utf8_lossy(&data[at + 10..])
+        .lines()
+        .next()
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    assert!(
+        data[start..].starts_with(b"xref"),
+        "startxref points at the table"
+    );
     // poppler, when installed, reads it back as a document with the right page count
     let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("publish-test.pdf");
     std::fs::write(&path, &data).unwrap();
     match std::process::Command::new("pdfinfo").arg(&path).output() {
         Ok(o) => {
             let info = String::from_utf8_lossy(&o.stdout);
-            assert!(o.status.success(), "{info}{}", String::from_utf8_lossy(&o.stderr));
-            let n: usize = info.lines().find_map(|l| l.strip_prefix("Pages:")).and_then(|v| v.trim().parse().ok()).expect("a page count");
+            assert!(
+                o.status.success(),
+                "{info}{}",
+                String::from_utf8_lossy(&o.stderr)
+            );
+            let n: usize = info
+                .lines()
+                .find_map(|l| l.strip_prefix("Pages:"))
+                .and_then(|v| v.trim().parse().ok())
+                .expect("a page count");
             assert_eq!(n, s.doc(|d| d.layout_names().len()), "{info}");
-            assert!(info.contains("Page size:       1190.55 x"), "the first sheet is the 420 mm wide layout: {info}");
+            assert!(
+                info.contains("Page size:       1190.55 x"),
+                "the first sheet is the 420 mm wide layout: {info}"
+            );
         }
         Err(_) => eprintln!("pdfinfo not installed; skipping the poppler check"),
     }

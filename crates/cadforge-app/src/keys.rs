@@ -24,7 +24,13 @@ impl CadForgeApp {
         }
         for ev in events {
             match ev {
-                Event::Key { key, pressed: true, modifiers, repeat, .. } => {
+                Event::Key {
+                    key,
+                    pressed: true,
+                    modifiers,
+                    repeat,
+                    ..
+                } => {
                     let ctrl = modifiers.command || modifiers.ctrl;
                     if modal {
                         if key == Key::Escape {
@@ -105,10 +111,18 @@ impl CadForgeApp {
                         };
                         if let Some(c) = cmd {
                             // normal text editing wins while typing in a field (or when the command line has text)
-                            if typing && matches!(key, Key::A | Key::C | Key::X | Key::V | Key::Z | Key::Y) {
+                            if typing
+                                && matches!(
+                                    key,
+                                    Key::A | Key::C | Key::X | Key::V | Key::Z | Key::Y
+                                )
+                            {
                                 continue;
                             }
-                            if !typing && matches!(key, Key::C | Key::X | Key::V | Key::A) && !self.ui.cmd.text.is_empty() {
+                            if !typing
+                                && matches!(key, Key::C | Key::X | Key::V | Key::A)
+                                && !self.ui.cmd.text.is_empty()
+                            {
                                 continue;
                             }
                             if c == "CLEANSCREENON" {
@@ -144,7 +158,12 @@ impl CadForgeApp {
     fn cmd_key(&mut self, ctx: &egui::Context, key: Key, _repeat: bool) {
         let (busy, kind, has_opts, recent_input) = {
             let a = self.h.borrow();
-            (a.busy(), a.pending().map(|p| p.kind), a.pending().is_some_and(|p| !p.spec.options.is_empty()), a.rt.recent_input.clone())
+            (
+                a.busy(),
+                a.pending().map(|p| p.kind),
+                a.pending().is_some_and(|p| !p.spec.options.is_empty()),
+                a.rt.recent_input.clone(),
+            )
         };
         match key {
             Key::Enter => {
@@ -158,7 +177,8 @@ impl CadForgeApp {
             }
             Key::Space => {
                 let c = &self.ui.cmd;
-                if kind != Some(PromptKind::String) && !c.text.trim().contains(char::is_whitespace) {
+                if kind != Some(PromptKind::String) && !c.text.trim().contains(char::is_whitespace)
+                {
                     if let Some(i) = c.sug_idx {
                         if let Some(s) = c.sugs.get(i).cloned() {
                             self.ui.cmd.text = s;
@@ -194,7 +214,9 @@ impl CadForgeApp {
                 }
             }
             Key::ArrowLeft => self.ui.cmd.caret = self.ui.cmd.caret.saturating_sub(1),
-            Key::ArrowRight => self.ui.cmd.caret = (self.ui.cmd.caret + 1).min(self.ui.cmd.text.chars().count()),
+            Key::ArrowRight => {
+                self.ui.cmd.caret = (self.ui.cmd.caret + 1).min(self.ui.cmd.text.chars().count())
+            }
             Key::Home => self.ui.cmd.caret = 0,
             Key::End => self.ui.cmd.caret = self.ui.cmd.text.chars().count(),
             Key::ArrowUp | Key::ArrowDown => {
@@ -215,12 +237,20 @@ impl CadForgeApp {
                     self.option_menu(ctx);
                     return;
                 }
-                let src: Vec<String> = if busy { recent_input } else { self.ui.cmd.past.clone() };
+                let src: Vec<String> = if busy {
+                    recent_input
+                } else {
+                    self.ui.cmd.past.clone()
+                };
                 let c = &mut self.ui.cmd;
                 let cur = c.recall.map_or(-1, |i| i as i64);
                 let next = (cur + if up { 1 } else { -1 }).clamp(-1, src.len() as i64 - 1);
                 c.recall = if next >= 0 { Some(next as usize) } else { None };
-                c.text = if next >= 0 { src[next as usize].clone() } else { String::new() };
+                c.text = if next >= 0 {
+                    src[next as usize].clone()
+                } else {
+                    String::new()
+                };
                 c.caret = c.text.chars().count();
             }
             Key::Tab => {
@@ -239,11 +269,18 @@ impl CadForgeApp {
         if matches!(key, Key::Delete) && !busy {
             // Delete with an empty command line erases the selection (handled above)
         }
-        self.h.borrow_mut().emit(cadforge_engine::app::Event::Overlay);
+        self.h
+            .borrow_mut()
+            .emit(cadforge_engine::app::Event::Overlay);
     }
 
     fn option_menu(&mut self, ctx: &egui::Context) {
-        let opts: Vec<String> = self.h.borrow().pending().map(|p| p.spec.options.clone()).unwrap_or_default();
+        let opts: Vec<String> = self
+            .h
+            .borrow()
+            .pending()
+            .map(|p| p.spec.options.clone())
+            .unwrap_or_default();
         let items: Vec<crate::menu::MItem> = opts
             .iter()
             .map(|o| {
@@ -284,14 +321,31 @@ impl CadForgeApp {
             let a = self.h.borrow();
             (a.busy(), a.sysvars.int("AUTOCOMPLETE") != 0)
         };
-        let starts_numeric = v.chars().next().is_some_and(|c| c.is_ascii_digit() || "@#.,<-".contains(c));
+        let starts_numeric = v
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit() || "@#.,<-".contains(c));
         if busy || v.is_empty() || !auto || starts_numeric {
             self.ui.cmd.sugs.clear();
             return;
         }
         let a = self.h.borrow();
-        let mut cmds: Vec<String> = a.registry.suggest(&v, true, &[], 14).into_iter().filter(|n| !n.starts_with('_') && !n.starts_with("OSNAP_")).collect();
-        let vars: Vec<String> = if v.len() >= 3 { a.sysvars.names().into_iter().filter(|n| n.starts_with(&v.to_uppercase()) && !cmds.contains(n)).take(4).collect() } else { vec![] };
+        let mut cmds: Vec<String> = a
+            .registry
+            .suggest(&v, true, &[], 14)
+            .into_iter()
+            .filter(|n| !n.starts_with('_') && !n.starts_with("OSNAP_"))
+            .collect();
+        let vars: Vec<String> = if v.len() >= 3 {
+            a.sysvars
+                .names()
+                .into_iter()
+                .filter(|n| n.starts_with(&v.to_uppercase()) && !cmds.contains(n))
+                .take(4)
+                .collect()
+        } else {
+            vec![]
+        };
         cmds.truncate(10);
         cmds.extend(vars);
         drop(a);
@@ -321,6 +375,8 @@ impl CadForgeApp {
 
     pub fn after_input(&mut self) {
         // pick up a command that asked for a dialog etc. on the next frame
-        self.h.borrow_mut().emit(cadforge_engine::app::Event::Overlay);
+        self.h
+            .borrow_mut()
+            .emit(cadforge_engine::app::Event::Overlay);
     }
 }

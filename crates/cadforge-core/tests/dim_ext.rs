@@ -31,25 +31,75 @@ fn doc() -> Drawing {
 }
 
 #[test]
-fn new_dimension_types_survive_a_dxf_round_trip_as_geometry() {
+fn new_dimension_types_survive_a_dxf_round_trip() {
     let text = write_dxf(&doc());
-    assert!(text.contains("AcDbOrdinateDimension") && text.contains("AcDbRadialDimension"));
+    assert!(
+        text.contains("AcDbOrdinateDimension")
+            && text.contains("AcDbRadialDimension")
+            && text.contains("AcDb3PointAngularDimension")
+    );
+    // CadForge opens them again as the same dimensions
     let back = read_dxf(&text, "dims").unwrap();
-    assert!(back.model.entities.iter().any(|e| matches!(&e.kind, Kind::Text(t) if t.s == "30.00")), "the ordinate text");
-    assert!(back.model.entities.iter().any(|e| matches!(&e.kind, Kind::Text(t) if t.s.starts_with('R'))), "the jogged radius text");
-    assert!(back.model.entities.iter().any(|e| e.type_name() == "arc"), "the arc-length dimension arc");
+    let kinds: Vec<DimType> = back
+        .model
+        .entities
+        .iter()
+        .filter_map(|e| {
+            if let Kind::Dim(d) = &e.kind {
+                Some(d.kind)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(kinds, vec![DimType::Arc, DimType::Jog, DimType::Ord]);
+    // other programs draw their blocks: without CadForge's extended data they read as that geometry
+    let plain = text.replace("CADFORGE", "OTHERAPP");
+    let geo = read_dxf(&plain, "dims").unwrap();
+    assert!(
+        geo.model
+            .entities
+            .iter()
+            .any(|e| matches!(&e.kind, Kind::Text(t) if t.s == "30.00")),
+        "the ordinate text"
+    );
+    assert!(
+        geo.model
+            .entities
+            .iter()
+            .any(|e| matches!(&e.kind, Kind::Text(t) if t.s.starts_with('R'))),
+        "the jogged radius text"
+    );
+    assert!(
+        geo.model.entities.iter().any(|e| e.type_name() == "arc"),
+        "the arc-length dimension arc"
+    );
 }
 
 #[test]
 fn new_dimension_types_validate_with_ezdxf() {
-    if !Command::new("python3").args(["-I", "-c", "import ezdxf"]).output().map(|o| o.status.success()).unwrap_or(false) {
+    if !Command::new("python3")
+        .args(["-I", "-c", "import ezdxf"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         eprintln!("ezdxf not installed; skipping");
         return;
     }
     let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("dim_ext.dxf");
     std::fs::write(&file, write_dxf(&doc())).unwrap();
-    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dxf/validate.py");
-    let r = Command::new("python3").arg("-I").arg(script).arg(&file).output().unwrap();
+    let script =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dxf/validate.py");
+    let r = Command::new("python3")
+        .arg("-I")
+        .arg(script)
+        .arg(&file)
+        .output()
+        .unwrap();
     let out = String::from_utf8_lossy(&r.stdout).to_string() + &String::from_utf8_lossy(&r.stderr);
-    assert!(r.status.success() && out.contains("audit errors: []"), "{out}");
+    assert!(
+        r.status.success() && out.contains("audit errors: []"),
+        "{out}"
+    );
 }

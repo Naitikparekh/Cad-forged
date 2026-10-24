@@ -10,7 +10,10 @@ pub struct Rec {
 
 impl Rec {
     pub fn get(&self, c: i32) -> Option<&str> {
-        self.g.iter().find(|(k, _)| *k == c).map(|(_, v)| v.as_str())
+        self.g
+            .iter()
+            .find(|(k, _)| *k == c)
+            .map(|(_, v)| v.as_str())
     }
     pub fn s(&self, c: i32) -> &str {
         self.get(c).unwrap_or("")
@@ -32,7 +35,11 @@ impl Rec {
         [self.f(c), self.f(c + 10)]
     }
     pub fn all(&self, c: i32) -> Vec<&str> {
-        self.g.iter().filter(|(k, _)| *k == c).map(|(_, v)| v.as_str()).collect()
+        self.g
+            .iter()
+            .filter(|(k, _)| *k == c)
+            .map(|(_, v)| v.as_str())
+            .collect()
     }
     pub fn handle(&self) -> u64 {
         hex(self.get(5).or(self.get(105)).unwrap_or("0"))
@@ -91,14 +98,20 @@ impl Dxf {
 }
 
 pub fn parse(text: &str) -> Dxf {
-    let lines: Vec<&str> = text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect();
+    let lines: Vec<&str> = text
+        .split('\n')
+        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+        .collect();
     let mut recs: Vec<Rec> = vec![];
     let mut i = 0;
     while i + 1 < lines.len() {
         if let Ok(code) = lines[i].trim().parse::<i32>() {
             let v = lines[i + 1].to_string();
             if code == 0 {
-                recs.push(Rec { ty: v.trim().to_string(), g: vec![] });
+                recs.push(Rec {
+                    ty: v.trim().to_string(),
+                    g: vec![],
+                });
             } else if let Some(r) = recs.last_mut() {
                 r.g.push((code, v));
             }
@@ -118,7 +131,13 @@ pub fn parse(text: &str) -> Dxf {
                     for (c, v) in r.g.into_iter().skip(1) {
                         if c == 9 {
                             name = v.trim().to_string();
-                            d.header.insert(name.clone(), Rec { ty: name.clone(), g: vec![] });
+                            d.header.insert(
+                                name.clone(),
+                                Rec {
+                                    ty: name.clone(),
+                                    g: vec![],
+                                },
+                            );
                         } else if let Some(h) = d.header.get_mut(&name) {
                             h.g.push((c, v));
                         }
@@ -140,7 +159,11 @@ pub fn parse(text: &str) -> Dxf {
                     ents.push(e);
                 }
                 let end = it.next().unwrap_or_default();
-                d.blocks.push(Block { begin: r, ents, end });
+                d.blocks.push(Block {
+                    begin: r,
+                    ents,
+                    end,
+                });
             }
             _ if section == "ENTITIES" => d.entities.push(r),
             _ if section == "OBJECTS" => d.objects.push(r),

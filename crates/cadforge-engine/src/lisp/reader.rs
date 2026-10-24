@@ -151,7 +151,9 @@ impl Rd<'_> {
 
     /// A lone `.` (dotted-pair marker), not the start of a number like `.5`.
     fn is_dot(&self) -> bool {
-        self.s.get(self.i + 1).is_none_or(|c| c.is_whitespace() || *c == '(' || *c == ')' || *c == '"' || *c == '\'')
+        self.s
+            .get(self.i + 1)
+            .is_none_or(|c| c.is_whitespace() || *c == '(' || *c == ')' || *c == '"' || *c == '\'')
     }
 
     fn string(&mut self) -> Result<Value, String> {
@@ -215,7 +217,15 @@ impl Rd<'_> {
         if let Ok(n) = tok.parse::<i64>() {
             return Value::Int(n);
         }
-        let looks_numeric = tok.chars().next().is_some_and(|c| c.is_ascii_digit() || ((c == '-' || c == '+' || c == '.') && tok.len() > 1 && tok.chars().nth(1).is_some_and(|d| d.is_ascii_digit() || d == '.')));
+        let looks_numeric = tok.chars().next().is_some_and(|c| {
+            c.is_ascii_digit()
+                || ((c == '-' || c == '+' || c == '.')
+                    && tok.len() > 1
+                    && tok
+                        .chars()
+                        .nth(1)
+                        .is_some_and(|d| d.is_ascii_digit() || d == '.'))
+        });
         if looks_numeric {
             if let Ok(r) = tok.parse::<f64>() {
                 return Value::Real(r);

@@ -12,7 +12,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 fn arg(a: &[Value], i: usize) -> LResult<&Value> {
-    a.get(i).ok_or_else(|| LErr::Msg("too few arguments".into()))
+    a.get(i)
+        .ok_or_else(|| LErr::Msg("too few arguments".into()))
 }
 
 fn ename(a: &[Value], i: usize) -> LResult<u64> {
@@ -70,16 +71,34 @@ fn rad(a: f64) -> Value {
 }
 
 fn entity_list(e: &Entity, doc: &cadforge_core::drawing::Drawing) -> Value {
-    let mut g: Vec<Value> = vec![pair(-1, Value::Ename(e.id)), pair(0, Value::str(dxf_name(&e.kind))), pair(5, Value::str(&format!("{:X}", e.id))), pair(100, Value::str("AcDbEntity")), pair(8, Value::str(if e.layer.is_empty() { "0" } else { &e.layer }))];
+    let mut g: Vec<Value> = vec![
+        pair(-1, Value::Ename(e.id)),
+        pair(0, Value::str(dxf_name(&e.kind))),
+        pair(5, Value::str(&format!("{:X}", e.id))),
+        pair(100, Value::str("AcDbEntity")),
+        pair(
+            8,
+            Value::str(if e.layer.is_empty() { "0" } else { &e.layer }),
+        ),
+    ];
     if let Some(lt) = &e.ltype {
-        g.push(pair(6, Value::str(if lt == "BYBLOCK" { "ByBlock" } else { lt })));
+        g.push(pair(
+            6,
+            Value::str(if lt == "BYBLOCK" { "ByBlock" } else { lt }),
+        ));
     }
     match e.color {
         Some(Color::Aci(n)) => g.push(pair(62, Value::Int(n as i64))),
         Some(Color::ByBlock) => g.push(pair(62, Value::Int(0))),
         Some(Color::Rgb(r, gg, b)) => {
-            g.push(pair(62, Value::Int(cadforge_core::style::rgb_to_aci([r, gg, b]) as i64)));
-            g.push(pair(420, Value::Int(((r as i64) << 16) | ((gg as i64) << 8) | b as i64)));
+            g.push(pair(
+                62,
+                Value::Int(cadforge_core::style::rgb_to_aci([r, gg, b]) as i64),
+            ));
+            g.push(pair(
+                420,
+                Value::Int(((r as i64) << 16) | ((gg as i64) << 8) | b as i64),
+            ));
         }
         _ => {}
     }
@@ -178,7 +197,9 @@ fn groups(v: &Value) -> LResult<Vec<(i64, Value)>> {
     let items = v.to_vec().ok_or_else(|| bad_arg("listp", v))?;
     let mut out = vec![];
     for it in items {
-        let Value::Cons(c) = &it else { return Err(bad_arg("association list", &it)) };
+        let Value::Cons(c) = &it else {
+            return Err(bad_arg("association list", &it));
+        };
         let code = c.0.as_i64().ok_or_else(|| bad_arg("integerp", &c.0))?;
         out.push((code, c.1.clone()));
     }
@@ -203,7 +224,11 @@ fn aci_color(n: i64) -> Option<Color> {
 }
 
 /// Apply the groups of an association list to `e` (entmod). Returns false when a value is not acceptable.
-fn apply_groups(e: &mut Entity, gs: &[(i64, Value)], doc: &cadforge_core::drawing::Drawing) -> bool {
+fn apply_groups(
+    e: &mut Entity,
+    gs: &[(i64, Value)],
+    doc: &cadforge_core::drawing::Drawing,
+) -> bool {
     // polyline vertices come as repeated 10 / 42 groups
     if let Kind::Pline { v, closed } = &mut e.kind {
         let mut nv: Vec<Vertex> = vec![];
@@ -227,7 +252,11 @@ fn apply_groups(e: &mut Entity, gs: &[(i64, Value)], doc: &cadforge_core::drawin
         }
     }
     if let Kind::Spline { fit, .. } = &mut e.kind {
-        let pts: Vec<Pt> = gs.iter().filter(|(c, _)| *c == 11).filter_map(|(_, v)| gpoint(v)).collect();
+        let pts: Vec<Pt> = gs
+            .iter()
+            .filter(|(c, _)| *c == 11)
+            .filter_map(|(_, v)| gpoint(v))
+            .collect();
         if pts.len() >= 2 {
             *fit = pts;
         }
@@ -254,7 +283,11 @@ fn apply_groups(e: &mut Entity, gs: &[(i64, Value)], doc: &cadforge_core::drawin
             420 => {
                 if let Some(n) = gnum(val) {
                     let n = n as i64;
-                    e.color = Some(Color::Rgb(((n >> 16) & 255) as u8, ((n >> 8) & 255) as u8, (n & 255) as u8));
+                    e.color = Some(Color::Rgb(
+                        ((n >> 16) & 255) as u8,
+                        ((n >> 8) & 255) as u8,
+                        (n & 255) as u8,
+                    ));
                 }
             }
             370 => e.lw = gnum(val).map(|n| n as i32),
@@ -376,18 +409,66 @@ fn make_entity(gs: &[(i64, Value)]) -> Option<Entity> {
     let first = |code: i64| gs.iter().find(|(c, _)| *c == code).map(|(_, v)| v);
     let point = |code: i64| first(code).and_then(gpoint);
     let kind = match ty.as_str() {
-        "LINE" => Kind::Line { a: point(10)?, b: point(11)? },
-        "CIRCLE" => Kind::Circle { c: point(10)?, r: first(40).and_then(gnum).filter(|r| *r > 0.0)? },
-        "ARC" => Kind::Arc { c: point(10)?, r: first(40).and_then(gnum).filter(|r| *r > 0.0)?, a0: first(50).and_then(gnum).unwrap_or(0.0), a1: first(51).and_then(gnum).unwrap_or(std::f64::consts::PI) },
+        "LINE" => Kind::Line {
+            a: point(10)?,
+            b: point(11)?,
+        },
+        "CIRCLE" => Kind::Circle {
+            c: point(10)?,
+            r: first(40).and_then(gnum).filter(|r| *r > 0.0)?,
+        },
+        "ARC" => Kind::Arc {
+            c: point(10)?,
+            r: first(40).and_then(gnum).filter(|r| *r > 0.0)?,
+            a0: first(50).and_then(gnum).unwrap_or(0.0),
+            a1: first(51).and_then(gnum).unwrap_or(std::f64::consts::PI),
+        },
         "POINT" => Kind::Point { p: point(10)? },
-        "XLINE" => Kind::Xline { p: point(10)?, d: point(11)? },
-        "RAY" => Kind::Ray { p: point(10)?, d: point(11)? },
-        "ELLIPSE" => Kind::Ellipse(EllipseData { c: point(10)?, m: point(11)?, ratio: first(40).and_then(gnum).filter(|r| *r > 0.0 && *r <= 1.0)?, t0: first(41).and_then(gnum).unwrap_or(0.0), t1: first(42).and_then(gnum).unwrap_or(std::f64::consts::TAU) }),
+        "XLINE" => Kind::Xline {
+            p: point(10)?,
+            d: point(11)?,
+        },
+        "RAY" => Kind::Ray {
+            p: point(10)?,
+            d: point(11)?,
+        },
+        "ELLIPSE" => Kind::Ellipse(EllipseData {
+            c: point(10)?,
+            m: point(11)?,
+            ratio: first(40).and_then(gnum).filter(|r| *r > 0.0 && *r <= 1.0)?,
+            t0: first(41).and_then(gnum).unwrap_or(0.0),
+            t1: first(42).and_then(gnum).unwrap_or(std::f64::consts::TAU),
+        }),
         "TEXT" | "MTEXT" => {
             let s = first(1)?.as_str()?.to_string();
-            Kind::Text(TextData { p: point(10)?, h: first(40).and_then(gnum).filter(|h| *h > 0.0).unwrap_or(2.5), s, rot: first(50).and_then(gnum).unwrap_or(0.0), jh: HJust::Left, jv: VJust::Baseline, w: first(41).and_then(gnum), multi: ty == "MTEXT", att: None })
+            Kind::Text(TextData {
+                p: point(10)?,
+                h: first(40).and_then(gnum).filter(|h| *h > 0.0).unwrap_or(2.5),
+                s,
+                rot: first(50).and_then(gnum).unwrap_or(0.0),
+                jh: HJust::Left,
+                jv: VJust::Baseline,
+                w: first(41).and_then(gnum),
+                multi: ty == "MTEXT",
+                att: None,
+            })
         }
-        "INSERT" => Kind::Insert(InsertData { name: first(2)?.as_str()?.to_string(), p: point(10)?, sx: first(41).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), sy: first(42).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), rot: first(50).and_then(gnum).unwrap_or(0.0), attribs: vec![], clip: vec![], clip_off: false }),
+        "INSERT" => Kind::Insert(InsertData {
+            name: first(2)?.as_str()?.to_string(),
+            p: point(10)?,
+            sx: first(41)
+                .and_then(gnum)
+                .filter(|x| *x != 0.0)
+                .unwrap_or(1.0),
+            sy: first(42)
+                .and_then(gnum)
+                .filter(|x| *x != 0.0)
+                .unwrap_or(1.0),
+            rot: first(50).and_then(gnum).unwrap_or(0.0),
+            attribs: vec![],
+            clip: vec![],
+            clip_off: false,
+        }),
         "LWPOLYLINE" => {
             let mut v: Vec<Vertex> = vec![];
             for (code, val) in gs {
@@ -407,7 +488,12 @@ fn make_entity(gs: &[(i64, Value)]) -> Option<Entity> {
             if v.len() < 2 {
                 return None;
             }
-            Kind::Pline { v, closed: first(70).and_then(gnum).is_some_and(|f| (f as i64) & 1 != 0) }
+            Kind::Pline {
+                v,
+                closed: first(70)
+                    .and_then(gnum)
+                    .is_some_and(|f| (f as i64) & 1 != 0),
+            }
         }
         _ => return None,
     };
@@ -451,30 +537,45 @@ fn sel_of<'a>(a: &'a [Value], i: usize) -> LResult<&'a Rc<RefCell<Vec<u64>>>> {
 
 pub async fn call(_it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LResult> {
     Some(match name {
-        "ENTLAST" => Ok(c.doc(|d| d.entities().last().map(|e| Value::Ename(e.id))).unwrap_or(Value::Nil)),
+        "ENTLAST" => Ok(c
+            .doc(|d| d.entities().last().map(|e| Value::Ename(e.id)))
+            .unwrap_or(Value::Nil)),
         "ENTNEXT" => (|| {
             let ids: Vec<u64> = c.doc(|d| d.entities().iter().map(|e| e.id).collect());
             Ok(match a.first() {
                 None | Some(Value::Nil) => ids.first().map_or(Value::Nil, |i| Value::Ename(*i)),
-                Some(Value::Ename(e)) => ids.iter().position(|i| i == e).and_then(|p| ids.get(p + 1)).map_or(Value::Nil, |i| Value::Ename(*i)),
+                Some(Value::Ename(e)) => ids
+                    .iter()
+                    .position(|i| i == e)
+                    .and_then(|p| ids.get(p + 1))
+                    .map_or(Value::Nil, |i| Value::Ename(*i)),
                 Some(other) => return Err(bad_arg("enamep", other)),
             })
         })(),
         "HANDENT" => (|| {
-            let h = arg(a, 0)?.as_str().ok_or_else(|| bad_arg("stringp", &a[0]))?;
+            let h = arg(a, 0)?
+                .as_str()
+                .ok_or_else(|| bad_arg("stringp", &a[0]))?;
             let id = u64::from_str_radix(h.trim(), 16).ok();
-            Ok(id.filter(|i| c.doc(|d| d.by_id(*i).is_some())).map_or(Value::Nil, Value::Ename))
+            Ok(id
+                .filter(|i| c.doc(|d| d.by_id(*i).is_some()))
+                .map_or(Value::Nil, Value::Ename))
         })(),
         "ENTGET" => (|| {
             let id = ename(a, 0)?;
-            Ok(c.doc(|d| d.by_id(id).map(|e| entity_list(e, d))).unwrap_or(Value::Nil))
+            Ok(c.doc(|d| d.by_id(id).map(|e| entity_list(e, d)))
+                .unwrap_or(Value::Nil))
         })(),
         "ENTMOD" => (|| {
             let gs = groups(arg(a, 0)?)?;
-            let Some((_, Value::Ename(id))) = gs.iter().find(|(c, _)| *c == -1) else { return Ok(Value::Nil) };
+            let Some((_, Value::Ename(id))) = gs.iter().find(|(c, _)| *c == -1) else {
+                return Ok(Value::Nil);
+            };
             let id = *id;
             let ok = c.doc_mut(|d| {
-                let Some(mut e) = d.by_id(id).cloned() else { return false };
+                let Some(mut e) = d.by_id(id).cloned() else {
+                    return false;
+                };
                 if !apply_groups(&mut e, &gs, d) {
                     return false;
                 }
@@ -490,12 +591,16 @@ pub async fn call(_it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LRes
         }
         "ENTMAKE" => (|| {
             let gs = groups(arg(a, 0)?)?;
-            let Some(mut e) = make_entity(&gs) else { return Ok(Value::Nil) };
+            let Some(mut e) = make_entity(&gs) else {
+                return Ok(Value::Nil);
+            };
             let ok = c.doc(|d| {
                 let mut probe = e.clone();
                 apply_groups(&mut probe, &gs, d).then_some(probe)
             });
-            let Some(probed) = ok else { return Ok(Value::Nil) };
+            let Some(probed) = ok else {
+                return Ok(Value::Nil);
+            };
             e = probed;
             c.add(e);
             Ok(a[0].clone())
@@ -518,8 +623,16 @@ pub async fn call(_it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LRes
         "SSLENGTH" => sel_of(a, 0).map(|s| Value::Int(s.borrow().len() as i64)),
         "SSNAME" => (|| {
             let s = sel_of(a, 0)?;
-            let i = arg(a, 1)?.as_i64().ok_or_else(|| bad_arg("integerp", &a[1]))?;
-            Ok(if i < 0 { Value::Nil } else { s.borrow().get(i as usize).map_or(Value::Nil, |e| Value::Ename(*e)) })
+            let i = arg(a, 1)?
+                .as_i64()
+                .ok_or_else(|| bad_arg("integerp", &a[1]))?;
+            Ok(if i < 0 {
+                Value::Nil
+            } else {
+                s.borrow()
+                    .get(i as usize)
+                    .map_or(Value::Nil, |e| Value::Ename(*e))
+            })
         })(),
         "SSADD" => (|| {
             let id = ename(a, 0)?;
@@ -541,7 +654,11 @@ pub async fn call(_it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LRes
         "SSMEMB" => (|| {
             let id = ename(a, 0)?;
             let s = sel_of(a, 1)?;
-            Ok(if s.borrow().contains(&id) { a[0].clone() } else { Value::Nil })
+            Ok(if s.borrow().contains(&id) {
+                a[0].clone()
+            } else {
+                Value::Nil
+            })
         })(),
         "SSSETFIRST" => (|| {
             let ids = match a.get(1) {
@@ -561,8 +678,13 @@ pub async fn call(_it: &Interp, c: &Ctx, name: &str, a: &[Value]) -> Option<LRes
         }
         // ---------------------------------------------------------------- tables
         "TBLSEARCH" => (|| {
-            let table = arg(a, 0)?.as_str().ok_or_else(|| bad_arg("stringp", &a[0]))?.to_uppercase();
-            let n = arg(a, 1)?.as_str().ok_or_else(|| bad_arg("stringp", &a[1]))?;
+            let table = arg(a, 0)?
+                .as_str()
+                .ok_or_else(|| bad_arg("stringp", &a[0]))?
+                .to_uppercase();
+            let n = arg(a, 1)?
+                .as_str()
+                .ok_or_else(|| bad_arg("stringp", &a[1]))?;
             Ok(c.doc(|d| table_entry(d, &table, n)).unwrap_or(Value::Nil))
         })(),
         _ => return None,
@@ -579,17 +701,42 @@ fn table_entry(d: &cadforge_core::drawing::Drawing, table: &str, name: &str) -> 
                 Color::Rgb(r, g, b) => cadforge_core::style::rgb_to_aci([r, g, b]) as i64,
                 _ => 7,
             };
-            Some(Value::list(vec![pair(0, Value::str("LAYER")), pair(2, Value::str(&l.name)), pair(70, Value::Int(flags)), pair(62, Value::Int(if l.on { aci } else { -aci })), pair(6, Value::str(&l.ltype))]))
+            Some(Value::list(vec![
+                pair(0, Value::str("LAYER")),
+                pair(2, Value::str(&l.name)),
+                pair(70, Value::Int(flags)),
+                pair(62, Value::Int(if l.on { aci } else { -aci })),
+                pair(6, Value::str(&l.ltype)),
+            ]))
         }
         "BLOCK" => {
-            let b = d.blocks.get(name).or_else(|| d.blocks.values().find(|b| b.name.eq_ignore_ascii_case(name)))?;
-            Some(Value::list(vec![pair(0, Value::str("BLOCK")), pair(2, Value::str(&b.name)), pair(70, Value::Int(0)), point_group(10, b.base)]))
+            let b = d.blocks.get(name).or_else(|| {
+                d.blocks
+                    .values()
+                    .find(|b| b.name.eq_ignore_ascii_case(name))
+            })?;
+            Some(Value::list(vec![
+                pair(0, Value::str("BLOCK")),
+                pair(2, Value::str(&b.name)),
+                pair(70, Value::Int(0)),
+                point_group(10, b.base),
+            ]))
         }
         "LTYPE" => {
             let k = cadforge_core::style::ltype_key(name)?;
-            Some(Value::list(vec![pair(0, Value::str("LTYPE")), pair(2, Value::str(k)), pair(70, Value::Int(0))]))
+            Some(Value::list(vec![
+                pair(0, Value::str("LTYPE")),
+                pair(2, Value::str(k)),
+                pair(70, Value::Int(0)),
+            ]))
         }
-        "STYLE" => (d.settings.text_style.eq_ignore_ascii_case(name)).then(|| Value::list(vec![pair(0, Value::str("STYLE")), pair(2, Value::str(&d.settings.text_style)), pair(70, Value::Int(0))])),
+        "STYLE" => (d.settings.text_style.eq_ignore_ascii_case(name)).then(|| {
+            Value::list(vec![
+                pair(0, Value::str("STYLE")),
+                pair(2, Value::str(&d.settings.text_style)),
+                pair(70, Value::Int(0)),
+            ])
+        }),
         _ => None,
     }
 }
@@ -601,7 +748,10 @@ async fn ssget(c: &Ctx, a: &[Value]) -> LResult {
             _ => Ok(vec![]),
         }
     };
-    let mode = a.first().and_then(Value::as_str).map(|s| s.trim_start_matches('_').to_uppercase());
+    let mode = a
+        .first()
+        .and_then(Value::as_str)
+        .map(|s| s.trim_start_matches('_').to_uppercase());
     // `(ssget filter)` and `(ssget)` ask the user
     if mode.is_none() {
         let filter = filter_of(a.first())?;
@@ -614,8 +764,21 @@ async fn ssget(c: &Ctx, a: &[Value]) -> LResult {
         return Ok(selset(sel.ents));
     }
     let mode = mode.unwrap_or_default();
-    let in_space = |keep: &dyn Fn(&Entity, &cadforge_core::drawing::Drawing) -> bool| -> Vec<u64> { c.doc(|d| d.entities().iter().filter(|e| !d.layer_of(e).frozen && keep(e, d)).map(|e| e.id).collect()) };
-    let pt_arg = |i: usize| -> LResult<Pt> { a.get(i).and_then(Value::as_point).map(|(x, y)| pt(x, y)).ok_or_else(|| bad_arg("point list", a.get(i).unwrap_or(&Value::Nil))) };
+    let in_space = |keep: &dyn Fn(&Entity, &cadforge_core::drawing::Drawing) -> bool| -> Vec<u64> {
+        c.doc(|d| {
+            d.entities()
+                .iter()
+                .filter(|e| !d.layer_of(e).frozen && keep(e, d))
+                .map(|e| e.id)
+                .collect()
+        })
+    };
+    let pt_arg = |i: usize| -> LResult<Pt> {
+        a.get(i)
+            .and_then(Value::as_point)
+            .map(|(x, y)| pt(x, y))
+            .ok_or_else(|| bad_arg("point list", a.get(i).unwrap_or(&Value::Nil)))
+    };
     match mode.as_str() {
         "X" => {
             let filter = filter_of(a.get(1))?;
@@ -625,39 +788,74 @@ async fn ssget(c: &Ctx, a: &[Value]) -> LResult {
             let filter = filter_of(a.get(if mode.len() == 1 { 3 } else { 2 }))?;
             let poly: Vec<Pt> = if mode.len() == 1 {
                 let (p, q) = (pt_arg(1)?, pt_arg(2)?);
-                vec![pt(p.x.min(q.x), p.y.min(q.y)), pt(p.x.max(q.x), p.y.min(q.y)), pt(p.x.max(q.x), p.y.max(q.y)), pt(p.x.min(q.x), p.y.max(q.y))]
+                vec![
+                    pt(p.x.min(q.x), p.y.min(q.y)),
+                    pt(p.x.max(q.x), p.y.min(q.y)),
+                    pt(p.x.max(q.x), p.y.max(q.y)),
+                    pt(p.x.min(q.x), p.y.max(q.y)),
+                ]
             } else {
-                a.get(1).and_then(Value::to_vec).unwrap_or_default().iter().filter_map(|v| v.as_point().map(|(x, y)| pt(x, y))).collect()
+                a.get(1)
+                    .and_then(Value::to_vec)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|v| v.as_point().map(|(x, y)| pt(x, y)))
+                    .collect()
             };
             if poly.len() < 3 {
-                return Err(LErr::Msg("bad argument: at least three points are needed".into()));
+                return Err(LErr::Msg(
+                    "bad argument: at least three points are needed".into(),
+                ));
             }
             let cross = mode.starts_with('C');
             Ok(selset(in_space(&|e, d| {
                 if !matches_filter(e, &filter) {
                     return false;
                 }
-                let Some(b) = bounds_of(e, d) else { return false };
-                let corners = [pt(b.min_x, b.min_y), pt(b.max_x, b.min_y), pt(b.max_x, b.max_y), pt(b.min_x, b.max_y)];
+                let Some(b) = bounds_of(e, d) else {
+                    return false;
+                };
+                let corners = [
+                    pt(b.min_x, b.min_y),
+                    pt(b.max_x, b.min_y),
+                    pt(b.max_x, b.max_y),
+                    pt(b.min_x, b.max_y),
+                ];
                 if cross {
                     // crossing: the bounds touch the polygon (corner inside, or an edge of the polygon crosses the bounds)
-                    corners.iter().any(|q| point_in_polygon(*q, &poly)) || poly.iter().any(|q| q.x >= b.min_x && q.x <= b.max_x && q.y >= b.min_y && q.y <= b.max_y) || (0..poly.len()).any(|i| {
-                        let (p0, p1) = (poly[i], poly[(i + 1) % poly.len()]);
-                        (0..4).any(|k| !seg_intersect(&Seg::line(p0, p1), &Seg::line(corners[k], corners[(k + 1) % 4]), false, false).is_empty())
-                    })
+                    corners.iter().any(|q| point_in_polygon(*q, &poly))
+                        || poly.iter().any(|q| {
+                            q.x >= b.min_x && q.x <= b.max_x && q.y >= b.min_y && q.y <= b.max_y
+                        })
+                        || (0..poly.len()).any(|i| {
+                            let (p0, p1) = (poly[i], poly[(i + 1) % poly.len()]);
+                            (0..4).any(|k| {
+                                !seg_intersect(
+                                    &Seg::line(p0, p1),
+                                    &Seg::line(corners[k], corners[(k + 1) % 4]),
+                                    false,
+                                    false,
+                                )
+                                .is_empty()
+                            })
+                        })
                 } else {
                     corners.iter().all(|q| point_in_polygon(*q, &poly))
                 }
             })))
         }
-        "L" => Ok(c.doc(|d| d.entities().last().map(|e| selset(vec![e.id]))).unwrap_or(Value::Nil)),
+        "L" => Ok(c
+            .doc(|d| d.entities().last().map(|e| selset(vec![e.id])))
+            .unwrap_or(Value::Nil)),
         "I" | "P" => {
             let ids: Vec<u64> = c.ed(|e| e.sel.iter().copied().collect());
             Ok(selset(ids))
         }
         _ => {
             // modes like ":S" (single) behave like the plain interactive form
-            let sel = c.select(crate::runtime::PromptSpec::new("Select objects")).await?;
+            let sel = c
+                .select(crate::runtime::PromptSpec::new("Select objects"))
+                .await?;
             Ok(selset(sel.ents))
         }
     }

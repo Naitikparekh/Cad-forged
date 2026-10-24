@@ -167,7 +167,10 @@ pub fn decode_mtext(src: &str) -> String {
                         out.push(c);
                     }
                 }
-                Some('f' | 'F' | 'C' | 'c' | 'H' | 'h' | 'W' | 'w' | 'Q' | 'q' | 'T' | 't' | 'A' | 'a' | 'X' | 'x') => match s[i..].iter().position(|&ch| ch == ';') {
+                Some(
+                    'f' | 'F' | 'C' | 'c' | 'H' | 'h' | 'W' | 'w' | 'Q' | 'q' | 'T' | 't' | 'A'
+                    | 'a' | 'X' | 'x',
+                ) => match s[i..].iter().position(|&ch| ch == ';') {
                     Some(j) => i += j,
                     None => i = s.len(),
                 },
@@ -212,7 +215,11 @@ fn tokenize(text: &str) -> Vec<Tok> {
     while i + 1 < norm.len() {
         if let Ok(code) = norm[i].trim().parse::<i32>() {
             // text content keeps its spaces: long strings are split into 250-character chunks at any character
-            let v = if matches!(code, 1 | 3) { norm[i + 1] } else { norm[i + 1].trim() };
+            let v = if matches!(code, 1 | 3) {
+                norm[i + 1]
+            } else {
+                norm[i + 1].trim()
+            };
             out.push((code, v.to_string()));
         }
         i += 2;
@@ -234,7 +241,11 @@ fn records(tokens: &[Tok]) -> Vec<Rec> {
     let mut embedded = false;
     for t in tokens {
         if t.0 == 0 {
-            recs.push(Rec { ty: t.1.clone(), g: vec![], vertices: vec![] });
+            recs.push(Rec {
+                ty: t.1.clone(),
+                g: vec![],
+                vertices: vec![],
+            });
             embedded = false;
         } else if let Some(r) = recs.last_mut() {
             embedded |= t.0 == 101 && r.ty == "MTEXT";
@@ -248,16 +259,30 @@ fn records(tokens: &[Tok]) -> Vec<Rec> {
 
 impl Rec {
     fn first(&self, code: i32) -> Option<&str> {
-        self.g.iter().find(|(c, _)| *c == code).map(|(_, v)| v.as_str())
+        self.g
+            .iter()
+            .find(|(c, _)| *c == code)
+            .map(|(_, v)| v.as_str())
     }
     fn num(&self, code: i32, d: f64) -> f64 {
         self.first(code).map(parse_f).unwrap_or(d)
     }
     fn int(&self, code: i32, d: i64) -> i64 {
-        self.first(code).and_then(|v| v.trim().parse::<i64>().ok().or_else(|| v.trim().parse::<f64>().ok().map(|f| f as i64))).unwrap_or(d)
+        self.first(code)
+            .and_then(|v| {
+                v.trim()
+                    .parse::<i64>()
+                    .ok()
+                    .or_else(|| v.trim().parse::<f64>().ok().map(|f| f as i64))
+            })
+            .unwrap_or(d)
     }
     fn all(&self, code: i32) -> Vec<&str> {
-        self.g.iter().filter(|(c, _)| *c == code).map(|(_, v)| v.as_str()).collect()
+        self.g
+            .iter()
+            .filter(|(c, _)| *c == code)
+            .map(|(_, v)| v.as_str())
+            .collect()
     }
     fn all_num(&self, code: i32) -> Vec<f64> {
         self.all(code).into_iter().map(parse_f).collect()
@@ -390,7 +415,13 @@ fn lw_of(r: &Rec) -> Option<i32> {
 
 // ---------------------------------------------------------------- B-spline evaluation
 
-fn bspline_sample(deg: usize, knots: &[f64], ctrl: &[Pt], weights: Option<&[f64]>, per_span: usize) -> Vec<Pt> {
+fn bspline_sample(
+    deg: usize,
+    knots: &[f64],
+    ctrl: &[Pt],
+    weights: Option<&[f64]>,
+    per_span: usize,
+) -> Vec<Pt> {
     let n = ctrl.len() - 1;
     let (t0, t1) = (knots[deg], knots[n + 1]);
     let mut uniq: Vec<f64> = vec![];
@@ -416,13 +447,23 @@ fn bspline_sample(deg: usize, knots: &[f64], ctrl: &[Pt], weights: Option<&[f64]
         for r in 1..=deg {
             for j in (r..=deg).rev() {
                 let den = knots[j + 1 + k - r] - knots[j + k - deg];
-                let a = if den == 0.0 { 0.0 } else { (t - knots[j + k - deg]) / den };
-                d[j] = ((1.0 - a) * d[j - 1].0 + a * d[j].0, (1.0 - a) * d[j - 1].1 + a * d[j].1, (1.0 - a) * d[j - 1].2 + a * d[j].2);
+                let a = if den == 0.0 {
+                    0.0
+                } else {
+                    (t - knots[j + k - deg]) / den
+                };
+                d[j] = (
+                    (1.0 - a) * d[j - 1].0 + a * d[j].0,
+                    (1.0 - a) * d[j - 1].1 + a * d[j].1,
+                    (1.0 - a) * d[j - 1].2 + a * d[j].2,
+                );
             }
         }
         pt(d[deg].0 / d[deg].2, d[deg].1 / d[deg].2)
     };
-    let mut pts: Vec<Pt> = (0..count).map(|i| at(t0 + (t1 - t0) * i as f64 / count as f64)).collect();
+    let mut pts: Vec<Pt> = (0..count)
+        .map(|i| at(t0 + (t1 - t0) * i as f64 / count as f64))
+        .collect();
     pts.push(ctrl[n]);
     pts
 }
@@ -494,7 +535,11 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
                         let a0 = rad(num(&mut i, 50));
                         let a1 = rad(num(&mut i, 51));
                         let ccw = num(&mut i, 73) != 0.0;
-                        let mut sw = if ccw { sweep_ccw(a0, a1) } else { -sweep_ccw(a1, a0) };
+                        let mut sw = if ccw {
+                            sweep_ccw(a0, a1)
+                        } else {
+                            -sweep_ccw(a1, a0)
+                        };
                         if sw.abs() < 1e-12 {
                             sw = if ccw { TAU } else { -TAU };
                         }
@@ -522,7 +567,10 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
                         let pts: Vec<Pt> = (0..=steps)
                             .map(|s| {
                                 let t = a0 + sw * s as f64 / steps as f64;
-                                pt(c.x + m.x * t.cos() - m.y * ratio * t.sin(), c.y + m.y * t.cos() + m.x * ratio * t.sin())
+                                pt(
+                                    c.x + m.x * t.cos() - m.y * ratio * t.sin(),
+                                    c.y + m.y * t.cos() + m.x * ratio * t.sin(),
+                                )
                             })
                             .collect();
                         for s in 0..steps {
@@ -537,7 +585,9 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
                         let nk = (num(&mut i, 95) as usize).min(cap);
                         let nc = (num(&mut i, 96) as usize).min(cap);
                         let knots: Vec<f64> = (0..nk).map(|_| num(&mut i, 40)).collect();
-                        let ctrl: Vec<Pt> = (0..nc).map(|_| pt(num(&mut i, 10), num(&mut i, 20))).collect();
+                        let ctrl: Vec<Pt> = (0..nc)
+                            .map(|_| pt(num(&mut i, 10), num(&mut i, 20)))
+                            .collect();
                         if ctrl.len() > deg && knots.len() == ctrl.len() + deg + 1 {
                             let pts = bspline_sample(deg, &knots, &ctrl, None, 10);
                             for s in 0..pts.len() - 1 {
@@ -566,7 +616,13 @@ fn hatch_loops(r: &Rec) -> Vec<Vec<Vertex>> {
 fn rev(s: &Seg) -> Seg {
     match *s {
         Seg::L { a, b, approx } => Seg::L { a: b, b: a, approx },
-        Seg::A { c, r, a0, sw, full } => Seg::A { c, r, a0: a0 + sw, sw: -sw, full },
+        Seg::A { c, r, a0, sw, full } => Seg::A {
+            c,
+            r,
+            a0: a0 + sw,
+            sw: -sw,
+            full,
+        },
     }
 }
 
@@ -577,7 +633,10 @@ fn chain(edges: &[Seg]) -> Vec<Vertex> {
     }
     let mut left: Vec<Seg> = edges.to_vec();
     let mut seq = vec![left.remove(0)];
-    let scale = edges.iter().map(|e| e.start().x.abs() + e.start().y.abs()).fold(1.0, f64::max);
+    let scale = edges
+        .iter()
+        .map(|e| e.start().x.abs() + e.start().y.abs())
+        .fold(1.0, f64::max);
     let tol = 1e-5 * scale;
     while !left.is_empty() {
         let tail = seq.last().unwrap().end();
@@ -600,7 +659,15 @@ fn chain(edges: &[Seg]) -> Vec<Vertex> {
     seq.iter()
         .map(|s| {
             let p = s.start();
-            Vertex::new(p.x, p.y, if matches!(s, Seg::A { .. }) { s.bulge() } else { 0.0 })
+            Vertex::new(
+                p.x,
+                p.y,
+                if matches!(s, Seg::A { .. }) {
+                    s.bulge()
+                } else {
+                    0.0
+                },
+            )
         })
         .collect()
 }
@@ -653,6 +720,8 @@ struct Ctx {
     images: indexmap::IndexMap<String, crate::picture::ImageDef>,
     /// Layer names by their LAYER table handle (viewports list their frozen layers by handle).
     layer_names: HashMap<String, String>,
+    /// The group of each grouped entity, by the entity's handle (upper case).
+    groups: HashMap<String, String>,
 }
 
 struct BlockRaw {
@@ -662,6 +731,16 @@ struct BlockRaw {
 }
 
 fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
+    let mut out = convert_kind(r, ctx);
+    if let Some(g) = r.first(5).and_then(|h| ctx.groups.get(&h.to_uppercase())) {
+        for e in &mut out {
+            e.grp = Some(g.clone());
+        }
+    }
+    out
+}
+
+fn convert_kind(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
     let layer = decode_text(r.first(8).unwrap_or("0"));
     let color = color_of(r);
     let lt = ltype_of(r.first(6));
@@ -689,7 +768,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
         "ARC" => {
             let rr = r.num(40, 0.0);
             if rr > 0.0 {
-                push(Entity::arc(r.pt(0), rr, rad(r.num(50, 0.0)), rad(r.num(51, 0.0))), true, &mut out);
+                push(
+                    Entity::arc(r.pt(0), rr, rad(r.num(50, 0.0)), rad(r.num(51, 0.0))),
+                    true,
+                    &mut out,
+                );
             }
         }
         "POINT" => push(Entity::point(r.pt(0)), false, &mut out),
@@ -741,7 +824,20 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             if flags & (16 | 64) == 0 {
                 // the header carries the default start / end widths of every vertex
                 let (dsw, dew) = (r.num(40, 0.0), r.num(41, 0.0));
-                let verts: Vec<Vertex> = r.vertices.iter().filter(|v| v.int(70, 0) & 16 == 0).map(|v| Vertex::wide(v.num(10, 0.0), v.num(20, 0.0), v.num(42, 0.0), v.num(40, dsw), v.num(41, dew))).collect();
+                let verts: Vec<Vertex> = r
+                    .vertices
+                    .iter()
+                    .filter(|v| v.int(70, 0) & 16 == 0)
+                    .map(|v| {
+                        Vertex::wide(
+                            v.num(10, 0.0),
+                            v.num(20, 0.0),
+                            v.num(42, 0.0),
+                            v.num(40, dsw),
+                            v.num(41, dew),
+                        )
+                    })
+                    .collect();
                 if verts.len() > 1 {
                     push(Entity::pline(verts, flags & 1 == 1), true, &mut out);
                 }
@@ -751,7 +847,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             let m = r.pt(1);
             let ratio = r.num(40, 1.0);
             if len(m) > 0.0 && ratio > 0.0 {
-                push(Entity::ellipse(r.pt(0), m, ratio.min(1.0), r.num(41, 0.0), r.num(42, TAU)), false, &mut out);
+                push(
+                    Entity::ellipse(r.pt(0), m, ratio.min(1.0), r.num(41, 0.0), r.num(42, TAU)),
+                    false,
+                    &mut out,
+                );
             }
         }
         "SPLINE" | "HELIX" => {
@@ -761,10 +861,26 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             let ctrl = r.pts(10, 20);
             let knots = r.all_num(40);
             let weights = r.all_num(41);
+            if fit.len() < 2 {
+                if let Some((fit, closed)) = bezier_chain_fit(deg, &knots, &ctrl, &weights) {
+                    push(Entity::spline(fit, closed), false, &mut out);
+                    return out;
+                }
+            }
             let pts: Option<Vec<Pt>> = if fit.len() >= 2 {
                 Some(fit.clone())
             } else if ctrl.len() > deg && knots.len() == ctrl.len() + deg + 1 {
-                Some(bspline_sample(deg, &knots, &ctrl, if weights.len() == ctrl.len() { Some(&weights) } else { None }, 12))
+                Some(bspline_sample(
+                    deg,
+                    &knots,
+                    &ctrl,
+                    if weights.len() == ctrl.len() {
+                        Some(&weights)
+                    } else {
+                        None
+                    },
+                    12,
+                ))
             } else if ctrl.len() >= 2 {
                 Some(ctrl.clone())
             } else {
@@ -773,7 +889,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             if let Some(mut pts) = pts {
                 if pts.len() >= 2 {
                     let closed = flags & 1 == 1 && fit.len() >= 2;
-                    if !closed && pts.len() > 2 && dist(pts[0], *pts.last().unwrap()) < 1e-9 && fit.len() < 2 {
+                    if !closed
+                        && pts.len() > 2
+                        && dist(pts[0], *pts.last().unwrap()) < 1e-9
+                        && fit.len() < 2
+                    {
                         pts.pop();
                         push(Entity::spline(pts, true), false, &mut out);
                     } else {
@@ -786,7 +906,14 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             if let Some(mut t) = text_of_rec(r) {
                 if r.ty == "ATTDEF" {
                     let f = r.int(70, 0);
-                    t.att = Some(AttDef { tag: decode_text(r.first(2).unwrap_or("")), prompt: decode_text(r.first(3).unwrap_or("")), invisible: f & 1 != 0, constant: f & 2 != 0, verify: f & 4 != 0, preset: f & 8 != 0 });
+                    t.att = Some(AttDef {
+                        tag: decode_text(r.first(2).unwrap_or("")),
+                        prompt: decode_text(r.first(3).unwrap_or("")),
+                        invisible: f & 1 != 0,
+                        constant: f & 2 != 0,
+                        verify: f & 4 != 0,
+                        preset: f & 8 != 0,
+                    });
                 }
                 push(Entity::new(Kind::Text(t)), true, &mut out);
             }
@@ -798,8 +925,13 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             let hh = r.num(40, 2.5);
             if !s.is_empty() {
                 let (jh, jv) = attach_of(r.int(71, 1));
-                let rot = if r.first(11).is_some() { r.num(21, 0.0).atan2(r.num(11, 0.0)) } else { rad(r.num(50, 0.0)) };
-                let mut e = Entity::mtext(r.pt(0), if hh > 0.0 { hh } else { 2.5 }, &s, r.num(41, 0.0));
+                let rot = if r.first(11).is_some() {
+                    r.num(21, 0.0).atan2(r.num(11, 0.0))
+                } else {
+                    rad(r.num(50, 0.0))
+                };
+                let mut e =
+                    Entity::mtext(r.pt(0), if hh > 0.0 { hh } else { 2.5 }, &s, r.num(41, 0.0));
                 if let Kind::Text(t) = &mut e.kind {
                     t.rot = rot;
                     t.jh = jh;
@@ -820,7 +952,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     i.rot = rad(r.num(50, 0.0));
                     for a in &r.vertices {
                         if let Some(t) = text_of_rec(a) {
-                            i.attribs.push(AttribData { tag: decode_text(a.first(2).unwrap_or("")), t, hidden: a.int(70, 0) & 1 != 0 });
+                            i.attribs.push(AttribData {
+                                tag: decode_text(a.first(2).unwrap_or("")),
+                                t,
+                                hidden: a.int(70, 0) & 1 != 0,
+                            });
                         }
                     }
                 }
@@ -843,7 +979,15 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             let pts = r.pts(10, 20);
             if pts.len() >= 2 {
                 let h = r.num(40, 2.5);
-                push(Entity::leader(pts, "", if h == 0.0 { 2.5 } else { h }), false, &mut out);
+                push(
+                    Entity::leader(
+                        pts,
+                        r.first(LEADER_TEXT).unwrap_or(""),
+                        if h == 0.0 { 2.5 } else { h },
+                    ),
+                    false,
+                    &mut out,
+                );
             }
         }
         "HATCH" => {
@@ -865,17 +1009,24 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     h.pa = rad(r.num(52, 0.0));
                     if r.int(450, 0) == 1 {
                         // gradient fill: two (or one tinted) true colours, the pattern name and the rotation
-                        let cols: Vec<[u8; 3]> = r.all(421).iter().map(|v| {
-                            let n = v.trim().parse::<i64>().unwrap_or(0) & 0xFFFFFF;
-                            [(n >> 16) as u8, (n >> 8) as u8, n as u8]
-                        }).collect();
+                        let cols: Vec<[u8; 3]> = r
+                            .all(421)
+                            .iter()
+                            .map(|v| {
+                                let n = v.trim().parse::<i64>().unwrap_or(0) & 0xFFFFFF;
+                                [(n >> 16) as u8, (n >> 8) as u8, n as u8]
+                            })
+                            .collect();
                         let one = r.int(452, 0) == 1 || cols.len() < 2;
                         let c1 = cols.first().copied().unwrap_or([255, 255, 255]);
                         h.gradient = Some(GradientData {
                             c1,
                             c2: cols.get(1).copied().unwrap_or([255, 255, 255]),
                             angle: r.num(460, 0.0),
-                            kind: r.first(470).map(|k| k.to_uppercase()).unwrap_or_else(|| "LINEAR".into()),
+                            kind: r
+                                .first(470)
+                                .map(|k| k.to_uppercase())
+                                .unwrap_or_else(|| "LINEAR".into()),
                             one_color: one,
                             tint: r.num(462, 0.5),
                         });
@@ -913,7 +1064,14 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 uniq.pop();
             }
             if uniq.len() >= 3 {
-                push(Entity::pline(uniq.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect(), true), false, &mut out);
+                push(
+                    Entity::pline(
+                        uniq.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect(),
+                        true,
+                    ),
+                    false,
+                    &mut out,
+                );
             }
         }
         "MLINE" => {
@@ -930,7 +1088,10 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 let grp = format!("*M{}", ctx.skipped.len() + verts.len());
                 for off in [lo, hi] {
                     let pts = offset_polyline(&verts, off, closed);
-                    let mut e = Entity::pline(pts.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect(), closed);
+                    let mut e = Entity::pline(
+                        pts.iter().map(|q| Vertex::new(q.x, q.y, 0.0)).collect(),
+                        closed,
+                    );
                     e.grp = Some(grp.clone());
                     push(e, false, &mut out);
                 }
@@ -957,7 +1118,12 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     (300, "CONTEXT_DATA{", _) => section = "ctx".into(),
                     (302, "LEADER{", _) => {
                         section = "leader".into();
-                        roots.push(Root { landing: None, dir: None, dogleg: 0.0, lines: vec![] });
+                        roots.push(Root {
+                            landing: None,
+                            dir: None,
+                            dogleg: 0.0,
+                            lines: vec![],
+                        });
                     }
                     (303, "}", _) => section = "ctx".into(),
                     (304, "LEADER_LINE{", Some(root)) => {
@@ -973,10 +1139,18 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                             l.push(pt(px, parse_f(t)));
                         }
                     }
-                    (20, t, Some(root)) if section == "leader" && root.landing.is_none() => root.landing = x.take().map(|px| pt(px, parse_f(t))),
+                    (20, t, Some(root)) if section == "leader" && root.landing.is_none() => {
+                        root.landing = x.take().map(|px| pt(px, parse_f(t)))
+                    }
                     (11, t, _) if section == "leader" => x = Some(parse_f(t)),
-                    (21, t, Some(root)) if section == "leader" && root.dir.is_none() => root.dir = x.take().map(|px| pt(px, parse_f(t))),
-                    (40, t, Some(root)) if section == "leader" && !in_line && root.dogleg == 0.0 => root.dogleg = parse_f(t),
+                    (21, t, Some(root)) if section == "leader" && root.dir.is_none() => {
+                        root.dir = x.take().map(|px| pt(px, parse_f(t)))
+                    }
+                    (40, t, Some(root))
+                        if section == "leader" && !in_line && root.dogleg == 0.0 =>
+                    {
+                        root.dogleg = parse_f(t)
+                    }
                     _ => {}
                 }
             }
@@ -997,7 +1171,11 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     }
                     if line.len() >= 2 {
                         let t = if made == 0 { text.as_str() } else { "" };
-                        push(Entity::leader(line, t, if text_h > 0.0 { text_h } else { 2.5 }), false, &mut out);
+                        push(
+                            Entity::leader(line, t, if text_h > 0.0 { text_h } else { 2.5 }),
+                            false,
+                            &mut out,
+                        );
                         made += 1;
                     }
                 }
@@ -1007,20 +1185,38 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             }
         }
         "WIPEOUT" => {
-            // clip boundary in image pixel space: x from -0.5 to the pixel width, mapped with the u / v vectors
+            // clip boundary in image pixel space: x from -0.5 to the pixel width, mapped with the u / v vectors (per pixel)
             let (o, u, v) = (r.pt(0), r.pt(1), r.pt(2));
             let raw: Vec<Pt> = r.pts(14, 24);
             let size = (r.num(13, 1.0), r.num(23, 1.0));
             let pts: Vec<Pt> = if r.int(71, 1) == 1 || raw.len() < 3 {
-                vec![pt(-0.5, -0.5), pt(size.0 - 0.5, -0.5), pt(size.0 - 0.5, size.1 - 0.5), pt(-0.5, size.1 - 0.5)]
+                vec![
+                    pt(-0.5, -0.5),
+                    pt(size.0 - 0.5, -0.5),
+                    pt(size.0 - 0.5, size.1 - 0.5),
+                    pt(-0.5, size.1 - 0.5),
+                ]
             } else {
                 raw
             };
-            let world: Vec<Pt> = pts.iter().map(|q| pt(o.x + u.x * (q.x + 0.5) + v.x * (q.y + 0.5), o.y + u.y * (q.x + 0.5) + v.y * (q.y + 0.5))).collect();
+            // pixel y runs down from the top edge, as for images
+            let world: Vec<Pt> = pts
+                .iter()
+                .map(|q| (q.x + 0.5, size.1 - q.y - 0.5))
+                .map(|(s, t)| pt(o.x + u.x * s + v.x * t, o.y + u.y * s + v.y * t))
+                .collect();
             let n = world.len();
-            let world = if n > 3 && dist(world[0], world[n - 1]) < 1e-9 { world[..n - 1].to_vec() } else { world };
+            let world = if n > 3 && dist(world[0], world[n - 1]) < 1e-9 {
+                world[..n - 1].to_vec()
+            } else {
+                world
+            };
             if world.len() >= 3 {
-                push(Entity::new(Kind::Wipeout(WipeoutData { pts: world })), false, &mut out);
+                push(
+                    Entity::new(Kind::Wipeout(WipeoutData { pts: world })),
+                    false,
+                    &mut out,
+                );
             }
         }
         "VIEWPORT" => {
@@ -1032,7 +1228,10 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 if vh > 0.0 {
                     vp.scale = Some(h / vh);
                 }
-                vp.vc = pt(r.num(17, 0.0) + r.num(12, 0.0), r.num(27, 0.0) + r.num(22, 0.0));
+                vp.vc = pt(
+                    r.num(17, 0.0) + r.num(12, 0.0),
+                    r.num(27, 0.0) + r.num(22, 0.0),
+                );
                 vp.off = r.int(68, 1) == 0;
                 vp.locked = r.int(90, 0) & 16384 != 0;
                 for h in r.all(331) {
@@ -1055,18 +1254,40 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     hpx = *h as f64;
                 }
             }
-            if wpx >= 1.0 && hpx >= 1.0 && wpx <= 1e6 && hpx <= 1e6 && (up.x != 0.0 || up.y != 0.0) && (vp.x != 0.0 || vp.y != 0.0) {
-                let (path, hnd) = (def.map_or_else(|| "image".to_string(), |d| d.0), r.first(340).unwrap_or("").to_string());
+            if wpx >= 1.0
+                && hpx >= 1.0
+                && wpx <= 1e6
+                && hpx <= 1e6
+                && (up.x != 0.0 || up.y != 0.0)
+                && (vp.x != 0.0 || vp.y != 0.0)
+            {
+                let (path, hnd) = (
+                    def.map_or_else(|| "image".to_string(), |d| d.0),
+                    r.first(340).unwrap_or("").to_string(),
+                );
                 let key = match ctx.image_keys.get(&hnd) {
                     Some(k) if !hnd.is_empty() => k.clone(),
                     _ => {
                         let k = crate::picture::unique_key(&path, |k| ctx.images.contains_key(k));
-                        ctx.images.insert(k.clone(), crate::picture::ImageDef::missing(&path, wpx as u32, hpx as u32));
+                        ctx.images.insert(
+                            k.clone(),
+                            crate::picture::ImageDef::missing(&path, wpx as u32, hpx as u32),
+                        );
                         ctx.image_keys.insert(hnd, k.clone());
                         k
                     }
                 };
-                let mut im = ImageData { name: key, p: r.pt(0), u: up * wpx, v: vp * hpx, clip: vec![], clip_off: false, brightness: r.int(281, 50).clamp(0, 100) as i32, contrast: r.int(282, 50).clamp(0, 100) as i32, fade: r.int(283, 0).clamp(0, 100) as i32 };
+                let mut im = ImageData {
+                    name: key,
+                    p: r.pt(0),
+                    u: up * wpx,
+                    v: vp * hpx,
+                    clip: vec![],
+                    clip_off: false,
+                    brightness: r.int(281, 50).clamp(0, 100) as i32,
+                    contrast: r.int(282, 50).clamp(0, 100) as i32,
+                    fade: r.int(283, 0).clamp(0, 100) as i32,
+                };
                 // boundary vertices are in pixels from the top-left corner of the picture, y down
                 let to_world = |x: f64, y: f64| im.p + up * (x + 0.5) + vp * (hpx - y - 0.5);
                 let (xs, ys) = (r.all_num(14), r.all_num(24));
@@ -1075,7 +1296,12 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                 let poly = match (r.int(71, 1), verts.len()) {
                     (1, 2) if active => {
                         let (a, b) = (pt(xs[0], ys[0]), pt(xs[1], ys[1]));
-                        vec![to_world(a.x, a.y), to_world(b.x, a.y), to_world(b.x, b.y), to_world(a.x, b.y)]
+                        vec![
+                            to_world(a.x, a.y),
+                            to_world(b.x, a.y),
+                            to_world(b.x, b.y),
+                            to_world(a.x, b.y),
+                        ]
                     }
                     (2, n) if n >= 3 => {
                         let mut v = verts.clone();
@@ -1094,8 +1320,16 @@ fn convert(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
             }
         }
         "DIMENSION" => {
+            if let Some(d) = cadforge_dim(r) {
+                push(Entity::new(Kind::Dim(d)), false, &mut out);
+                return out;
+            }
             let bname = r.first(2).unwrap_or("").to_string();
-            let recs: Vec<Rec> = ctx.blocks.get(&bname).map(|b| b.entities.clone()).unwrap_or_default();
+            let recs: Vec<Rec> = ctx
+                .blocks
+                .get(&bname)
+                .map(|b| b.entities.clone())
+                .unwrap_or_default();
             for be in &recs {
                 for mut e in convert(be, ctx) {
                     if matches!(e.kind, Kind::Point { .. }) {
@@ -1128,8 +1362,20 @@ fn offset_polyline(pts: &[Pt], d: f64, closed: bool) -> Vec<Pt> {
     };
     (0..n)
         .map(|i| {
-            let prev = if i > 0 { Some(i - 1) } else if closed { Some(n - 1) } else { None };
-            let next = if i + 1 < n { Some(i + 1) } else if closed { Some(0) } else { None };
+            let prev = if i > 0 {
+                Some(i - 1)
+            } else if closed {
+                Some(n - 1)
+            } else {
+                None
+            };
+            let next = if i + 1 < n {
+                Some(i + 1)
+            } else if closed {
+                Some(0)
+            } else {
+                None
+            };
             let n1 = prev.map(|p| seg_normal(p, i));
             let n2 = next.map(|q| seg_normal(i, q));
             let m = match (n1, n2) {
@@ -1158,7 +1404,11 @@ fn text_of_rec(r: &Rec) -> Option<TextData> {
     }
     let jh = r.int(72, 0);
     let jv = r.int(74, 0).max(r.int(73, 0));
-    let anchor = if (jh != 0 || jv != 0) && r.first(11).is_some() { r.pt(1) } else { r.pt(0) };
+    let anchor = if (jh != 0 || jv != 0) && r.first(11).is_some() {
+        r.pt(1)
+    } else {
+        r.pt(0)
+    };
     let vj = if jh == 4 {
         VJust::Middle
     } else {
@@ -1169,7 +1419,11 @@ fn text_of_rec(r: &Rec) -> Option<TextData> {
             _ => VJust::Baseline,
         }
     };
-    Some(TextData::new(anchor, hh, &s).with_rot(rad(r.num(50, 0.0))).with_just(jh_of(jh), vj))
+    Some(
+        TextData::new(anchor, hh, &s)
+            .with_rot(rad(r.num(50, 0.0)))
+            .with_just(jh_of(jh), vj),
+    )
 }
 
 /// Merge POLYLINE/VERTEX/SEQEND and INSERT/ATTRIB/SEQEND runs into single records.
@@ -1180,13 +1434,19 @@ fn group_entities(list: &[Rec]) -> Vec<Rec> {
     for r in list {
         match r.ty.as_str() {
             "POLYLINE" => {
-                out.push(Rec { vertices: vec![], ..r.clone() });
+                out.push(Rec {
+                    vertices: vec![],
+                    ..r.clone()
+                });
                 in_poly = true;
                 in_ins = false;
             }
             "VERTEX" if in_poly => out.last_mut().unwrap().vertices.push(r.clone()),
             "INSERT" => {
-                out.push(Rec { vertices: vec![], ..r.clone() });
+                out.push(Rec {
+                    vertices: vec![],
+                    ..r.clone()
+                });
                 in_poly = false;
                 in_ins = r.int(66, 0) == 1;
             }
@@ -1203,15 +1463,161 @@ fn group_entities(list: &[Rec]) -> Vec<Rec> {
             }
         }
     }
+    leader_text(out)
+}
+
+/// CadForge writes a spline through fit points as the chain of cubic Béziers it draws (knots 0,0,0,0,1,1,1,...,n,n,n,n).
+/// When the control points are exactly that chain for the Bézier joints, the joints are the fit points and the
+/// spline reads back as it was (anything else, from other programs, is sampled).
+fn bezier_chain_fit(
+    deg: usize,
+    knots: &[f64],
+    ctrl: &[Pt],
+    weights: &[f64],
+) -> Option<(Vec<Pt>, bool)> {
+    if deg != 3 || ctrl.len() < 4 || (ctrl.len() - 1) % 3 != 0 || weights.iter().any(|w| *w != 1.0)
+    {
+        return None;
+    }
+    let n = (ctrl.len() - 1) / 3;
+    let mut want = vec![0.0; 4];
+    for i in 1..n {
+        want.extend([i as f64; 3]);
+    }
+    want.extend([n as f64; 4]);
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0);
+    if knots.len() != want.len() || knots.iter().zip(&want).any(|(a, b)| !close(*a, *b)) {
+        return None;
+    }
+    let joints: Vec<Pt> = ctrl.iter().step_by(3).copied().collect();
+    let same = |p: Pt, q: Pt| close(p.x, q.x) && close(p.y, q.y);
+    let candidates = [(joints.clone(), false), (joints[..n].to_vec(), true)];
+    candidates.into_iter().find(|(fit, closed)| {
+        let bz = spline_beziers(fit, *closed);
+        (!closed || (n >= 3 && same(joints[0], joints[n])))
+            && bz.len() == n
+            && bz.iter().enumerate().all(|(i, b)| {
+                [b.p0, b.c1, b.c2, b.p1]
+                    .iter()
+                    .zip(&ctrl[3 * i..3 * i + 4])
+                    .all(|(p, q)| same(*p, *q))
+            })
+    })
+}
+
+/// The strings of an entity's extended data for one application (empty when it has none).
+fn xdata_strings<'a>(r: &'a Rec, app: &str) -> Vec<&'a str> {
+    let mut mine = false;
+    let mut out = vec![];
+    for (c, v) in &r.g {
+        match *c {
+            1001 => mine = v.trim().eq_ignore_ascii_case(app),
+            1000 if mine => out.push(v.as_str()),
+            _ => {}
+        }
+    }
     out
+}
+
+/// A DIMENSION that CadForge wrote, as CadForge's dimension: its CADFORGE extended data, when the dimension's
+/// definition points and text still agree with it (a dimension changed by another program is read as drawn).
+fn cadforge_dim(r: &Rec) -> Option<crate::dim::DimData> {
+    use crate::dim::DimType;
+    let json = xdata_strings(r, super::dxf_write::CADFORGE_APP).concat();
+    if json.is_empty() {
+        return None;
+    }
+    let d: crate::dim::DimData = serde_json::from_str(&json).ok()?;
+    let close = |a: Pt, b: Option<Pt>| {
+        b.is_some_and(|b| dist(a, b) <= 1e-9 * (1.0 + a.x.abs().max(a.y.abs())))
+    };
+    let zero = Some(pt(0.0, 0.0));
+    let points = close(r.pt(0), Some(super::dxf_write::dim_def_point(&d)))
+        && match d.kind {
+            DimType::Lin | DimType::Ali => close(r.pt(3), d.p1) && close(r.pt(4), d.p2),
+            DimType::Ord => close(r.pt(3), d.pt) && close(r.pt(4), d.dp),
+            DimType::Ang | DimType::Arc => {
+                close(r.pt(3), d.p1) && close(r.pt(4), d.p2) && close(r.pt(5), d.c.or(zero))
+            }
+            DimType::Rad | DimType::Jog | DimType::Dia => close(r.pt(5), d.pt),
+        };
+    let text = decode_text(r.first(1).unwrap_or("")) == d.txt.clone().unwrap_or_default();
+    (points && text).then_some(d)
+}
+
+/// GROUP objects: the group name (its entry in the group dictionary) of each member entity, by entity handle.
+fn groups_of(objects: &[Rec]) -> HashMap<String, String> {
+    let mut names: HashMap<String, String> = HashMap::new();
+    for d in objects.iter().filter(|r| r.ty == "DICTIONARY") {
+        for p in d.g.windows(2).filter(|p| p[0].0 == 3 && p[1].0 == 350) {
+            names.insert(p[1].1.trim().to_uppercase(), decode_text(&p[0].1));
+        }
+    }
+    let mut out = HashMap::new();
+    for g in objects.iter().filter(|r| r.ty == "GROUP") {
+        let Some(name) = g.first(5).and_then(|h| names.get(&h.trim().to_uppercase())) else {
+            continue;
+        };
+        for m in g.all(340) {
+            out.entry(m.trim().to_uppercase())
+                .or_insert_with(|| name.clone());
+        }
+    }
+    out
+}
+
+/// Group code (not used by DXF) carrying a leader's own text, taken from its annotation.
+const LEADER_TEXT: i32 = -100;
+
+/// A LEADER's MTEXT annotation (group 340) that sits where CadForge draws a leader's text (just right of the last
+/// vertex by 0.4 text heights, middle left, unrotated, the leader's text height) becomes the leader's own text, so
+/// a CadForge leader reads back as it was written. Annotations placed anywhere else stay separate texts.
+fn leader_text(mut list: Vec<Rec>) -> Vec<Rec> {
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0);
+    let mut merged: Vec<(usize, usize, String)> = vec![];
+    for (i, r) in list.iter().enumerate().filter(|(_, r)| r.ty == "LEADER") {
+        let (Some(h), Some(last)) = (r.first(340), r.pts(10, 20).last().copied()) else {
+            continue;
+        };
+        let Some(j) = list
+            .iter()
+            .position(|m| m.ty == "MTEXT" && m.first(5).is_some_and(|x| x.eq_ignore_ascii_case(h)))
+        else {
+            continue;
+        };
+        let (m, th) = (&list[j], r.num(40, 2.5));
+        let at = m.pt(0);
+        if m.int(71, 1) == 4
+            && close(m.num(40, 0.0), th)
+            && close(at.x, last.x + th * 0.4)
+            && close(at.y, last.y)
+            && m.num(21, 0.0) == 0.0
+            && m.num(50, 0.0) == 0.0
+        {
+            let mut raw = m.all(3).join("");
+            raw.push_str(m.first(1).unwrap_or(""));
+            merged.push((i, j, decode_mtext(&raw)));
+        }
+    }
+    let drop: std::collections::HashSet<usize> = merged.iter().map(|(_, j, _)| *j).collect();
+    for (i, _, s) in merged {
+        list[i].g.push((LEADER_TEXT, s));
+    }
+    list.into_iter()
+        .enumerate()
+        .filter(|(k, _)| !drop.contains(k))
+        .map(|(_, r)| r)
+        .collect()
 }
 
 // ---------------------------------------------------------------- entry point
 
 /// Windows-1252 code points for the bytes 0x80..=0x9F (the rest of the range equals Latin-1).
 const CP1252_HIGH: [char; 32] = [
-    '\u{20AC}', '\u{81}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}', '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{8D}', '\u{017D}', '\u{8F}', '\u{90}', '\u{2018}',
-    '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}', '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{9D}', '\u{017E}', '\u{0178}',
+    '\u{20AC}', '\u{81}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
+    '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{8D}', '\u{017D}', '\u{8F}',
+    '\u{90}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
+    '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{9D}', '\u{017E}', '\u{0178}',
 ];
 
 /// Windows-1252 text from bytes.
@@ -1260,9 +1666,19 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let mut doc = Drawing::new(name);
 
     // ---- header
-    let hv = |k: &str, code: i32, d: Option<f64>| -> Option<f64> { header.get(k).and_then(|v| v.iter().find(|(c, _)| *c == code)).map(|(_, v)| parse_f(v)).or(d) };
+    let hv = |k: &str, code: i32, d: Option<f64>| -> Option<f64> {
+        header
+            .get(k)
+            .and_then(|v| v.iter().find(|(c, _)| *c == code))
+            .map(|(_, v)| parse_f(v))
+            .or(d)
+    };
     let units = hv("$INSUNITS", 70, Some(0.0)).unwrap_or(0.0) as i32;
-    doc.settings.units.ins_units = if [0, 1, 2, 4, 5, 6].contains(&units) { units } else { 0 };
+    doc.settings.units.ins_units = if [0, 1, 2, 4, 5, 6].contains(&units) {
+        units
+    } else {
+        0
+    };
     doc.settings.units.precision = (hv("$LUPREC", 70, Some(4.0)).unwrap_or(4.0) as i32).clamp(0, 8);
     let lts = hv("$LTSCALE", 40, Some(1.0)).unwrap_or(1.0);
     doc.settings.ltscale = if lts == 0.0 || lts.is_nan() { 1.0 } else { lts };
@@ -1274,8 +1690,20 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         }
     }
     {
-        let ds = doc.settings.dim_styles.get_mut("Standard").expect("standard dim style");
-        for (k, f) in [("$DIMTXT", 0), ("$DIMASZ", 1), ("$DIMEXO", 2), ("$DIMEXE", 3), ("$DIMGAP", 4), ("$DIMCEN", 5), ("$DIMSCALE", 6)] {
+        let ds = doc
+            .settings
+            .dim_styles
+            .get_mut("Standard")
+            .expect("standard dim style");
+        for (k, f) in [
+            ("$DIMTXT", 0),
+            ("$DIMASZ", 1),
+            ("$DIMEXO", 2),
+            ("$DIMEXE", 3),
+            ("$DIMGAP", 4),
+            ("$DIMCEN", 5),
+            ("$DIMSCALE", 6),
+        ] {
             if let Some(v) = hv(k, 40, None) {
                 if v > 0.0 {
                     match f {
@@ -1300,10 +1728,18 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     // ---- linetypes the file defines (simple dash / gap / dot ones; shapes and text are left out), so layers and
     // objects that use them keep their look
     let empty: Vec<Rec> = vec![];
-    for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LTYPE") {
+    for r in secs
+        .get("TABLES")
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|x| x.ty == "LTYPE")
+    {
         let name = decode_text(r.first(2).unwrap_or("")).trim().to_string();
         let upper = name.to_uppercase();
-        if name.is_empty() || matches!(upper.as_str(), "BYBLOCK" | "BYLAYER") || LINETYPES.iter().any(|l| l.name.eq_ignore_ascii_case(&name)) {
+        if name.is_empty()
+            || matches!(upper.as_str(), "BYBLOCK" | "BYLAYER")
+            || LINETYPES.iter().any(|l| l.name.eq_ignore_ascii_case(&name))
+        {
             continue;
         }
         if r.all(74).iter().any(|v| v.trim() != "0") {
@@ -1311,13 +1747,22 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         }
         let pattern: Vec<f64> = r.all(49).iter().map(|v| parse_f(v)).collect();
         if !pattern.is_empty() {
-            let _ = doc.define_linetype(crate::defs::LinetypeDef { name, desc: decode_text(r.first(3).unwrap_or("")), pattern });
+            let _ = doc.define_linetype(crate::defs::LinetypeDef {
+                name,
+                desc: decode_text(r.first(3).unwrap_or("")),
+                pattern,
+            });
         }
     }
 
     // ---- layers
     doc.layers.clear();
-    for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYER") {
+    for r in secs
+        .get("TABLES")
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|x| x.ty == "LAYER")
+    {
         let lname = decode_text(r.first(2).unwrap_or(""));
         if lname.is_empty() || doc.layer(&lname).is_some() {
             continue;
@@ -1329,11 +1774,18 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
                 let n = tc.trim().parse::<i64>().unwrap_or(0) & 0xFFFFFF;
                 Color::Rgb((n >> 16) as u8, (n >> 8) as u8, n as u8)
             }
-            None => Color::Aci(if c62 == 0 { 7 } else { c62.unsigned_abs().min(255) as u8 }),
+            None => Color::Aci(if c62 == 0 {
+                7
+            } else {
+                c62.unsigned_abs().min(255) as u8
+            }),
         };
         let lt = ltype_key(r.first(6).unwrap_or("Continuous")).unwrap_or("Continuous");
         let lwv = r.int(370, 25);
-        let mut l = Layer::new(&lname).with_color(color).with_ltype(lt).with_lw(if lwv >= 0 { lwv as i32 } else { 25 });
+        let mut l = Layer::new(&lname)
+            .with_color(color)
+            .with_ltype(lt)
+            .with_lw(if lwv >= 0 { lwv as i32 } else { 25 });
         l.on = c62 >= 0;
         l.frozen = flags & 1 != 0;
         l.locked = flags & 4 != 0;
@@ -1345,12 +1797,44 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     }
 
     // ---- blocks (including anonymous dimension blocks, used for DIMENSION import)
-    let layer_names: HashMap<String, String> = secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYER").filter_map(|r| Some((r.first(5)?.to_uppercase(), decode_text(r.first(2)?)))).collect();
-    let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default(), layer_names };
-    for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "IMAGEDEF") {
+    let layer_names: HashMap<String, String> = secs
+        .get("TABLES")
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|x| x.ty == "LAYER")
+        .filter_map(|r| Some((r.first(5)?.to_uppercase(), decode_text(r.first(2)?))))
+        .collect();
+    let mut ctx = Ctx {
+        blocks: HashMap::new(),
+        skipped: Default::default(),
+        image_defs: HashMap::new(),
+        image_keys: HashMap::new(),
+        images: Default::default(),
+        layer_names,
+        groups: groups_of(secs.get("OBJECTS").unwrap_or(&empty)),
+    };
+    for r in secs
+        .get("OBJECTS")
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|x| x.ty == "IMAGEDEF")
+    {
         if let Some(h) = r.first(5) {
-            let px = |v: f64| if v.is_finite() && v > 0.0 { v.min(1e6) as u32 } else { 0 };
-            ctx.image_defs.insert(h.to_string(), (decode_text(r.first(1).unwrap_or("")), px(r.num(10, 0.0)), px(r.num(20, 0.0))));
+            let px = |v: f64| {
+                if v.is_finite() && v > 0.0 {
+                    v.min(1e6) as u32
+                } else {
+                    0
+                }
+            };
+            ctx.image_defs.insert(
+                h.to_string(),
+                (
+                    decode_text(r.first(1).unwrap_or("")),
+                    px(r.num(10, 0.0)),
+                    px(r.num(20, 0.0)),
+                ),
+            );
         }
     }
     let mut order: Vec<String> = vec![];
@@ -1360,7 +1844,11 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         for r in secs.get("BLOCKS").unwrap_or(&empty) {
             match r.ty.as_str() {
                 "BLOCK" => {
-                    cur = Some(BlockRaw { name: decode_text(r.first(2).unwrap_or("")), base: r.pt(0), entities: vec![] });
+                    cur = Some(BlockRaw {
+                        name: decode_text(r.first(2).unwrap_or("")),
+                        base: r.pt(0),
+                        entities: vec![],
+                    });
                     raw.clear();
                 }
                 "ENDBLK" => {
@@ -1378,7 +1866,34 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             }
         }
     }
-    for n in order.iter().filter(|n| !n.starts_with('*')) {
+    // anonymous blocks that an imported INSERT refers to (dynamic block references *U, ...) are blocks like the
+    // named ones; the others (dimension *D blocks, table *T blocks and what only they use) are not
+    let space = |n: &str| {
+        let l = n.to_lowercase();
+        l.starts_with("*model_space") || l.starts_with("*paper_space")
+    };
+    let mut referenced: std::collections::HashSet<String> = Default::default();
+    let mut todo: Vec<&Rec> = secs.get("ENTITIES").unwrap_or(&empty).iter().collect();
+    todo.extend(
+        ctx.blocks
+            .iter()
+            .filter(|(n, _)| !n.starts_with('*') || space(n))
+            .flat_map(|(_, b)| b.entities.iter()),
+    );
+    while let Some(r) = todo.pop() {
+        let Some(n) = r.first(2).filter(|_| r.ty == "INSERT").map(decode_text) else {
+            continue;
+        };
+        if n.starts_with('*') && !space(&n) && referenced.insert(n.clone()) {
+            if let Some(b) = ctx.blocks.get(&n) {
+                todo.extend(b.entities.iter());
+            }
+        }
+    }
+    for n in order
+        .iter()
+        .filter(|n| !n.starts_with('*') || (referenced.contains(*n) && !space(n)))
+    {
         let (base, recs) = {
             let b = &ctx.blocks[n];
             (b.base, b.entities.clone())
@@ -1397,15 +1912,31 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         paper: Paper,
     }
     let mut layout_defs: HashMap<String, LayoutDef> = HashMap::new(); // by LAYOUT handle
-    for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYOUT") {
+    for r in secs
+        .get("OBJECTS")
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|x| x.ty == "LAYOUT")
+    {
         let Some(h) = r.first(5) else { continue };
-        let Some(at) = r.g.iter().position(|(c, v)| *c == 100 && v == "AcDbLayout") else { continue };
+        let Some(at) = r.g.iter().position(|(c, v)| *c == 100 && v == "AcDbLayout") else {
+            continue;
+        };
         let after = &r.g[at..];
-        let name = decode_text(after.iter().find(|(c, _)| *c == 1).map_or("", |(_, v)| v.as_str()));
+        let name = decode_text(
+            after
+                .iter()
+                .find(|(c, _)| *c == 1)
+                .map_or("", |(_, v)| v.as_str()),
+        );
         if name.is_empty() || name.eq_ignore_ascii_case("Model") {
             continue;
         }
-        let tab = after.iter().find(|(c, _)| *c == 71).and_then(|(_, v)| v.trim().parse::<i64>().ok()).unwrap_or(0);
+        let tab = after
+            .iter()
+            .find(|(c, _)| *c == 71)
+            .and_then(|(_, v)| v.trim().parse::<i64>().ok())
+            .unwrap_or(0);
         let k = if r.int(72, 1) == 0 { 25.4 } else { 1.0 };
         let (mut w, mut hh) = (r.num(44, 297.0) * k, r.num(45, 210.0) * k);
         if matches!(r.int(73, 0), 1 | 3) {
@@ -1415,11 +1946,33 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             (w, hh) = (297.0, 210.0);
         }
         let pname = r.first(4).unwrap_or("");
-        let known = ["A0", "A1", "A2", "A3", "A4", "Letter", "Legal", "Tabloid", "ANSI C", "ANSI D"].iter().find(|n| pname.eq_ignore_ascii_case(n)).map(|n| n.to_string());
-        layout_defs.insert(h.to_string(), LayoutDef { name, tab, paper: Paper { w, h: hh, name: known.unwrap_or_else(|| "Custom".into()), landscape: w >= hh } });
+        let known = [
+            "A0", "A1", "A2", "A3", "A4", "Letter", "Legal", "Tabloid", "ANSI C", "ANSI D",
+        ]
+        .iter()
+        .find(|n| pname.eq_ignore_ascii_case(n))
+        .map(|n| n.to_string());
+        layout_defs.insert(
+            h.to_string(),
+            LayoutDef {
+                name,
+                tab,
+                paper: Paper {
+                    w,
+                    h: hh,
+                    name: known.unwrap_or_else(|| "Custom".into()),
+                    landscape: w >= hh,
+                },
+            },
+        );
     }
     let mut block_layout: HashMap<String, String> = HashMap::new(); // paper-space block name -> layout name
-    for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "BLOCK_RECORD") {
+    for r in secs
+        .get("TABLES")
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|x| x.ty == "BLOCK_RECORD")
+    {
         let bn = decode_text(r.first(2).unwrap_or(""));
         if let Some(def) = r.first(340).and_then(|h| layout_defs.get(h)) {
             block_layout.insert(bn.to_lowercase(), def.name.clone());
@@ -1456,7 +2009,10 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         }
     }
     // the other layouts live in their own `*Paper_SpaceN` blocks
-    for n in order.iter().filter(|n| n.to_lowercase().starts_with("*paper_space")) {
+    for n in order
+        .iter()
+        .filter(|n| n.to_lowercase().starts_with("*paper_space"))
+    {
         let recs = ctx.blocks[n].entities.clone();
         let ln = layout_of(n, &mut fallback_names);
         for r in &recs {
@@ -1465,16 +2021,28 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             }
         }
     }
-    let mut named: Vec<(i64, String, Paper)> = layout_defs.values().map(|d| (d.tab, d.name.clone(), d.paper.clone())).collect();
+    let mut named: Vec<(i64, String, Paper)> = layout_defs
+        .values()
+        .map(|d| (d.tab, d.name.clone(), d.paper.clone()))
+        .collect();
     for n in sheet_ents.keys() {
         if !named.iter().any(|(_, ln, _)| ln == n) {
-            named.push((1000 + named.len() as i64, n.clone(), Paper::named("A3", true)));
+            named.push((
+                1000 + named.len() as i64,
+                n.clone(),
+                Paper::named("A3", true),
+            ));
         }
     }
     named.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     for (_, ln, pp) in named {
         let entities = sheet_ents.remove(&ln).unwrap_or_default();
-        doc.layouts.push(Layout { name: ln.clone(), paper: pp, entities: vec![], fresh: false });
+        doc.layouts.push(Layout {
+            name: ln.clone(),
+            paper: pp,
+            entities: vec![],
+            fresh: false,
+        });
         for e in entities {
             doc.add_to(e, &ln);
         }
@@ -1493,8 +2061,17 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     for n in missing {
         doc.layers.push(Layer::new(&n));
     }
-    let cl = decode_text(header.get("$CLAYER").and_then(|v| v.iter().find(|(c, _)| *c == 8)).map(|(_, v)| v.as_str()).unwrap_or("0"));
-    doc.cur.layer = doc.layer(&cl).map(|l| l.name.clone()).unwrap_or_else(|| doc.layers[0].name.clone());
+    let cl = decode_text(
+        header
+            .get("$CLAYER")
+            .and_then(|v| v.iter().find(|(c, _)| *c == 8))
+            .map(|(_, v)| v.as_str())
+            .unwrap_or("0"),
+    );
+    doc.cur.layer = doc
+        .layer(&cl)
+        .map(|l| l.name.clone())
+        .unwrap_or_else(|| doc.layers[0].name.clone());
 
     doc.images = std::mem::take(&mut ctx.images);
     doc.skipped = ctx.skipped;

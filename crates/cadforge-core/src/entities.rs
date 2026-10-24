@@ -167,12 +167,27 @@ impl ImageData {
     /// A picture of `w` x `h` drawing units with its lower-left corner at `p`, rotated by `rot` radians.
     pub fn new(name: &str, p: Pt, w: f64, h: f64, rot: f64) -> ImageData {
         let (c, s) = (rot.cos(), rot.sin());
-        ImageData { name: name.to_string(), p, u: pt(c * w, s * w), v: pt(-s * h, c * h), clip: vec![], clip_off: false, brightness: 50, contrast: 50, fade: 0 }
+        ImageData {
+            name: name.to_string(),
+            p,
+            u: pt(c * w, s * w),
+            v: pt(-s * h, c * h),
+            clip: vec![],
+            clip_off: false,
+            brightness: 50,
+            contrast: 50,
+            fade: 0,
+        }
     }
 
     /// The four corners, counter-clockwise from the lower-left.
     pub fn corners(&self) -> [Pt; 4] {
-        [self.p, self.p + self.u, self.p + self.u + self.v, self.p + self.v]
+        [
+            self.p,
+            self.p + self.u,
+            self.p + self.u + self.v,
+            self.p + self.v,
+        ]
     }
 
     /// The visible boundary: the clip polygon (cut to the picture), or the whole picture.
@@ -252,18 +267,34 @@ pub struct LayerOverride {
 
 impl LayerOverride {
     pub fn is_empty(&self) -> bool {
-        !self.frozen && self.color.is_none() && self.ltype.is_none() && self.lw.is_none() && self.transp.is_none()
+        !self.frozen
+            && self.color.is_none()
+            && self.ltype.is_none()
+            && self.lw.is_none()
+            && self.transp.is_none()
     }
 }
 
 impl ViewportData {
     pub fn new(c: Pt, w: f64, h: f64) -> ViewportData {
-        ViewportData { c, w, h, scale: None, vc: Pt::ZERO, locked: false, off: false, clip: None, layers: vec![] }
+        ViewportData {
+            c,
+            w,
+            h,
+            scale: None,
+            vc: Pt::ZERO,
+            locked: false,
+            off: false,
+            clip: None,
+            layers: vec![],
+        }
     }
 
     /// The override for `layer` in this viewport, if any.
     pub fn layer_override(&self, layer: &str) -> Option<&LayerOverride> {
-        self.layers.iter().find(|o| o.layer.eq_ignore_ascii_case(layer))
+        self.layers
+            .iter()
+            .find(|o| o.layer.eq_ignore_ascii_case(layer))
     }
 
     /// Whether `layer` is frozen in this viewport.
@@ -273,10 +304,17 @@ impl ViewportData {
 
     /// Change the override for `layer` (creating it when missing); an override that no longer changes anything is dropped.
     pub fn edit_override(&mut self, layer: &str, f: impl FnOnce(&mut LayerOverride)) {
-        let i = match self.layers.iter().position(|o| o.layer.eq_ignore_ascii_case(layer)) {
+        let i = match self
+            .layers
+            .iter()
+            .position(|o| o.layer.eq_ignore_ascii_case(layer))
+        {
             Some(i) => i,
             None => {
-                self.layers.push(LayerOverride { layer: layer.to_string(), ..Default::default() });
+                self.layers.push(LayerOverride {
+                    layer: layer.to_string(),
+                    ..Default::default()
+                });
                 self.layers.len() - 1
             }
         };
@@ -300,7 +338,12 @@ impl ViewportData {
     pub fn outline(&self) -> Vec<Pt> {
         match &self.clip {
             Some(p) if p.len() >= 3 => p.clone(),
-            _ => vec![pt(self.c.x - self.w / 2.0, self.c.y - self.h / 2.0), pt(self.c.x + self.w / 2.0, self.c.y - self.h / 2.0), pt(self.c.x + self.w / 2.0, self.c.y + self.h / 2.0), pt(self.c.x - self.w / 2.0, self.c.y + self.h / 2.0)],
+            _ => vec![
+                pt(self.c.x - self.w / 2.0, self.c.y - self.h / 2.0),
+                pt(self.c.x + self.w / 2.0, self.c.y - self.h / 2.0),
+                pt(self.c.x + self.w / 2.0, self.c.y + self.h / 2.0),
+                pt(self.c.x - self.w / 2.0, self.c.y + self.h / 2.0),
+            ],
         }
     }
 
@@ -337,20 +380,53 @@ impl ViewportData {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Kind {
-    Line { a: Pt, b: Pt },
-    Circle { c: Pt, r: f64 },
-    Arc { c: Pt, r: f64, a0: f64, a1: f64 },
-    Pline { v: Vec<Vertex>, #[serde(default)] closed: bool },
+    Line {
+        a: Pt,
+        b: Pt,
+    },
+    Circle {
+        c: Pt,
+        r: f64,
+    },
+    Arc {
+        c: Pt,
+        r: f64,
+        a0: f64,
+        a1: f64,
+    },
+    Pline {
+        v: Vec<Vertex>,
+        #[serde(default)]
+        closed: bool,
+    },
     Ellipse(EllipseData),
-    Spline { fit: Vec<Pt>, #[serde(default)] closed: bool },
-    Point { p: Pt },
+    Spline {
+        fit: Vec<Pt>,
+        #[serde(default)]
+        closed: bool,
+    },
+    Point {
+        p: Pt,
+    },
     Text(TextData),
     Dim(DimData),
-    Leader { pts: Vec<Pt>, #[serde(default)] s: String, #[serde(default = "d25")] h: f64 },
+    Leader {
+        pts: Vec<Pt>,
+        #[serde(default)]
+        s: String,
+        #[serde(default = "d25")]
+        h: f64,
+    },
     Hatch(HatchData),
     Insert(InsertData),
-    Xline { p: Pt, d: Pt },
-    Ray { p: Pt, d: Pt },
+    Xline {
+        p: Pt,
+        d: Pt,
+    },
+    Ray {
+        p: Pt,
+        d: Pt,
+    },
     Viewport(ViewportData),
     Table(TableData),
     Wipeout(WipeoutData),
@@ -382,7 +458,17 @@ pub struct Entity {
 
 impl Entity {
     pub fn new(kind: Kind) -> Entity {
-        Entity { id: 0, layer: String::new(), color: None, ltype: None, lw: None, lts: None, transp: None, grp: None, kind }
+        Entity {
+            id: 0,
+            layer: String::new(),
+            color: None,
+            ltype: None,
+            lw: None,
+            lts: None,
+            transp: None,
+            grp: None,
+            kind,
+        }
     }
     pub fn line(a: Pt, b: Pt) -> Entity {
         Entity::new(Kind::Line { a, b })
@@ -391,7 +477,12 @@ impl Entity {
         Entity::new(Kind::Circle { c, r })
     }
     pub fn arc(c: Pt, r: f64, a0: f64, a1: f64) -> Entity {
-        Entity::new(Kind::Arc { c, r, a0: norm_angle(a0), a1: norm_angle(a1) })
+        Entity::new(Kind::Arc {
+            c,
+            r,
+            a0: norm_angle(a0),
+            a1: norm_angle(a1),
+        })
     }
     /// Arc entity from a directed segment; negative sweeps are flipped to CCW.
     pub fn arc_seg(s: &Seg) -> Entity {
@@ -413,7 +504,13 @@ impl Entity {
         Entity::pline(pts.iter().map(|p| Vertex::from(*p)).collect(), closed)
     }
     pub fn ellipse(c: Pt, m: Pt, ratio: f64, t0: f64, t1: f64) -> Entity {
-        Entity::new(Kind::Ellipse(EllipseData { c, m, ratio, t0, t1 }))
+        Entity::new(Kind::Ellipse(EllipseData {
+            c,
+            m,
+            ratio,
+            t0,
+            t1,
+        }))
     }
     pub fn spline(fit: Vec<Pt>, closed: bool) -> Entity {
         Entity::new(Kind::Spline { fit, closed })
@@ -435,13 +532,32 @@ impl Entity {
         Entity::new(Kind::Dim(d))
     }
     pub fn leader(pts: Vec<Pt>, s: &str, h: f64) -> Entity {
-        Entity::new(Kind::Leader { pts, s: s.into(), h })
+        Entity::new(Kind::Leader {
+            pts,
+            s: s.into(),
+            h,
+        })
     }
     pub fn hatch(loops: Vec<Vec<Vertex>>, pattern: &str) -> Entity {
-        Entity::new(Kind::Hatch(HatchData { loops, pattern: pattern.into(), ps: 1.0, pa: 0.0, gradient: None }))
+        Entity::new(Kind::Hatch(HatchData {
+            loops,
+            pattern: pattern.into(),
+            ps: 1.0,
+            pa: 0.0,
+            gradient: None,
+        }))
     }
     pub fn insert(name: &str, p: Pt) -> Entity {
-        Entity::new(Kind::Insert(InsertData { name: name.into(), p, sx: 1.0, sy: 1.0, rot: 0.0, attribs: vec![], clip: vec![], clip_off: false }))
+        Entity::new(Kind::Insert(InsertData {
+            name: name.into(),
+            p,
+            sx: 1.0,
+            sy: 1.0,
+            rot: 0.0,
+            attribs: vec![],
+            clip: vec![],
+            clip_off: false,
+        }))
     }
     pub fn xline(p: Pt, d: Pt) -> Entity {
         Entity::new(Kind::Xline { p, d: unit(d) })
@@ -525,7 +641,15 @@ impl Entity {
     }
 
     pub fn is_curve(&self) -> bool {
-        matches!(self.kind, Kind::Line { .. } | Kind::Circle { .. } | Kind::Arc { .. } | Kind::Pline { .. } | Kind::Ellipse(_) | Kind::Spline { .. })
+        matches!(
+            self.kind,
+            Kind::Line { .. }
+                | Kind::Circle { .. }
+                | Kind::Arc { .. }
+                | Kind::Pline { .. }
+                | Kind::Ellipse(_)
+                | Kind::Spline { .. }
+        )
     }
 }
 
@@ -533,7 +657,10 @@ impl Entity {
 
 pub fn ellipse_point(e: &EllipseData, t: f64) -> Pt {
     let n = pt(-e.m.y * e.ratio, e.m.x * e.ratio);
-    pt(e.c.x + e.m.x * t.cos() + n.x * t.sin(), e.c.y + e.m.y * t.cos() + n.y * t.sin())
+    pt(
+        e.c.x + e.m.x * t.cos() + n.x * t.sin(),
+        e.c.y + e.m.y * t.cos() + n.y * t.sin(),
+    )
 }
 pub fn ellipse_sweep(e: &EllipseData) -> f64 {
     let s = sweep_ccw(e.t0, e.t1);
@@ -550,7 +677,9 @@ pub fn ellipse_is_full(e: &EllipseData) -> bool {
 pub fn ellipse_points(e: &EllipseData, n: usize) -> Vec<Pt> {
     let sw = ellipse_sweep(e);
     let steps = 8usize.max((n as f64 * sw / TAU).ceil() as usize);
-    (0..=steps).map(|i| ellipse_point(e, e.t0 + sw * i as f64 / steps as f64)).collect()
+    (0..=steps)
+        .map(|i| ellipse_point(e, e.t0 + sw * i as f64 / steps as f64))
+        .collect()
 }
 
 /// Centripetal Catmull-Rom through the fit points; returns a dense point list.
@@ -570,12 +699,21 @@ pub fn spline_points(fit: &[Pt], closed: bool, per_span: usize) -> Vec<Pt> {
     let knot = |a: Pt, b: Pt| dist(a, b).sqrt().max(1e-6);
     let mut out = vec![];
     for i in 0..count as isize {
-        let p0 = if closed { at(i - 1) } else if i == 0 { pt(2.0 * fit[0].x - fit[1].x, 2.0 * fit[0].y - fit[1].y) } else { at(i - 1) };
+        let p0 = if closed {
+            at(i - 1)
+        } else if i == 0 {
+            pt(2.0 * fit[0].x - fit[1].x, 2.0 * fit[0].y - fit[1].y)
+        } else {
+            at(i - 1)
+        };
         let (p1, p2) = (at(i), at(i + 1));
         let p3 = if closed {
             at(i + 2)
         } else if (i + 2) as usize >= n {
-            pt(2.0 * fit[n - 1].x - fit[n - 2].x, 2.0 * fit[n - 1].y - fit[n - 2].y)
+            pt(
+                2.0 * fit[n - 1].x - fit[n - 2].x,
+                2.0 * fit[n - 1].y - fit[n - 2].y,
+            )
         } else {
             at(i + 2)
         };
@@ -623,12 +761,21 @@ pub fn spline_beziers(fit: &[Pt], closed: bool) -> Vec<Bezier> {
     let knot = |a: Pt, b: Pt| dist(a, b).sqrt().max(1e-6);
     let mut out = vec![];
     for i in 0..count as isize {
-        let p0 = if closed { at(i - 1) } else if i == 0 { pt(2.0 * fit[0].x - fit[1].x, 2.0 * fit[0].y - fit[1].y) } else { at(i - 1) };
+        let p0 = if closed {
+            at(i - 1)
+        } else if i == 0 {
+            pt(2.0 * fit[0].x - fit[1].x, 2.0 * fit[0].y - fit[1].y)
+        } else {
+            at(i - 1)
+        };
         let (p1, p2) = (at(i), at(i + 1));
         let p3 = if closed {
             at(i + 2)
         } else if (i + 2) as usize >= n {
-            pt(2.0 * fit[n - 1].x - fit[n - 2].x, 2.0 * fit[n - 1].y - fit[n - 2].y)
+            pt(
+                2.0 * fit[n - 1].x - fit[n - 2].x,
+                2.0 * fit[n - 1].y - fit[n - 2].y,
+            )
         } else {
             at(i + 2)
         };
@@ -643,15 +790,30 @@ pub fn spline_beziers(fit: &[Pt], closed: bool) -> Vec<Bezier> {
             let (u, v, w) = (d(p1, p2, t2 - t1), d(p1, p3, t3 - t1), d(p2, p3, t3 - t2));
             pt(u.x - v.x + w.x, u.y - v.y + w.y)
         };
-        out.push(Bezier { p0: p1, c1: pt(p1.x + m1.x * d12 / 3.0, p1.y + m1.y * d12 / 3.0), c2: pt(p2.x - m2.x * d12 / 3.0, p2.y - m2.y * d12 / 3.0), p1: p2 });
+        out.push(Bezier {
+            p0: p1,
+            c1: pt(p1.x + m1.x * d12 / 3.0, p1.y + m1.y * d12 / 3.0),
+            c2: pt(p2.x - m2.x * d12 / 3.0, p2.y - m2.y * d12 / 3.0),
+            p1: p2,
+        });
     }
     out
 }
 
 fn lines_from_pts(pts: &[Pt], closed: bool) -> Vec<Seg> {
-    let mut out: Vec<Seg> = (0..pts.len().saturating_sub(1)).map(|i| Seg::L { a: pts[i], b: pts[i + 1], approx: true }).collect();
+    let mut out: Vec<Seg> = (0..pts.len().saturating_sub(1))
+        .map(|i| Seg::L {
+            a: pts[i],
+            b: pts[i + 1],
+            approx: true,
+        })
+        .collect();
     if closed && pts.len() > 2 {
-        out.push(Seg::L { a: pts[pts.len() - 1], b: pts[0], approx: true });
+        out.push(Seg::L {
+            a: pts[pts.len() - 1],
+            b: pts[0],
+            approx: true,
+        });
     }
     out
 }
@@ -659,7 +821,13 @@ fn lines_from_pts(pts: &[Pt], closed: bool) -> Vec<Seg> {
 // ---------------------------------------------------------------- block references
 
 pub fn insert_matrix(e: &InsertData, base: Pt) -> Mat {
-    mat::mul(&mat::mul(&mat::translate(e.p.x, e.p.y), &mat::rotate(e.rot, Pt::ZERO)), &mat::mul(&mat::scale(e.sx, e.sy, Pt::ZERO), &mat::translate(-base.x, -base.y)))
+    mat::mul(
+        &mat::mul(&mat::translate(e.p.x, e.p.y), &mat::rotate(e.rot, Pt::ZERO)),
+        &mat::mul(
+            &mat::scale(e.sx, e.sy, Pt::ZERO),
+            &mat::translate(-base.x, -base.y),
+        ),
+    )
 }
 
 fn transform_seg_general(s: &Seg, m: &Mat) -> Option<Seg> {
@@ -680,7 +848,10 @@ fn transform_segs(segs: &[Seg], m: &Mat) -> Vec<Seg> {
                     Seg::A { r, .. } => *r,
                     _ => 1.0,
                 };
-                let pts: Vec<Pt> = tess_seg(s, 0.01 * 1f64.max(r * 0.01)).into_iter().map(|p| mat::apply(m, p)).collect();
+                let pts: Vec<Pt> = tess_seg(s, 0.01 * 1f64.max(r * 0.01))
+                    .into_iter()
+                    .map(|p| mat::apply(m, p))
+                    .collect();
                 out.extend(lines_from_pts(&pts, false));
             }
         }
@@ -713,7 +884,13 @@ fn segs_of_depth(e: &Entity, doc: &Drawing, depth: usize) -> Rc<Vec<Seg>> {
 fn compute_segs(e: &Entity, doc: &Drawing, depth: usize) -> Vec<Seg> {
     match &e.kind {
         Kind::Line { a, b } => vec![Seg::line(*a, *b)],
-        Kind::Circle { c, r } => vec![Seg::A { c: *c, r: *r, a0: 0.0, sw: TAU, full: true }],
+        Kind::Circle { c, r } => vec![Seg::A {
+            c: *c,
+            r: *r,
+            a0: 0.0,
+            sw: TAU,
+            full: true,
+        }],
         Kind::Arc { c, r, a0, a1 } => {
             let sw = sweep_ccw(*a0, *a1);
             vec![Seg::arc(*c, *r, *a0, if sw < 1e-12 { TAU } else { sw })]
@@ -730,23 +907,41 @@ fn compute_segs(e: &Entity, doc: &Drawing, depth: usize) -> Vec<Seg> {
                 _ => return vec![],
             };
             let m = insert_matrix(ins, def.base);
-            def.entities.iter().flat_map(|be| transform_segs(&segs_of_depth(be, doc, depth + 1), &m)).collect()
+            def.entities
+                .iter()
+                .flat_map(|be| transform_segs(&segs_of_depth(be, doc, depth + 1), &m))
+                .collect()
         }
         Kind::Xline { p, d } => vec![Seg::line(*p + *d * -1e6, *p + *d * 1e6)],
         Kind::Ray { p, d } => vec![Seg::line(*p, *p + *d * 1e6)],
         Kind::Viewport(v) => {
             let (c, w, h) = (v.c, v.w, v.h);
             vec![
-                Seg::line(pt(c.x - w / 2.0, c.y - h / 2.0), pt(c.x + w / 2.0, c.y - h / 2.0)),
-                Seg::line(pt(c.x + w / 2.0, c.y - h / 2.0), pt(c.x + w / 2.0, c.y + h / 2.0)),
-                Seg::line(pt(c.x + w / 2.0, c.y + h / 2.0), pt(c.x - w / 2.0, c.y + h / 2.0)),
-                Seg::line(pt(c.x - w / 2.0, c.y + h / 2.0), pt(c.x - w / 2.0, c.y - h / 2.0)),
+                Seg::line(
+                    pt(c.x - w / 2.0, c.y - h / 2.0),
+                    pt(c.x + w / 2.0, c.y - h / 2.0),
+                ),
+                Seg::line(
+                    pt(c.x + w / 2.0, c.y - h / 2.0),
+                    pt(c.x + w / 2.0, c.y + h / 2.0),
+                ),
+                Seg::line(
+                    pt(c.x + w / 2.0, c.y + h / 2.0),
+                    pt(c.x - w / 2.0, c.y + h / 2.0),
+                ),
+                Seg::line(
+                    pt(c.x - w / 2.0, c.y + h / 2.0),
+                    pt(c.x - w / 2.0, c.y - h / 2.0),
+                ),
             ]
         }
         Kind::Table(t) => table_geometry(t).0,
         Kind::Wipeout(w) => {
             let n = w.pts.len();
-            (0..n).filter(|_| n >= 2).map(|i| Seg::line(w.pts[i], w.pts[(i + 1) % n])).collect()
+            (0..n)
+                .filter(|_| n >= 2)
+                .map(|i| Seg::line(w.pts[i], w.pts[(i + 1) % n]))
+                .collect()
         }
         Kind::Region(r) => r.loops.iter().flat_map(|l| pline_segs(l, true)).collect(),
         Kind::Image(im) => {
@@ -773,8 +968,16 @@ pub fn table_geometry(t: &TableData) -> (Vec<Seg>, Vec<TextData>) {
         let (dx, dy) = (x, -y);
         pt(t.p.x + dx * cs - dy * sn, t.p.y + dx * sn + dy * cs)
     };
-    let hidden_h = |i: usize, c: usize| t.merges.iter().any(|m| m[0] < i && i <= m[2] && m[1] <= c && c <= m[3]);
-    let hidden_v = |j: usize, r: usize| t.merges.iter().any(|m| m[1] < j && j <= m[3] && m[0] <= r && r <= m[2]);
+    let hidden_h = |i: usize, c: usize| {
+        t.merges
+            .iter()
+            .any(|m| m[0] < i && i <= m[2] && m[1] <= c && c <= m[3])
+    };
+    let hidden_v = |j: usize, r: usize| {
+        t.merges
+            .iter()
+            .any(|m| m[1] < j && j <= m[3] && m[0] <= r && r <= m[2])
+    };
     let mut segs = vec![];
     for i in 0..=nr {
         let mut start: Option<usize> = None;
@@ -807,14 +1010,26 @@ pub fn table_geometry(t: &TableData) -> (Vec<Seg>, Vec<TextData>) {
     let mut texts = vec![];
     for r in 0..nr {
         for c in 0..nc {
-            let s = t.cells.get(r).and_then(|row| row.get(c)).map(String::as_str).unwrap_or("");
+            let s = t
+                .cells
+                .get(r)
+                .and_then(|row| row.get(c))
+                .map(String::as_str)
+                .unwrap_or("");
             if s.is_empty() {
                 continue;
             }
-            if t.merges.iter().any(|m| (m[0] != r || m[1] != c) && m[0] <= r && r <= m[2] && m[1] <= c && c <= m[3]) {
+            if t.merges.iter().any(|m| {
+                (m[0] != r || m[1] != c) && m[0] <= r && r <= m[2] && m[1] <= c && c <= m[3]
+            }) {
                 continue;
             }
-            let (r1, c1) = t.merges.iter().find(|m| m[0] == r && m[1] == c).map(|m| (m[2], m[3])).unwrap_or((r, c));
+            let (r1, c1) = t
+                .merges
+                .iter()
+                .find(|m| m[0] == r && m[1] == c)
+                .map(|m| (m[2], m[3]))
+                .unwrap_or((r, c));
             let ctr = w((xs[c] + xs[c1 + 1]) / 2.0, (ys[r] + ys[r1 + 1]) / 2.0);
             let h = if t.title && r == 0 { t.h * 1.25 } else { t.h };
             let mut td = TextData::new(ctr, h, s).with_just(HJust::Center, VJust::Middle);
@@ -857,7 +1072,12 @@ fn texts_of_depth(e: &Entity, doc: &Drawing, depth: usize) -> Vec<TextData> {
                     t
                 })
                 .collect();
-            out.extend(ins.attribs.iter().filter(|a| !a.hidden && !a.t.s.is_empty()).map(|a| a.t.clone()));
+            out.extend(
+                ins.attribs
+                    .iter()
+                    .filter(|a| !a.hidden && !a.t.s.is_empty())
+                    .map(|a| a.t.clone()),
+            );
             out
         }
         _ => vec![],
@@ -866,9 +1086,21 @@ fn texts_of_depth(e: &Entity, doc: &Drawing, depth: usize) -> Vec<TextData> {
 
 pub fn leader_text(pts: &[Pt], s: &str, h: f64) -> TextData {
     let last = *pts.last().unwrap_or(&Pt::ZERO);
-    let prev = if pts.len() >= 2 { pts[pts.len() - 2] } else { last };
+    let prev = if pts.len() >= 2 {
+        pts[pts.len() - 2]
+    } else {
+        last
+    };
     let right = last.x >= prev.x;
-    TextData::new(pt(last.x + if right { 1.0 } else { -1.0 } * h * 0.4, last.y), h, s).with_just(if right { HJust::Left } else { HJust::Right }, VJust::Middle)
+    TextData::new(
+        pt(last.x + if right { 1.0 } else { -1.0 } * h * 0.4, last.y),
+        h,
+        s,
+    )
+    .with_just(
+        if right { HJust::Left } else { HJust::Right },
+        VJust::Middle,
+    )
 }
 
 // ---------------------------------------------------------------- bounds
@@ -954,7 +1186,10 @@ pub fn pick_distance(e: &Entity, p: Pt, doc: &Drawing) -> f64 {
     }
     if let Kind::Pline { v, closed } = &e.kind {
         // a wide polyline is picked anywhere on its drawn area
-        if pline_outline(v, *closed).iter().any(|poly| point_in_polygon(p, poly)) {
+        if pline_outline(v, *closed)
+            .iter()
+            .any(|poly| point_in_polygon(p, poly))
+        {
             return 0.0;
         }
     }
@@ -963,7 +1198,11 @@ pub fn pick_distance(e: &Entity, p: Pt, doc: &Drawing) -> f64 {
 
 fn hatch_pick_distance(e: &Entity, h: &HatchData, p: Pt, doc: &Drawing) -> f64 {
     if h.pattern == "SOLID" {
-        return if point_in_hatch(h, p) { 0.0 } else { f64::INFINITY };
+        return if point_in_hatch(h, p) {
+            0.0
+        } else {
+            f64::INFINITY
+        };
     }
     let mut best = f64::INFINITY;
     if let Some(lines) = hatch_segments(e, doc) {
@@ -995,10 +1234,22 @@ pub fn hatch_segments(e: &Entity, doc: &Drawing) -> Option<Rc<Vec<[f64; 4]>>> {
             return v;
         }
     }
-    let diag = bounds_of(e, doc).map(|b| (b.max_x - b.min_x).hypot(b.max_y - b.min_y)).unwrap_or(1.0);
+    let diag = bounds_of(e, doc)
+        .map(|b| (b.max_x - b.min_x).hypot(b.max_y - b.min_y))
+        .unwrap_or(1.0);
     let tol = 0.01f64.max(0.002 * diag);
-    let loops: Vec<Vec<Pt>> = h.loops.iter().map(|l| tess_segs(&pline_segs(l, true), tol)).collect();
-    let r = hatch_lines(&loops, &h.pattern, if h.ps == 0.0 { 1.0 } else { h.ps }, deg(h.pa)).map(Rc::new);
+    let loops: Vec<Vec<Pt>> = h
+        .loops
+        .iter()
+        .map(|l| tess_segs(&pline_segs(l, true), tol))
+        .collect();
+    let r = hatch_lines(
+        &loops,
+        &h.pattern,
+        if h.ps == 0.0 { 1.0 } else { h.ps },
+        deg(h.pa),
+    )
+    .map(Rc::new);
     if e.id != 0 {
         doc.cache_put_hatch(e.id, r.clone());
     }
@@ -1006,7 +1257,10 @@ pub fn hatch_segments(e: &Entity, doc: &Drawing) -> Option<Rc<Vec<[f64; 4]>>> {
 }
 
 pub fn hatch_loops_tess(h: &HatchData) -> Vec<Vec<Pt>> {
-    h.loops.iter().map(|l| tess_segs(&pline_segs(l, true), 0.02)).collect()
+    h.loops
+        .iter()
+        .map(|l| tess_segs(&pline_segs(l, true), 0.02))
+        .collect()
 }
 
 // ---------------------------------------------------------------- selection by rectangle
@@ -1032,7 +1286,10 @@ pub fn crosses_rect(e: &Entity, r: &Bounds, doc: &Drawing) -> bool {
         }
     }
     if let Kind::Hatch(h) = &e.kind {
-        if h.pattern == "SOLID" && b.map(|b| b.overlaps(r)).unwrap_or(false) && point_in_hatch(h, r.center()) {
+        if h.pattern == "SOLID"
+            && b.map(|b| b.overlaps(r)).unwrap_or(false)
+            && point_in_hatch(h, r.center())
+        {
             return true;
         }
     }
@@ -1067,7 +1324,11 @@ pub struct Decomp {
 
 /// Decompose a similarity matrix into uniform scale, rotation and reflection flag.
 pub fn decompose(m: &Mat) -> Decomp {
-    Decomp { k: mat::scale_factor(m), theta: mat::angle(m), flip: mat::det(m) < 0.0 }
+    Decomp {
+        k: mat::scale_factor(m),
+        theta: mat::angle(m),
+        flip: mat::det(m) < 0.0,
+    }
 }
 
 fn flip_verts(v: &mut [Vertex], m: &Mat, flip: bool) {
@@ -1098,7 +1359,14 @@ pub fn transform_entity(e: &mut Entity, m: &Mat) {
         Kind::Arc { c, r, a0, a1 } => {
             let sw = sweep_ccw(*a0, *a1);
             let src = Seg::arc(*c, *r, *a0, if sw == 0.0 { TAU } else { sw });
-            if let Seg::A { c: nc, r: nr, a0: na0, sw: nsw, .. } = transform_seg(&src, m) {
+            if let Seg::A {
+                c: nc,
+                r: nr,
+                a0: na0,
+                sw: nsw,
+                ..
+            } = transform_seg(&src, m)
+            {
                 let start = if nsw < 0.0 { na0 + nsw } else { na0 };
                 let sweep = nsw.abs();
                 *c = nc;
@@ -1303,7 +1571,13 @@ pub fn stretch_entity(e: &mut Entity, win: &Bounds, d: Pt, doc: &Drawing) -> boo
             let ns = if si { s + d } else { s };
             let ne = if ei { en + d } else { en };
             match arc_through(ns, mid_pt + d * 0.5, ne) {
-                Some(Seg::A { c: nc, r: nr, a0: na0, sw: nsw, .. }) => {
+                Some(Seg::A {
+                    c: nc,
+                    r: nr,
+                    a0: na0,
+                    sw: nsw,
+                    ..
+                }) => {
                     *c = nc;
                     *r = nr;
                     *a0 = norm_angle(if nsw >= 0.0 { na0 } else { na0 + nsw });
@@ -1329,7 +1603,10 @@ pub fn stretch_entity(e: &mut Entity, win: &Bounds, d: Pt, doc: &Drawing) -> boo
                 false
             }
         }
-        Kind::Point { p } | Kind::Text(TextData { p, .. }) | Kind::Xline { p, .. } | Kind::Ray { p, .. } => {
+        Kind::Point { p }
+        | Kind::Text(TextData { p, .. })
+        | Kind::Xline { p, .. }
+        | Kind::Ray { p, .. } => {
             if inside(*p) {
                 mv(p);
                 true
@@ -1438,42 +1715,92 @@ pub struct Grip {
 }
 
 fn grip(id: &str, pt: Pt, kind: GripKind) -> Grip {
-    Grip { id: id.to_string(), pt, kind }
+    Grip {
+        id: id.to_string(),
+        pt,
+        kind,
+    }
 }
 
 /// Grip descriptors for an entity: stretch points, move handles and radius handles.
 pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
     use GripKind::*;
     match &e.kind {
-        Kind::Line { a, b } => vec![grip("a", *a, Stretch), grip("m", mid(*a, *b), Move), grip("b", *b, Stretch)],
+        Kind::Line { a, b } => vec![
+            grip("a", *a, Stretch),
+            grip("m", mid(*a, *b), Move),
+            grip("b", *b, Stretch),
+        ],
         Kind::Circle { c, r } => {
             let mut v = vec![grip("c", *c, Move)];
             for i in 0..4 {
-                v.push(grip(&format!("q{}", i), polar(*c, i as f64 * PI / 2.0, *r), Radius));
+                v.push(grip(
+                    &format!("q{}", i),
+                    polar(*c, i as f64 * PI / 2.0, *r),
+                    Radius,
+                ));
             }
             v
         }
         Kind::Arc { c, r, a0, a1 } => {
-            let sw = { let s = sweep_ccw(*a0, *a1); if s == 0.0 { TAU } else { s } };
-            vec![grip("s", polar(*c, *a0, *r), Stretch), grip("m", polar(*c, *a0 + sw / 2.0, *r), Stretch), grip("e", polar(*c, *a0 + sw, *r), Stretch), grip("c", *c, Move)]
+            let sw = {
+                let s = sweep_ccw(*a0, *a1);
+                if s == 0.0 {
+                    TAU
+                } else {
+                    s
+                }
+            };
+            vec![
+                grip("s", polar(*c, *a0, *r), Stretch),
+                grip("m", polar(*c, *a0 + sw / 2.0, *r), Stretch),
+                grip("e", polar(*c, *a0 + sw, *r), Stretch),
+                grip("c", *c, Move),
+            ]
         }
         Kind::Pline { v, closed } => {
-            let mut out: Vec<Grip> = v.iter().enumerate().map(|(i, q)| grip(&format!("v{}", i), q.pt(), Stretch)).collect();
+            let mut out: Vec<Grip> = v
+                .iter()
+                .enumerate()
+                .map(|(i, q)| grip(&format!("v{}", i), q.pt(), Stretch))
+                .collect();
             for (i, s) in pline_segs(v, *closed).iter().enumerate() {
-                out.push(grip(&format!("m{}", i), s.at(0.5), if s.is_line() { Move } else { Stretch }));
+                out.push(grip(
+                    &format!("m{}", i),
+                    s.at(0.5),
+                    if s.is_line() { Move } else { Stretch },
+                ));
             }
             out
         }
         Kind::Ellipse(el) => {
             let n = pt(-el.m.y * el.ratio, el.m.x * el.ratio);
-            vec![grip("c", el.c, Move), grip("a0", el.c + el.m, Stretch), grip("a1", el.c - el.m, Stretch), grip("b0", el.c + n, Stretch), grip("b1", el.c - n, Stretch)]
+            vec![
+                grip("c", el.c, Move),
+                grip("a0", el.c + el.m, Stretch),
+                grip("a1", el.c - el.m, Stretch),
+                grip("b0", el.c + n, Stretch),
+                grip("b1", el.c - n, Stretch),
+            ]
         }
-        Kind::Spline { fit, .. } => fit.iter().enumerate().map(|(i, p)| grip(&format!("f{}", i), *p, Stretch)).collect(),
-        Kind::Point { p } | Kind::Xline { p, .. } | Kind::Ray { p, .. } => vec![grip("p", *p, Move)],
+        Kind::Spline { fit, .. } => fit
+            .iter()
+            .enumerate()
+            .map(|(i, p)| grip(&format!("f{}", i), *p, Stretch))
+            .collect(),
+        Kind::Point { p } | Kind::Xline { p, .. } | Kind::Ray { p, .. } => {
+            vec![grip("p", *p, Move)]
+        }
         Kind::Text(t) => vec![grip("p", t.p, Move)],
         Kind::Insert(i) => vec![grip("p", i.p, Move)],
-        Kind::Leader { pts, .. } => pts.iter().enumerate().map(|(i, p)| grip(&format!("l{}", i), *p, Stretch)).collect(),
-        Kind::Hatch(_) => bounds_of(e, doc).map(|b| vec![grip("c", b.center(), Move)]).unwrap_or_default(),
+        Kind::Leader { pts, .. } => pts
+            .iter()
+            .enumerate()
+            .map(|(i, p)| grip(&format!("l{}", i), *p, Stretch))
+            .collect(),
+        Kind::Hatch(_) => bounds_of(e, doc)
+            .map(|b| vec![grip("c", b.center(), Move)])
+            .unwrap_or_default(),
         Kind::Dim(d) => {
             let mut out = vec![];
             let geo = dim_geometry(d, &doc.settings);
@@ -1503,23 +1830,45 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
         }
         Kind::Table(t) => vec![grip("p", t.p, Move)],
         Kind::Wipeout(w) => {
-            let mut out: Vec<Grip> = w.pts.iter().enumerate().map(|(i, q)| grip(&format!("v{}", i), *q, Stretch)).collect();
+            let mut out: Vec<Grip> = w
+                .pts
+                .iter()
+                .enumerate()
+                .map(|(i, q)| grip(&format!("v{}", i), *q, Stretch))
+                .collect();
             if let Some(b) = bounds_of(e, doc) {
                 out.push(grip("c", b.center(), Move));
             }
             out
         }
-        Kind::Region(_) => bounds_of(e, doc).map(|b| vec![grip("c", b.center(), Move)]).unwrap_or_default(),
+        Kind::Region(_) => bounds_of(e, doc)
+            .map(|b| vec![grip("c", b.center(), Move)])
+            .unwrap_or_default(),
         Kind::Image(im) => {
             let cs = im.corners();
-            let mut out = vec![grip("c", pt((cs[0].x + cs[2].x) / 2.0, (cs[0].y + cs[2].y) / 2.0), Move)];
-            out.extend(cs.iter().enumerate().map(|(i, q)| grip(&format!("k{i}"), *q, Stretch)));
+            let mut out = vec![grip(
+                "c",
+                pt((cs[0].x + cs[2].x) / 2.0, (cs[0].y + cs[2].y) / 2.0),
+                Move,
+            )];
+            out.extend(
+                cs.iter()
+                    .enumerate()
+                    .map(|(i, q)| grip(&format!("k{i}"), *q, Stretch)),
+            );
             out
         }
         Kind::Viewport(v) => {
             let mut out = vec![grip("c", v.c, Move)];
-            for (i, (sx, sy)) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)].iter().enumerate() {
-                out.push(grip(&format!("k{}", i), pt(v.c.x + sx * v.w / 2.0, v.c.y + sy * v.h / 2.0), Stretch));
+            for (i, (sx, sy)) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+                .iter()
+                .enumerate()
+            {
+                out.push(grip(
+                    &format!("k{}", i),
+                    pt(v.c.x + sx * v.w / 2.0, v.c.y + sy * v.h / 2.0),
+                    Stretch,
+                ));
             }
             out
         }
@@ -1548,8 +1897,23 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
             }
         }
         (Kind::Circle { c, r }, _) => *r = dist(*c, to).max(1e-9),
-        (Kind::Arc { c, r, a0, a1 }, Kind::Arc { c: oc, r: or, a0: oa0, a1: oa1 }) => {
-            let sw = { let s = sweep_ccw(*oa0, *oa1); if s == 0.0 { TAU } else { s } };
+        (
+            Kind::Arc { c, r, a0, a1 },
+            Kind::Arc {
+                c: oc,
+                r: or,
+                a0: oa0,
+                a1: oa1,
+            },
+        ) => {
+            let sw = {
+                let s = sweep_ccw(*oa0, *oa1);
+                if s == 0.0 {
+                    TAU
+                } else {
+                    s
+                }
+            };
             let s = polar(*oc, *oa0, *or);
             let m = polar(*oc, *oa0 + sw / 2.0, *or);
             let en = polar(*oc, *oa0 + sw, *or);
@@ -1558,7 +1922,14 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
                 "e" => [s, m, to],
                 _ => [s, to, en],
             };
-            if let Some(Seg::A { c: nc, r: nr, a0: na0, sw: nsw, .. }) = arc_through(tri[0], tri[1], tri[2]) {
+            if let Some(Seg::A {
+                c: nc,
+                r: nr,
+                a0: na0,
+                sw: nsw,
+                ..
+            }) = arc_through(tri[0], tri[1], tri[2])
+            {
                 *c = nc;
                 *r = nr;
                 *a0 = norm_angle(if nsw >= 0.0 { na0 } else { na0 + nsw });
@@ -1792,7 +2163,10 @@ fn seg_snaps(s: &Seg, push: &mut impl FnMut(Pt, SnapType)) {
 fn dedupe_snaps(list: Vec<SnapPt>) -> Vec<SnapPt> {
     let mut out: Vec<SnapPt> = vec![];
     for s in list {
-        if !out.iter().any(|o| o.kind == s.kind && same_pt(o.pt, s.pt, 1e-9)) {
+        if !out
+            .iter()
+            .any(|o| o.kind == s.kind && same_pt(o.pt, s.pt, 1e-9))
+        {
             out.push(s);
         }
     }
@@ -1812,7 +2186,12 @@ fn inherit(src: &Entity, mut o: Entity) -> Entity {
 /// Entities replacing `e` when exploded, or `None` if the entity cannot be exploded.
 pub fn explode_entity(e: &Entity, doc: &Drawing) -> Option<Vec<Entity>> {
     match &e.kind {
-        Kind::Pline { v, closed } => Some(pline_segs(v, *closed).iter().map(|s| inherit(e, Entity::arc_seg(s))).collect()),
+        Kind::Pline { v, closed } => Some(
+            pline_segs(v, *closed)
+                .iter()
+                .map(|s| inherit(e, Entity::arc_seg(s)))
+                .collect(),
+        ),
         Kind::Insert(ins) => {
             let def = match doc.blocks.get(&ins.name) {
                 Some(d) => d,
@@ -1846,7 +2225,13 @@ pub fn explode_entity(e: &Entity, doc: &Drawing) -> Option<Vec<Entity>> {
             }
             for a in &geo.arrows {
                 if let Some(poly) = arrow_polygon(a) {
-                    out.push(inherit(e, Entity::hatch(vec![poly.iter().map(|p| Vertex::from(*p)).collect()], "SOLID")));
+                    out.push(inherit(
+                        e,
+                        Entity::hatch(
+                            vec![poly.iter().map(|p| Vertex::from(*p)).collect()],
+                            "SOLID",
+                        ),
+                    ));
                 }
             }
             let t = &geo.text;
@@ -1922,7 +2307,13 @@ pub fn circle_to_ellipse(c: &Entity, m: &Mat) -> Entity {
             t1 = n1;
         }
     }
-    let mut out = Entity::ellipse(mat::apply(m, cc), maj, ratio, norm_angle(t0), if arc.is_some() { norm_angle(t1) } else { TAU });
+    let mut out = Entity::ellipse(
+        mat::apply(m, cc),
+        maj,
+        ratio,
+        norm_angle(t0),
+        if arc.is_some() { norm_angle(t1) } else { TAU },
+    );
     out.layer = c.layer.clone();
     out.color = c.color;
     out.ltype = c.ltype.clone();
@@ -1960,7 +2351,11 @@ mod tests {
         let back = serde_json::to_string(&ents).unwrap();
         let again: Vec<Entity> = serde_json::from_str(&back).unwrap();
         assert_eq!(ents, again);
-        assert!(back.contains("\"type\":\"pline\"") && back.contains("\"lw\":70") && !back.contains("null"));
+        assert!(
+            back.contains("\"type\":\"pline\"")
+                && back.contains("\"lw\":70")
+                && !back.contains("null")
+        );
     }
 
     #[test]
@@ -1974,11 +2369,23 @@ mod tests {
         assert_relative_eq!(b.max_y, 8.0, epsilon = 1e-9);
         let sn = snap_points_of(&c, &d);
         assert_eq!(sn.iter().filter(|p| p.kind == SnapType::Qua).count(), 4);
-        assert!(sn.iter().any(|p| p.kind == SnapType::Cen && same(p.pt, pt(5.0, 5.0))));
-        let pl = Entity::pline(vec![Vertex::new(0.0, 0.0, 0.0), Vertex::new(10.0, 0.0, 1.0), Vertex::new(10.0, 10.0, 0.0)], false);
+        assert!(sn
+            .iter()
+            .any(|p| p.kind == SnapType::Cen && same(p.pt, pt(5.0, 5.0))));
+        let pl = Entity::pline(
+            vec![
+                Vertex::new(0.0, 0.0, 0.0),
+                Vertex::new(10.0, 0.0, 1.0),
+                Vertex::new(10.0, 10.0, 0.0),
+            ],
+            false,
+        );
         assert_eq!(segs_of(&pl, &d).len(), 2);
         let sn = snap_points_of(&pl, &d);
-        assert!(sn.iter().filter(|p| p.kind == SnapType::Mid).count() == 2 && sn.iter().any(|p| p.kind == SnapType::Cen));
+        assert!(
+            sn.iter().filter(|p| p.kind == SnapType::Mid).count() == 2
+                && sn.iter().any(|p| p.kind == SnapType::Cen)
+        );
         let el = Entity::ellipse(Pt::ZERO, pt(10.0, 0.0), 0.5, 0.0, TAU);
         let b = bounds_of(&el, &d).unwrap();
         assert!((b.max_x - 10.0).abs() < 0.05 && (b.max_y - 5.0).abs() < 0.05);
@@ -1995,10 +2402,25 @@ mod tests {
         let half = Bounds::new(4.0, -1.0, 6.0, 1.0);
         assert!(!in_window(&l, &half, &d) && crosses_rect(&l, &half, &d));
         let t = Entity::text(pt(0.0, 0.0), 2.0, "HELLO");
-        assert_eq!(pick_distance(&t, pt(0.5, 0.5), &d), 0.0, "inside the text box");
-        let solid = Entity::hatch(vec![vec![Vertex::new(0.0, 0.0, 0.0), Vertex::new(10.0, 0.0, 0.0), Vertex::new(10.0, 10.0, 0.0), Vertex::new(0.0, 10.0, 0.0)]], "SOLID");
+        assert_eq!(
+            pick_distance(&t, pt(0.5, 0.5), &d),
+            0.0,
+            "inside the text box"
+        );
+        let solid = Entity::hatch(
+            vec![vec![
+                Vertex::new(0.0, 0.0, 0.0),
+                Vertex::new(10.0, 0.0, 0.0),
+                Vertex::new(10.0, 10.0, 0.0),
+                Vertex::new(0.0, 10.0, 0.0),
+            ]],
+            "SOLID",
+        );
         assert_eq!(pick_distance(&solid, pt(5.0, 5.0), &d), 0.0);
-        assert!(crosses_rect(&solid, &Bounds::new(4.0, 4.0, 6.0, 6.0), &d), "a crossing window wholly inside a solid hatch selects it");
+        assert!(
+            crosses_rect(&solid, &Bounds::new(4.0, 4.0, 6.0, 6.0), &d),
+            "a crossing window wholly inside a solid hatch selects it"
+        );
     }
 
     #[test]
@@ -2011,10 +2433,16 @@ mod tests {
         let mut a = Entity::arc(Pt::ZERO, 2.0, 0.0, PI / 2.0);
         transform_entity(&mut a, &mat::mirror(Pt::ZERO, pt(1.0, 0.0)));
         if let Kind::Arc { a0, a1, .. } = a.kind {
-            assert_relative_eq!(a0, 3.0 * PI / 2.0, epsilon = 1e-12);       // mirrored arcs stay CCW: now from -90° to 0°
-            assert!(a1.abs() < 1e-9 || (a1 - TAU).abs() < 1e-9, "end angle wraps to 0, got {a1}");
+            assert_relative_eq!(a0, 3.0 * PI / 2.0, epsilon = 1e-12); // mirrored arcs stay CCW: now from -90° to 0°
+            assert!(
+                a1.abs() < 1e-9 || (a1 - TAU).abs() < 1e-9,
+                "end angle wraps to 0, got {a1}"
+            );
         }
-        let mut p = Entity::pline(vec![Vertex::new(0.0, 0.0, 0.5), Vertex::new(4.0, 0.0, 0.0)], false);
+        let mut p = Entity::pline(
+            vec![Vertex::new(0.0, 0.0, 0.5), Vertex::new(4.0, 0.0, 0.0)],
+            false,
+        );
         transform_entity(&mut p, &mat::mirror(Pt::ZERO, pt(1.0, 0.0)));
         if let Kind::Pline { v, .. } = &p.kind {
             assert_relative_eq!(v[0].b, -0.5, epsilon = 1e-12);
@@ -2059,7 +2487,15 @@ mod tests {
     #[test]
     fn explode_and_circle_to_ellipse() {
         let mut d = doc();
-        let pl = Entity::pline(vec![Vertex::new(0.0, 0.0, 0.0), Vertex::new(10.0, 0.0, 1.0), Vertex::new(10.0, 10.0, 0.0)], true).on_layer("A");
+        let pl = Entity::pline(
+            vec![
+                Vertex::new(0.0, 0.0, 0.0),
+                Vertex::new(10.0, 0.0, 1.0),
+                Vertex::new(10.0, 10.0, 0.0),
+            ],
+            true,
+        )
+        .on_layer("A");
         let parts = explode_entity(&pl, &d).unwrap();
         assert_eq!(parts.len(), 3);
         assert!(matches!(parts[1].kind, Kind::Arc { .. }) && parts[1].layer == "A");
@@ -2085,7 +2521,13 @@ mod tests {
 
     #[test]
     fn spline_bezier_matches_dense_curve() {
-        let fit = [pt(0.0, 0.0), pt(10.0, 8.0), pt(25.0, 3.0), pt(40.0, 15.0), pt(50.0, 0.0)];
+        let fit = [
+            pt(0.0, 0.0),
+            pt(10.0, 8.0),
+            pt(25.0, 3.0),
+            pt(40.0, 15.0),
+            pt(50.0, 0.0),
+        ];
         for closed in [false, true] {
             let dense = spline_points(&fit, closed, 800);
             let mut worst = 0.0f64;
@@ -2093,8 +2535,14 @@ mod tests {
                 for k in 0..=10 {
                     let t = k as f64 / 10.0;
                     let u = 1.0 - t;
-                    let p = bz.p0 * (u * u * u) + bz.c1 * (3.0 * u * u * t) + bz.c2 * (3.0 * u * t * t) + bz.p1 * (t * t * t);
-                    let best = dense.windows(2).map(|w| Seg::line(w[0], w[1]).nearest(p).2).fold(f64::INFINITY, f64::min);
+                    let p = bz.p0 * (u * u * u)
+                        + bz.c1 * (3.0 * u * u * t)
+                        + bz.c2 * (3.0 * u * t * t)
+                        + bz.p1 * (t * t * t);
+                    let best = dense
+                        .windows(2)
+                        .map(|w| Seg::line(w[0], w[1]).nearest(p).2)
+                        .fold(f64::INFINITY, f64::min);
                     worst = worst.max(best);
                 }
             }

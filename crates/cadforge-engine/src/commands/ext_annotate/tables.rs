@@ -38,7 +38,10 @@ fn overlaps(m: &[usize; 4], r: &[usize; 4]) -> bool {
 
 /// The top-left cell of the merged range containing the cell (or the cell itself).
 fn anchor(t: &TableData, r: usize, c: usize) -> (usize, usize) {
-    t.merges.iter().find(|m| overlaps(m, &[r, c, r, c])).map_or((r, c), |m| (m[0], m[1]))
+    t.merges
+        .iter()
+        .find(|m| overlaps(m, &[r, c, r, c]))
+        .map_or((r, c), |m| (m[0], m[1]))
 }
 
 /// Cell of the table under a world point; merged cells resolve to their top-left cell.
@@ -59,16 +62,29 @@ fn cell_at(t: &TableData, q: Pt) -> Option<(usize, usize)> {
 
 /// World centre of a cell (the whole merged range for a merged cell).
 fn cell_center(t: &TableData, r: usize, c: usize) -> Pt {
-    let [r0, c0, r1, c1] = t.merges.iter().find(|m| m[0] == r && m[1] == c).copied().unwrap_or([r, c, r, c]);
+    let [r0, c0, r1, c1] = t
+        .merges
+        .iter()
+        .find(|m| m[0] == r && m[1] == c)
+        .copied()
+        .unwrap_or([r, c, r, c]);
     let sum = |v: &[f64], to: usize| v.iter().take(to).sum::<f64>();
-    let (x, y) = ((sum(&t.cols, c0) + sum(&t.cols, c1 + 1)) / 2.0, (sum(&t.rows, r0) + sum(&t.rows, r1 + 1)) / 2.0);
+    let (x, y) = (
+        (sum(&t.cols, c0) + sum(&t.cols, c1 + 1)) / 2.0,
+        (sum(&t.rows, r0) + sum(&t.rows, r1 + 1)) / 2.0,
+    );
     let (cs, sn) = (t.rot.cos(), t.rot.sin());
     pt(t.p.x + x * cs + y * sn, t.p.y + x * sn - y * cs)
 }
 
 fn insert_row(t: &mut TableData, at: usize) {
     normalize(t);
-    let h = t.rows.get(at).or(t.rows.last()).copied().unwrap_or(t.h * 2.0);
+    let h = t
+        .rows
+        .get(at)
+        .or(t.rows.last())
+        .copied()
+        .unwrap_or(t.h * 2.0);
     t.rows.insert(at, h);
     t.cells.insert(at, vec![String::new(); t.cols.len()]);
     for m in &mut t.merges {
@@ -83,9 +99,16 @@ fn insert_row(t: &mut TableData, at: usize) {
 
 fn insert_col(t: &mut TableData, at: usize) {
     normalize(t);
-    let w = t.cols.get(at).or(t.cols.last()).copied().unwrap_or(t.h * 8.0);
+    let w = t
+        .cols
+        .get(at)
+        .or(t.cols.last())
+        .copied()
+        .unwrap_or(t.h * 8.0);
     t.cols.insert(at, w);
-    t.cells.iter_mut().for_each(|row| row.insert(at, String::new()));
+    t.cells
+        .iter_mut()
+        .for_each(|row| row.insert(at, String::new()));
     for m in &mut t.merges {
         if at <= m[1] {
             m[1] += 1;
@@ -139,13 +162,22 @@ fn delete_col(t: &mut TableData, col: usize) -> Result<(), &'static str> {
 
 /// Merge the cells between two corner cells; ranges that partly overlap are swallowed. The texts are combined into the
 /// top-left cell.
-fn merge_cells(t: &mut TableData, a: (usize, usize), b: (usize, usize)) -> Result<(), &'static str> {
+fn merge_cells(
+    t: &mut TableData,
+    a: (usize, usize),
+    b: (usize, usize),
+) -> Result<(), &'static str> {
     normalize(t);
     let mut r = [a.0.min(b.0), a.1.min(b.1), a.0.max(b.0), a.1.max(b.1)];
     loop {
         let before = r;
         for m in t.merges.iter().filter(|m| overlaps(m, &before)) {
-            r = [r[0].min(m[0]), r[1].min(m[1]), r[2].max(m[2]), r[3].max(m[3])];
+            r = [
+                r[0].min(m[0]),
+                r[1].min(m[1]),
+                r[2].max(m[2]),
+                r[3].max(m[3]),
+            ];
         }
         if r == before {
             break;
@@ -194,21 +226,99 @@ fn hidden(t: &TableData, r: usize, c: usize) -> bool {
 async fn table(c: Ctx, _a: Args) -> CmdResult<()> {
     let style = c.doc(|d| d.settings.cur_table());
     let h = style.text_height;
-    let Some(cols) = c.number(ps("Enter number of columns").default_num(4.0).integer().min(1.0).max(100.0)).await?.value() else { return Ok(()) };
-    let Some(rows) = c.number(ps("Enter number of rows").default_num(3.0).integer().min(1.0).max(1000.0)).await?.value() else { return Ok(()) };
-    let Some(cw) = c.distance(ps("Specify column width").default_num(8.0 * h).min(0.0).nonzero()).await?.value() else { return Ok(()) };
-    let Some(rh) = c.distance(ps("Specify row height").default_num(2.0 * h).min(0.0).nonzero()).await?.value() else { return Ok(()) };
+    let Some(cols) = c
+        .number(
+            ps("Enter number of columns")
+                .default_num(4.0)
+                .integer()
+                .min(1.0)
+                .max(100.0),
+        )
+        .await?
+        .value()
+    else {
+        return Ok(());
+    };
+    let Some(rows) = c
+        .number(
+            ps("Enter number of rows")
+                .default_num(3.0)
+                .integer()
+                .min(1.0)
+                .max(1000.0),
+        )
+        .await?
+        .value()
+    else {
+        return Ok(());
+    };
+    let Some(cw) = c
+        .distance(
+            ps("Specify column width")
+                .default_num(8.0 * h)
+                .min(0.0)
+                .nonzero(),
+        )
+        .await?
+        .value()
+    else {
+        return Ok(());
+    };
+    let Some(rh) = c
+        .distance(
+            ps("Specify row height")
+                .default_num(2.0 * h)
+                .min(0.0)
+                .nonzero(),
+        )
+        .await?
+        .value()
+    else {
+        return Ok(());
+    };
     let (nc, nr) = (cols as usize, rows as usize);
-    let mut t = TableData { p: Pt::ZERO, cols: vec![cw; nc], rows: vec![rh; nr], cells: vec![vec![String::new(); nc]; nr], h, merges: vec![], style: style.name.clone(), title: false, rot: 0.0 };
+    let mut t = TableData {
+        p: Pt::ZERO,
+        cols: vec![cw; nc],
+        rows: vec![rh; nr],
+        cells: vec![vec![String::new(); nc]; nr],
+        h,
+        merges: vec![],
+        style: style.name.clone(),
+        title: false,
+        rot: 0.0,
+    };
     set_title(&mut t, style.title);
     let shape = t.clone();
-    let Some(at) = c.point(ps("Specify insertion point").preview(move |_, p| vec![pv(Entity::new(Kind::Table(TableData { p, ..shape.clone() })))])).await?.pt() else { return Ok(()) };
+    let Some(at) = c
+        .point(ps("Specify insertion point").preview(move |_, p| {
+            vec![pv(Entity::new(Kind::Table(TableData {
+                p,
+                ..shape.clone()
+            })))]
+        }))
+        .await?
+        .pt()
+    else {
+        return Ok(());
+    };
     t.p = at;
-    if c.keyword(ps("Enter text for the cells now").options(&["Yes", "No"]).default_str("No")).await?.kw() == Some("Yes") {
+    if c.keyword(
+        ps("Enter text for the cells now")
+            .options(&["Yes", "No"])
+            .default_str("No"),
+    )
+    .await?
+    .kw()
+        == Some("Yes")
+    {
         for r in 0..nr {
             for col in 0..nc {
                 if !hidden(&t, r, col) {
-                    t.cells[r][col] = c.string(ps(&format!("Enter text for cell {}", cell_name(r, col))).raw()).await?.text;
+                    t.cells[r][col] = c
+                        .string(ps(&format!("Enter text for cell {}", cell_name(r, col))).raw())
+                        .await?
+                        .text;
                 }
             }
         }
@@ -236,7 +346,9 @@ fn edit_table<R>(c: &Ctx, id: u64, f: impl FnOnce(&mut TableData) -> R) -> Optio
 /// Pick a table cell: the table, row and column (`None` when Enter ends the command).
 async fn pick_cell(c: &Ctx, prompt: &str) -> CmdResult<Option<(u64, usize, usize)>> {
     loop {
-        let Some(q) = c.point(ps(prompt).allow_enter()).await?.pt() else { return Ok(None) };
+        let Some(q) = c.point(ps(prompt).allow_enter()).await?.pt() else {
+            return Ok(None);
+        };
         let hit = c.doc(|d| {
             d.entities().iter().rev().find_map(|e| match &e.kind {
                 Kind::Table(t) => cell_at(t, q).map(|(r, col)| (e.id, r, col)),
@@ -252,10 +364,28 @@ async fn pick_cell(c: &Ctx, prompt: &str) -> CmdResult<Option<(u64, usize, usize
 
 /// Edit the text of one cell (also used by DDEDIT).
 pub(super) async fn edit_cell(c: &Ctx, id: u64, r: usize, col: usize) -> CmdResult<()> {
-    let Some(Kind::Table(t)) = c.entity_by_id(id).map(|e| e.kind) else { return Ok(()) };
-    let cur = t.cells.get(r).and_then(|row| row.get(col)).cloned().unwrap_or_default();
+    let Some(Kind::Table(t)) = c.entity_by_id(id).map(|e| e.kind) else {
+        return Ok(());
+    };
+    let cur = t
+        .cells
+        .get(r)
+        .and_then(|row| row.get(col))
+        .cloned()
+        .unwrap_or_default();
     c.log(&format!("Cell {}: \"{cur}\"", cell_name(r, col)));
-    let spec = TextEditSpec { prompt: format!("Enter text for cell {}", cell_name(r, col)), p: cell_center(&t, r, col), h: t.h, rot: t.rot, jh: HJust::Center, jv: VJust::Middle, multi: false, w: None, initial: Some(cur), editing: None };
+    let spec = TextEditSpec {
+        prompt: format!("Enter text for cell {}", cell_name(r, col)),
+        p: cell_center(&t, r, col),
+        h: t.h,
+        rot: t.rot,
+        jh: HJust::Center,
+        jv: VJust::Middle,
+        multi: false,
+        w: None,
+        initial: Some(cur),
+        editing: None,
+    };
     let s = text_input(c, spec).await?;
     edit_table(c, id, |t| t.cells[r][col] = s);
     Ok(())
@@ -275,29 +405,68 @@ pub(super) async fn edit_cell_at(c: &Ctx, id: u64, at: Pt) -> CmdResult<()> {
     }
 }
 
-const CELL_OPTIONS: [&str; 9] = ["Text", "insert row Above", "insert row Below", "insert column Left", "insert column Right", "Delete row", "delete Column", "Merge", "Unmerge"];
+const CELL_OPTIONS: [&str; 9] = [
+    "Text",
+    "insert row Above",
+    "insert row Below",
+    "insert column Left",
+    "insert column Right",
+    "Delete row",
+    "delete Column",
+    "Merge",
+    "Unmerge",
+];
 
 async fn tableedit(c: Ctx, _a: Args) -> CmdResult<()> {
     while let Some((id, r, col)) = pick_cell(&c, "Pick a table cell to edit").await? {
         c.log(&format!("Cell {}", cell_name(r, col)));
-        let Some(opt) = c.keyword(ps("Enter an option").options(&CELL_OPTIONS).default_str("Text")).await?.kw().map(str::to_string) else { continue };
-        let (end_r, end_c) = c.entity_by_id(id).and_then(|e| match e.kind {
-            Kind::Table(t) => t.merges.iter().find(|m| m[0] == r && m[1] == col).map(|m| (m[2], m[3])),
-            _ => None,
-        }).unwrap_or((r, col));
+        let Some(opt) = c
+            .keyword(
+                ps("Enter an option")
+                    .options(&CELL_OPTIONS)
+                    .default_str("Text"),
+            )
+            .await?
+            .kw()
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let (end_r, end_c) = c
+            .entity_by_id(id)
+            .and_then(|e| match e.kind {
+                Kind::Table(t) => t
+                    .merges
+                    .iter()
+                    .find(|m| m[0] == r && m[1] == col)
+                    .map(|m| (m[2], m[3])),
+                _ => None,
+            })
+            .unwrap_or((r, col));
         let result: Result<(), &str> = match opt.as_str() {
             "Text" => {
                 edit_cell(&c, id, r, col).await?;
                 Ok(())
             }
             "insert row Above" => edit_table(&c, id, |t| insert_row(t, r)).ok_or("Not a table."),
-            "insert row Below" => edit_table(&c, id, |t| insert_row(t, end_r + 1)).ok_or("Not a table."),
-            "insert column Left" => edit_table(&c, id, |t| insert_col(t, col)).ok_or("Not a table."),
-            "insert column Right" => edit_table(&c, id, |t| insert_col(t, end_c + 1)).ok_or("Not a table."),
+            "insert row Below" => {
+                edit_table(&c, id, |t| insert_row(t, end_r + 1)).ok_or("Not a table.")
+            }
+            "insert column Left" => {
+                edit_table(&c, id, |t| insert_col(t, col)).ok_or("Not a table.")
+            }
+            "insert column Right" => {
+                edit_table(&c, id, |t| insert_col(t, end_c + 1)).ok_or("Not a table.")
+            }
             "Delete row" => edit_table(&c, id, |t| delete_row(t, r)).unwrap_or(Err("Not a table.")),
-            "delete Column" => edit_table(&c, id, |t| delete_col(t, col)).unwrap_or(Err("Not a table.")),
+            "delete Column" => {
+                edit_table(&c, id, |t| delete_col(t, col)).unwrap_or(Err("Not a table."))
+            }
             "Merge" => match pick_cell(&c, "Pick the opposite cell to merge").await? {
-                Some((other, r2, c2)) if other == id => edit_table(&c, id, |t| merge_cells(t, (r, col), (r2, c2))).unwrap_or(Err("Not a table.")),
+                Some((other, r2, c2)) if other == id => {
+                    edit_table(&c, id, |t| merge_cells(t, (r, col), (r2, c2)))
+                        .unwrap_or(Err("Not a table."))
+                }
                 Some(_) => Err("Both cells must be in the same table."),
                 None => Ok(()),
             },
@@ -318,23 +487,61 @@ async fn tableedit(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn tablestyle(c: Ctx, _a: Args) -> CmdResult<()> {
     let cur = c.doc(|d| d.settings.cur_table());
     let name = loop {
-        let n = c.string(ps("Enter table style name or [?]").default_str(&cur.name)).await?.text;
+        let n = c
+            .string(ps("Enter table style name or [?]").default_str(&cur.name))
+            .await?
+            .text;
         if n != "?" {
             break n;
         }
         let names = c.doc(|d| d.settings.table_styles.keys().cloned().collect::<Vec<_>>());
-        c.log(&format!("Table styles: {}", if names.is_empty() { "Standard".into() } else { names.join(", ") }));
+        c.log(&format!(
+            "Table styles: {}",
+            if names.is_empty() {
+                "Standard".into()
+            } else {
+                names.join(", ")
+            }
+        ));
     };
     if name.is_empty() {
         return Ok(());
     }
-    let old = c.doc(|d| d.settings.table_styles.get(&name).cloned()).unwrap_or(TableStyle { name: name.clone(), ..cur });
-    let Some(h) = c.distance(ps("Specify text height").default_num(old.text_height).min(0.0).nonzero()).await?.value() else { return Ok(()) };
-    let title = match c.keyword(ps("Title row").options(&["Yes", "No"]).default_str(if old.title { "Yes" } else { "No" })).await?.kw() {
+    let old = c
+        .doc(|d| d.settings.table_styles.get(&name).cloned())
+        .unwrap_or(TableStyle {
+            name: name.clone(),
+            ..cur
+        });
+    let Some(h) = c
+        .distance(
+            ps("Specify text height")
+                .default_num(old.text_height)
+                .min(0.0)
+                .nonzero(),
+        )
+        .await?
+        .value()
+    else {
+        return Ok(());
+    };
+    let title = match c
+        .keyword(
+            ps("Title row")
+                .options(&["Yes", "No"])
+                .default_str(if old.title { "Yes" } else { "No" }),
+        )
+        .await?
+        .kw()
+    {
         Some(k) => k == "Yes",
         None => old.title,
     };
-    let style = TableStyle { name: name.clone(), text_height: h, title };
+    let style = TableStyle {
+        name: name.clone(),
+        text_height: h,
+        title,
+    };
     // tables using the style follow it
     let updated = c.doc_mut(|d| {
         d.change(|d| {
@@ -353,14 +560,33 @@ async fn tablestyle(c: Ctx, _a: Args) -> CmdResult<()> {
             n
         })
     });
-    c.log(&format!("Table style \"{name}\" is current.{}", if updated > 0 { format!(" {updated} table(s) updated.") } else { String::new() }));
+    c.log(&format!(
+        "Table style \"{name}\" is current.{}",
+        if updated > 0 {
+            format!(" {updated} table(s) updated.")
+        } else {
+            String::new()
+        }
+    ));
     Ok(())
 }
 
 pub fn register(r: &mut Registry) {
-    r.define(def("Draw", "TABLE", run(table)).aliases(&["TB"]).no_pickfirst().title("Table").desc("Creates an empty table object."));
+    r.define(
+        def("Draw", "TABLE", run(table))
+            .aliases(&["TB"])
+            .no_pickfirst()
+            .title("Table")
+            .desc("Creates an empty table object."),
+    );
     r.define(def("Annotation", "TABLEEDIT", run(tableedit)).aliases(&["TABLEDIT"]).no_pickfirst().title("Edit Table Cell").desc("Edits the text of a table cell and inserts, deletes, merges and unmerges rows, columns and cells."));
-    r.define(def("Annotation", "TABLESTYLE", run(tablestyle)).aliases(&["TS"]).no_pickfirst().title("Table Style").desc("Creates, modifies or sets the current table style."));
+    r.define(
+        def("Annotation", "TABLESTYLE", run(tablestyle))
+            .aliases(&["TS"])
+            .no_pickfirst()
+            .title("Table Style")
+            .desc("Creates, modifies or sets the current table style."),
+    );
 }
 
 #[cfg(test)]
@@ -368,23 +594,49 @@ mod tests {
     use super::*;
 
     fn grid(rows: usize, cols: usize) -> TableData {
-        TableData { p: pt(0.0, 0.0), cols: vec![10.0; cols], rows: vec![5.0; rows], cells: (0..rows).map(|r| (0..cols).map(|c| cell_name(r, c)).collect()).collect(), h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0.0 }
+        TableData {
+            p: pt(0.0, 0.0),
+            cols: vec![10.0; cols],
+            rows: vec![5.0; rows],
+            cells: (0..rows)
+                .map(|r| (0..cols).map(|c| cell_name(r, c)).collect())
+                .collect(),
+            h: 2.5,
+            merges: vec![],
+            style: String::new(),
+            title: false,
+            rot: 0.0,
+        }
     }
 
     #[test]
     fn cell_names_and_lookup() {
-        assert_eq!((cell_name(0, 0).as_str(), cell_name(11, 2).as_str(), cell_name(2, 26).as_str()), ("A1", "C12", "AA3"));
+        assert_eq!(
+            (
+                cell_name(0, 0).as_str(),
+                cell_name(11, 2).as_str(),
+                cell_name(2, 26).as_str()
+            ),
+            ("A1", "C12", "AA3")
+        );
         let mut t = grid(3, 3);
         assert_eq!(cell_at(&t, pt(15.0, -7.0)), Some((1, 1)));
         assert_eq!(cell_at(&t, pt(-1.0, -1.0)), None);
         assert_eq!(cell_at(&t, pt(35.0, -1.0)), None);
         t.merges.push([0, 0, 1, 1]);
-        assert_eq!(cell_at(&t, pt(15.0, -7.0)), Some((0, 0)), "merged cells resolve to the top-left cell");
+        assert_eq!(
+            cell_at(&t, pt(15.0, -7.0)),
+            Some((0, 0)),
+            "merged cells resolve to the top-left cell"
+        );
         t.rot = PI / 2.0; // rows run to the right of a table turned a quarter turn
         t.p = pt(100.0, 100.0);
         assert_eq!(cell_at(&t, pt(107.0, 125.0)), Some((1, 2)));
         let c = cell_center(&t, 1, 2);
-        assert!((c.x - 107.5).abs() < 1e-9 && (c.y - 125.0).abs() < 1e-9, "{c:?}");
+        assert!(
+            (c.x - 107.5).abs() < 1e-9 && (c.y - 125.0).abs() < 1e-9,
+            "{c:?}"
+        );
     }
 
     #[test]
@@ -392,19 +644,37 @@ mod tests {
         let mut t = grid(3, 3);
         t.merges.push([1, 0, 2, 1]);
         insert_row(&mut t, 0);
-        assert_eq!((t.rows.len(), t.cells.len(), t.merges[0]), (4, 4, [2, 0, 3, 1]), "the merge moves down with its rows");
+        assert_eq!(
+            (t.rows.len(), t.cells.len(), t.merges[0]),
+            (4, 4, [2, 0, 3, 1]),
+            "the merge moves down with its rows"
+        );
         insert_row(&mut t, 3);
-        assert_eq!(t.merges[0], [2, 0, 4, 1], "inserting inside a merge grows it");
+        assert_eq!(
+            t.merges[0],
+            [2, 0, 4, 1],
+            "inserting inside a merge grows it"
+        );
         delete_row(&mut t, 3).unwrap();
         assert_eq!(t.merges[0], [2, 0, 3, 1]);
         delete_row(&mut t, 2).unwrap();
-        assert_eq!(t.merges[0], [2, 0, 2, 1], "a merge that loses a row shrinks");
+        assert_eq!(
+            t.merges[0],
+            [2, 0, 2, 1],
+            "a merge that loses a row shrinks"
+        );
         insert_col(&mut t, 1);
-        assert_eq!((t.cols.len(), t.cells[0].len(), t.merges[0]), (4, 4, [2, 0, 2, 2]));
+        assert_eq!(
+            (t.cols.len(), t.cells[0].len(), t.merges[0]),
+            (4, 4, [2, 0, 2, 2])
+        );
         delete_col(&mut t, 1).unwrap();
         assert_eq!(t.merges[0], [2, 0, 2, 1]);
         delete_col(&mut t, 0).unwrap();
-        assert!(t.merges.is_empty(), "a merge that shrinks to a single cell is dropped");
+        assert!(
+            t.merges.is_empty(),
+            "a merge that shrinks to a single cell is dropped"
+        );
     }
 
     #[test]
@@ -415,7 +685,11 @@ mod tests {
         assert_eq!(t.cells[0][0], "A1\\PB1\\PA2\\PB2");
         assert!(t.cells[1][1].is_empty());
         merge_cells(&mut t, (1, 1), (2, 2)).unwrap();
-        assert_eq!(t.merges, vec![[0, 0, 2, 2]], "overlapping merges are swallowed");
+        assert_eq!(
+            t.merges,
+            vec![[0, 0, 2, 2]],
+            "overlapping merges are swallowed"
+        );
         assert!(merge_cells(&mut grid(2, 2), (1, 1), (1, 1)).is_err());
         assert!(unmerge_cell(&mut t, 1, 1) && t.merges.is_empty());
         assert!(!unmerge_cell(&mut t, 1, 1));

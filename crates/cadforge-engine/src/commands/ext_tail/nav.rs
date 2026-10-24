@@ -14,7 +14,11 @@ async fn viewgo(c: Ctx, args: Args) -> CmdResult<()> {
     }
     let typed = match args.str("name") {
         Some(n) => n.to_string(),
-        None => c.string(ps("Enter view name to restore").default_str(&names[0])).await?.text,
+        None => {
+            c.string(ps("Enter view name to restore").default_str(&names[0]))
+                .await?
+                .text
+        }
     };
     let Some(n) = names.iter().find(|n| n.eq_ignore_ascii_case(typed.trim())) else {
         c.log_error(&format!("View {} not found.", typed.trim()));
@@ -32,7 +36,13 @@ async fn viewgo(c: Ctx, args: Args) -> CmdResult<()> {
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(def("View", "VIEWGO", run(viewgo)).title("Restore Named View").icon("view").desc("Restores a named view.").transparent());
+    r.define(
+        def("View", "VIEWGO", run(viewgo))
+            .title("Restore Named View")
+            .icon("view")
+            .desc("Restores a named view.")
+            .transparent(),
+    );
     // the realtime pan, zoom and free orbit already work on the current (2D or 3D) view
     r.alias("3DPAN", "PAN");
     r.alias("3DZOOM", "ZOOM");

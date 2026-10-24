@@ -30,7 +30,11 @@ impl V3 {
         self.x * o.x + self.y * o.y + self.z * o.z
     }
     pub fn cross(self, o: V3) -> V3 {
-        V3::new(self.y * o.z - self.z * o.y, self.z * o.x - self.x * o.z, self.x * o.y - self.y * o.x)
+        V3::new(
+            self.y * o.z - self.z * o.y,
+            self.z * o.x - self.x * o.z,
+            self.x * o.y - self.y * o.x,
+        )
     }
     pub fn len(self) -> f64 {
         self.dot(self).sqrt()
@@ -91,9 +95,20 @@ pub struct Solid {
 
 impl Solid {
     pub fn from_mesh(name: &str, m: Mesh) -> Solid {
-        Solid { id: 0, name: name.into(), layer: String::new(), color: None, vertices: m.vertices, faces: m.faces, program: None }
+        Solid {
+            id: 0,
+            name: name.into(),
+            layer: String::new(),
+            color: None,
+            vertices: m.vertices,
+            faces: m.faces,
+            program: None,
+        }
     }
     pub fn mesh(&self) -> Mesh {
-        Mesh { vertices: self.vertices.clone(), faces: self.faces.clone() }
+        Mesh {
+            vertices: self.vertices.clone(),
+            faces: self.faces.clone(),
+        }
     }
 }

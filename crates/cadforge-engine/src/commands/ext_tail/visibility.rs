@@ -18,8 +18,18 @@ async fn isolate(c: Ctx, _a: Args) -> CmdResult<()> {
     }
     let keep: BTreeSet<u64> = sel.ents.iter().chain(sel.solids.iter()).copied().collect();
     let others: Vec<u64> = c.doc(|d| {
-        let mut v: Vec<u64> = d.entities().iter().filter(|e| d.is_visible(e) && !keep.contains(&e.id)).map(|e| e.id).collect();
-        v.extend(d.solids.iter().filter(|s| d.solid_visible(s) && !keep.contains(&s.id)).map(|s| s.id));
+        let mut v: Vec<u64> = d
+            .entities()
+            .iter()
+            .filter(|e| d.is_visible(e) && !keep.contains(&e.id))
+            .map(|e| e.id)
+            .collect();
+        v.extend(
+            d.solids
+                .iter()
+                .filter(|s| d.solid_visible(s) && !keep.contains(&s.id))
+                .map(|s| s.id),
+        );
         v
     });
     let n = others.len();
@@ -69,7 +79,26 @@ async fn unisolate(c: Ctx, _a: Args) -> CmdResult<()> {
 }
 
 pub(super) fn register(r: &mut Registry) {
-    r.define(def("Select", "ISOLATEOBJECTS", run(isolate)).aliases(&["ISOLATE"]).title("Isolate Objects").icon("layiso").desc("Hides all objects except the selected ones until UNISOLATEOBJECTS."));
-    r.define(def("Select", "HIDEOBJECTS", run(hideobjects)).aliases(&["OBJECTHIDE"]).title("Hide Objects").icon("layoff").desc("Hides the selected objects until UNISOLATEOBJECTS."));
-    r.define(def("Select", "UNISOLATEOBJECTS", run(unisolate)).aliases(&["UNISOLATE", "ENDOBJECTISOLATION"]).title("End Object Isolation").icon("layuniso").desc("Displays the objects hidden by ISOLATEOBJECTS or HIDEOBJECTS.").once());
+    r.define(
+        def("Select", "ISOLATEOBJECTS", run(isolate))
+            .aliases(&["ISOLATE"])
+            .title("Isolate Objects")
+            .icon("layiso")
+            .desc("Hides all objects except the selected ones until UNISOLATEOBJECTS."),
+    );
+    r.define(
+        def("Select", "HIDEOBJECTS", run(hideobjects))
+            .aliases(&["OBJECTHIDE"])
+            .title("Hide Objects")
+            .icon("layoff")
+            .desc("Hides the selected objects until UNISOLATEOBJECTS."),
+    );
+    r.define(
+        def("Select", "UNISOLATEOBJECTS", run(unisolate))
+            .aliases(&["UNISOLATE", "ENDOBJECTISOLATION"])
+            .title("End Object Isolation")
+            .icon("layuniso")
+            .desc("Displays the objects hidden by ISOLATEOBJECTS or HIDEOBJECTS.")
+            .once(),
+    );
 }

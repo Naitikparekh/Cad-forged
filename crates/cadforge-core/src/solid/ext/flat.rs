@@ -16,7 +16,11 @@ pub struct Line2 {
 /// View axes for a camera at `yaw` / `pitch` (as in [`crate::view::View`]): right, up and the direction away from the viewer.
 fn axes(yaw: f64, pitch: f64) -> (V3, V3, V3) {
     let (sy, cy, sp, cp) = (yaw.sin(), yaw.cos(), pitch.sin(), pitch.cos());
-    (V3::new(cy, -sy, 0.0), V3::new(sy * sp, cy * sp, cp), V3::new(sy * cp, cy * cp, -sp))
+    (
+        V3::new(cy, -sy, 0.0),
+        V3::new(sy * sp, cy * sp, cp),
+        V3::new(sy * cp, cy * cp, -sp),
+    )
 }
 
 /// A face seen in the view: 2D corners (counter-clockwise) with depths.
@@ -54,7 +58,10 @@ fn overlap(t: &Tri, s0: Pt, dir: Pt, sd: (f64, f64), tol: f64) -> Option<(f64, f
     // face depth at s0 and its change along the segment, from barycentric coordinates
     let area = cross(t.p[1] - t.p[0], t.p[2] - t.p[0]);
     let depth = |x: Pt| -> f64 {
-        let (w1, w2) = (cross(x - t.p[0], t.p[2] - t.p[0]) / area, cross(t.p[1] - t.p[0], x - t.p[0]) / area);
+        let (w1, w2) = (
+            cross(x - t.p[0], t.p[2] - t.p[0]) / area,
+            cross(t.p[1] - t.p[0], x - t.p[0]) / area,
+        );
         t.d[0] * (1.0 - w1 - w2) + t.d[1] * w1 + t.d[2] * w2
     };
     let (f0, f1) = (depth(s0) - sd.0, depth(s0 + dir) - sd.1);
@@ -67,13 +74,25 @@ pub fn flatshot(meshes: &[&Mesh], yaw: f64, pitch: f64, min_angle: f64) -> Vec<L
     let (right, up, away) = axes(yaw, pitch);
     let to_view = away.scale(-1.0);
     let proj = |p: V3| (pt(p.dot(right), p.dot(up)), p.dot(away));
-    let size = meshes.iter().filter(|m| !m.vertices.is_empty()).map(|m| mesh_bounds(&m.vertices)).fold(1e-9f64, |a, b| a.max(b.max.x - b.min.x).max(b.max.y - b.min.y).max(b.max.z - b.min.z));
+    let size = meshes
+        .iter()
+        .filter(|m| !m.vertices.is_empty())
+        .map(|m| mesh_bounds(&m.vertices))
+        .fold(1e-9f64, |a, b| {
+            a.max(b.max.x - b.min.x)
+                .max(b.max.y - b.min.y)
+                .max(b.max.z - b.min.z)
+        });
     let eps = 1e-7 * size;
     let topos: Vec<Topo> = meshes.iter().map(|m| Topo::new(m)).collect();
     let mut tris: Vec<Tri> = vec![];
     for t in &topos {
         for (_, f) in t.live_faces() {
-            let pr = [proj(t.pos[f[0] as usize]), proj(t.pos[f[1] as usize]), proj(t.pos[f[2] as usize])];
+            let pr = [
+                proj(t.pos[f[0] as usize]),
+                proj(t.pos[f[1] as usize]),
+                proj(t.pos[f[2] as usize]),
+            ];
             let mut p = [pr[0].0, pr[1].0, pr[2].0];
             let mut d = [pr[0].1, pr[1].1, pr[2].1];
             let a = cross(p[1] - p[0], p[2] - p[0]);
@@ -84,7 +103,16 @@ pub fn flatshot(meshes: &[&Mesh], yaw: f64, pitch: f64, min_angle: f64) -> Vec<L
                 p.swap(1, 2);
                 d.swap(1, 2);
             }
-            let (lo, hi) = (pt(p.iter().map(|q| q.x).fold(f64::INFINITY, f64::min), p.iter().map(|q| q.y).fold(f64::INFINITY, f64::min)), pt(p.iter().map(|q| q.x).fold(f64::NEG_INFINITY, f64::max), p.iter().map(|q| q.y).fold(f64::NEG_INFINITY, f64::max)));
+            let (lo, hi) = (
+                pt(
+                    p.iter().map(|q| q.x).fold(f64::INFINITY, f64::min),
+                    p.iter().map(|q| q.y).fold(f64::INFINITY, f64::min),
+                ),
+                pt(
+                    p.iter().map(|q| q.x).fold(f64::NEG_INFINITY, f64::max),
+                    p.iter().map(|q| q.y).fold(f64::NEG_INFINITY, f64::max),
+                ),
+            );
             tris.push(Tri { p, d, lo, hi });
         }
     }
@@ -109,10 +137,20 @@ pub fn flatshot(meshes: &[&Mesh], yaw: f64, pitch: f64, min_angle: f64) -> Vec<L
             if len(dir) < 1e-9 * size {
                 continue;
             }
-            let (lo, hi) = (pt(p0.x.min(p1.x), p0.y.min(p1.y)), pt(p0.x.max(p1.x), p0.y.max(p1.y)));
+            let (lo, hi) = (
+                pt(p0.x.min(p1.x), p0.y.min(p1.y)),
+                pt(p0.x.max(p1.x), p0.y.max(p1.y)),
+            );
             let mut hidden: Vec<(f64, f64)> = vec![];
-            for tr in tris.iter().filter(|tr| tr.lo.x <= hi.x + eps && tr.hi.x >= lo.x - eps && tr.lo.y <= hi.y + eps && tr.hi.y >= lo.y - eps) {
-                let Some((t0, t1, f0, df)) = overlap(tr, p0, dir, (d0, d1), eps) else { continue };
+            for tr in tris.iter().filter(|tr| {
+                tr.lo.x <= hi.x + eps
+                    && tr.hi.x >= lo.x - eps
+                    && tr.lo.y <= hi.y + eps
+                    && tr.hi.y >= lo.y - eps
+            }) {
+                let Some((t0, t1, f0, df)) = overlap(tr, p0, dir, (d0, d1), eps) else {
+                    continue;
+                };
                 // hidden where the face is nearer than the edge: f0 + df·t < -eps
                 let (mut s, mut e) = (t0, t1);
                 if df.abs() < 1e-15 {
@@ -142,7 +180,11 @@ pub fn flatshot(meshes: &[&Mesh], yaw: f64, pitch: f64, min_angle: f64) -> Vec<L
             let mut cursor = 0.0;
             let mut push = |s: f64, e: f64, visible: bool| {
                 if e - s > 1e-9 {
-                    out.push(Line2 { a: p0 + dir * s, b: p0 + dir * e, visible });
+                    out.push(Line2 {
+                        a: p0 + dir * s,
+                        b: p0 + dir * e,
+                        visible,
+                    });
                 }
             };
             for (s, e) in merged {
@@ -163,7 +205,11 @@ mod tests {
     use std::f64::consts::FRAC_PI_2;
 
     fn total(lines: &[Line2], visible: bool) -> f64 {
-        lines.iter().filter(|l| l.visible == visible).map(|l| dist(l.a, l.b)).sum()
+        lines
+            .iter()
+            .filter(|l| l.visible == visible)
+            .map(|l| dist(l.a, l.b))
+            .sum()
     }
 
     #[test]
@@ -171,7 +217,11 @@ mod tests {
         let b = box_mesh(0.0, 0.0, 0.0, 10.0, 6.0, 4.0, "B").mesh();
         let l = flatshot(&[&b], 0.0, FRAC_PI_2, 0.3);
         assert!((total(&l, true) - 32.0).abs() < 1e-6, "{}", total(&l, true));
-        assert!((total(&l, false) - 32.0).abs() < 1e-6, "{}", total(&l, false));
+        assert!(
+            (total(&l, false) - 32.0).abs() < 1e-6,
+            "{}",
+            total(&l, false)
+        );
     }
 
     #[test]
@@ -179,9 +229,24 @@ mod tests {
         let b = box_mesh(0.0, 0.0, 0.0, 10.0, 6.0, 4.0, "B").mesh();
         let l = flatshot(&[&b], 0.0, 0.0, 0.3);
         assert!((total(&l, true) - 28.0).abs() < 1e-6, "{}", total(&l, true));
-        let (xs, ys): (Vec<f64>, Vec<f64>) = (l.iter().flat_map(|l| [l.a.x, l.b.x]).collect(), l.iter().flat_map(|l| [l.a.y, l.b.y]).collect());
-        assert!((xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - xs.iter().cloned().fold(f64::INFINITY, f64::min) - 10.0).abs() < 1e-6);
-        assert!((ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - ys.iter().cloned().fold(f64::INFINITY, f64::min) - 4.0).abs() < 1e-6);
+        let (xs, ys): (Vec<f64>, Vec<f64>) = (
+            l.iter().flat_map(|l| [l.a.x, l.b.x]).collect(),
+            l.iter().flat_map(|l| [l.a.y, l.b.y]).collect(),
+        );
+        assert!(
+            (xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                - xs.iter().cloned().fold(f64::INFINITY, f64::min)
+                - 10.0)
+                .abs()
+                < 1e-6
+        );
+        assert!(
+            (ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                - ys.iter().cloned().fold(f64::INFINITY, f64::min)
+                - 4.0)
+                .abs()
+                < 1e-6
+        );
     }
 
     #[test]
@@ -189,7 +254,11 @@ mod tests {
         let big = box_mesh(0.0, 0.0, 0.0, 10.0, 10.0, 2.0, "A").mesh();
         let small = box_mesh(8.0, 4.0, 2.0, 4.0, 2.0, 2.0, "B").mesh();
         let l = flatshot(&[&big, &small], 0.0, FRAC_PI_2, 0.3);
-        let on_edge: f64 = l.iter().filter(|s| s.visible && (s.a.x - 10.0).abs() < 1e-9 && (s.b.x - 10.0).abs() < 1e-9).map(|s| dist(s.a, s.b)).sum();
+        let on_edge: f64 = l
+            .iter()
+            .filter(|s| s.visible && (s.a.x - 10.0).abs() < 1e-9 && (s.b.x - 10.0).abs() < 1e-9)
+            .map(|s| dist(s.a, s.b))
+            .sum();
         assert!((on_edge - 8.0).abs() < 1e-4, "{on_edge}");
     }
 
@@ -197,7 +266,14 @@ mod tests {
     fn a_cylinder_seen_from_the_side_has_silhouettes() {
         let c = cylinder_mesh(0.0, 0.0, 0.0, 5.0, 10.0, 32, "C").mesh();
         let l = flatshot(&[&c], 0.0, 0.0, 0.5);
-        let vertical: f64 = l.iter().filter(|s| s.visible && (s.a.x - s.b.x).abs() < 1e-9).map(|s| dist(s.a, s.b)).sum();
-        assert!(vertical >= 20.0 - 1e-6, "two silhouette lines of height 10, got {vertical}");
+        let vertical: f64 = l
+            .iter()
+            .filter(|s| s.visible && (s.a.x - s.b.x).abs() < 1e-9)
+            .map(|s| dist(s.a, s.b))
+            .sum();
+        assert!(
+            vertical >= 20.0 - 1e-6,
+            "two silhouette lines of height 10, got {vertical}"
+        );
     }
 }

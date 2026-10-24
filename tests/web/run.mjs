@@ -162,9 +162,10 @@ await test('layout tabs switch to paper space and a double-click enters the view
   await page.mouse.move(103, 770, { steps: 3 }); await t.frame(2); await page.mouse.click(103, 770); await t.frame(5);
   s = await t.state();
   assert.equal(s.space, 'Layout1'); assert.equal(s.mspace, false);
-  // inside the default viewport; whether two quick clicks count as a double-click depends on frame timing, so try again if not
+  // inside the default viewport; whether two quick clicks count as a double-click depends on frame timing, so try again if not.
+  // Each try waits out egui's double-click window first, so the tab click or an earlier try does not make it a triple click.
   for (let attempt = 0; attempt < 3 && !(await t.state()).mspace; attempt++) {
-    await page.mouse.move(720, 460, { steps: 3 }); await t.frame(3); await page.mouse.dblclick(720, 460); await t.frame(5);
+    await page.mouse.move(720, 460, { steps: 3 }); await t.frame(3); await page.waitForTimeout(400); await page.mouse.dblclick(720, 460); await t.frame(5);
   }
   s = await t.state();
   if (!s.mspace) { fs.mkdirSync(path.join(root, 'target', 'tmp'), { recursive: true }); await t.shot(path.join(root, 'target', 'tmp', 'layout-dblclick-failed.png')); }
@@ -497,6 +498,48 @@ await test('binary DXF: -DXFOUT downloads one that ezdxf reads, and a binary fil
   await drop('web-binary-in.dxf', 'application/dxf', fs.readFileSync(theirs));
   const s = await t.state();
   assert.equal(s.name, 'web-binary-in'); assert.deepEqual([...s.types].sort(), ['circle', 'line', 'text']);
+});
+
+// AutoCAD DWG: open (chooser and drop), Save As DWG on the command line, and QSAVE keeping the file's DWG version
+const dwgSample = v => path.join(root, 'tests', 'dwg', 'samples', `sample_${v}.dwg`);
+await test('OPEN an AutoCAD 2018 DWG through the file chooser', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('OPEN')]);
+  await fc.setFiles(dwgSample('AC1032')); await page.waitForTimeout(1500); await t.frame(4);
+  const s = await t.state();
+  assert.equal(s.name, 'sample_AC1032'); assert.equal(s.entities, 202);
+  assert.ok(s.history.some(h => /sample_AC1032\.dwg: not shown/.test(h.text || h)), 'what was left out is reported: ' + JSON.stringify(s.history.slice(-4)));
+});
+
+await test('dropping an AutoCAD 2004 DWG opens it as a new drawing', async () => {
+  const before = (await t.state()).editors;
+  await drop('sample_AC1018.dwg', 'application/octet-stream', fs.readFileSync(dwgSample('AC1018')));
+  await page.waitForTimeout(900); await t.frame(4);
+  const s = await t.state();
+  assert.equal(s.name, 'sample_AC1018'); assert.equal(s.entities, 202); assert.equal(s.editors, before + 1);
+});
+
+await test('-SAVEAS downloads an AutoCAD 2004 DWG that opens again with every object', async () => {
+  const before = await t.state();
+  const f = await download(async () => { await t.cmd('-SAVEAS'); await page.keyboard.press('Enter'); await t.frame(3); await t.cmd('web-save'); });
+  assert.equal(f.name, 'web-save.dwg');
+  assert.equal(f.data.subarray(0, 6).toString('latin1'), 'AC1018');
+  const tmp = path.join(root, 'target', 'tmp'); fs.mkdirSync(tmp, { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'web-save.dwg'), f.data);
+  await drop('web-save-again.dwg', 'application/octet-stream', f.data);
+  await page.waitForTimeout(900); await t.frame(4);
+  const s = await t.state();
+  assert.equal(s.name, 'web-save-again'); assert.equal(s.entities, before.entities);
+  assert.deepEqual([...s.types].sort(), [...before.types].sort());
+});
+
+await test('QSAVE on an opened AutoCAD 2000 DWG saves a DWG 2000 under the same name', async () => {
+  await drop('sample_AC1015.dwg', 'application/octet-stream', fs.readFileSync(dwgSample('AC1015')));
+  await page.waitForTimeout(900); await t.frame(4);
+  assert.equal((await t.state()).name, 'sample_AC1015');
+  const f = await download(() => t.cmd('QSAVE'));
+  assert.equal(f.name, 'sample_AC1015.dwg');
+  assert.equal(f.data.subarray(0, 6).toString('latin1'), 'AC1015');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

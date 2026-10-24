@@ -22,7 +22,11 @@ impl<'a> Bits<'a> {
     }
 
     pub fn at(d: &'a [u8], ver: Ver, pos_bits: usize) -> Self {
-        Bits { d, pos: pos_bits, ver }
+        Bits {
+            d,
+            pos: pos_bits,
+            ver,
+        }
     }
 
     pub fn byte_pos(&self) -> usize {
@@ -309,7 +313,10 @@ impl<'a> Bits<'a> {
         let n = n as u16 as usize;
         if self.ver >= Ver::R2007 {
             let raw = self.bytes(n * 2)?;
-            let units: Vec<u16> = raw.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+            let units: Vec<u16> = raw
+                .chunks(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
             Ok(String::from_utf16_lossy(&units).replace('\0', ""))
         } else {
             let raw = self.bytes(n)?;

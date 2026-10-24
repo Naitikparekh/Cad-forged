@@ -139,10 +139,20 @@ pub struct Bounds {
 
 impl Bounds {
     pub fn new(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> Bounds {
-        Bounds { min_x, min_y, max_x, max_y }
+        Bounds {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        }
     }
     pub fn of_points(pts: &[Pt]) -> Bounds {
-        let mut b = Bounds::new(f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let mut b = Bounds::new(
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        );
         for p in pts {
             b.min_x = b.min_x.min(p.x);
             b.min_y = b.min_y.min(p.y);
@@ -152,7 +162,12 @@ impl Bounds {
         b
     }
     pub fn union(self, o: Bounds) -> Bounds {
-        Bounds::new(self.min_x.min(o.min_x), self.min_y.min(o.min_y), self.max_x.max(o.max_x), self.max_y.max(o.max_y))
+        Bounds::new(
+            self.min_x.min(o.min_x),
+            self.min_y.min(o.min_y),
+            self.max_x.max(o.max_x),
+            self.max_y.max(o.max_y),
+        )
     }
     pub fn union_opt(a: Option<Bounds>, b: Option<Bounds>) -> Option<Bounds> {
         match (a, b) {
@@ -162,13 +177,24 @@ impl Bounds {
         }
     }
     pub fn overlaps(&self, o: &Bounds) -> bool {
-        self.min_x <= o.max_x && self.max_x >= o.min_x && self.min_y <= o.max_y && self.max_y >= o.min_y
+        self.min_x <= o.max_x
+            && self.max_x >= o.min_x
+            && self.min_y <= o.max_y
+            && self.max_y >= o.min_y
     }
     pub fn inside(&self, outer: &Bounds) -> bool {
-        self.min_x >= outer.min_x && self.max_x <= outer.max_x && self.min_y >= outer.min_y && self.max_y <= outer.max_y
+        self.min_x >= outer.min_x
+            && self.max_x <= outer.max_x
+            && self.min_y >= outer.min_y
+            && self.max_y <= outer.max_y
     }
     pub fn grow(&self, d: f64) -> Bounds {
-        Bounds::new(self.min_x - d, self.min_y - d, self.max_x + d, self.max_y + d)
+        Bounds::new(
+            self.min_x - d,
+            self.min_y - d,
+            self.max_x + d,
+            self.max_y + d,
+        )
     }
     pub fn contains(&self, p: Pt) -> bool {
         p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y
@@ -180,7 +206,10 @@ impl Bounds {
         self.max_y - self.min_y
     }
     pub fn center(&self) -> Pt {
-        pt((self.min_x + self.max_x) / 2.0, (self.min_y + self.max_y) / 2.0)
+        pt(
+            (self.min_x + self.max_x) / 2.0,
+            (self.min_y + self.max_y) / 2.0,
+        )
     }
     pub fn is_valid(&self) -> bool {
         self.min_x.is_finite() && self.max_x >= self.min_x && self.max_y >= self.min_y
@@ -194,15 +223,31 @@ pub enum Seg {
     /// Straight segment; `approx` marks a piece of a tessellated curve (not snappable).
     L { a: Pt, b: Pt, approx: bool },
     /// Circular arc; `full` marks a complete circle.
-    A { c: Pt, r: f64, a0: f64, sw: f64, full: bool },
+    A {
+        c: Pt,
+        r: f64,
+        a0: f64,
+        sw: f64,
+        full: bool,
+    },
 }
 
 impl Seg {
     pub fn line(a: Pt, b: Pt) -> Seg {
-        Seg::L { a, b, approx: false }
+        Seg::L {
+            a,
+            b,
+            approx: false,
+        }
     }
     pub fn arc(c: Pt, r: f64, a0: f64, sw: f64) -> Seg {
-        Seg::A { c, r, a0, sw, full: false }
+        Seg::A {
+            c,
+            r,
+            a0,
+            sw,
+            full: false,
+        }
     }
     pub fn is_line(&self) -> bool {
         matches!(self, Seg::L { .. })
@@ -241,7 +286,13 @@ impl Seg {
     pub fn reverse(&self) -> Seg {
         match *self {
             Seg::L { a, b, approx } => Seg::L { a: b, b: a, approx },
-            Seg::A { c, r, a0, sw, full } => Seg::A { c, r, a0: a0 + sw, sw: -sw, full },
+            Seg::A { c, r, a0, sw, full } => Seg::A {
+                c,
+                r,
+                a0: a0 + sw,
+                sw: -sw,
+                full,
+            },
         }
     }
     /// Portion of the segment between params t0 and t1.
@@ -253,7 +304,9 @@ impl Seg {
     }
     pub fn bounds(&self) -> Bounds {
         match *self {
-            Seg::L { a, b, .. } => Bounds::new(a.x.min(b.x), a.y.min(b.y), a.x.max(b.x), a.y.max(b.y)),
+            Seg::L { a, b, .. } => {
+                Bounds::new(a.x.min(b.x), a.y.min(b.y), a.x.max(b.x), a.y.max(b.y))
+            }
             Seg::A { c, r, a0, sw, .. } => {
                 let mut pts = vec![self.start(), self.end()];
                 for k in 0..4 {
@@ -305,7 +358,11 @@ impl Seg {
             Seg::L { a, b, .. } => {
                 let (dx, dy) = (b.x - a.x, b.y - a.y);
                 let l2 = dx * dx + dy * dy;
-                let t = if l2 < 1e-24 { 0.0 } else { clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / l2, 0.0, 1.0) };
+                let t = if l2 < 1e-24 {
+                    0.0
+                } else {
+                    clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / l2, 0.0, 1.0)
+                };
                 let q = pt(a.x + dx * t, a.y + dy * t);
                 (q, t, dist(p, q))
             }
@@ -314,7 +371,11 @@ impl Seg {
                 let t = arc_param(ang, self);
                 if !(0.0..=1.0).contains(&t) {
                     let (e0, e1) = (self.start(), self.end());
-                    return if dist(p, e0) <= dist(p, e1) { (e0, 0.0, dist(p, e0)) } else { (e1, 1.0, dist(p, e1)) };
+                    return if dist(p, e0) <= dist(p, e1) {
+                        (e0, 0.0, dist(p, e0))
+                    } else {
+                        (e1, 1.0, dist(p, e1))
+                    };
                 }
                 if dist(p, c) < EPS {
                     return (self.start(), 0.0, r);
@@ -344,8 +405,18 @@ impl Seg {
     }
     pub fn with_flags_from(self, o: &Seg) -> Seg {
         match (self, o) {
-            (Seg::L { a, b, .. }, Seg::L { approx, .. }) => Seg::L { a, b, approx: *approx },
-            (Seg::A { c, r, a0, sw, .. }, Seg::A { full, .. }) => Seg::A { c, r, a0, sw, full: *full },
+            (Seg::L { a, b, .. }, Seg::L { approx, .. }) => Seg::L {
+                a,
+                b,
+                approx: *approx,
+            },
+            (Seg::A { c, r, a0, sw, .. }, Seg::A { full, .. }) => Seg::A {
+                c,
+                r,
+                a0,
+                sw,
+                full: *full,
+            },
             (s, _) => s,
         }
     }
@@ -358,7 +429,11 @@ pub fn angle_in_arc(a: f64, a0: f64, sw: f64, tol: f64) -> bool {
     if sw.abs() >= TAU - tol {
         return true;
     }
-    let d = if sw >= 0.0 { norm_angle(a - a0) } else { norm_angle(a0 - a) };
+    let d = if sw >= 0.0 {
+        norm_angle(a - a0)
+    } else {
+        norm_angle(a0 - a)
+    };
     let s = sw.abs();
     d <= s + tol || d >= TAU - tol
 }
@@ -373,7 +448,11 @@ pub fn arc_param(a: f64, arc: &Seg) -> f64 {
     if s < EPS {
         return 0.0;
     }
-    let d = if sw >= 0.0 { norm_angle(a - a0) } else { norm_angle(a0 - a) };
+    let d = if sw >= 0.0 {
+        norm_angle(a - a0)
+    } else {
+        norm_angle(a0 - a)
+    };
     if d <= s {
         return d / s;
     }
@@ -392,11 +471,18 @@ pub fn arc_through(p1: Pt, p2: Pt, p3: Pt) -> Option<Seg> {
         return None;
     }
     let (a2, b2, c2) = (ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy);
-    let c = pt((a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d, (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d);
+    let c = pt(
+        (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d,
+        (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d,
+    );
     let r = dist(c, p1);
     let (a0, am, a1) = (angle_of(c, p1), angle_of(c, p2), angle_of(c, p3));
     let ccw = sweep_ccw(a0, am) < sweep_ccw(a0, a1);
-    let sw = if ccw { sweep_ccw(a0, a1) } else { -sweep_ccw(a1, a0) };
+    let sw = if ccw {
+        sweep_ccw(a0, a1)
+    } else {
+        -sweep_ccw(a1, a0)
+    };
     Some(Seg::arc(c, r, a0, sw))
 }
 
@@ -444,10 +530,19 @@ pub fn seg_intersect(s1: &Seg, s2: &Seg, ext1: bool, ext2: bool) -> Vec<Hit> {
     let hits = match (s1, s2) {
         (Seg::L { .. }, Seg::L { .. }) => line_line(s1, s2),
         (Seg::L { .. }, Seg::A { .. }) => line_arc(s1, s2),
-        (Seg::A { .. }, Seg::L { .. }) => line_arc(s2, s1).into_iter().map(|h| Hit { pt: h.pt, t1: h.t2, t2: h.t1 }).collect(),
+        (Seg::A { .. }, Seg::L { .. }) => line_arc(s2, s1)
+            .into_iter()
+            .map(|h| Hit {
+                pt: h.pt,
+                t1: h.t2,
+                t2: h.t1,
+            })
+            .collect(),
         _ => arc_arc(s1, s2),
     };
-    hits.into_iter().filter(|h| (ext1 || in_range(h.t1)) && (ext2 || in_range(h.t2))).collect()
+    hits.into_iter()
+        .filter(|h| (ext1 || in_range(h.t1)) && (ext2 || in_range(h.t2)))
+        .collect()
 }
 
 fn line_line(s1: &Seg, s2: &Seg) -> Vec<Hit> {
@@ -462,7 +557,11 @@ fn line_line(s1: &Seg, s2: &Seg) -> Vec<Hit> {
     }
     let w = a2 - a1;
     let (t1, t2) = (cross(w, q) / den, cross(w, r) / den);
-    vec![Hit { pt: pt(a1.x + r.x * t1, a1.y + r.y * t1), t1, t2 }]
+    vec![Hit {
+        pt: pt(a1.x + r.x * t1, a1.y + r.y * t1),
+        t1,
+        t2,
+    }]
 }
 
 fn line_arc(l: &Seg, a: &Seg) -> Vec<Hit> {
@@ -491,11 +590,19 @@ fn line_arc(l: &Seg, a: &Seg) -> Vec<Hit> {
         disc = 0.0;
     }
     let sq = disc.sqrt();
-    let ts: Vec<f64> = if sq < 1e-9 * scale.sqrt() { vec![-bb / (2.0 * aa)] } else { vec![(-bb - sq) / (2.0 * aa), (-bb + sq) / (2.0 * aa)] };
+    let ts: Vec<f64> = if sq < 1e-9 * scale.sqrt() {
+        vec![-bb / (2.0 * aa)]
+    } else {
+        vec![(-bb - sq) / (2.0 * aa), (-bb + sq) / (2.0 * aa)]
+    };
     ts.into_iter()
         .map(|t1| {
             let p = pt(la.x + d.x * t1, la.y + d.y * t1);
-            Hit { pt: p, t1, t2: arc_param(angle_of(ac, p), a) }
+            Hit {
+                pt: p,
+                t1,
+                t2: arc_param(angle_of(ac, p), a),
+            }
         })
         .collect()
 }
@@ -518,8 +625,18 @@ fn arc_arc(a: &Seg, b: &Seg) -> Vec<Hit> {
     let h = h2.sqrt();
     let u = unit(bc - ac);
     let base = ac + u * x;
-    let pts = if h < 1e-9 { vec![base] } else { vec![base + perp(u) * h, base + perp(u) * -h] };
-    pts.into_iter().map(|p| Hit { pt: p, t1: arc_param(angle_of(ac, p), a), t2: arc_param(angle_of(bc, p), b) }).collect()
+    let pts = if h < 1e-9 {
+        vec![base]
+    } else {
+        vec![base + perp(u) * h, base + perp(u) * -h]
+    };
+    pts.into_iter()
+        .map(|p| Hit {
+            pt: p,
+            t1: arc_param(angle_of(ac, p), a),
+            t2: arc_param(angle_of(bc, p), b),
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------- tangent / perpendicular helpers
@@ -536,7 +653,10 @@ pub fn perp_feet(s: &Seg, p: Pt) -> Vec<(Pt, f64)> {
                 return vec![];
             }
             let a = angle_of(c, p);
-            [polar(c, a, r), polar(c, a + PI, r)].into_iter().map(|q| (q, arc_param(angle_of(c, q), s))).collect()
+            [polar(c, a, r), polar(c, a + PI, r)]
+                .into_iter()
+                .map(|q| (q, arc_param(angle_of(c, q), s)))
+                .collect()
         }
     }
 }
@@ -551,7 +671,10 @@ pub fn tangent_points(s: &Seg, p: Pt) -> Vec<(Pt, f64)> {
             }
             let base = angle_of(c, p);
             let off = clamp(r / d, -1.0, 1.0).acos();
-            [base + off, base - off].into_iter().map(|a| (polar(c, a, r), arc_param(a, s))).collect()
+            [base + off, base - off]
+                .into_iter()
+                .map(|a| (polar(c, a, r), arc_param(a, s)))
+                .collect()
         }
         _ => vec![],
     }
@@ -564,7 +687,16 @@ pub fn tangent_centres(s1: &Seg, s2: &Seg, r: f64) -> Vec<Pt> {
             .iter()
             .map(|k| match *s {
                 Seg::L { .. } => s.offset(k * r),
-                Seg::A { c, r: rr, a0, sw, .. } => Seg::A { c, r: rr, a0, sw: sw.abs(), full: false }.offset(k * r),
+                Seg::A {
+                    c, r: rr, a0, sw, ..
+                } => Seg::A {
+                    c,
+                    r: rr,
+                    a0,
+                    sw: sw.abs(),
+                    full: false,
+                }
+                .offset(k * r),
             })
             .collect()
     };
@@ -601,7 +733,13 @@ pub struct Vertex {
 
 impl Vertex {
     pub fn new(x: f64, y: f64, b: f64) -> Vertex {
-        Vertex { x, y, b, sw: 0.0, ew: 0.0 }
+        Vertex {
+            x,
+            y,
+            b,
+            sw: 0.0,
+            ew: 0.0,
+        }
     }
     /// A vertex whose outgoing edge tapers from `sw` to `ew`.
     pub fn wide(x: f64, y: f64, b: f64, sw: f64, ew: f64) -> Vertex {
@@ -661,7 +799,13 @@ pub fn pline_outline(v: &[Vertex], closed: bool) -> Vec<Vec<Pt>> {
         out.push(left);
     }
     for i in 0..segs.len() {
-        let j = if i + 1 < segs.len() { i + 1 } else if closed { 0 } else { continue };
+        let j = if i + 1 < segs.len() {
+            i + 1
+        } else if closed {
+            0
+        } else {
+            continue;
+        };
         if let (Some(a), Some(b)) = (ends[i], ends[j]) {
             let corner = segs[i].end();
             out.push(vec![corner, a[2], b[0]]);
@@ -675,12 +819,17 @@ pub fn pline_outline(v: &[Vertex], closed: bool) -> Vec<Vec<Pt>> {
 pub fn pline_segs(v: &[Vertex], closed: bool) -> Vec<Seg> {
     let n = v.len();
     let last = if closed { n } else { n.saturating_sub(1) };
-    (0..last).map(|i| bulge_seg(v[i].pt(), v[(i + 1) % n].pt(), v[i].b)).collect()
+    (0..last)
+        .map(|i| bulge_seg(v[i].pt(), v[(i + 1) % n].pt(), v[i].b))
+        .collect()
 }
 
 /// Rebuild bulge-vertices from consecutive segments.
 pub fn segs_to_verts(segs: &[Seg], closed: bool) -> Vec<Vertex> {
-    let mut v: Vec<Vertex> = segs.iter().map(|s| Vertex::new(s.start().x, s.start().y, s.bulge())).collect();
+    let mut v: Vec<Vertex> = segs
+        .iter()
+        .map(|s| Vertex::new(s.start().x, s.start().y, s.bulge()))
+        .collect();
     if !closed {
         if let Some(last) = segs.last() {
             let e = last.end();
@@ -738,7 +887,11 @@ pub fn point_in_polygon(p: Pt, pts: &[Pt]) -> bool {
 
 /// Number of tessellation steps for an arc.
 pub fn arc_steps(r: f64, sweep: f64, tol: f64) -> usize {
-    let max_step = if r > tol { 2.0 * clamp(1.0 - tol / r, -1.0, 1.0).acos() } else { PI / 2.0 };
+    let max_step = if r > tol {
+        2.0 * clamp(1.0 - tol / r, -1.0, 1.0).acos()
+    } else {
+        PI / 2.0
+    };
     clamp((sweep / max_step.max(1e-3)).ceil(), 2.0, 2048.0) as usize
 }
 
@@ -748,7 +901,9 @@ pub fn tess_seg(s: &Seg, tol: f64) -> Vec<Pt> {
         Seg::L { a, b, .. } => vec![a, b],
         Seg::A { c, r, a0, sw, .. } => {
             let n = arc_steps(r, sw.abs(), tol);
-            (0..=n).map(|i| polar(c, a0 + sw * i as f64 / n as f64, r)).collect()
+            (0..=n)
+                .map(|i| polar(c, a0 + sw * i as f64 / n as f64, r))
+                .collect()
         }
     }
 }
@@ -786,7 +941,14 @@ pub mod mat {
     }
     pub fn rotate(ang: f64, c: Pt) -> Mat {
         let (co, si) = (ang.cos(), ang.sin());
-        [co, si, -si, co, c.x - co * c.x + si * c.y, c.y - si * c.x - co * c.y]
+        [
+            co,
+            si,
+            -si,
+            co,
+            c.x - co * c.x + si * c.y,
+            c.y - si * c.x - co * c.y,
+        ]
     }
     pub fn scale(sx: f64, sy: f64, c: Pt) -> Mat {
         [sx, 0.0, 0.0, sy, c.x - sx * c.x, c.y - sy * c.y]
@@ -795,10 +957,20 @@ pub mod mat {
     pub fn mirror(p1: Pt, p2: Pt) -> Mat {
         let u = unit(p2 - p1);
         let (c2, s2) = (u.x * u.x - u.y * u.y, 2.0 * u.x * u.y);
-        [c2, s2, s2, -c2, p1.x - c2 * p1.x - s2 * p1.y, p1.y - s2 * p1.x + c2 * p1.y]
+        [
+            c2,
+            s2,
+            s2,
+            -c2,
+            p1.x - c2 * p1.x - s2 * p1.y,
+            p1.y - s2 * p1.x + c2 * p1.y,
+        ]
     }
     pub fn apply(m: &Mat, p: Pt) -> Pt {
-        pt(m[0] * p.x + m[2] * p.y + m[4], m[1] * p.x + m[3] * p.y + m[5])
+        pt(
+            m[0] * p.x + m[2] * p.y + m[4],
+            m[1] * p.x + m[3] * p.y + m[5],
+        )
     }
     pub fn apply_vec(m: &Mat, p: Pt) -> Pt {
         pt(m[0] * p.x + m[2] * p.y, m[1] * p.x + m[3] * p.y)
@@ -808,11 +980,19 @@ pub mod mat {
     }
     pub fn invert(m: &Mat) -> Mat {
         let d = det(m);
-        [m[3] / d, -m[1] / d, -m[2] / d, m[0] / d, (m[2] * m[5] - m[3] * m[4]) / d, (m[1] * m[4] - m[0] * m[5]) / d]
+        [
+            m[3] / d,
+            -m[1] / d,
+            -m[2] / d,
+            m[0] / d,
+            (m[2] * m[5] - m[3] * m[4]) / d,
+            (m[1] * m[4] - m[0] * m[5]) / d,
+        ]
     }
     /// Similarity = uniform scale + rotation (+ optional reflection).
     pub fn is_similarity(m: &Mat) -> bool {
-        (m[0].hypot(m[1]) - m[2].hypot(m[3])).abs() < 1e-9 * 1f64.max(m[0].hypot(m[1])) && (m[0] * m[2] + m[1] * m[3]).abs() < 1e-9 * 1f64.max(m[0] * m[0] + m[1] * m[1])
+        (m[0].hypot(m[1]) - m[2].hypot(m[3])).abs() < 1e-9 * 1f64.max(m[0].hypot(m[1]))
+            && (m[0] * m[2] + m[1] * m[3]).abs() < 1e-9 * 1f64.max(m[0] * m[0] + m[1] * m[1])
     }
     pub fn scale_factor(m: &Mat) -> f64 {
         det(m).abs().sqrt()
@@ -825,13 +1005,23 @@ pub mod mat {
 /// Apply an affine matrix to a segment (arcs keep their shape under similarity transforms only).
 pub fn transform_seg(s: &Seg, m: &Mat) -> Seg {
     match *s {
-        Seg::L { a, b, approx } => Seg::L { a: mat::apply(m, a), b: mat::apply(m, b), approx },
+        Seg::L { a, b, approx } => Seg::L {
+            a: mat::apply(m, a),
+            b: mat::apply(m, b),
+            approx,
+        },
         Seg::A { c, r, a0, sw, full } => {
             let mirrored = mat::det(m) < 0.0;
             let k = mat::scale_factor(m);
             let nc = mat::apply(m, c);
             let v = mat::apply_vec(m, pt(a0.cos(), a0.sin()));
-            Seg::A { c: nc, r: r * k, a0: v.y.atan2(v.x), sw: if mirrored { -sw } else { sw }, full }
+            Seg::A {
+                c: nc,
+                r: r * k,
+                a0: v.y.atan2(v.x),
+                sw: if mirrored { -sw } else { sw },
+                full,
+            }
         }
     }
 }
@@ -873,7 +1063,10 @@ pub fn clip_line_to_rect(a: Pt, d: Pt, r: &Bounds, both_ways: bool) -> Option<(P
             return None;
         }
     }
-    Some((pt(a.x + d.x * t0, a.y + d.y * t0), pt(a.x + d.x * t1, a.y + d.y * t1)))
+    Some((
+        pt(a.x + d.x * t0, a.y + d.y * t0),
+        pt(a.x + d.x * t1, a.y + d.y * t1),
+    ))
 }
 
 pub fn seg_in_rect(s: &Seg, r: &Bounds) -> bool {
@@ -894,7 +1087,9 @@ pub fn seg_touches_rect(s: &Seg, r: &Bounds) -> bool {
         Seg::line(pt(r.max_x, r.max_y), pt(r.min_x, r.max_y)),
         Seg::line(pt(r.min_x, r.max_y), pt(r.min_x, r.min_y)),
     ];
-    edges.iter().any(|e| !seg_intersect(s, e, false, false).is_empty())
+    edges
+        .iter()
+        .any(|e| !seg_intersect(s, e, false, false).is_empty())
 }
 
 #[cfg(test)]
@@ -926,7 +1121,7 @@ mod tests {
             _ => panic!(),
         }
         assert!(arc_through(pt(0.0, 0.0), pt(1.0, 1.0), pt(2.0, 2.0)).is_none());
-        let s = bulge_seg(pt(0.0, 0.0), pt(2.0, 0.0), 1.0);        // semicircle on the left of the chord
+        let s = bulge_seg(pt(0.0, 0.0), pt(2.0, 0.0), 1.0); // semicircle on the left of the chord
         match s {
             Seg::A { c, r, sw, .. } => {
                 assert!(dist(c, pt(1.0, 0.0)) < 1e-9);
@@ -936,7 +1131,7 @@ mod tests {
             _ => panic!(),
         }
         assert_relative_eq!(s.bulge(), 1.0, epsilon = 1e-9);
-        let back = bulge_seg(pt(2.0, 0.0), pt(0.0, 0.0), -1.0);    // negative bulge: clockwise
+        let back = bulge_seg(pt(2.0, 0.0), pt(0.0, 0.0), -1.0); // negative bulge: clockwise
         assert!(matches!(back, Seg::A { sw, .. } if sw < 0.0));
     }
 
@@ -948,7 +1143,9 @@ mod tests {
         assert_eq!(h.len(), 1);
         assert!(dist(h[0].pt, pt(5.0, 5.0)) < 1e-9);
         // parallel
-        assert!(seg_intersect(&l1, &Seg::line(pt(0.0, 1.0), pt(10.0, 11.0)), true, true).is_empty());
+        assert!(
+            seg_intersect(&l1, &Seg::line(pt(0.0, 1.0), pt(10.0, 11.0)), true, true).is_empty()
+        );
         // extension only
         let short = Seg::line(pt(0.0, 0.0), pt(1.0, 0.0));
         let vert = Seg::line(pt(5.0, -1.0), pt(5.0, 1.0));
@@ -957,17 +1154,41 @@ mod tests {
         assert_eq!(ext.len(), 1);
         assert_relative_eq!(ext[0].t1, 5.0, epsilon = 1e-9);
         // line / circle
-        let circle = Seg::A { c: pt(0.0, 0.0), r: 5.0, a0: 0.0, sw: TAU, full: true };
-        let h = seg_intersect(&Seg::line(pt(-10.0, 0.0), pt(10.0, 0.0)), &circle, false, false);
+        let circle = Seg::A {
+            c: pt(0.0, 0.0),
+            r: 5.0,
+            a0: 0.0,
+            sw: TAU,
+            full: true,
+        };
+        let h = seg_intersect(
+            &Seg::line(pt(-10.0, 0.0), pt(10.0, 0.0)),
+            &circle,
+            false,
+            false,
+        );
         assert_eq!(h.len(), 2);
         // tangent line: single hit
-        let t = seg_intersect(&Seg::line(pt(-10.0, 5.0), pt(10.0, 5.0)), &circle, false, false);
+        let t = seg_intersect(
+            &Seg::line(pt(-10.0, 5.0), pt(10.0, 5.0)),
+            &circle,
+            false,
+            false,
+        );
         assert_eq!(t.len(), 1);
         // arc / arc
-        let c2 = Seg::A { c: pt(6.0, 0.0), r: 5.0, a0: 0.0, sw: TAU, full: true };
+        let c2 = Seg::A {
+            c: pt(6.0, 0.0),
+            r: 5.0,
+            a0: 0.0,
+            sw: TAU,
+            full: true,
+        };
         let h = seg_intersect(&circle, &c2, false, false);
         assert_eq!(h.len(), 2);
-        assert!(h.iter().all(|x| (x.pt.x - 3.0).abs() < 1e-9 && (x.pt.y.abs() - 4.0).abs() < 1e-9));
+        assert!(h
+            .iter()
+            .all(|x| (x.pt.x - 3.0).abs() < 1e-9 && (x.pt.y.abs() - 4.0).abs() < 1e-9));
         // half arc excludes one of the hits
         let upper = Seg::arc(pt(0.0, 0.0), 5.0, 0.0, PI);
         assert_eq!(seg_intersect(&upper, &c2, false, false).len(), 1);
@@ -977,16 +1198,26 @@ mod tests {
     fn nearest_offset_and_tangents() {
         let l = Seg::line(pt(0.0, 0.0), pt(10.0, 0.0));
         let (p, t, d) = l.nearest(pt(4.0, 3.0));
-        assert!(dist(p, pt(4.0, 0.0)) < 1e-12 && (t - 0.4).abs() < 1e-12 && (d - 3.0).abs() < 1e-12);
+        assert!(
+            dist(p, pt(4.0, 0.0)) < 1e-12 && (t - 0.4).abs() < 1e-12 && (d - 3.0).abs() < 1e-12
+        );
         assert_eq!(l.nearest(pt(-5.0, 1.0)).1, 0.0);
         match l.offset(2.0).unwrap() {
-            Seg::L { a, b, .. } => assert!(dist(a, pt(0.0, 2.0)) < 1e-12 && dist(b, pt(10.0, 2.0)) < 1e-12),
+            Seg::L { a, b, .. } => {
+                assert!(dist(a, pt(0.0, 2.0)) < 1e-12 && dist(b, pt(10.0, 2.0)) < 1e-12)
+            }
             _ => panic!(),
         }
         let ccw = Seg::arc(Pt::ZERO, 5.0, 0.0, PI);
         assert!(matches!(ccw.offset(2.0), Some(Seg::A { r, .. }) if (r - 3.0).abs() < 1e-12));
         assert!(ccw.offset(6.0).is_none());
-        let circle = Seg::A { c: pt(0.0, 0.0), r: 5.0, a0: 0.0, sw: TAU, full: true };
+        let circle = Seg::A {
+            c: pt(0.0, 0.0),
+            r: 5.0,
+            a0: 0.0,
+            sw: TAU,
+            full: true,
+        };
         let tp = tangent_points(&circle, pt(10.0, 0.0));
         assert_eq!(tp.len(), 2);
         for (q, _) in tp {
@@ -1002,7 +1233,12 @@ mod tests {
 
     #[test]
     fn polylines_and_areas() {
-        let sq = [Vertex::new(0.0, 0.0, 0.0), Vertex::new(4.0, 0.0, 0.0), Vertex::new(4.0, 3.0, 0.0), Vertex::new(0.0, 3.0, 0.0)];
+        let sq = [
+            Vertex::new(0.0, 0.0, 0.0),
+            Vertex::new(4.0, 0.0, 0.0),
+            Vertex::new(4.0, 3.0, 0.0),
+            Vertex::new(0.0, 3.0, 0.0),
+        ];
         assert_relative_eq!(pline_area(&sq), 12.0, epsilon = 1e-12);
         assert_relative_eq!(pline_length(&sq, true), 14.0, epsilon = 1e-12);
         assert_eq!(pline_segs(&sq, false).len(), 3);
@@ -1012,8 +1248,14 @@ mod tests {
         assert_relative_eq!(pline_length(&circle, true), TAU, epsilon = 1e-9);
         let back = segs_to_verts(&pline_segs(&circle, true), true);
         assert_relative_eq!(back[0].b, 1.0, epsilon = 1e-9);
-        assert!(point_in_polygon(pt(1.0, 1.0), &[pt(0.0, 0.0), pt(4.0, 0.0), pt(4.0, 3.0), pt(0.0, 3.0)]));
-        assert!(!point_in_polygon(pt(5.0, 1.0), &[pt(0.0, 0.0), pt(4.0, 0.0), pt(4.0, 3.0), pt(0.0, 3.0)]));
+        assert!(point_in_polygon(
+            pt(1.0, 1.0),
+            &[pt(0.0, 0.0), pt(4.0, 0.0), pt(4.0, 3.0), pt(0.0, 3.0)]
+        ));
+        assert!(!point_in_polygon(
+            pt(5.0, 1.0),
+            &[pt(0.0, 0.0), pt(4.0, 0.0), pt(4.0, 3.0), pt(0.0, 3.0)]
+        ));
     }
 
     #[test]
@@ -1026,7 +1268,13 @@ mod tests {
         assert_relative_eq!(b.max_y, 10.0, epsilon = 1e-9);
         assert_relative_eq!(b.min_x, -10.0, epsilon = 1e-9);
         assert!(b.min_y.abs() < 1e-9);
-        let two = tess_segs(&[Seg::line(pt(0.0, 0.0), pt(1.0, 0.0)), Seg::line(pt(1.0, 0.0), pt(1.0, 1.0))], 0.01);
+        let two = tess_segs(
+            &[
+                Seg::line(pt(0.0, 0.0), pt(1.0, 0.0)),
+                Seg::line(pt(1.0, 0.0), pt(1.0, 1.0)),
+            ],
+            0.01,
+        );
         assert_eq!(two.len(), 3);
     }
 
@@ -1042,7 +1290,11 @@ mod tests {
         let inv = mat::invert(&mat::mul(&r, &s));
         let p = pt(3.0, -2.0);
         assert!(dist(mat::apply(&inv, mat::apply(&mat::mul(&r, &s), p)), p) < 1e-12);
-        assert!(mat::is_similarity(&r) && mat::is_similarity(&m) && !mat::is_similarity(&mat::scale(2.0, 1.0, Pt::ZERO)));
+        assert!(
+            mat::is_similarity(&r)
+                && mat::is_similarity(&m)
+                && !mat::is_similarity(&mat::scale(2.0, 1.0, Pt::ZERO))
+        );
         // arcs under a mirror keep their shape but reverse their sweep
         let arc = Seg::arc(pt(0.0, 0.0), 2.0, 0.0, PI / 2.0);
         match transform_seg(&arc, &mat::mirror(pt(0.0, 0.0), pt(1.0, 0.0))) {
@@ -1067,7 +1319,10 @@ mod tests {
         let crossing = Seg::line(pt(-5.0, 5.0), pt(15.0, 5.0));
         assert!(seg_touches_rect(&crossing, &r) && !seg_in_rect(&crossing, &r));
         assert!(seg_in_rect(&Seg::line(pt(1.0, 1.0), pt(2.0, 2.0)), &r));
-        assert!(!seg_touches_rect(&Seg::line(pt(20.0, 20.0), pt(30.0, 30.0)), &r));
+        assert!(!seg_touches_rect(
+            &Seg::line(pt(20.0, 20.0), pt(30.0, 30.0)),
+            &r
+        ));
     }
 }
 
@@ -1085,19 +1340,31 @@ impl Ucs {
     }
     pub fn to_wcs(&self, p: Pt) -> Pt {
         let (c, s) = (self.angle.cos(), self.angle.sin());
-        Pt { x: self.origin.x + p.x * c - p.y * s, y: self.origin.y + p.x * s + p.y * c }
+        Pt {
+            x: self.origin.x + p.x * c - p.y * s,
+            y: self.origin.y + p.x * s + p.y * c,
+        }
     }
     pub fn from_wcs(&self, p: Pt) -> Pt {
         let (c, s) = (self.angle.cos(), self.angle.sin());
         let (dx, dy) = (p.x - self.origin.x, p.y - self.origin.y);
-        Pt { x: dx * c + dy * s, y: -dx * s + dy * c }
+        Pt {
+            x: dx * c + dy * s,
+            y: -dx * s + dy * c,
+        }
     }
     pub fn vec_to_wcs(&self, v: Pt) -> Pt {
         let (c, s) = (self.angle.cos(), self.angle.sin());
-        Pt { x: v.x * c - v.y * s, y: v.x * s + v.y * c }
+        Pt {
+            x: v.x * c - v.y * s,
+            y: v.x * s + v.y * c,
+        }
     }
     pub fn vec_from_wcs(&self, v: Pt) -> Pt {
         let (c, s) = (self.angle.cos(), self.angle.sin());
-        Pt { x: v.x * c + v.y * s, y: -v.x * s + v.y * c }
+        Pt {
+            x: v.x * c + v.y * s,
+            y: -v.x * s + v.y * c,
+        }
     }
 }

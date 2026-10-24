@@ -8,7 +8,11 @@ fn p(x: f64, y: f64) -> Pt {
 }
 
 fn three_lines(s: &Sim) -> [u64; 3] {
-    [s.add(Entity::line(p(0., 0.), p(10., 0.))), s.add(Entity::line(p(0., 5.), p(10., 5.))), s.add(Entity::line(p(0., 10.), p(10., 10.)))]
+    [
+        s.add(Entity::line(p(0., 0.), p(10., 0.))),
+        s.add(Entity::line(p(0., 5.), p(10., 5.))),
+        s.add(Entity::line(p(0., 10.), p(10., 10.))),
+    ]
 }
 
 fn visible(s: &Sim, id: u64) -> bool {
@@ -21,7 +25,11 @@ fn isolate_hides_everything_but_the_selection_and_unisolate_brings_it_back() {
     let [a, b, c] = three_lines(&s);
     s.set_sel(&[b]);
     s.cmd("ISOLATEOBJECTS");
-    assert!(!visible(&s, a) && visible(&s, b) && !visible(&s, c), "{}", s.log_text());
+    assert!(
+        !visible(&s, a) && visible(&s, b) && !visible(&s, c),
+        "{}",
+        s.log_text()
+    );
     assert!(s.history_has("2 objects hidden."));
     // hidden objects cannot be picked
     s.cmd("ERASE").click(5., 0.).enter();

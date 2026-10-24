@@ -15,7 +15,15 @@ fn main() {
     let bytes = std::fs::read(&args[0]).unwrap();
     let t = std::time::Instant::now();
     match cadforge_core::io::dwg::dwg_to_dxf(&bytes) {
-        Ok((_, rep)) => println!("{}: version {} objects {} failed {:?} unsupported {:?} ({:?})", args[0], rep.version, rep.objects, rep.failed, rep.unsupported, t.elapsed()),
+        Ok((_, rep)) => println!(
+            "{}: version {} objects {} failed {:?} unsupported {:?} ({:?})",
+            args[0],
+            rep.version,
+            rep.objects,
+            rep.failed,
+            rep.unsupported,
+            t.elapsed()
+        ),
         Err(e) => {
             println!("{}: ERROR {e}", args[0]);
             return;
@@ -23,10 +31,16 @@ fn main() {
     }
     let d = cadforge_core::io::read_dwg(&bytes, "x").unwrap();
     let s = summary(&d);
-    println!("  dwg: {:?} layers {} blocks {} layouts {:?} skipped {:?}", s.0, s.1, s.2, s.3, d.skipped);
+    println!(
+        "  dwg: {:?} layers {} blocks {} layouts {:?} skipped {:?}",
+        s.0, s.1, s.2, s.3, d.skipped
+    );
     if let Some(twin) = args.get(1) {
         let t = cadforge_core::io::read_dxf_bytes(&std::fs::read(twin).unwrap(), "x").unwrap();
         let s2 = summary(&t);
-        println!("  dxf: {:?} layers {} blocks {} layouts {:?} skipped {:?}", s2.0, s2.1, s2.2, s2.3, t.skipped);
+        println!(
+            "  dxf: {:?} layers {} blocks {} layouts {:?} skipped {:?}",
+            s2.0, s2.1, s2.2, s2.3, t.skipped
+        );
     }
 }

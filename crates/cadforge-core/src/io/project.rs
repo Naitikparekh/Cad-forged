@@ -6,7 +6,7 @@ pub const FILE_EXT: &str = ".cadforge.json";
 /// File name without a recognised drawing extension.
 pub fn strip_ext(name: &str) -> String {
     let lower = name.to_lowercase();
-    for ext in [".cadforge.json", ".json", ".cadforge", ".dxf"] {
+    for ext in [".cadforge.json", ".json", ".cadforge", ".dxf", ".dwg"] {
         if lower.ends_with(ext) {
             return name[..name.len() - ext.len()].to_string();
         }
@@ -19,5 +19,11 @@ pub fn to_json(doc: &Drawing) -> String {
 }
 
 pub fn from_json(text: &str, name: &str) -> Result<Drawing, String> {
-    Drawing::from_json_str(text, Some(name)).map_err(|e| if e.contains("expected") || e.contains("EOF") || e.contains("key must be") { "This file is not valid JSON.".to_string() } else { e })
+    Drawing::from_json_str(text, Some(name)).map_err(|e| {
+        if e.contains("expected") || e.contains("EOF") || e.contains("key must be") {
+            "This file is not valid JSON.".to_string()
+        } else {
+            e
+        }
+    })
 }

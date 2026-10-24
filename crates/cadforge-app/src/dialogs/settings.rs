@@ -4,7 +4,9 @@ use crate::app::CadForgeApp;
 use cadforge_engine::parse::{os_bit, os_full};
 use eframe::egui::{self, RichText};
 
-const OSNAP_MODES: [&str; 10] = ["END", "MID", "CEN", "NOD", "QUA", "INT", "INS", "PER", "TAN", "NEA"];
+const OSNAP_MODES: [&str; 10] = [
+    "END", "MID", "CEN", "NOD", "QUA", "INT", "INS", "PER", "TAN", "NEA",
+];
 
 fn fnum(v: f64) -> String {
     cadforge_engine::sysvars::fmt_num(v)
@@ -44,7 +46,25 @@ impl DsState {
             "dyn" => 3,
             _ => 0,
         };
-        DsState { tab, ready: false, snap_on: false, snap_x: String::new(), snap_y: String::new(), grid_on: true, grid_x: String::new(), grid_y: String::new(), major: String::new(), polar_on: false, inc: 90.0, otrack: true, os_on: true, modes: [false; 10], dyn_on: true, dyn_ptr: true, dyn_dim: true }
+        DsState {
+            tab,
+            ready: false,
+            snap_on: false,
+            snap_x: String::new(),
+            snap_y: String::new(),
+            grid_on: true,
+            grid_x: String::new(),
+            grid_y: String::new(),
+            major: String::new(),
+            polar_on: false,
+            inc: 90.0,
+            otrack: true,
+            os_on: true,
+            modes: [false; 10],
+            dyn_on: true,
+            dyn_ptr: true,
+            dyn_dim: true,
+        }
     }
     pub fn load(&mut self, app: &CadForgeApp) {
         let a = app.h.borrow();
@@ -71,7 +91,12 @@ impl DsState {
         self.ready = true;
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
-        let (Some(sx), Some(sy), Some(gx), Some(gy)) = (parse_pos(&self.snap_x), parse_pos(&self.snap_y), parse_pos(&self.grid_x), parse_pos(&self.grid_y)) else {
+        let (Some(sx), Some(sy), Some(gx), Some(gy)) = (
+            parse_pos(&self.snap_x),
+            parse_pos(&self.snap_y),
+            parse_pos(&self.grid_x),
+            parse_pos(&self.grid_y),
+        ) else {
             app.toast("Spacing values must be positive numbers.");
             return;
         };
@@ -81,7 +106,14 @@ impl DsState {
         app.set_sv("GRIDMODE", self.grid_on as i64 as f64);
         app.set_sv("GRIDUNIT_X", gx);
         app.set_sv("GRIDUNIT_Y", gy);
-        app.set_sv("GRIDMAJOR", self.major.trim().parse::<f64>().ok().map_or(5.0, |v| v.round().max(1.0)));
+        app.set_sv(
+            "GRIDMAJOR",
+            self.major
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map_or(5.0, |v| v.round().max(1.0)),
+        );
         app.set_sv("POLARANG", self.inc);
         app.set_sv("POLARMODE", self.polar_on as i64 as f64);
         app.set_sv("OTRACKMODE", self.otrack as i64 as f64);
@@ -97,13 +129,29 @@ impl DsState {
         app.set_sv("OSMODE", m as f64);
         let bits = (self.dyn_ptr as i64) | ((self.dyn_dim as i64) << 1);
         let bits = if bits == 0 { 3 } else { bits };
-        app.set_sv("DYNMODE", if self.dyn_on { bits as f64 } else { -(bits as f64) });
+        app.set_sv(
+            "DYNMODE",
+            if self.dyn_on {
+                bits as f64
+            } else {
+                -(bits as f64)
+            },
+        );
     }
 }
 
 impl CadForgeApp {
     pub(super) fn ui_dsettings(&mut self, ui: &mut egui::Ui, s: &mut DsState) -> Out {
-        self.tab_strip(ui, &["Snap and Grid", "Polar Tracking", "Object Snap", "Dynamic Input"], &mut s.tab);
+        self.tab_strip(
+            ui,
+            &[
+                "Snap and Grid",
+                "Polar Tracking",
+                "Object Snap",
+                "Dynamic Input",
+            ],
+            &mut s.tab,
+        );
         match s.tab {
             0 => {
                 ui.columns(2, |cols| {
@@ -139,11 +187,13 @@ impl CadForgeApp {
                     ui.checkbox(&mut s.polar_on, "Polar Tracking On (F10)");
                     ui.horizontal(|ui| {
                         ui.label("Increment angle");
-                        egui::ComboBox::from_id_salt("ds-inc").selected_text(fnum(s.inc)).show_ui(ui, |ui| {
-                            for v in [90.0, 45.0, 30.0, 22.5, 18.0, 15.0, 10.0, 5.0] {
-                                ui.selectable_value(&mut s.inc, v, fnum(v));
-                            }
-                        });
+                        egui::ComboBox::from_id_salt("ds-inc")
+                            .selected_text(fnum(s.inc))
+                            .show_ui(ui, |ui| {
+                                for v in [90.0, 45.0, 30.0, 22.5, 18.0, 15.0, 10.0, 5.0] {
+                                    ui.selectable_value(&mut s.inc, v, fnum(v));
+                                }
+                            });
                     });
                 });
                 self.group(ui, "Object snap tracking", |ui| {
@@ -153,14 +203,17 @@ impl CadForgeApp {
             2 => {
                 ui.checkbox(&mut s.os_on, "Object Snap On (F3)");
                 self.group(ui, "Object Snap modes", |ui| {
-                    egui::Grid::new("ds-os").num_columns(2).spacing([40.0, 4.0]).show(ui, |ui| {
-                        for (i, k) in OSNAP_MODES.iter().enumerate() {
-                            ui.checkbox(&mut s.modes[i], os_full(k));
-                            if i % 2 == 1 {
-                                ui.end_row();
+                    egui::Grid::new("ds-os")
+                        .num_columns(2)
+                        .spacing([40.0, 4.0])
+                        .show(ui, |ui| {
+                            for (i, k) in OSNAP_MODES.iter().enumerate() {
+                                ui.checkbox(&mut s.modes[i], os_full(k));
+                                if i % 2 == 1 {
+                                    ui.end_row();
+                                }
                             }
-                        }
-                    });
+                        });
                 });
                 ui.horizontal(|ui| {
                     if self.btn(ui, "Select All", false).clicked() {
@@ -235,7 +288,11 @@ impl OptionsState {
         }
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
-        let n = |s: &str, lo: f64, hi: f64| s.trim().parse::<f64>().map_or(lo, |v| v.round().clamp(lo, hi));
+        let n = |s: &str, lo: f64, hi: f64| {
+            s.trim()
+                .parse::<f64>()
+                .map_or(lo, |v| v.round().clamp(lo, hi))
+        };
         app.pending_theme = Some(self.dark);
         app.set_sv("CURSORSIZE", n(&self.cursor, 1.0, 100.0));
         app.set_sv("LWDISPLAY", self.lw as i64 as f64);
@@ -250,14 +307,21 @@ impl OptionsState {
         app.set_sv("PICKFIRST", self.pickfirst as i64 as f64);
         app.set_sv("APERTURE", n(&self.apt, 1.0, 50.0));
         app.set_sv("AUTOCOMPLETE", self.auto as i64 as f64);
-        let sc = (self.sc_default as i64) | ((self.sc_edit as i64) << 1) | ((self.sc_cmd as i64) << 2) | 8;
+        let sc = (self.sc_default as i64)
+            | ((self.sc_edit as i64) << 1)
+            | ((self.sc_cmd as i64) << 2)
+            | 8;
         app.set_sv("SHORTCUTMENU", sc as f64);
     }
 }
 
 impl CadForgeApp {
     pub(super) fn ui_options(&mut self, ui: &mut egui::Ui, s: &mut OptionsState) -> Out {
-        self.tab_strip(ui, &["Display", "Selection", "Drafting", "User Preferences"], &mut s.tab);
+        self.tab_strip(
+            ui,
+            &["Display", "Selection", "Drafting", "User Preferences"],
+            &mut s.tab,
+        );
         match s.tab {
             0 => {
                 self.group(ui, "Colour scheme", |ui| {
@@ -295,7 +359,10 @@ impl CadForgeApp {
                     ui.checkbox(&mut s.grips, "Enable grips");
                 });
                 self.group(ui, "Selection modes", |ui| {
-                    ui.checkbox(&mut s.pickfirst, "Allow selection before the command (noun/verb)");
+                    ui.checkbox(
+                        &mut s.pickfirst,
+                        "Allow selection before the command (noun/verb)",
+                    );
                 });
             }
             2 => {
@@ -313,7 +380,10 @@ impl CadForgeApp {
                 self.group(ui, "Right-click customization", |ui| {
                     ui.checkbox(&mut s.sc_default, "Default mode menu (no objects selected)");
                     ui.checkbox(&mut s.sc_edit, "Edit mode menu (objects selected)");
-                    ui.checkbox(&mut s.sc_cmd, "Command mode menu (right-click shows a menu; otherwise it acts as Enter)");
+                    ui.checkbox(
+                        &mut s.sc_cmd,
+                        "Command mode menu (right-click shows a menu; otherwise it acts as Enter)",
+                    );
                 });
                 if self.btn(ui, "Edit Aliases...", false).clicked() {
                     self.dialog = Some(super::Dialog::aliasedit());
@@ -323,7 +393,12 @@ impl CadForgeApp {
         let o = self.ok_cancel(ui, Some("OK"), Some("Cancel"), &["Reset"]);
         if o == Out::Btn(0) {
             let d = cadforge_engine::sysvars::pref_defaults();
-            for (k, dst) in [("CURSORSIZE", &mut s.cursor), ("PICKBOX", &mut s.pick), ("GRIPSIZE", &mut s.grip), ("APERTURE", &mut s.apt)] {
+            for (k, dst) in [
+                ("CURSORSIZE", &mut s.cursor),
+                ("PICKBOX", &mut s.pick),
+                ("GRIPSIZE", &mut s.grip),
+                ("APERTURE", &mut s.apt),
+            ] {
                 if let Some(v) = d.get(k).and_then(|v| v.num()) {
                     *dst = fnum(v);
                 }
@@ -345,8 +420,15 @@ pub struct UnitsState {
 impl UnitsState {
     pub fn new(app: &CadForgeApp) -> UnitsState {
         let a = app.h.borrow();
-        let u = a.doc().map(|d| d.settings.units.clone()).unwrap_or_default();
-        UnitsState { precision: u.precision, ang: u.ang_precision, ins: u.ins_units }
+        let u = a
+            .doc()
+            .map(|d| d.settings.units.clone())
+            .unwrap_or_default();
+        UnitsState {
+            precision: u.precision,
+            ang: u.ang_precision,
+            ins: u.ins_units,
+        }
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
         let (p, a, i) = (self.precision, self.ang, self.ins);
@@ -378,11 +460,13 @@ impl CadForgeApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Precision");
-                    egui::ComboBox::from_id_salt("un-prec").selected_text(prec_label(s.precision)).show_ui(ui, |ui| {
-                        for v in 0..=8 {
-                            ui.selectable_value(&mut s.precision, v, prec_label(v));
-                        }
-                    });
+                    egui::ComboBox::from_id_salt("un-prec")
+                        .selected_text(prec_label(s.precision))
+                        .show_ui(ui, |ui| {
+                            for v in 0..=8 {
+                                ui.selectable_value(&mut s.precision, v, prec_label(v));
+                            }
+                        });
                 });
             });
             self.group(&mut cols[1], "Angle", |ui| {
@@ -392,11 +476,13 @@ impl CadForgeApp {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Precision");
-                    egui::ComboBox::from_id_salt("un-ang").selected_text(prec_label(s.ang)).show_ui(ui, |ui| {
-                        for v in 0..=4 {
-                            ui.selectable_value(&mut s.ang, v, prec_label(v));
-                        }
-                    });
+                    egui::ComboBox::from_id_salt("un-ang")
+                        .selected_text(prec_label(s.ang))
+                        .show_ui(ui, |ui| {
+                            for v in 0..=4 {
+                                ui.selectable_value(&mut s.ang, v, prec_label(v));
+                            }
+                        });
                 });
                 self.note(ui, "Angles measure counter-clockwise from the +X axis.");
             });
@@ -404,13 +490,25 @@ impl CadForgeApp {
         self.group(ui, "Insertion scale", |ui| {
             ui.horizontal(|ui| {
                 ui.label("Units to scale inserted content");
-                let names = [(0, "Unitless"), (1, "Inches"), (2, "Feet"), (4, "Millimeters"), (5, "Centimeters"), (6, "Meters")];
-                let cur = names.iter().find(|n| n.0 == s.ins).map_or("Unitless", |n| n.1);
-                egui::ComboBox::from_id_salt("un-ins").selected_text(cur).show_ui(ui, |ui| {
-                    for (v, l) in names {
-                        ui.selectable_value(&mut s.ins, v, l);
-                    }
-                });
+                let names = [
+                    (0, "Unitless"),
+                    (1, "Inches"),
+                    (2, "Feet"),
+                    (4, "Millimeters"),
+                    (5, "Centimeters"),
+                    (6, "Meters"),
+                ];
+                let cur = names
+                    .iter()
+                    .find(|n| n.0 == s.ins)
+                    .map_or("Unitless", |n| n.1);
+                egui::ComboBox::from_id_salt("un-ins")
+                    .selected_text(cur)
+                    .show_ui(ui, |ui| {
+                        for (v, l) in names {
+                            ui.selectable_value(&mut s.ins, v, l);
+                        }
+                    });
             });
         });
         self.ok_cancel(ui, Some("OK"), Some("Cancel"), &[])
@@ -425,7 +523,13 @@ pub struct TextStyleState {
 
 impl TextStyleState {
     pub fn new(app: &CadForgeApp) -> TextStyleState {
-        TextStyleState { height: app.h.borrow().doc().map_or("2.5".into(), |d| fnum(d.settings.text_height)) }
+        TextStyleState {
+            height: app
+                .h
+                .borrow()
+                .doc()
+                .map_or("2.5".into(), |d| fnum(d.settings.text_height)),
+        }
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
         let Some(v) = parse_pos(&self.height) else {
@@ -442,17 +546,20 @@ impl TextStyleState {
 
 impl CadForgeApp {
     pub(super) fn ui_textstyle(&mut self, ui: &mut egui::Ui, s: &mut TextStyleState) -> Out {
-        egui::Grid::new("ts").num_columns(2).spacing([14.0, 8.0]).show(ui, |ui| {
-            ui.label("Style name");
-            ui.label(RichText::new("Standard").strong());
-            ui.end_row();
-            ui.label("Font");
-            ui.label("Sans-serif (Liberation Sans)");
-            ui.end_row();
-            ui.label("Default height");
-            self.num_edit(ui, &mut s.height, 90.0);
-            ui.end_row();
-        });
+        egui::Grid::new("ts")
+            .num_columns(2)
+            .spacing([14.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Style name");
+                ui.label(RichText::new("Standard").strong());
+                ui.end_row();
+                ui.label("Font");
+                ui.label("Sans-serif (Liberation Sans)");
+                ui.end_row();
+                ui.label("Default height");
+                self.num_edit(ui, &mut s.height, 90.0);
+                ui.end_row();
+            });
         self.note(ui, "Text is drawn with a Helvetica-compatible sans-serif font. The default height is used by TEXT and MTEXT.");
         self.ok_cancel(ui, Some("OK"), Some("Cancel"), &[])
     }
@@ -482,14 +589,21 @@ fn prop_of(e: &cadforge_core::entities::Entity, k: usize) -> String {
 
 impl QSelectState {
     pub fn new(app: &CadForgeApp) -> QSelectState {
-        let mut s = QSelectState { prop: 0, neg: false, value: String::new(), include: true, append: false };
+        let mut s = QSelectState {
+            prop: 0,
+            neg: false,
+            value: String::new(),
+            include: true,
+            append: false,
+        };
         s.value = s.values(app).first().cloned().unwrap_or_default();
         s
     }
     fn values(&self, app: &CadForgeApp) -> Vec<String> {
         let a = app.h.borrow();
         let Some(d) = a.doc() else { return vec![] };
-        let set: std::collections::BTreeSet<String> = d.entities().iter().map(|e| prop_of(e, self.prop)).collect();
+        let set: std::collections::BTreeSet<String> =
+            d.entities().iter().map(|e| prop_of(e, self.prop)).collect();
         set.into_iter().collect()
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
@@ -523,44 +637,63 @@ impl QSelectState {
 impl CadForgeApp {
     pub(super) fn ui_qselect(&mut self, ui: &mut egui::Ui, s: &mut QSelectState) -> Out {
         let values = s.values(self);
-        egui::Grid::new("qs").num_columns(2).spacing([14.0, 8.0]).show(ui, |ui| {
-            ui.label("Apply to");
-            ui.label("Entire drawing");
-            ui.end_row();
-            ui.label("Property");
-            let before = s.prop;
-            egui::ComboBox::from_id_salt("qs-prop").selected_text(QS_PROPS[s.prop]).show_ui(ui, |ui| {
-                for (i, p) in QS_PROPS.iter().enumerate() {
-                    ui.selectable_value(&mut s.prop, i, *p);
+        egui::Grid::new("qs")
+            .num_columns(2)
+            .spacing([14.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Apply to");
+                ui.label("Entire drawing");
+                ui.end_row();
+                ui.label("Property");
+                let before = s.prop;
+                egui::ComboBox::from_id_salt("qs-prop")
+                    .selected_text(QS_PROPS[s.prop])
+                    .show_ui(ui, |ui| {
+                        for (i, p) in QS_PROPS.iter().enumerate() {
+                            ui.selectable_value(&mut s.prop, i, *p);
+                        }
+                    });
+                if s.prop != before {
+                    s.value = String::new();
                 }
-            });
-            if s.prop != before {
-                s.value = String::new();
-            }
-            ui.end_row();
-            ui.label("Operator");
-            egui::ComboBox::from_id_salt("qs-op").selected_text(if s.neg { "<> Not equal to" } else { "= Equals" }).show_ui(ui, |ui| {
-                ui.selectable_value(&mut s.neg, false, "= Equals");
-                ui.selectable_value(&mut s.neg, true, "<> Not equal to");
-            });
-            ui.end_row();
-            ui.label("Value");
-            if s.value.is_empty() || !values.contains(&s.value) {
-                s.value = values.first().cloned().unwrap_or_default();
-            }
-            egui::ComboBox::from_id_salt("qs-val").selected_text(&s.value).show_ui(ui, |ui| {
-                for v in &values {
-                    ui.selectable_value(&mut s.value, v.clone(), v);
+                ui.end_row();
+                ui.label("Operator");
+                egui::ComboBox::from_id_salt("qs-op")
+                    .selected_text(if s.neg { "<> Not equal to" } else { "= Equals" })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut s.neg, false, "= Equals");
+                        ui.selectable_value(&mut s.neg, true, "<> Not equal to");
+                    });
+                ui.end_row();
+                ui.label("Value");
+                if s.value.is_empty() || !values.contains(&s.value) {
+                    s.value = values.first().cloned().unwrap_or_default();
                 }
+                egui::ComboBox::from_id_salt("qs-val")
+                    .selected_text(&s.value)
+                    .show_ui(ui, |ui| {
+                        for v in &values {
+                            ui.selectable_value(&mut s.value, v.clone(), v);
+                        }
+                    });
+                ui.end_row();
+                ui.label("How to apply");
+                egui::ComboBox::from_id_salt("qs-how")
+                    .selected_text(if s.include {
+                        "Include in new selection set"
+                    } else {
+                        "Exclude from new selection set"
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut s.include, true, "Include in new selection set");
+                        ui.selectable_value(
+                            &mut s.include,
+                            false,
+                            "Exclude from new selection set",
+                        );
+                    });
+                ui.end_row();
             });
-            ui.end_row();
-            ui.label("How to apply");
-            egui::ComboBox::from_id_salt("qs-how").selected_text(if s.include { "Include in new selection set" } else { "Exclude from new selection set" }).show_ui(ui, |ui| {
-                ui.selectable_value(&mut s.include, true, "Include in new selection set");
-                ui.selectable_value(&mut s.include, false, "Exclude from new selection set");
-            });
-            ui.end_row();
-        });
         ui.checkbox(&mut s.append, "Append to current selection set");
         self.ok_cancel(ui, Some("OK"), Some("Cancel"), &[])
     }

@@ -76,9 +76,24 @@ impl Default for Memory {
             rect_fillet: 0.0,
             rect_chamfer: [0.0, 0.0],
             fillet_radius: None,
-            hatch: Rc::new(RefCell::new(HatchMemory { pattern: "ANSI31".into(), scale: 1.0, angle: 0.0, color: None, island: "normal".into() })),
-            array_rect: ArrayRect { rows: 3, cols: 4, dr: 10.0, dc: 10.0 },
-            array_polar: ArrayPolar { n: 6, fill: 360.0, rotate: true },
+            hatch: Rc::new(RefCell::new(HatchMemory {
+                pattern: "ANSI31".into(),
+                scale: 1.0,
+                angle: 0.0,
+                color: None,
+                island: "normal".into(),
+            })),
+            array_rect: ArrayRect {
+                rows: 3,
+                cols: 4,
+                dr: 10.0,
+                dc: 10.0,
+            },
+            array_polar: ArrayPolar {
+                n: 6,
+                fill: 360.0,
+                rotate: true,
+            },
             text_height: 2.5,
             dim_style: "Standard".into(),
             insert_scale: 1.0,
@@ -91,7 +106,12 @@ impl Default for Memory {
             last_dim: None,
             last_distance: 0.0,
             group_serial: 0,
-            solid: SolidMemory { radius: 10.0, height: 20.0, length: 30.0, top: 0.0 },
+            solid: SolidMemory {
+                radius: 10.0,
+                height: 20.0,
+                length: 30.0,
+                top: 0.0,
+            },
         }
     }
 }

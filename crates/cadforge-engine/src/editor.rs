@@ -32,7 +32,18 @@ impl Editor {
         if let Some(s) = &doc.view {
             view.set_state(s);
         }
-        Editor { id, doc, view, sel: IndexSet::new(), temp_sel: IndexSet::new(), hover_id: None, zoomed: false, visual_style: "2D Wireframe".into(), views: Default::default(), mspace: None }
+        Editor {
+            id,
+            doc,
+            view,
+            sel: IndexSet::new(),
+            temp_sel: IndexSet::new(),
+            hover_id: None,
+            zoomed: false,
+            visual_style: "2D Wireframe".into(),
+            views: Default::default(),
+            mspace: None,
+        }
     }
 
     pub fn entity_by_id(&self, id: u64) -> Option<&Entity> {
@@ -40,15 +51,28 @@ impl Editor {
     }
 
     pub fn selected(&self) -> Vec<&Entity> {
-        self.doc.entities().iter().filter(|e| self.sel.contains(&e.id)).collect()
+        self.doc
+            .entities()
+            .iter()
+            .filter(|e| self.sel.contains(&e.id))
+            .collect()
     }
 
     pub fn selected_ids(&self) -> Vec<u64> {
-        self.doc.entities().iter().filter(|e| self.sel.contains(&e.id)).map(|e| e.id).collect()
+        self.doc
+            .entities()
+            .iter()
+            .filter(|e| self.sel.contains(&e.id))
+            .map(|e| e.id)
+            .collect()
     }
 
     pub fn selected_solids(&self) -> Vec<&Solid> {
-        self.doc.solids.iter().filter(|s| self.sel.contains(&s.id)).collect()
+        self.doc
+            .solids
+            .iter()
+            .filter(|s| self.sel.contains(&s.id))
+            .collect()
     }
 
     pub fn select(&mut self, ids: impl IntoIterator<Item = u64>) {
@@ -68,7 +92,13 @@ impl Editor {
 
     /// Drop ids that no longer exist (after undo, erase...).
     pub fn prune(&mut self) {
-        let live: HashSet<u64> = self.doc.entities().iter().map(|e| e.id).chain(self.doc.solids.iter().map(|s| s.id)).collect();
+        let live: HashSet<u64> = self
+            .doc
+            .entities()
+            .iter()
+            .map(|e| e.id)
+            .chain(self.doc.solids.iter().map(|s| s.id))
+            .collect();
         self.sel.retain(|id| live.contains(id));
         self.temp_sel.retain(|id| live.contains(id));
     }
@@ -85,7 +115,12 @@ impl Editor {
 
     pub fn zoom_extents(&mut self, margin: f64) {
         self.view.push();
-        let pts: Vec<_> = self.doc.solids.iter().flat_map(|s| s.vertices.iter().copied()).collect();
+        let pts: Vec<_> = self
+            .doc
+            .solids
+            .iter()
+            .flat_map(|s| s.vertices.iter().copied())
+            .collect();
         if !self.view.is_plan() && !pts.is_empty() {
             self.view.fit_points_3d(&pts, 0.08);
             return;
