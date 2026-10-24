@@ -93,6 +93,12 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
         w.g(9, "$CLAYER");
         w.text(8, n, false);
     }
+    if hdr.insbase.iter().all(|v| v.is_finite()) && hdr.insbase != [0.0; 3] {
+        w.g(9, "$INSBASE");
+        w.g(10, hdr.insbase[0]);
+        w.g(20, hdr.insbase[1]);
+        w.g(30, hdr.insbase[2]);
+    }
     w.g(0, "ENDSEC");
 
     // ---- tables
@@ -244,9 +250,9 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
                 w.g(10, iw);
                 w.g(20, ih);
             }
-            // groups, with the dictionary entries that name them
+            // groups and XRECORDs, with the dictionary entries that name them
             Info::Dict(entries) => {
-                let groups: Vec<&(String, u64)> = entries.iter().filter(|(_, h)| objs.binary_search_by_key(h, |x| x.handle).is_ok_and(|k| objs[k].ty == "GROUP")).collect();
+                let groups: Vec<&(String, u64)> = entries.iter().filter(|(_, h)| objs.binary_search_by_key(h, |x| x.handle).is_ok_and(|k| matches!(objs[k].ty, "GROUP" | "XRECORD"))).collect();
                 if !groups.is_empty() {
                     w.g(0, "DICTIONARY");
                     w.g(5, hex(o.handle));
@@ -254,6 +260,13 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
                         w.text(3, name, false);
                         w.g(350, hex(*h));
                     }
+                }
+            }
+            Info::Xrecord(items) => {
+                w.g(0, "XRECORD");
+                w.g(5, hex(o.handle));
+                for (c, s) in items {
+                    w.text(*c, s, false);
                 }
             }
             Info::Group(members) => {

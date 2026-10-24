@@ -42,6 +42,54 @@ pub fn xdata_chunks(s: &str) -> Vec<&str> {
     out
 }
 
+/// What a drawing holds that DXF and DWG have no place for, as JSON for the CADFORGE XRECORD of the named object
+/// dictionary (other programs keep it as it is): named views, the last view, the current and named UCSs, the current
+/// colour / linetype / lineweight, loaded linetypes and hatch patterns, the plot style table, which blocks are external
+/// references, and the pictures' data (DXF and DWG only name picture files). None when there is nothing to keep.
+pub fn cadforge_extras(doc: &Drawing) -> Option<String> {
+    use serde_json::{to_value, Map, Value};
+    let mut m = Map::new();
+    let mut put = |k: &str, v: Result<Value, serde_json::Error>| {
+        if let Ok(v) = v {
+            m.insert(k.into(), v);
+        }
+    };
+    if !doc.views.is_empty() {
+        put("views", to_value(&doc.views));
+    }
+    if let Some(v) = &doc.view {
+        put("view", to_value(v));
+    }
+    if !doc.ucs.is_world() {
+        put("ucs", to_value(doc.ucs));
+    }
+    if !doc.ucs_named.is_empty() {
+        put("ucs_named", to_value(&doc.ucs_named));
+    }
+    if doc.cur.color.is_some() || doc.cur.ltype.is_some() || doc.cur.lw.is_some() {
+        put("cur", to_value(&doc.cur));
+    }
+    if !doc.custom_ltypes.is_empty() {
+        put("ltypes", to_value(&doc.custom_ltypes));
+    }
+    if !doc.custom_patterns.is_empty() {
+        put("patterns", to_value(&doc.custom_patterns));
+    }
+    if let Some(p) = &doc.plot_styles {
+        put("plot_styles", to_value(p.as_ref()));
+    }
+    // external references keep their contents as blocks; the link to the other drawing goes here
+    let xrefs: indexmap::IndexMap<&String, &crate::drawing::XrefInfo> = doc.blocks.iter().filter_map(|(k, b)| b.xref.as_ref().map(|x| (k, x))).collect();
+    if !xrefs.is_empty() {
+        put("xrefs", to_value(&xrefs));
+    }
+    let pictures: indexmap::IndexMap<&String, &crate::picture::ImageDef> = doc.images.iter().filter(|(_, d)| d.data.is_some()).collect();
+    if !pictures.is_empty() {
+        put("images", to_value(&pictures));
+    }
+    (!m.is_empty()).then(|| ascii_json(&Value::Object(m)))
+}
+
 /// A DIMENSION's definition point (group 10) for a CadForge dimension.
 pub fn dim_def_point(d: &crate::dim::DimData) -> Pt {
     let zero = pt(0.0, 0.0);
@@ -865,7 +913,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.s(0, "SECTION").s(2, "HEADER");
     o.s(9, "$ACADVER").s(1, "AC1015").s(9, "$DWGCODEPAGE").s(3, "ANSI_1252");
     o.s(9, "$HANDSEED").s(5, "__HANDSEED__");
-    o.s(9, "$INSBASE").pt(pt(0.0, 0.0), 0);
+    o.s(9, "$INSBASE").pt(doc.base, 0);
     o.s(9, "$EXTMIN").pt(pt(ext.min_x, ext.min_y), 0);
     o.s(9, "$EXTMAX").pt(pt(ext.max_x, ext.max_y), 0);
     o.s(9, "$LIMMIN").n(10, 0.0).n(20, 0.0);
@@ -998,6 +1046,16 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.s(0, "DICTIONARY").s(5, &hs["dictRoot"]).i(330, 0).s(100, "AcDbDictionary").i(281, 1).s(3, "ACAD_GROUP").s(350, &hs["dictGroup"]).s(3, "ACAD_LAYOUT").s(350, &dict_layout);
     if !w.image_defs.is_empty() {
         o.s(3, "ACAD_IMAGE_DICT").s(350, &dict_images);
+    }
+    let extras = cadforge_extras(doc).map(|json| (w.h(), json));
+    if let Some((h, _)) = &extras {
+        o.s(3, CADFORGE_APP).s(350, h);
+    }
+    if let Some((h, json)) = &extras {
+        o.s(0, "XRECORD").s(5, h).s(102, "{ACAD_REACTORS").s(330, &hs["dictRoot"]).s(102, "}").s(330, &hs["dictRoot"]).s(100, "AcDbXrecord").i(280, 1);
+        for chunk in xdata_chunks(json) {
+            o.s(1, chunk);
+        }
     }
     o.s(0, "DICTIONARY").s(5, &hs["dictGroup"]).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
     let groups: Vec<&(String, String, Vec<String>)> = w.groups.iter().filter(|g| !g.2.is_empty()).collect();

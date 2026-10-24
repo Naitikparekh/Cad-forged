@@ -127,11 +127,15 @@ fn dxf_round_trip_keeps_placement_clip_and_adjustments() {
     near(i.clip[0].x, 15.0);
     near(i.clip[0].y, 22.0);
     near(i.clip[2].x, 20.0);
-    // the DXF names the file but does not carry it
+    // the DXF names the file (other programs look for it there); CadForge keeps the picture itself in its own data
     let def = &back.images[&i.name];
-    assert!(def.is_missing(), "a DXF refers to the picture file, it does not embed it");
+    assert!(!def.is_missing(), "CadForge opens the picture again");
+    assert_eq!(def.data, d.images[&key].data);
     assert_eq!((def.w, def.h), (4, 2));
     assert_eq!(def.path, d.images[&key].path);
+    // without CadForge's data, the file is only named
+    let plain = read_dxf(&dxf.replace("CADFORGE", "OTHERAPP"), "rt").unwrap();
+    assert!(plain.images.values().all(|p| p.is_missing()));
 }
 
 #[test]

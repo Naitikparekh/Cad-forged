@@ -390,6 +390,69 @@ fn tables_and_regions_open_again() {
     assert!(inside.contains(&"text".to_string()) && inside.contains(&"line".to_string()) && inside.contains(&"pline".to_string()), "{inside:?}");
 }
 
+/// What DXF and DWG have no place for: named views, the last view, the current and named UCSs, the insertion base,
+/// the current colour / linetype / lineweight, loaded linetypes and hatch patterns, the plot style table, an external
+/// reference and the pictures' data.
+fn settings_drawing() -> Drawing {
+    use cadforge_core::defs::{FamilyDef, LinetypeDef, PatternDef};
+    use cadforge_core::drawing::{Current, NamedView, ViewState};
+    use cadforge_core::entities::{ImageData, Kind};
+    let mut d = Drawing::new("settings");
+    d.add_layer("Walls").unwrap();
+    d.define_linetype(LinetypeDef { name: "CF_DASHDOT".into(), desc: "dash dot".into(), pattern: vec![2.0, -1.0, 0.0, -1.0] }).unwrap();
+    d.define_pattern(PatternDef { name: "CF_WEAVE".into(), desc: "weave".into(), families: vec![FamilyDef { a: 30.0, ox: 0.0, oy: 0.0, dx: 0.0, dy: 2.0, dash: vec![1.0, -0.5] }] }).unwrap();
+    let mut l = Entity::line(pt(0.0, 0.0), pt(100.0, 50.0)).on_layer("Walls");
+    l.ltype = Some("CF_DASHDOT".into());
+    d.add(l);
+    d.add(Entity::hatch(vec![vec![Vertex::new(0.0, 0.0, 0.0), Vertex::new(20.0, 0.0, 0.0), Vertex::new(20.0, 10.0, 0.0), Vertex::new(0.0, 10.0, 0.0)]], "CF_WEAVE"));
+    let mut px = vec![];
+    for i in 0..12 {
+        px.extend([20 * i as u8, 255 - 20 * i as u8, 128, 255]);
+    }
+    let key = d.add_image("site photo.png", cadforge_core::picture::encode_png(4, 3, px).unwrap()).unwrap();
+    d.add(Entity::new(Kind::Image(ImageData::new(&key, pt(10.0, 20.0), 40.0, 30.0, 0.0))));
+    d.views.insert("Front".into(), NamedView { cx: 12.5, cy: 7.25, scale: 3.5, cz: None, yaw: None, pitch: None });
+    d.views.insert("Iso".into(), NamedView { cx: 1.0, cy: 2.0, scale: 0.75, cz: Some(4.0), yaw: Some(0.7), pitch: Some(0.6) });
+    d.ucs = cadforge_core::geom::Ucs { origin: pt(10.0, 20.0), angle: 0.5 };
+    d.ucs_named.insert("Rot30".into(), cadforge_core::geom::Ucs { origin: pt(5.0, 5.0), angle: std::f64::consts::FRAC_PI_6 });
+    d.base = pt(3.0, 4.0);
+    d.cur = Current { layer: "Walls".into(), color: Some(cadforge_core::style::Color::Aci(3)), ltype: Some("CF_DASHDOT".into()), lw: Some(35) };
+    d.view = Some(ViewState { cx: 50.0, cy: 25.0, cz: 0.0, scale: 2.0, yaw: 0.0, pitch: std::f64::consts::FRAC_PI_2 });
+    d.plot_styles = Some(std::rc::Rc::new(cadforge_core::plotstyle::PlotStyleTable::monochrome()));
+    d.define_block("SITE", pt(0.0, 0.0), vec![Entity::circle(pt(0.0, 0.0), 5.0)]);
+    d.blocks.get_mut("SITE").unwrap().xref = Some(cadforge_core::drawing::XrefInfo { path: "survey/site.dwg".into(), overlay: true, loaded: true });
+    d.add(Entity::insert("SITE", pt(50.0, 50.0)));
+    d
+}
+
+#[test]
+fn drawing_settings_and_pictures_open_again() {
+    let d = settings_drawing();
+    let state = |d: &Drawing| {
+        let line = d.model.entities.iter().find(|e| e.type_name() == "line").map(|e| e.ltype.clone());
+        let hatch = d.model.entities.iter().find_map(|e| if let cadforge_core::entities::Kind::Hatch(h) = &e.kind { Some(h.pattern.clone()) } else { None });
+        let pictures: Vec<_> = d.images.values().map(|p| (p.path.clone(), p.w, p.h, p.data.as_ref().map(|b| b.0.as_ref().clone()))).collect();
+        let xrefs: Vec<_> = d.blocks.iter().map(|(k, b)| (k.clone(), rounded(&b.xref))).collect();
+        format!(
+            "{} | {} | {} | {} | {} | {} | {} | {} | {} | {line:?} {hatch:?} | {pictures:?} | {xrefs:?}",
+            rounded(&d.views),
+            rounded(&d.view),
+            rounded(&d.ucs),
+            rounded(&d.ucs_named),
+            rounded(&(d.base.x, d.base.y)),
+            rounded(&d.cur),
+            rounded(&d.custom_ltypes),
+            rounded(&d.custom_patterns),
+            rounded(&d.plot_styles)
+        )
+    };
+    for (ver, _) in VERSIONS {
+        let back = read_dwg(&write_dwg_as(&d, ver).unwrap(), "s").unwrap();
+        assert_eq!(state(&back), state(&d), "{}", ver.label());
+    }
+    assert_eq!(state(&read_dxf(&write_dxf(&d), "s").unwrap()), state(&d), "DXF");
+}
+
 /// Objects over 32 KB (a four-byte size), more than one page of the object map, many layers and blocks.
 #[test]
 fn large_objects_and_many_handles() {
@@ -414,7 +477,7 @@ fn large_objects_and_many_handles() {
 }
 
 fn checked_files() -> Vec<(String, Vec<u8>)> {
-    let mut drawings = vec![("sample".to_string(), sample_drawing()), ("dims".to_string(), dims_drawing().0), ("solids".to_string(), solids_drawing()), ("tables".to_string(), tables_drawing())];
+    let mut drawings = vec![("sample".to_string(), sample_drawing()), ("dims".to_string(), dims_drawing().0), ("solids".to_string(), solids_drawing()), ("tables".to_string(), tables_drawing()), ("settings".to_string(), settings_drawing())];
     for f in ["kitchen-R2018.dxf", "annotation-R2018.dxf", "image-R2018.dxf", "pline-widths-R2018.dxf"] {
         drawings.push((f.to_string(), read_dxf_bytes(&std::fs::read(repo(&format!("tests/dxf/corpus/{f}"))).unwrap(), f).unwrap()));
     }

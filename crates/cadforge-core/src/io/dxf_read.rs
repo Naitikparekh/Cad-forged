@@ -1246,7 +1246,7 @@ fn group_entities(list: &[Rec]) -> Vec<Rec> {
 /// When the control points are exactly that chain for the Bézier joints, the joints are the fit points and the
 /// spline reads back as it was (anything else, from other programs, is sampled).
 fn bezier_chain_fit(deg: usize, knots: &[f64], ctrl: &[Pt], weights: &[f64]) -> Option<(Vec<Pt>, bool)> {
-    if deg != 3 || ctrl.len() < 4 || (ctrl.len() - 1) % 3 != 0 || weights.iter().any(|w| *w != 1.0) {
+    if deg != 3 || ctrl.len() < 4 || !(ctrl.len() - 1).is_multiple_of(3) || weights.iter().any(|w| *w != 1.0) {
         return None;
     }
     let n = (ctrl.len() - 1) / 3;
@@ -1368,6 +1368,52 @@ fn cadforge_dim(r: &Rec) -> Option<crate::dim::DimData> {
     (points && text).then_some(d)
 }
 
+/// The CADFORGE XRECORD of the named object dictionary (see `dxf_write::cadforge_extras`), as JSON.
+fn cadforge_extras(objects: &[Rec]) -> Option<serde_json::Value> {
+    let app = super::dxf_write::CADFORGE_APP;
+    let handle = objects.iter().filter(|r| r.ty == "DICTIONARY").find_map(|d| d.g.windows(2).find(|p| p[0].0 == 3 && p[0].1.trim() == app && p[1].0 == 350).map(|p| p[1].1.trim().to_uppercase()))?;
+    let x = objects.iter().find(|r| r.ty == "XRECORD" && r.first(5).is_some_and(|h| h.trim().eq_ignore_ascii_case(&handle)))?;
+    serde_json::from_str(&x.all(1).concat()).ok()
+}
+
+/// Put back what the CADFORGE XRECORD keeps: named views, the last view, the current and named UCSs, the current
+/// colour / linetype / lineweight, the plot style table, which blocks are external references and the data of the
+/// pictures the file names.
+fn apply_extras(doc: &mut Drawing, x: &serde_json::Value) {
+    fn get<T: serde::de::DeserializeOwned>(x: &serde_json::Value, k: &str) -> Option<T> {
+        x.get(k).and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
+    if let Some(v) = get(x, "views") {
+        doc.views = v;
+    }
+    doc.view = get(x, "view").or(doc.view.take());
+    if let Some(u) = get(x, "ucs") {
+        doc.ucs = u;
+    }
+    if let Some(u) = get(x, "ucs_named") {
+        doc.ucs_named = u;
+    }
+    if let Some(c) = get::<crate::drawing::Current>(x, "cur") {
+        // (the current layer is $CLAYER)
+        (doc.cur.color, doc.cur.ltype, doc.cur.lw) = (c.color, c.ltype, c.lw);
+    }
+    if let Some(p) = get::<crate::plotstyle::PlotStyleTable>(x, "plot_styles") {
+        doc.plot_styles = Some(std::rc::Rc::new(p));
+    }
+    let xrefs: indexmap::IndexMap<String, crate::drawing::XrefInfo> = get(x, "xrefs").unwrap_or_default();
+    for (k, info) in xrefs {
+        if let Some(b) = doc.blocks.get_mut(&k) {
+            b.xref = Some(info);
+        }
+    }
+    let pictures: indexmap::IndexMap<String, crate::picture::ImageDef> = get(x, "images").unwrap_or_default();
+    for def in doc.images.values_mut().filter(|d| d.data.is_none()) {
+        if let Some(p) = pictures.values().find(|p| p.path == def.path && p.data.is_some()) {
+            *def = p.clone();
+        }
+    }
+}
+
 /// GROUP objects: the group name (its entry in the group dictionary) of each member entity, by entity handle.
 fn groups_of(objects: &[Rec]) -> HashMap<String, String> {
     let mut names: HashMap<String, String> = HashMap::new();
@@ -1471,6 +1517,7 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let units = hv("$INSUNITS", 70, Some(0.0)).unwrap_or(0.0) as i32;
     doc.settings.units.ins_units = if [0, 1, 2, 4, 5, 6].contains(&units) { units } else { 0 };
     doc.settings.units.precision = (hv("$LUPREC", 70, Some(4.0)).unwrap_or(4.0) as i32).clamp(0, 8);
+    doc.base = pt(hv("$INSBASE", 10, Some(0.0)).unwrap_or(0.0), hv("$INSBASE", 20, Some(0.0)).unwrap_or(0.0));
     let lts = hv("$LTSCALE", 40, Some(1.0)).unwrap_or(1.0);
     doc.settings.ltscale = if lts == 0.0 || lts.is_nan() { 1.0 } else { lts };
     doc.settings.pdmode = hv("$PDMODE", 70, Some(0.0)).unwrap_or(0.0) as i32;
@@ -1554,6 +1601,16 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     // ---- blocks (including anonymous dimension blocks, used for DIMENSION import)
     let layer_names: HashMap<String, String> = secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "LAYER").filter_map(|r| Some((r.first(5)?.to_uppercase(), decode_text(r.first(2)?)))).collect();
     let mut ctx = Ctx { blocks: HashMap::new(), skipped: Default::default(), image_defs: HashMap::new(), image_keys: HashMap::new(), images: Default::default(), layer_names, groups: groups_of(secs.get("OBJECTS").unwrap_or(&empty)), model: false, solids: vec![] };
+    // what CadForge keeps that DXF has no place for; loaded linetypes and patterns first, the entities use them
+    let extras = cadforge_extras(secs.get("OBJECTS").unwrap_or(&empty));
+    if let Some(x) = &extras {
+        for def in x.get("ltypes").and_then(|v| serde_json::from_value::<Vec<crate::defs::LinetypeDef>>(v.clone()).ok()).unwrap_or_default() {
+            let _ = doc.define_linetype(def);
+        }
+        for def in x.get("patterns").and_then(|v| serde_json::from_value::<Vec<crate::defs::PatternDef>>(v.clone()).ok()).unwrap_or_default() {
+            let _ = doc.define_pattern(def);
+        }
+    }
     for r in secs.get("OBJECTS").unwrap_or(&empty).iter().filter(|x| x.ty == "IMAGEDEF") {
         if let Some(h) = r.first(5) {
             let px = |v: f64| if v.is_finite() && v > 0.0 { v.min(1e6) as u32 } else { 0 };
@@ -1731,6 +1788,9 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         doc.insert_solid_raw(s);
     }
     doc.images = std::mem::take(&mut ctx.images);
+    if let Some(x) = &extras {
+        apply_extras(&mut doc, x);
+    }
     doc.skipped = ctx.skipped;
     doc.paper_skipped = 0;
     let _ = paper;

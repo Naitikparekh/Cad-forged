@@ -67,6 +67,8 @@ pub enum Info {
     Group(Vec<u64>),
     /// A registered application (extended data names its application by this record).
     AppId(String),
+    /// An XRECORD's text items (group code, text); reading stops at the first item of another kind.
+    Xrecord(Vec<(i32, String)>),
 }
 
 #[derive(Debug, Clone)]
@@ -127,6 +129,7 @@ fn fixed_type(t: u16) -> Option<&'static str> {
         53 => "STYLE",
         57 => "LTYPE",
         67 => "APPID",
+        79 => "XRECORD",
         69 => "DIMSTYLE",
         72 => "GROUP",
         77 => "LWPOLYLINE",
@@ -704,6 +707,12 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             };
             let info = Info::Dict(entries().unwrap_or_default());
             return Ok(Obj { ty: "DICTIONARY", handle: o.handle, owner, ent: None, g, info });
+        }
+        "XRECORD" => {
+            let owner = o.non_entity()?;
+            let n = o.m.bl()?.clamp(0, 1 << 30) as usize;
+            let b = o.m.bytes(n.min(o.m.d.len()))?;
+            return Ok(Obj { ty: "XRECORD", handle: o.handle, owner, ent: None, g, info: Info::Xrecord(xrecord_strings(&b, ver)) });
         }
         "APPID" => {
             let owner = o.non_entity()?;
@@ -1655,6 +1664,30 @@ fn eed_groups(eed: &[(u64, Vec<u8>)], ver: Ver, g: &mut Vec<(i32, V)>) {
             g.extend(strings.into_iter().map(|s| (1000, V::S(s))));
         }
     }
+}
+
+/// The text items at the start of XRECORD data: a group code, then (as in extended data) a two-byte length, a code
+/// page byte and the characters (R2007+: a character count and UTF-16).
+fn xrecord_strings(b: &[u8], ver: Ver) -> Vec<(i32, String)> {
+    let mut out = vec![];
+    let mut i = 0;
+    while i + 4 <= b.len() {
+        let code = i16::from_le_bytes([b[i], b[i + 1]]) as i32;
+        if !((1..=9).contains(&code) && code != 5 || (300..=309).contains(&code)) {
+            break;
+        }
+        let n = u16::from_le_bytes([b[i + 2], b[i + 3]]) as usize;
+        if ver >= Ver::R2007 {
+            let Some(s) = b.get(i + 4..i + 4 + 2 * n) else { break };
+            out.push((code, char::decode_utf16(s.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]]))).map(|c| c.unwrap_or('?')).collect()));
+            i += 4 + 2 * n;
+        } else {
+            let Some(s) = b.get(i + 5..i + 5 + n) else { break };
+            out.push((code, s.iter().map(|&c| c as char).collect()));
+            i += 5 + n;
+        }
+    }
+    out
 }
 
 /// The items of one extended data block, as (DXF group code, value); stops at anything odd. (Strings are stored as

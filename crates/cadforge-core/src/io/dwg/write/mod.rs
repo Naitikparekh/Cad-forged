@@ -1489,6 +1489,26 @@ impl<'a> Writer<'a> {
                     self.dictionary(&mut o, &entries, r.i(281, 1) as i16);
                     self.put(h, o);
                 }
+                // CadForge's own data (strings only); data items are a group code, a two-byte length, a code page
+                // byte and the characters
+                "XRECORD" => {
+                    let mut o = self.nonent(79, h, r.owner(), &r.reactors());
+                    let mut data = vec![];
+                    // the data items follow the subclass marker (and the cloning flag)
+                    let at = r.g.iter().position(|(c, v)| *c == 100 && v == "AcDbXrecord").map_or(r.g.len(), |k| k + 1);
+                    let text = |c: i32| (1..=9).contains(&c) && c != 5 || (300..=309).contains(&c);
+                    for (c, v) in r.g[at..].iter().filter(|(c, _)| text(*c)) {
+                        let s: Vec<u8> = v.chars().map(|ch| if (ch as u32) < 0x100 { ch as u8 } else { b'?' }).collect();
+                        data.extend((*c as i16).to_le_bytes());
+                        data.extend((s.len() as u16).to_le_bytes());
+                        data.push(30);
+                        data.extend(s);
+                    }
+                    o.m.bl(data.len() as i32);
+                    o.m.bytes(&data);
+                    o.m.bs(r.i(280, 1) as i16); // cloning
+                    self.put(h, o);
+                }
                 "GROUP" => {
                     let mut o = self.nonent(72, h, r.owner(), &r.reactors());
                     o.m.tv(r.s(300));

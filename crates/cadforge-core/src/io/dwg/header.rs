@@ -23,11 +23,13 @@ pub struct Header {
     pub dimgap: f64,
     pub dimdec: Option<i16>,
     pub insunits: Option<i16>,
+    /// The drawing's insertion base point.
+    pub insbase: [f64; 3],
 }
 
 impl Default for Header {
     fn default() -> Self {
-        Header { ltscale: 1.0, textsize: 2.5, pdmode: 0, pdsize: 0.0, lunits: 2, luprec: 4, clayer: 0, dimscale: 1.0, dimasz: 2.5, dimexo: 0.625, dimexe: 1.25, dimtxt: 2.5, dimcen: 2.5, dimgap: 0.625, dimdec: None, insunits: None }
+        Header { ltscale: 1.0, textsize: 2.5, pdmode: 0, pdsize: 0.0, lunits: 2, luprec: 4, clayer: 0, dimscale: 1.0, dimasz: 2.5, dimexo: 0.625, dimexe: 1.25, dimtxt: 2.5, dimcen: 2.5, dimgap: 0.625, dimdec: None, insunits: None, insbase: [0.0; 3] }
     }
 }
 
@@ -231,7 +233,8 @@ fn read_into(d: &[u8], ver: Ver, maint: u8, o: &mut Header) -> R<()> {
             r.m.bd3()?;
         }
     }
-    r.m.bd3()?;
+    // model space
+    o.insbase = r.m.bd3()?;
     r.m.bd3()?;
     r.m.bd3()?;
     r.m.rd2()?;
