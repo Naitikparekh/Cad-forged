@@ -6,7 +6,7 @@ pub const FILE_EXT: &str = ".cadforge.json";
 /// File name without a recognised drawing extension.
 pub fn strip_ext(name: &str) -> String {
     let lower = name.to_lowercase();
-    for ext in [".cadforge.json", ".json", ".cadforge", ".dxf", ".dwg"] {
+    for ext in [".cadforge.json", ".json", ".cadforge", ".dxf", ".dwg", ".dwt"] {
         if lower.ends_with(ext) {
             return name[..name.len() - ext.len()].to_string();
         }

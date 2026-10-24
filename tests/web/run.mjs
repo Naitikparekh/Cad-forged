@@ -542,6 +542,21 @@ await test('QSAVE on an opened AutoCAD 2000 DWG saves a DWG 2000 under the same 
   assert.equal(f.data.subarray(0, 6).toString('latin1'), 'AC1015');
 });
 
+await test('a drawing saved as a template (.dwt) starts a new, unnamed drawing through -NEW File', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const src = await t.state();
+  const f = await download(async () => { await t.cmd('-SAVEAS'); await t.cmd('Template'); await t.cmd('web-template'); });
+  assert.equal(f.name, 'web-template.dwt');
+  assert.equal(f.data.subarray(0, 6).toString('latin1'), 'AC1018');
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), (async () => { await t.cmd('-NEW'); await t.cmd('File'); })()]);
+  await fc.setFiles({ name: 'web-template.dwt', mimeType: 'application/octet-stream', buffer: f.data }); await page.waitForTimeout(900); await t.frame(4);
+  const s = await t.state();
+  assert.ok(/^Drawing\d+$/.test(s.name), s.name);
+  assert.equal(s.editors, src.editors + 1);
+  assert.equal(s.entities, src.entities);
+  assert.equal(s.dirty, false);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();

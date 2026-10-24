@@ -177,6 +177,8 @@ pub enum SaveFormat {
     Dwg2000,
     Dxf,
     CadForge,
+    /// A drawing template (*.dwt): an AutoCAD 2004 DWG that NEW starts drawings from.
+    Template,
 }
 
 impl SaveFormat {
@@ -191,6 +193,8 @@ impl SaveFormat {
             }
         } else if l.ends_with(".dxf") {
             SaveFormat::Dxf
+        } else if l.ends_with(".dwt") {
+            SaveFormat::Template
         } else {
             SaveFormat::CadForge
         }
@@ -201,6 +205,7 @@ impl SaveFormat {
             SaveFormat::Dwg2004 | SaveFormat::Dwg2000 => ".dwg",
             SaveFormat::Dxf => ".dxf",
             SaveFormat::CadForge => cadforge_core::io::FILE_EXT,
+            SaveFormat::Template => ".dwt",
         }
     }
 
@@ -210,10 +215,11 @@ impl SaveFormat {
             SaveFormat::Dwg2000 => "AutoCAD 2000 Drawing (*.dwg)",
             SaveFormat::Dxf => "AutoCAD DXF (*.dxf)",
             SaveFormat::CadForge => "CadForge Drawing (*.json)",
+            SaveFormat::Template => "AutoCAD Drawing Template (*.dwt)",
         }
     }
 
-    pub const ALL: [SaveFormat; 4] = [SaveFormat::Dwg2004, SaveFormat::Dwg2000, SaveFormat::Dxf, SaveFormat::CadForge];
+    pub const ALL: [SaveFormat; 5] = [SaveFormat::Dwg2004, SaveFormat::Dwg2000, SaveFormat::Dxf, SaveFormat::Template, SaveFormat::CadForge];
 
     /// What a file of this format cannot hold of the drawing (nothing for a CadForge project).
     pub fn not_kept(self, d: &Drawing) -> Vec<String> {
@@ -232,6 +238,7 @@ impl SaveFormat {
     fn short(self) -> &'static str {
         match self {
             SaveFormat::Dwg2004 | SaveFormat::Dwg2000 => "DWG",
+            SaveFormat::Template => "DWT",
             SaveFormat::Dxf => "DXF",
             SaveFormat::CadForge => "CadForge",
         }
@@ -247,10 +254,27 @@ impl SaveFormat {
                 d.dwg_version = (ver == Ver::R2000).then_some(ver);
                 (bytes, "image/vnd.dwg")
             }
+            SaveFormat::Template => (write_dwg_as(d, Ver::R2004)?, "image/vnd.dwg"),
             SaveFormat::Dxf => (cadforge_core::io::write_dxf(d).into_bytes(), "application/dxf"),
             SaveFormat::CadForge => (cadforge_core::io::to_json(d).into_bytes(), "application/json"),
         })
     }
+}
+
+/// -NEW: a new drawing from a template, on the command line: the metric (acadiso) or imperial (acad) defaults, or a
+/// template file (*.dwt, or any drawing) the host lets the user choose.
+async fn new_cli(c: Ctx, a: Args) -> CmdResult<()> {
+    let kw = match a.str("template").or(a.str("option")) {
+        Some(t) => t.to_string(),
+        None => c.keyword(ps("Enter template [Metric/Imperial/File]").options(&["Metric", "Imperial", "File"]).default_str("Metric")).await?.kw().unwrap_or("Metric").to_string(),
+    };
+    match kw.to_lowercase().as_str() {
+        "file" => ui_action(&c, "-NEW", "NEW", Args::none().with("template", ArgVal::Str("file".into()))),
+        k => {
+            c.app(|app| app.new_drawing(None, k == "imperial"));
+        }
+    }
+    Ok(())
 }
 
 /// The file name with the format's extension (an existing drawing extension is replaced).
@@ -267,15 +291,17 @@ async fn saveas_cli(c: Ctx, a: Args) -> CmdResult<()> {
         SaveFormat::Dwg2000 => "2000",
         SaveFormat::Dxf => "DXF",
         SaveFormat::CadForge => "CadForge",
+        SaveFormat::Template => "Template",
     };
     c.log(&format!("Current file format: {}", cur.label()));
     let fmt_kw = match a.str("format") {
         Some(f) => f.to_string(),
-        None => c.keyword(ps("Enter file format [2000/2004/DXF/CadForge]").options(&["2000", "2004", "DXF", "CadForge"]).default_str(key(cur))).await?.kw().unwrap_or(key(cur)).to_string(),
+        None => c.keyword(ps("Enter file format [2000/2004/DXF/Template/CadForge]").options(&["2000", "2004", "DXF", "Template", "CadForge"]).default_str(key(cur))).await?.kw().unwrap_or(key(cur)).to_string(),
     };
     let fmt = match fmt_kw.to_lowercase().as_str() {
         "2000" => SaveFormat::Dwg2000,
         "dxf" => SaveFormat::Dxf,
+        "template" | "dwt" => SaveFormat::Template,
         "cadforge" | "json" => SaveFormat::CadForge,
         _ => SaveFormat::Dwg2004,
     };
@@ -448,7 +474,8 @@ pub(super) fn register(r: &mut Registry) {
     r.define(def("Utilities", "SAVEALL", run(saveall)).title("Save All").icon("save").desc("Saves all open drawings.").once());
     r.define(def("Output", "PREVIEW", run(preview)).aliases(&["PRE"]).title("Plot Preview").icon("plot").desc("Displays the drawing as it will be plotted.").once());
     r.define(def("File", "-DXFOUT", run(dxfout)).title("Export DXF (options)").icon("dxf").desc("Writes the drawing as an ASCII or binary DXF file.").once());
-    r.define(def("File", "-SAVEAS", run(saveas_cli)).title("Save As (command line)").icon("saveas").desc("Saves the drawing under a new name as an AutoCAD 2004 or 2000 DWG, a DXF or a CadForge file.").once());
+    r.define(def("File", "-NEW", run(new_cli)).title("New (command line)").icon("new").desc("Creates a new drawing from the metric or imperial defaults or from a template file.").once());
+    r.define(def("File", "-SAVEAS", run(saveas_cli)).title("Save As (command line)").icon("saveas").desc("Saves the drawing under a new name as an AutoCAD 2004 or 2000 DWG, a DXF, a drawing template or a CadForge file.").once());
     r.define(def("Output", "PLOTSTYLE", run(plotstyle)).title("Plot Style Table").desc("Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting.").once());
     r.define(def("Output", "PUBLISH", run(publish)).title("Publish").icon("pdf").desc("Publishes drawings to PDF or plotters.").once());
     r.define(def("Output", "ETRANSMIT", run(etransmit)).title("eTransmit").desc("Lists the files needed to send a drawing to someone else.").once());

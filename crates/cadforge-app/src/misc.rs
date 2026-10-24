@@ -22,14 +22,14 @@ impl CadForgeApp {
     pub fn ui_action(&mut self, ctx: &egui::Context, name: &str, args: Args) {
         use crate::dialogs::Dialog;
         match name {
-            "NEW" => {
-                let imperial = args.str("template") == Some("imperial");
-                self.new_drawing(imperial);
-            }
+            "NEW" => match args.str("template") {
+                Some("file") => self.open_files(ctx, "template"),
+                t => self.new_drawing(t == Some("imperial")),
+            },
             "OPEN" => self.open_files(ctx, "open"),
             "IMPORT" => self.open_files(ctx, "import"),
             "QSAVE" => self.save(ctx),
-            "SAVEAS" => self.save_as_type(args.str("type")),
+            "SAVEAS" => self.save_as_type(args.str("type").or(args.str("option"))),
             "EXPORTDWG" => self.export_dwg(if args.str("type") == Some("dwg2000") { SaveFormat::Dwg2000 } else { SaveFormat::Dwg2004 }),
             "DXFOUT" => self.export_dxf(ctx),
             "EXPORT" => self.export_menu(ctx),
@@ -117,7 +117,8 @@ impl CadForgeApp {
                 "lin" => ".lin,.txt",
                 "pat" => ".pat,.txt",
                 "plotstyle" => ".ctb,.stb",
-                _ => ".dwg,.dxf,.json,.cadforge",
+                "template" => ".dwt,.dwg,.dxf,.json",
+                _ => ".dwg,.dwt,.dxf,.json,.cadforge",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
         }
@@ -180,8 +181,14 @@ impl CadForgeApp {
                 continue;
             }
             // drawings are read from their bytes (DWG and binary DXF are not text)
-            if matches!(p.purpose, "open" | "import") {
+            if matches!(p.purpose, "open" | "import" | "template") {
                 match (p.purpose, self.parse_drawing(&p.name, &p.bytes)) {
+                    ("template", Ok(doc)) => {
+                        self.ui.showing_start = false;
+                        self.h.borrow_mut().new_from_template(doc);
+                        self.h.borrow_mut().log(&format!("New drawing from the template {}.", p.name), "info");
+                        self.h.pump();
+                    }
                     ("open", Ok(mut doc)) => {
                         doc.file_name = Some(p.name.clone());
                         doc.dirty = false;
@@ -193,7 +200,11 @@ impl CadForgeApp {
                     }
                     (_, Ok(src)) => self.import_into_current(&p.name, src),
                     (_, Err(e)) => {
-                        let what = if p.purpose == "open" { "open" } else { "import" };
+                        let what = match p.purpose {
+                            "open" => "open",
+                            "template" => "start a drawing from",
+                            _ => "import",
+                        };
                         self.h.borrow_mut().log(&format!("Could not {what} {}: {e}", p.name), "error");
                         self.toast(&format!("Could not {what} {}: {e}", p.name));
                     }
@@ -350,6 +361,7 @@ impl CadForgeApp {
             Some("dwg") => SaveFormat::Dwg2004,
             Some("dwg2000") => SaveFormat::Dwg2000,
             Some("dxf") => SaveFormat::Dxf,
+            Some("dwt") => SaveFormat::Template,
             Some("json") => SaveFormat::CadForge,
             _ => fmt,
         };
@@ -528,10 +540,10 @@ impl CadForgeApp {
             sub: Vec<(&'static str, &'static str, &'static str)>,
         }
         let items = vec![
-            Item { icon: "new", label: "New", cmd: Some("NEW"), sub: vec![] },
+            Item { icon: "new", label: "New", cmd: Some("NEW"), sub: vec![("new", "Drawing (metric)", "-NEW:Metric"), ("new", "Drawing (imperial)", "-NEW:Imperial"), ("new", "From Template...", "-NEW:File")] },
             Item { icon: "open", label: "Open", cmd: Some("OPEN"), sub: vec![] },
             Item { icon: "save", label: "Save", cmd: Some("QSAVE"), sub: vec![] },
-            Item { icon: "saveas", label: "Save As", cmd: Some("SAVEAS"), sub: vec![("saveas", "AutoCAD Drawing (*.dwg)", "SAVEAS:dwg"), ("saveas", "AutoCAD 2000 Drawing (*.dwg)", "SAVEAS:dwg2000"), ("dxf", "DXF Drawing (*.dxf)", "SAVEAS:dxf"), ("saveas", "CadForge Drawing (*.json)", "SAVEAS:json")] },
+            Item { icon: "saveas", label: "Save As", cmd: Some("SAVEAS"), sub: vec![("saveas", "AutoCAD Drawing (*.dwg)", "SAVEAS:dwg"), ("saveas", "AutoCAD 2000 Drawing (*.dwg)", "SAVEAS:dwg2000"), ("dxf", "DXF Drawing (*.dxf)", "SAVEAS:dxf"), ("saveas", "Drawing Template (*.dwt)", "SAVEAS:dwt"), ("saveas", "CadForge Drawing (*.json)", "SAVEAS:json")] },
             Item { icon: "import", label: "Import", cmd: Some("IMPORT"), sub: vec![] },
             Item { icon: "export", label: "Export", cmd: None, sub: vec![("dxf", "DWG", "EXPORTDWG"), ("dxf", "DXF", "DXFOUT"), ("pdf", "PDF", "EXPORTPDF"), ("export", "Other Formats...", "EXPORT")] },
             Item { icon: "plot", label: "Print", cmd: Some("PLOT"), sub: vec![] },
@@ -650,9 +662,9 @@ impl CadForgeApp {
             self.ui.app_menu = None;
         }
         if let Some((name, args)) = run {
-            // "SAVEAS:dwg": a command with the file type it starts with
+            // "SAVEAS:dwg", "-NEW:Imperial": a command with the option it starts with
             match name.split_once(':') {
-                Some((cmd, ty)) => self.run_command(cmd, Args::none().with("type", cadforge_engine::runtime::ArgVal::Str(ty.into()))),
+                Some((cmd, opt)) => self.run_command(cmd, Args::none().with("option", cadforge_engine::runtime::ArgVal::Str(opt.into()))),
                 None => self.run_command(name, args.unwrap_or_else(Args::none)),
             }
         }
@@ -1035,7 +1047,7 @@ pub fn skipped_note(d: &Drawing) -> Option<String> {
 pub fn dropped_purpose(name: &str) -> Option<&'static str> {
     let ext = name.rsplit('.').next()?.to_lowercase();
     Some(match ext.as_str() {
-        "dwg" | "dxf" | "json" | "cadforge" => "open",
+        "dwg" | "dwt" | "dxf" | "json" | "cadforge" => "open",
         "png" | "jpg" | "jpeg" => "image",
         "lsp" | "scr" => "lisp",
         "lin" => "lin",
@@ -1053,6 +1065,7 @@ mod drop_tests {
     fn extensions_choose_the_command() {
         assert_eq!(dropped_purpose("plan.DXF"), Some("open"));
         assert_eq!(dropped_purpose("site.dwg"), Some("open"));
+        assert_eq!(dropped_purpose("A3 sheet.DWT"), Some("open"));
         assert_eq!(dropped_purpose("a.cadforge.json"), Some("open"));
         assert_eq!(dropped_purpose("site.JPEG"), Some("image"));
         assert_eq!(dropped_purpose("tools.lsp"), Some("lisp"));

@@ -117,3 +117,40 @@ fn an_extrusion_history_survives_dwg_and_dxf() {
         assert!((v - 12000.0).abs() < 1e-6, "{fmt}: rebuilt volume {v}: {}", t.log_text());
     }
 }
+
+/// A drawing saved as a template (*.dwt, a DWG) starts new, unnamed drawings with its layers and contents; -NEW
+/// offers the metric and imperial defaults and hands "File" to the host's file chooser.
+#[test]
+fn templates_start_new_drawings() {
+    let s = Sim::new();
+    s.doc_mut(|d| {
+        d.add_layer("TITLE").unwrap();
+        d.add(Entity::line(pt(0., 0.), pt(420., 0.)).on_layer("TITLE"));
+    });
+    s.cmd_args("-SAVEAS", Args::none().with("format", ArgVal::Str("Template".into())).with("name", ArgVal::Str("A3 sheet".into())));
+    let (name, data, mime) = file(&s).expect("template");
+    assert_eq!((name.as_str(), mime.as_str()), ("A3 sheet.dwt", "image/vnd.dwg"));
+    assert!(data.starts_with(b"AC1018"));
+    s.doc(|d| assert_eq!(SaveFormat::of(d.file_name.as_deref().unwrap(), d), SaveFormat::Template));
+    // a new drawing from it
+    let before = s.h.borrow().editors.len();
+    let template = read_dwg(&data, "A3 sheet").unwrap();
+    s.h.borrow_mut().new_from_template(template);
+    assert_eq!(s.h.borrow().editors.len(), before + 1);
+    s.doc(|d| {
+        assert!(d.name.starts_with("Drawing"), "{}", d.name);
+        assert!(d.file_name.is_none() && !d.dirty);
+        assert!(d.layer("TITLE").is_some());
+        assert_eq!(d.model.entities.len(), 1);
+    });
+    // -NEW
+    s.cmd("-NEW").ty("Imperial");
+    s.doc(|d| assert_eq!(d.settings.units.ins_units, 1));
+    s.cmd("-NEW").enter();
+    s.doc(|d| assert_ne!(d.settings.units.ins_units, 1));
+    let ui = Sim::new();
+    ui.h.borrow_mut().ui.dialogs = true;
+    ui.cmd("-NEW").ty("File");
+    let asked: Vec<Option<String>> = ui.h.borrow_mut().take_events().into_iter().filter_map(|e| if let Event::UiAction { name, args } = e { (name == "NEW").then(|| args.str("template").map(String::from)) } else { None }).collect();
+    assert_eq!(asked, vec![Some("file".to_string())]);
+}

@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 333 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 334 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -180,7 +180,8 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | Command | Aliases | Description |
 |---|---|---|
 | `-DXFOUT` |  | Writes the drawing as an ASCII or binary DXF file. |
-| `-SAVEAS` |  | Saves the drawing under a new name as an AutoCAD 2004 or 2000 DWG, a DXF or a CadForge file. |
+| `-NEW` |  | Creates a new drawing from the metric or imperial defaults or from a template file. |
+| `-SAVEAS` |  | Saves the drawing under a new name as an AutoCAD 2004 or 2000 DWG, a DXF, a drawing template or a CadForge file. |
 | `ARCHIVE` |  | Packs the drawing, its pictures and a report into one ZIP file. |
 | `AUDIT` |  | Evaluates the integrity of a drawing and corrects some errors. |
 | `CLOSEALL` |  | Closes all currently open drawings. |

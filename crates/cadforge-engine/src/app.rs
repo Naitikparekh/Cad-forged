@@ -230,6 +230,17 @@ impl App {
         self.add_drawing(doc)
     }
 
+    /// A new, unnamed drawing that starts as a copy of a template (its layers, styles, layouts and contents).
+    pub fn new_from_template(&mut self, mut doc: Drawing) -> u64 {
+        self.counter += 1;
+        doc.name = format!("Drawing{}", self.counter);
+        doc.file_name = None;
+        doc.dwg_version = None;
+        doc.skipped.clear();
+        doc.dirty = false;
+        self.add_drawing(doc)
+    }
+
     pub fn add_drawing(&mut self, mut doc: Drawing) -> u64 {
         doc.ensure_default_layouts();
         let id = self.next_editor_id;
