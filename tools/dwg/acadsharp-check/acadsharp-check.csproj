@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A DWG/DXF checker built on ACadSharp (MIT). ACadSharpDir: a clone of https://github.com/DomCR/ACadSharp
+       with its submodules. Build: dotnet build -c Release -p:TargetFrameworks=net10.0 -p:ACadSharpDir=/path/to/ACadSharp -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ACadSharpDir Condition="'$(ACadSharpDir)' == ''">../../../../acadsharp</ACadSharpDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(ACadSharpDir)/src/ACadSharp/ACadSharp.csproj" />
+  </ItemGroup>
+</Project>

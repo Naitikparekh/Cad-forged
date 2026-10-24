@@ -10,6 +10,9 @@ mod header;
 mod lz77;
 mod objects;
 mod to_dxf;
+pub mod write;
+
+pub use write::{dxf_to_dwg, write_dwg};
 
 use crate::drawing::Drawing;
 use std::collections::BTreeMap;
@@ -97,6 +100,17 @@ pub fn dwg_to_dxf(bytes: &[u8]) -> Result<(String, DwgReport), String> {
     objs.sort_by_key(|o| o.handle);
     objs.dedup_by_key(|o| o.handle);
     Ok((to_dxf::emit(&objs, &hdr), rep))
+}
+
+/// Every object in a DWG file as (handle, type name), in handle order: for diagnostics.
+pub fn list_objects(bytes: &[u8]) -> Result<Vec<(u64, String)>, String> {
+    let f = file::DwgFile::open(bytes)?;
+    let classes = f.classes();
+    let names: std::collections::HashMap<u16, String> = classes.iter().map(|(k, (n, _))| (*k, n.clone())).collect();
+    let data = f.objects().ok_or("The DWG file has no objects section.")?;
+    let mut out: Vec<(u64, String)> = f.handle_map()?.into_iter().map(|(h, off)| (h, objects::type_name(data, f.ver, off, &names).unwrap_or_else(|| "?".into()))).collect();
+    out.sort();
+    Ok(out)
 }
 
 /// Read a DWG file into a drawing. Objects that could not be read, and entity types CadForge does not use, are listed

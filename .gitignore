@@ -6,3 +6,5 @@ dist-web/
 .claude/worktrees/
 __pycache__/
 dist/
+tools/dwg/acadsharp-check/bin/
+tools/dwg/acadsharp-check/obj/
