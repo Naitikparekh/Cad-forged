@@ -1301,8 +1301,8 @@ fn polyface_solid(r: &Rec, ctx: &mut Ctx, layer: &str, color: Option<Color>) {
     ctx.solids.push((id, Solid { id: 0, name, layer: layer.to_string(), color, vertices, faces, program: None }));
 }
 
-/// The solids read from polyface meshes, the parts of each CadForge solid joined again.
-fn join_solids(parts: Vec<(Option<u64>, crate::solid::Solid)>) -> Vec<crate::solid::Solid> {
+/// The solids read from polyface meshes, the parts of each CadForge solid joined again (with the CadForge id each had).
+fn join_solids(parts: Vec<(Option<u64>, crate::solid::Solid)>) -> Vec<(Option<u64>, crate::solid::Solid)> {
     let mut out: Vec<(Option<u64>, crate::solid::Solid)> = vec![];
     for (id, s) in parts {
         match out.iter_mut().find(|(k, _)| id.is_some() && *k == id) {
@@ -1314,7 +1314,7 @@ fn join_solids(parts: Vec<(Option<u64>, crate::solid::Solid)>) -> Vec<crate::sol
             None => out.push((id, s)),
         }
     }
-    out.into_iter().map(|(_, s)| s).collect()
+    out
 }
 
 /// A table or region CadForge wrote as an insert of the block of its geometry: its CADFORGE extended data, when the
@@ -1724,6 +1724,8 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     };
 
     // ---- model space (and the active layout's entities, stored in ENTITIES with group 67 = 1)
+    // (the ids model-space objects get, by handle: solids' extrusion histories name their outlines by handle)
+    let mut ids_by_handle: HashMap<String, u64> = HashMap::new();
     for r in group_entities(secs.get("ENTITIES").unwrap_or(&empty)) {
         if r.first(67) == Some("1") {
             let ln = layout_of("*Paper_Space", &mut fallback_names);
@@ -1737,7 +1739,10 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         let ents = convert(&r, &mut ctx);
         ctx.model = false;
         for e in ents {
-            doc.add_to(e, "model");
+            let id = doc.add_to(e, "model");
+            if let Some(h) = r.first(5) {
+                ids_by_handle.entry(h.trim().to_uppercase()).or_insert(id);
+            }
         }
     }
     // the other layouts live in their own `*Paper_SpaceN` blocks
@@ -1781,11 +1786,33 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let cl = decode_text(header.get("$CLAYER").and_then(|v| v.iter().find(|(c, _)| *c == 8)).map(|(_, v)| v.as_str()).unwrap_or("0"));
     doc.cur.layer = doc.layer(&cl).map(|l| l.name.clone()).unwrap_or_else(|| doc.layers[0].name.clone());
 
-    for s in join_solids(std::mem::take(&mut ctx.solids)) {
+    let mut solid_ids: HashMap<u64, u64> = HashMap::new();
+    for (old, s) in join_solids(std::mem::take(&mut ctx.solids)) {
         if doc.layer(&s.layer).is_none() {
             doc.layers.push(Layer::new(&s.layer));
         }
-        doc.insert_solid_raw(s);
+        let id = doc.insert_solid_raw(s);
+        if let Some(old) = old {
+            solid_ids.insert(old, id);
+        }
+    }
+    // extrusion histories: the outlines by their new ids
+    for p in extras.as_ref().and_then(|x| x.get("programs")).and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+        let Some(id) = p["solid"].as_u64().and_then(|old| solid_ids.get(&old)) else { continue };
+        let mut prog = p["program"].clone();
+        let mapped = prog["features"].as_array_mut().is_some_and(|fs| {
+            fs.iter_mut().all(|f| {
+                let ids: Option<Vec<u64>> = f["profile"].as_array().map(|hs| hs.iter().filter_map(|h| h.as_str().and_then(|h| ids_by_handle.get(&h.to_uppercase()).copied())).collect());
+                let all = ids.as_ref().zip(f["profile"].as_array()).is_some_and(|(i, hs)| i.len() == hs.len());
+                f["profile"] = ids.unwrap_or_default().into();
+                all
+            })
+        });
+        if let (true, Ok(prog)) = (mapped, serde_json::from_value::<crate::solid::Program>(prog)) {
+            if let Some(s) = doc.solids.iter_mut().find(|s| s.id == *id) {
+                s.program = Some(prog);
+            }
+        }
     }
     doc.images = std::mem::take(&mut ctx.images);
     if let Some(x) = &extras {

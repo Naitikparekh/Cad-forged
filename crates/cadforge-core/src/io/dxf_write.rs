@@ -45,8 +45,9 @@ pub fn xdata_chunks(s: &str) -> Vec<&str> {
 /// What a drawing holds that DXF and DWG have no place for, as JSON for the CADFORGE XRECORD of the named object
 /// dictionary (other programs keep it as it is): named views, the last view, the current and named UCSs, the current
 /// colour / linetype / lineweight, loaded linetypes and hatch patterns, the plot style table, which blocks are external
-/// references, and the pictures' data (DXF and DWG only name picture files). None when there is nothing to keep.
-pub fn cadforge_extras(doc: &Drawing) -> Option<String> {
+/// references, the extrusion histories of 3D solids (their outlines named by the handles in `handles`, CadForge id to
+/// handle), and the pictures' data (DXF and DWG only name picture files). None when there is nothing to keep.
+pub fn cadforge_extras(doc: &Drawing, handles: &HashMap<u64, String>) -> Option<String> {
     use serde_json::{to_value, Map, Value};
     let mut m = Map::new();
     let mut put = |k: &str, v: Result<Value, serde_json::Error>| {
@@ -77,6 +78,23 @@ pub fn cadforge_extras(doc: &Drawing) -> Option<String> {
     }
     if let Some(p) = &doc.plot_styles {
         put("plot_styles", to_value(p.as_ref()));
+    }
+    // a solid's extrusion history, with its outlines by handle (they get new ids when the file is read); left out when
+    // an outline is no longer in the drawing
+    let programs: Vec<Value> = doc
+        .solids
+        .iter()
+        .filter_map(|s| {
+            let p = s.program.as_ref()?;
+            let mut v = to_value(p).ok()?;
+            for (f, j) in p.features.iter().zip(v["features"].as_array_mut()?) {
+                j["profile"] = f.profile.iter().map(|id| handles.get(id).cloned()).collect::<Option<Vec<String>>>()?.into();
+            }
+            Some(serde_json::json!({ "solid": s.id, "program": v }))
+        })
+        .collect();
+    if !programs.is_empty() {
+        put("programs", Ok(Value::Array(programs)));
     }
     // external references keep their contents as blocks; the link to the other drawing goes here
     let xrefs: indexmap::IndexMap<&String, &crate::drawing::XrefInfo> = doc.blocks.iter().filter_map(|(k, b)| b.xref.as_ref().map(|x| (k, x))).collect();
@@ -276,6 +294,9 @@ struct W<'a> {
     /// The group of the entity being written (an index into `groups`); only in model space and layouts.
     cur_grp: Option<usize>,
     grouping: bool,
+    /// The handle each entity was written with (its first object), by CadForge id: solids' extrusion histories name
+    /// their outlines by it.
+    handle_of: HashMap<u64, String>,
 }
 
 impl<'a> W<'a> {
@@ -435,6 +456,7 @@ impl<'a> W<'a> {
             }),
             _ => None,
         };
+        self.handle_of.entry(e.id).or_insert_with(|| format!("{:X}", self.handle));
         self.write_kind(o, e);
         self.cur_grp = outer;
     }
@@ -812,7 +834,7 @@ pub fn write_dxf_binary(doc: &Drawing) -> Vec<u8> {
 
 /// Serialise a drawing to DXF text.
 pub fn write_dxf(doc: &Drawing) -> String {
-    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2, image_defs: vec![], layer_handles: HashMap::new(), groups: vec![], cur_grp: None, grouping: false };
+    let mut w = W { doc, handle: 0x10, dim_blocks: vec![], block_rec: HashMap::new(), vp_id: 2, image_defs: vec![], layer_handles: HashMap::new(), groups: vec![], cur_grp: None, grouping: false, handle_of: HashMap::new() };
     let mut o = Out::default();
 
     // ---------- collect names
@@ -1047,7 +1069,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     if !w.image_defs.is_empty() {
         o.s(3, "ACAD_IMAGE_DICT").s(350, &dict_images);
     }
-    let extras = cadforge_extras(doc).map(|json| (w.h(), json));
+    let extras = cadforge_extras(doc, &w.handle_of).map(|json| (w.h(), json));
     if let Some((h, _)) = &extras {
         o.s(3, CADFORGE_APP).s(350, h);
     }

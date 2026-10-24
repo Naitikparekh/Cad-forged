@@ -88,3 +88,32 @@ fn an_opened_autocad_2000_file_saves_as_2000() {
         assert_eq!(with_ext("site plan.json", f), format!("site plan{ext}"));
     }
 }
+
+/// An extruded solid keeps its link to its outline through DWG and DXF: after opening the file again, editing the
+/// outline and UPDATEEXTRUSION rebuild the solid.
+#[test]
+fn an_extrusion_history_survives_dwg_and_dxf() {
+    let vol = |s: &cadforge_core::solid::Solid| cadforge_core::solid::mesh::mesh_volume(&s.mesh());
+    for fmt in ["2004", "2000", "DXF"] {
+        let s = Sim::new();
+        s.add(Entity::pline_pts(&[pt(0., 0.), pt(10., 0.), pt(10., 20.), pt(0., 20.)], true));
+        s.cmd("EXTRUDE").click(5., 0.).enter();
+        s.ty("30");
+        assert_eq!(s.solids().len(), 1, "{fmt}");
+        s.cmd_args("-SAVEAS", Args::none().with("format", ArgVal::Str(fmt.into())).with("name", ArgVal::Str("part".into())));
+        let (_, data, _) = file(&s).expect("file");
+        let back = if fmt == "DXF" { read_dxf_bytes(&data, "part").unwrap() } else { read_dwg(&data, "part").unwrap() };
+        let prog = back.solids[0].program.clone().unwrap_or_else(|| panic!("{fmt}: the solid lost its extrusion history"));
+        let outline = prog.features[0].profile[0];
+        assert!(back.model.entities.iter().any(|e| e.id == outline && e.type_name() == "pline"), "{fmt}: the history names the outline");
+        // open it, make the outline wider and rebuild
+        let t = Sim::new();
+        t.doc_mut(|d| *d = back);
+        t.doc_mut(|d| d.modify(outline, |e| if let Kind::Pline { v, .. } = &mut e.kind { v[1].x = 20.0; v[2].x = 20.0 }));
+        let sid = t.solids()[0].id;
+        t.set_sel(&[sid]);
+        t.cmd("UPDATEEXTRUSION");
+        let v = vol(&t.solids()[0]);
+        assert!((v - 12000.0).abs() < 1e-6, "{fmt}: rebuilt volume {v}: {}", t.log_text());
+    }
+}
