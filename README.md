@@ -1,8 +1,8 @@
 # CadForge 2.0
 
 A CAD application with an AutoCAD-style interface and command set: 2D drafting, annotation, hatching,
-blocks and external references, layers, paper-space layouts, raster images, AutoLISP, 3D solid modelling, DXF
-import/export and plotting to PDF/SVG/PNG.
+blocks and external references, layers, paper-space layouts, raster images, AutoLISP, 3D solid modelling, AutoCAD
+DWG and DXF open/save and plotting to PDF/SVG/PNG.
 
 It exists in two forms that share one design:
 
@@ -52,8 +52,13 @@ product.
   `.pat` add linetypes and hatch patterns); **autosave** every `SAVETIME` minutes with recovery of unsaved drawings after
   a crash (`DRAWINGRECOVERY`); `PUBLISH` writes every sheet as one multi-page PDF; `ARCHIVE` / `ETRANSMIT` pack a
   drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files.
-* **Files**: CadForge JSON, **DXF R2000 export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by
-  other tools, and **binary DXF**, which `-DXFOUT` also writes), **plot to PDF / SVG / PNG** with paper size, scale, lineweights and monochrome options and a live preview.
+* **Files**: **AutoCAD DWG** opened from R14 to 2018 and saved as AutoCAD 2004 (the default) or 2000; **DXF R2000
+  export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by other tools, and **binary DXF**,
+  which `-DXFOUT` also writes); CadForge JSON projects; **plot to PDF / SVG / PNG** with paper size, scale, lineweights and
+  monochrome options and a live preview. Open, Save, Save As ("Files of type"), Export and drag-and-drop all take DWG; a
+  drawing saved as DWG or DXF opens again as the same drawing (dimensions stay dimensions, groups, tables, regions, 3D
+  solids, wipeouts, pictures, named views and UCSs, loaded linetypes and patterns are kept), and a save reports anything
+  the format cannot hold.
 
 ## Rust app: build, run, test
 
@@ -136,14 +141,18 @@ with a scripted "user" (`tests/unit/sim.js` in JS, `cadforge_engine::sim::Sim` i
 
 ## Limitations
 
-No DWG (DXF only), no B-rep solids (meshes only: no fillet or face editing of solids), no surfaces or meshes, no
+No B-rep solids (meshes only: no fillet or face editing of solids), no surfaces or meshes, no
 rendering, no sheet sets, no dynamic blocks, no OLE objects or PDF/DGN underlays, no plot style editor (named `.stb`
 tables load but cannot be applied), MTEXT has no columns, tabs or font choice, there are 13 built-in hatch patterns
 (more load from `.pat` files) and a single text font. External references are taken from drawings that are already open
 (no reload from a path).
 
-DXF notes: raster images are written as references to the image file (pixels are not embedded in the DXF), and
-`XCLIP` boundaries are display-only and are not written to DXF. See `HANDOFF.md` and `docs/BENCHMARK.md` for the full
+DWG / DXF notes: DWG is written as AutoCAD 2000 or 2004 (newer AutoCAD versions open these) and was checked with
+ACadSharp and LibreDWG, not with AutoCAD itself. What CadForge cannot read from an AutoCAD file (ACIS 3D solids,
+AutoCAD tables, underlays, OLE...) is listed when the file is opened and is not in the file CadForge saves. CadForge's
+own extras (picture data, named views, a solid's mesh...) travel in CADFORGE extended data and an XRECORD that AutoCAD
+keeps; other programs see pictures as references to their files and 3D solids as polyface meshes. `XCLIP` boundaries are
+display-only and are not written. See `HANDOFF.md` and `docs/BENCHMARK.md` for the full
 list.
 
 The egui build draws text with Liberation Sans (SIL OFL) and Inter, shipped in `crates/cadforge-app/assets/fonts`.

@@ -60,7 +60,8 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
 * **Layouts**: per-sheet paper-space blocks, `LAYOUT` objects and viewports in DXF (`dxf_write.rs`/`dxf_read.rs`).
 * **Raster images**: `Kind::Image` + `Drawing.images` (pixels live in the drawing and are left out of undo snapshots).
   DXF `IMAGE`/`IMAGEDEF` read and write with the pixel convention origin top-left, y down, pixel centres at integers.
-  The DXF references the file; pixels are not embedded. Render: `Op::Image`, PDF image XObjects.
+  The DXF / DWG IMAGEDEF names the file (other programs look for it); CadForge's own copy of the pixels travels in the
+  CADFORGE XRECORD (see DWG below). Render: `Op::Image`, PDF image XObjects.
 * **Block references**: `REFEDIT`/`REFSET`/`REFCLOSE`, `XCLIP` (`InsertData.clip`, display-only, convex clipping in the
   renderer via `clip_ops_to_convex`), `BSAVE`/`BSAVEAS`, `XOPEN`, block palette.
 * **AutoLISP** (`crates/cadforge-engine/src/lisp/`): explicit-stack machine (no native recursion, so deep recursion cannot
@@ -108,6 +109,24 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   group comes from its code (same table as ezdxf); R2000+ files use 2-byte codes, R12 1-byte codes (read only). Strings are
   UTF-8 from AC1021 on, otherwise cp1252. Output is always AC1015. `-DXFOUT [ASCII/Binary]` is the command (File > Export >
   Binary DXF in the app). Verified against ezdxf in both directions; never opened in AutoCAD.
+* **DWG** (`io/dwg`): the reader (a port of ACadSharp's, MIT) decodes R13–R2018 files (bit streams, R2004 pages and
+  LZ77, R2007 Reed-Solomon) into objects, `to_dxf.rs` turns them into DXF groups and `read_dxf` builds the drawing, so
+  there is one importer. The writer (`io/dwg/write`) goes the other way: `write_dxf_exact` (numbers in full) is parsed by
+  `dxfin.rs` and every record is encoded as a DWG object (`write/mod.rs`, header in `write/header.rs`, the R2004 page
+  container and LZ77 encoder in `write/r2004.rs`). Output is AutoCAD 2004 (default) or 2000 (`write_dwg_as`); the drawing
+  remembers the version it came from (`Drawing.dwg_version`). Checked by `tests/dwg.rs` (AutoCAD samples of every version
+  against their DXF twins), `tests/dwg_write.rs` (open-save-open of every sample, the DXF corpus and drawings with every
+  dimension kind, solids, tables, settings; ACadSharp with `DWG_ACADSHARP`, LibreDWG with `LIBREDWG_BIN`, see
+  `tools/dwg/README.md`). **Never opened in AutoCAD itself.**
+  Round trips: what DXF/DWG cannot express is kept as CadForge data that other programs leave alone — CADFORGE extended
+  data on DIMENSIONs (the dimension's own data; used only while its points still match, otherwise the block geometry is
+  read), on table / region INSERTs of an anonymous block (only while the insert is unmoved) and on solid polyface meshes
+  (their name and id, to join split parts); and one CADFORGE XRECORD in the named object dictionary for drawing-level
+  extras (`dxf_write::cadforge_extras` / `dxf_read::apply_extras`). Leaders keep their text as an MTEXT annotation at
+  the spot CadForge draws it; groups are GROUP objects; splines CadForge wrote are recognised by their Bezier chain.
+  App: OPEN / IMPORT / drop read bytes (`parse_drawing`), Save As has a type list (`SaveFormat` in
+  `commands/ext_system/files.rs`, also `-SAVEAS` and `EXPORTDWG`), and a save reports `io::not_kept_in_dxf`.
+  `cargo run -p cadforge-core --example rtdiff -- file` lists what changes in a DWG (or `RTDIFF_DXF=1` DXF) round trip.
 * **Spatial index** (`spatial.rs`, `Drawing::candidates`): a uniform grid over entity bounds, built per space on first use
   after a change (`Caches` is cleared by every `touch()`), skipped below 512 entities. Callers loop over the returned
   positions in ascending order, so results equal a full scan (`tests/spatial_equiv.rs` proves it against the linear
@@ -120,6 +139,8 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   that byte order is from memory of the format, not from a test against AutoCAD.
 * **Browser test harness**: `launch()` now proves the input path works before returning (keys typed right after start-up
   were sometimes lost); tests that type into a fresh page should still use `startCommand` / `until` rather than fixed sleeps.
+* **Gotcha**: do not run `cargo fmt` — the code base keeps its own longer-line style and has no rustfmt config, so it
+  would reformat every file.
 * **Gotcha**: `python3 tools/benchmark/score.py --check` prints "EVIDENCE: ... pattern not found" *above* the score table and
   exits 1; do not pipe it through `tail`. Evidence patterns are regexes, so write `\(` for a literal parenthesis (or avoid them).
 
@@ -133,4 +154,4 @@ regenerate old ones). Scenario tests for commands live in `crates/cadforge-engin
 Done since the first benchmark: autosave, drag-and-drop, isolate / hide objects, polyline widths, multi-sheet PUBLISH, .lin / .pat
 loading, packaging and CI, ten small commands. Still open:
 Meshes and surfaces, rendering, sheet sets, dynamic blocks, annotative scaling, MTEXT inline formatting, the full hatch
-pattern library, plot styles, PUBLISH, PDF/DGN underlays, DWG, autosave, a spatial index for very large drawings.
+pattern library, PDF/DGN underlays, DWG output in 2007+ formats and a check of the DWG files in AutoCAD itself.

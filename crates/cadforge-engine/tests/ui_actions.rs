@@ -205,3 +205,19 @@ fn hatchedit_changes_the_pattern_of_an_existing_hatch_through_its_dialog() {
     let Kind::Hatch(h) = s.doc(|d| d.by_id(id).unwrap().kind.clone()) else { panic!() };
     assert_eq!(h.pattern, "ANSI31", "the edit is one undo step");
 }
+
+#[test]
+fn save_as_and_export_dwg_hand_the_file_type_to_the_host() {
+    let s = with_dialogs();
+    s.cmd("EXPORTDWG");
+    assert_eq!(ui_actions(&s), vec!["EXPORTDWG"]);
+    s.cmd("DWGOUT");
+    assert_eq!(ui_actions(&s), vec!["EXPORTDWG"], "DWGOUT is its alias");
+    s.cmd_args("SAVEAS", Args::none().with("type", ArgVal::Str("dwg2000".into())));
+    let ev: Vec<(String, Option<String>)> = events(&s).into_iter().filter_map(|e| if let Event::UiAction { name, args } = e { Some((name, args.str("type").map(String::from))) } else { None }).collect();
+    assert_eq!(ev, vec![("SAVEAS".to_string(), Some("dwg2000".to_string()))]);
+    // without a dialog host, -SAVEAS does the same on the command line
+    let plain = Sim::new();
+    plain.cmd("SAVEAS");
+    assert!(plain.log_text().contains("not available"), "{}", plain.log_text());
+}

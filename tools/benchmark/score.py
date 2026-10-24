@@ -220,8 +220,8 @@ def write_doc(par, items, frac, points, covered, missing, total):
         w(f"- {per * (1 - i['credit']):.2f} pt: {i['text']} ({i['axis']}) {('- ' + i['missing']) if i['missing'] else ''}")
     w("")
     w("Long-tail commands that do not exist yet are listed by `cargo run -p cadforge-engine --example parity -- --missing`. Many are tied to features this program does not have at all "
-      "(meshes and surfaces, sheet sets, annotative scaling, dynamic blocks, PDF / DGN underlays, DWG, VBA / .NET, rendering). Closing the gap to 95 means building those, "
-      "not polishing what is here; some of them (DWG, the plug-in ecosystem, 40 years of drawings and habits) cannot be reproduced at all.")
+      "(meshes and surfaces, sheet sets, annotative scaling, dynamic blocks, PDF / DGN underlays, VBA / .NET, rendering). Closing the gap to 95 means building those, "
+      "not polishing what is here; some of them (the plug-in ecosystem, 40 years of drawings and habits) cannot be reproduced at all.")
     w("")
     out = [i for i in items if i["out"]]
     if out:

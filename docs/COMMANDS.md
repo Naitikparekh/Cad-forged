@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 331 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 333 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -180,6 +180,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | Command | Aliases | Description |
 |---|---|---|
 | `-DXFOUT` |  | Writes the drawing as an ASCII or binary DXF file. |
+| `-SAVEAS` |  | Saves the drawing under a new name as an AutoCAD 2004 or 2000 DWG, a DXF or a CadForge file. |
 | `ARCHIVE` |  | Packs the drawing, its pictures and a report into one ZIP file. |
 | `AUDIT` |  | Evaluates the integrity of a drawing and corrects some errors. |
 | `CLOSEALL` |  | Closes all currently open drawings. |
@@ -332,6 +333,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `DXFOUT` |  | Writes the drawing as an ASCII DXF file. |
 | `DYN` |  | Turns dynamic input on or off. |
 | `EXPORT` | `EXP` | Saves the objects in a drawing to a different file format. |
+| `EXPORTDWG` | `DWGOUT` | Writes a copy of the drawing as an AutoCAD 2004 DWG file. |
 | `EXPORTPDF` |  | Exports the layout to a PDF file. |
 | `FILTER` | `FI` | Creates a list of requirements that an object must meet to be included in a selection set (command-line form of the Object Selection Filters dialog). |
 | `GRID` |  | Displays a grid pattern in the current viewport. |
