@@ -1,4 +1,5 @@
-//! Writing DWG: AutoCAD 2000 (AC1015) files, which every AutoCAD since 2000 and every DWG reader opens.
+//! Writing DWG: AutoCAD 2004 (AC1018) files by default, which AutoCAD 2004 and later and every DWG reader open, or
+//! AutoCAD 2000 (AC1015) files for older programs.
 //!
 //! The drawing is first written as DXF by [`crate::io::write_dxf`] (one mapping of CadForge's model to AutoCAD's
 //! objects, shared by both formats); its records are then encoded as DWG objects, the way the reader turns DWG objects
@@ -7,28 +8,62 @@
 //! entity lists, attribute chains). Object layouts follow the Open Design Alliance specification as implemented by
 //! ACadSharp (MIT License, Copyright (c) 2021 Albert Domenech).
 //!
-//! AutoCAD 2000 files store colours as palette indexes: true colours are written as their nearest index.
+//! AutoCAD 2000 files store colours as palette indexes (true colours are written as their nearest index) and have no
+//! gradient fills; 2004 files keep both.
 
 mod bitw;
 mod dxfin;
 mod header;
+mod r2004;
+
+use super::Ver;
 
 use crate::drawing::Drawing;
 use bitw::{crc16, BitW};
 use dxfin::{hex, Dxf, Rec};
 use std::collections::HashMap;
 
-/// Write a drawing as an AutoCAD 2000 DWG file.
+/// Write a drawing as an AutoCAD 2004 DWG file.
 pub fn write_dwg(doc: &Drawing) -> Result<Vec<u8>, String> {
-    dxf_to_dwg(&crate::io::write_dxf(doc))
+    write_dwg_as(doc, Ver::R2004)
 }
 
-/// Encode CadForge's DXF output as an AutoCAD 2000 DWG file.
-pub fn dxf_to_dwg(text: &str) -> Result<Vec<u8>, String> {
+/// Write a drawing as a DWG file of the given version: [`Ver::R2004`] or [`Ver::R2000`].
+pub fn write_dwg_as(doc: &Drawing, ver: Ver) -> Result<Vec<u8>, String> {
+    dxf_to_dwg(&crate::io::write_dxf(doc), ver)
+}
+
+/// Encode CadForge's DXF output as a DWG file.
+pub fn dxf_to_dwg(text: &str, ver: Ver) -> Result<Vec<u8>, String> {
+    if !matches!(ver, Ver::R2000 | Ver::R2004) {
+        return Err(format!("CadForge writes DWG 2000 and 2004 files, not {}.", ver.label()));
+    }
     let d = dxfin::parse(text);
-    let mut w = Writer::new(&d)?;
+    let mut w = Writer::new(&d, ver)?;
     w.write_all()?;
     Ok(w.file())
+}
+
+/// A CMC colour: the palette index, or (2004) the true colour that goes with it.
+fn cmc(m: &mut BitW, ver: Ver, aci: i64, rgb: Option<u32>) {
+    if ver < Ver::R2004 {
+        m.bs(aci.clamp(0, 256) as i16);
+        return;
+    }
+    m.bs(0);
+    let v: u32 = match (rgb, aci) {
+        (Some(c), _) => 0xC200_0000 | (c & 0xFF_FFFF),
+        (None, 256) => 0xC000_0000,
+        (None, 0) => 0xC100_0000,
+        (None, i) => 0xC300_0000 | (i.clamp(1, 255) as u32),
+    };
+    m.bl(v as i32);
+    m.rc(0); // no colour or book name
+}
+
+/// The DXF colour of a record: its index (62) and true colour (420).
+fn colour(r: &Rec, default: i64) -> (i64, Option<u32>) {
+    (r.i(62, default), r.get(420).and_then(|v| v.trim().parse::<i64>().ok()).map(|v| v as u32))
 }
 
 fn rad(deg: f64) -> f64 {
@@ -127,6 +162,7 @@ fn group(list: &[Rec]) -> Vec<Ent<'_>> {
 
 struct Writer<'a> {
     d: &'a Dxf,
+    ver: Ver,
     next: u64,
     layers: HashMap<String, u64>,
     ltypes: HashMap<String, u64>,
@@ -150,15 +186,16 @@ struct Writer<'a> {
     placeholder: u64,
     classes: Vec<usize>,
     objs: Vec<(u64, Vec<u8>)>,
-    /// The first VIEWPORT of each block (a layout's last active viewport).
-    viewports: HashMap<u64, u64>,
+    /// The VIEWPORTs of each block (a layout's viewports, the first its last active one).
+    viewports: HashMap<u64, Vec<u64>>,
 }
 
 impl<'a> Writer<'a> {
-    fn new(d: &'a Dxf) -> Result<Writer<'a>, String> {
+    fn new(d: &'a Dxf, ver: Ver) -> Result<Writer<'a>, String> {
         let seed = d.header.get("$HANDSEED").map_or(0, |r| hex(r.s(5)));
         let mut w = Writer {
             d,
+            ver,
             next: 0,
             layers: HashMap::new(),
             ltypes: HashMap::new(),
@@ -290,7 +327,11 @@ impl<'a> Writer<'a> {
         for r in reactors {
             o.h.h(4, *r);
         }
-        o.h.h(3, 0); // no extension dictionary
+        if self.ver >= Ver::R2004 {
+            o.m.bit(true); // no extension dictionary
+        } else {
+            o.h.h(3, 0);
+        }
         o
     }
 
@@ -309,11 +350,23 @@ impl<'a> Writer<'a> {
             o.h.h(4, owner);
         }
         o.m.bl(0);
-        o.h.h(3, 0);
-        o.m.bit(false); // previous and next entity given explicitly
-        o.h.h(4, prev);
-        o.h.h(4, next);
-        o.m.bs(r.i(62, 256).clamp(0, 256) as i16);
+        if self.ver >= Ver::R2004 {
+            o.m.bit(true); // no extension dictionary
+            let (aci, rgb) = colour(r, 256);
+            match rgb {
+                Some(c) => {
+                    o.m.bs(0x8000u16 as i16);
+                    o.m.bl((0xC200_0000 | (c & 0xFF_FFFF)) as i32);
+                }
+                None => o.m.bs(aci.clamp(0, 256) as i16),
+            }
+        } else {
+            o.h.h(3, 0);
+            o.m.bit(false); // previous and next entity given explicitly
+            o.h.h(4, prev);
+            o.h.h(4, next);
+            o.m.bs(r.i(62, 256).clamp(0, 256) as i16);
+        }
         o.m.bd(r.fd(48, 1.0));
         o.h.h(5, self.layer(r.s(8)));
         match r.s(6).to_lowercase().as_str() {
@@ -455,7 +508,9 @@ impl<'a> Writer<'a> {
         for r in &dimstyles {
             self.dimstyle_rec(r);
         }
-        self.control("VP_ENT_HDR", 70, &[], &[]);
+        if self.ver < Ver::R2004 {
+            self.control("VP_ENT_HDR", 70, &[], &[]);
+        }
     }
 
     fn layer_rec(&mut self, r: &Rec) {
@@ -481,7 +536,8 @@ impl<'a> Writer<'a> {
             v |= 16;
         }
         o.m.bs(v);
-        o.m.bs(color.unsigned_abs().clamp(1, 255) as i16);
+        let rgb = r.get(420).and_then(|v| v.trim().parse::<i64>().ok()).map(|v| v as u32);
+        cmc(&mut o.m, self.ver, color.unsigned_abs().clamp(1, 255) as i64, rgb);
         o.h.h(5, 0); // xref block
         o.h.h(5, self.placeholder); // plot style "Normal"
         let lt = self.ltypes.get(&r.s(6).to_lowercase()).copied().unwrap_or(self.ltypes["continuous"]);
@@ -562,7 +618,7 @@ impl<'a> Writer<'a> {
             o.m.bit(r.i(c, 0) != 0); // DIMTOFL DIMSAH DIMTIX DIMSOXD
         }
         for c in [176, 177, 178] {
-            o.m.bs(r.i(c, 0) as i16); // DIMCLRD DIMCLRE DIMCLRT
+            cmc(&mut o.m, self.ver, r.i(c, 0), None); // DIMCLRD DIMCLRE DIMCLRT
         }
         for (c, d) in [(179, 0), (271, 2), (272, 2), (273, 2), (274, 2), (275, 0), (276, 0), (277, 2), (278, b'.' as i64), (279, 0), (280, 0)] {
             o.m.bs(r.i(c, d) as i16);
@@ -611,6 +667,9 @@ impl<'a> Writer<'a> {
         o.m.bit(false); // xref
         o.m.bit(false); // overlaid xref
         o.m.bit(false); // loaded
+        if self.ver >= Ver::R2004 {
+            o.m.bl(firsts.len() as i32);
+        }
         o.m.bd3(b.begin.p(10));
         o.m.tv(b.begin.s(1));
         let ins = self.inserts.get(&rh).cloned().unwrap_or_default();
@@ -622,8 +681,14 @@ impl<'a> Writer<'a> {
         o.m.bl(0); // no preview
         o.h.h(5, 0);
         o.h.h(3, b.begin.handle());
-        o.h.h(4, firsts.first().copied().unwrap_or(0));
-        o.h.h(4, firsts.last().copied().unwrap_or(0));
+        if self.ver >= Ver::R2004 {
+            for e in &firsts {
+                o.h.h(3, *e);
+            }
+        } else {
+            o.h.h(4, firsts.first().copied().unwrap_or(0));
+            o.h.h(4, firsts.last().copied().unwrap_or(0));
+        }
         o.h.h(3, b.end.handle());
         for i in &ins {
             o.h.h(4, *i);
@@ -634,8 +699,9 @@ impl<'a> Writer<'a> {
         let mut o = self.ent(4, &b.begin, rh, 0, 0);
         o.m.tv(name);
         self.put(b.begin.handle(), o);
-        if let Some(v) = ents.iter().find(|e| e.r.ty == "VIEWPORT") {
-            self.viewports.insert(rh, v.r.handle());
+        let vps: Vec<u64> = ents.iter().filter(|e| e.r.ty == "VIEWPORT").map(|e| e.r.handle()).collect();
+        if !vps.is_empty() {
+            self.viewports.insert(rh, vps);
         }
         for (k, e) in ents.iter().enumerate() {
             let prev = if k > 0 { firsts[k - 1] } else { 0 };
@@ -753,6 +819,9 @@ impl<'a> Writer<'a> {
                 o.m.bs(r.i(73, 1) as i16);
                 o.m.bd(r.fd(44, 1.0));
                 o.m.bit(false);
+                if self.ver >= Ver::R2004 {
+                    o.m.bl(0); // no background fill
+                }
                 o
             }
             "INSERT" => {
@@ -778,11 +847,20 @@ impl<'a> Writer<'a> {
                 o.m.bd3(ext);
                 let atts = !e.kids.is_empty() && e.seqend.is_some();
                 o.m.bit(atts);
+                if atts && self.ver >= Ver::R2004 {
+                    o.m.bl(e.kids.len() as i32);
+                }
                 let block = self.blocks.get(r.s(2)).copied().ok_or_else(|| format!("INSERT of a missing block {}", r.s(2)))?;
                 o.h.h(5, block);
                 if atts {
-                    o.h.h(4, e.kids[0].handle());
-                    o.h.h(4, e.kids[e.kids.len() - 1].handle());
+                    if self.ver >= Ver::R2004 {
+                        for k in &e.kids {
+                            o.h.h(3, k.handle());
+                        }
+                    } else {
+                        o.h.h(4, e.kids[0].handle());
+                        o.h.h(4, e.kids[e.kids.len() - 1].handle());
+                    }
                     o.h.h(3, e.seqend.map_or(0, |s| s.handle()));
                 }
                 o
@@ -878,11 +956,16 @@ impl<'a> Writer<'a> {
                 o.m.bd3([r.f(112), r.fd(122, 1.0), r.f(132)]);
                 o.m.bd(r.f(146));
                 o.m.bs(r.i(79, 0) as i16);
+                if self.ver >= Ver::R2004 {
+                    o.m.bs(0); // shade plot mode
+                }
                 for f in frozen {
-                    o.h.h(5, f);
+                    o.h.h(if self.ver >= Ver::R2004 { 4 } else { 5 }, f);
                 }
                 o.h.h(5, r.get(340).map_or(0, hex)); // clip boundary
-                o.h.h(5, 0); // viewport entity header
+                if self.ver < Ver::R2004 {
+                    o.h.h(5, 0); // viewport entity header
+                }
                 o.h.h(5, 0); // named UCS
                 o.h.h(5, 0); // base UCS
                 o
@@ -1077,6 +1160,25 @@ impl<'a> Writer<'a> {
 
     fn hatch(&self, o: &mut O, r: &Rec, ext: [f64; 3]) {
         let solid = r.i(70, 0) != 0;
+        if self.ver >= Ver::R2004 {
+            // gradient: 450 on, 460 angle (radians), 461 shift, 452 one colour, 462 tint, 463/421 stops, 470 name
+            let grad = r.i(450, 0) != 0;
+            o.m.bl(grad as i32);
+            o.m.bl(r.i(451, 0) as i32);
+            o.m.bd(r.f(460));
+            o.m.bd(r.f(461));
+            o.m.bl(r.i(452, 0) as i32);
+            o.m.bd(r.f(462));
+            let stops: Vec<f64> = r.all(463).iter().map(|v| v.trim().parse().unwrap_or(0.0)).collect();
+            let cols: Vec<u32> = r.all(421).iter().map(|v| v.trim().parse::<i64>().unwrap_or(0) as u32).collect();
+            let n = if grad { stops.len().min(cols.len()) } else { 0 };
+            o.m.bl(n as i32);
+            for k in 0..n {
+                o.m.bd(stops[k]);
+                cmc(&mut o.m, self.ver, 7, Some(cols[k]));
+            }
+            o.m.tv(if grad { r.s(470) } else { "" });
+        }
         o.m.bd(r.f(30));
         o.m.bd3(ext);
         o.m.tv(r.s(2));
@@ -1294,13 +1396,21 @@ impl<'a> Writer<'a> {
                     for c in [48, 49, 140, 141] {
                         o.m.bd(p.f(c));
                     }
-                    o.m.tv(p.s(6));
+                    if self.ver < Ver::R2004 {
+                        o.m.tv(p.s(6)); // plot view name
+                    }
                     o.m.bd(p.fd(142, 1.0));
                     o.m.bd(p.fd(143, 1.0));
                     o.m.tv(p.s(7));
                     o.m.bs(p.i(75, 16) as i16);
                     o.m.bd(p.fd(147, 1.0));
                     o.m.bd2([p.f(148), p.f(149)]);
+                    if self.ver >= Ver::R2004 {
+                        o.m.bs(0); // shade plot mode
+                        o.m.bs(0); // shade plot resolution
+                        o.m.bs(300); // shade plot dpi
+                        o.h.h(5, 0); // plot view
+                    }
                     o.m.tv(l.s(1));
                     o.m.bl(l.i(71, 0) as i32);
                     o.m.bs(l.i(70, 1) as i16);
@@ -1315,10 +1425,19 @@ impl<'a> Writer<'a> {
                     o.m.bd3(l.p(14));
                     o.m.bd3(l.p(15));
                     let block = l.get(330).map_or(0, hex);
+                    let vps = self.viewports.get(&block).cloned().unwrap_or_default();
+                    if self.ver >= Ver::R2004 {
+                        o.m.bl(vps.len() as i32);
+                    }
                     o.h.h(4, block);
-                    o.h.h(4, l.get(331).map_or_else(|| self.viewports.get(&block).copied().unwrap_or(0), hex));
+                    o.h.h(4, l.get(331).map_or_else(|| vps.first().copied().unwrap_or(0), hex));
                     o.h.h(5, 0); // base UCS
                     o.h.h(5, 0); // named UCS
+                    if self.ver >= Ver::R2004 {
+                        for v in &vps {
+                            o.h.h(4, *v);
+                        }
+                    }
                     self.put(h, o);
                 }
                 "IMAGEDEF" => {
@@ -1353,13 +1472,13 @@ impl<'a> Writer<'a> {
         o.m.tv("Standard");
         o.m.tv("");
         o.m.bs(0);
-        o.m.bs(256);
+        cmc(&mut o.m, self.ver, 256, None);
         o.m.bd(std::f64::consts::FRAC_PI_2);
         o.m.bd(std::f64::consts::FRAC_PI_2);
         o.m.rc(2);
         for off in [0.5, -0.5] {
             o.m.bd(off);
-            o.m.bs(256);
+            cmc(&mut o.m, self.ver, 256, None);
             o.m.bs(32767); // ByLayer linetype
         }
         self.put(mls, o);
@@ -1380,6 +1499,12 @@ impl<'a> Writer<'a> {
 
     fn classes_section(&self) -> Vec<u8> {
         let mut m = BitW::new();
+        if self.ver >= Ver::R2004 {
+            m.bs(499 + self.classes.len() as i16); // highest class number
+            m.rc(0);
+            m.rc(0);
+            m.bit(true);
+        }
         for (i, &k) in self.classes.iter().enumerate() {
             let c = &CLASSES[k];
             m.bs(500 + i as i16);
@@ -1389,6 +1514,14 @@ impl<'a> Writer<'a> {
             m.tv(c.dxf);
             m.bit(false);
             m.bs(if c.entity { 0x1F2 } else { 0x1F3 });
+            if self.ver >= Ver::R2004 {
+                let count = self.objs.iter().filter(|(_, b)| object_type(b) == 500 + i as u16).count();
+                m.bl(count as i32);
+                m.bl(0); // dwg version
+                m.bl(0); // maintenance version
+                m.bl(0);
+                m.bl(0);
+            }
         }
         m.align();
         let mut out = vec![0x8D, 0xA1, 0xC4, 0xB8, 0xC4, 0xA9, 0xF8, 0xC5, 0xC0, 0xDC, 0xF4, 0x5F, 0xE7, 0xCF, 0xB6, 0x8A];
@@ -1397,6 +1530,9 @@ impl<'a> Writer<'a> {
         out.extend_from_slice(&body);
         out.extend_from_slice(&crc16(0xC0C1, &body).to_le_bytes());
         out.extend_from_slice(&[0x72, 0x5E, 0x3B, 0x47, 0x3B, 0x56, 0x07, 0x3A, 0x3F, 0x23, 0x0B, 0xA0, 0x18, 0x30, 0x49, 0x75]);
+        if self.ver >= Ver::R2004 {
+            out.extend_from_slice(&[0; 8]);
+        }
         out
     }
 
@@ -1473,33 +1609,50 @@ impl<'a> Writer<'a> {
             byblock: self.ltypes["byblock"],
             continuous: self.ltypes["continuous"],
         };
-        let header = header::write(&self.d.header, &refs, julian);
+        let header = header::write(&self.d.header, &refs, julian, self.ver);
         let classes = self.classes_section();
-        let aux = aux_header(julian, self.next);
+        let aux = aux_header(julian, self.next, self.ver);
         let preview = preview();
-        // file order: file header, aux header, preview, header, classes, objects, object map, free space, template
+        let metric = self.d.header.get("$MEASUREMENT").map_or(1, |r| r.i(70, 1));
+        let template = [0u8, 0, metric as u8, 0];
+        self.objs.sort_by_key(|o| o.0);
+        if self.ver >= Ver::R2004 {
+            // the objects section starts with 0x0DCA; offsets count from the section start
+            let mut objects = 0x0DCAu32.to_le_bytes().to_vec();
+            let mut map = vec![];
+            for (h, bytes) in &self.objs {
+                map.push((*h, objects.len()));
+                objects.extend_from_slice(bytes);
+            }
+            let handles = Self::handles_section(&map);
+            let free = free_space(map.len(), julian, 0);
+            let s = |name, data: Vec<u8>, compressed| r2004::Section { name, data, compressed };
+            let sections = vec![
+                s("AcDb:SummaryInfo", summary_info(julian), false),
+                s("AcDb:Preview", preview, false),
+                s("AcDb:AppInfo", app_info(), false),
+                s("AcDb:RevHistory", vec![0; 12], true),
+                s("AcDb:AcDbObjects", objects, true),
+                s("AcDb:ObjFreeSpace", free, true),
+                s("AcDb:Template", template.to_vec(), true),
+                s("AcDb:Handles", handles, true),
+                s("AcDb:Classes", classes, true),
+                s("AcDb:AuxHeader", aux, true),
+                s("AcDb:Header", header, true),
+            ];
+            return r2004::assemble(&sections, MAINT_2004);
+        }
+        // AutoCAD 2000: file header, aux header, preview, header, classes, objects, object map, free space, template
         let head_len = 0x61;
         let objects_at = head_len + aux.len() + preview.len() + header.len() + classes.len();
         let mut objects = vec![];
         let mut map = vec![];
-        self.objs.sort_by_key(|o| o.0);
         for (h, bytes) in &self.objs {
             map.push((*h, objects_at + objects.len()));
             objects.extend_from_slice(bytes);
         }
         let handles = Self::handles_section(&map);
-        let mut free = vec![];
-        free.extend_from_slice(&0i32.to_le_bytes());
-        free.extend_from_slice(&(map.len() as u32).to_le_bytes());
-        free.extend_from_slice(&julian.0.to_le_bytes());
-        free.extend_from_slice(&julian.1.to_le_bytes());
-        free.extend_from_slice(&(objects_at as u32).to_le_bytes());
-        free.push(4);
-        for v in [0x32u32, 0, 0x64, 0, 0x200, 0, 0xFFFF_FFFF, 0] {
-            free.extend_from_slice(&v.to_le_bytes());
-        }
-        let metric = self.d.header.get("$MEASUREMENT").map_or(1, |r| r.i(70, 1));
-        let template = [0u8, 0, metric as u8, 0];
+        let free = free_space(map.len(), julian, objects_at as u32);
         let aux_at = head_len;
         let preview_at = aux_at + aux.len();
         let header_at = preview_at + preview.len();
@@ -1527,6 +1680,75 @@ impl<'a> Writer<'a> {
         }
         f
     }
+}
+
+/// The maintenance version written in 2004 files (the one AutoCAD writes).
+const MAINT_2004: u8 = 0x68;
+
+/// The object type an encoded object starts with (after its MS size).
+fn object_type(b: &[u8]) -> u16 {
+    let skip = if b.len() > 1 && b[1] & 0x80 != 0 { 4 } else { 2 };
+    let mut r = super::bits::Bits::new(&b[skip.min(b.len())..], Ver::R2000);
+    r.bs().unwrap_or(0) as u16
+}
+
+fn free_space(objects: usize, julian: (i32, i32), objects_at: u32) -> Vec<u8> {
+    let mut free = vec![];
+    free.extend_from_slice(&0i32.to_le_bytes());
+    free.extend_from_slice(&(objects as u32).to_le_bytes());
+    free.extend_from_slice(&julian.0.to_le_bytes());
+    free.extend_from_slice(&julian.1.to_le_bytes());
+    free.extend_from_slice(&objects_at.to_le_bytes());
+    free.push(4);
+    for v in [0x32u32, 0, 0x64, 0, 0x200, 0, 0xFFFF_FFFF, 0] {
+        free.extend_from_slice(&v.to_le_bytes());
+    }
+    free
+}
+
+/// Text as the 2004 information sections store it: a length (with the terminating zero) and code-page bytes.
+fn info_text(out: &mut Vec<u8>, s: &str) {
+    out.extend_from_slice(&(s.len() as u16 + 1).to_le_bytes());
+    out.extend_from_slice(s.as_bytes());
+    out.push(0);
+}
+
+fn summary_info(julian: (i32, i32)) -> Vec<u8> {
+    let mut b = vec![];
+    for s in ["", "", "", "", "", "", "", ""] {
+        info_text(&mut b, s); // title subject author keywords comments last-saved-by revision hyperlink base
+    }
+    b.extend_from_slice(&[0; 8]); // total editing time
+    for _ in 0..2 {
+        b.extend_from_slice(&julian.0.to_le_bytes()); // created, modified
+        b.extend_from_slice(&julian.1.to_le_bytes());
+    }
+    b.extend_from_slice(&0u16.to_le_bytes()); // no custom properties
+    b.extend_from_slice(&[0; 8]);
+    b
+}
+
+/// The program that wrote the file, as UTF-16 strings with their lengths.
+fn app_info() -> Vec<u8> {
+    fn wide(out: &mut Vec<u8>, s: &str) {
+        let units: Vec<u16> = s.encode_utf16().collect();
+        out.extend_from_slice(&(units.len() as u16 + 1).to_le_bytes());
+        for u in units {
+            out.extend_from_slice(&u.to_le_bytes());
+        }
+        out.extend_from_slice(&[0, 0]);
+    }
+    let version = env!("CARGO_PKG_VERSION");
+    let mut b = 3u32.to_le_bytes().to_vec();
+    wide(&mut b, "AppInfoDataList");
+    b.extend_from_slice(&3u32.to_le_bytes());
+    b.extend_from_slice(&[0; 16]);
+    wide(&mut b, version);
+    b.extend_from_slice(&[0; 16]);
+    wide(&mut b, "Saved by CadForge");
+    b.extend_from_slice(&[0; 16]);
+    wide(&mut b, &format!("<ProductInformation name =\"CadForge\" build_version=\"{version}\" registry_version=\"{version}\" install_id_string=\"CadForge\" registry_localeID=\"1033\"/>"));
+    b
 }
 
 /// Points in groups c / c+10 / c+20 in order of appearance.
@@ -1562,20 +1784,21 @@ fn julian_now() -> (i32, i32) {
     ((2_440_588 + secs / 86_400) as i32, ((secs % 86_400) * 1000) as i32)
 }
 
-fn aux_header(julian: (i32, i32), handseed: u64) -> Vec<u8> {
+fn aux_header(julian: (i32, i32), handseed: u64, ver: Ver) -> Vec<u8> {
+    let (code, maint) = if ver >= Ver::R2004 { (25, MAINT_2004 as i16) } else { (23, 15) };
     let mut b = vec![0xFF, 0x77, 0x01];
     let rs = |b: &mut Vec<u8>, v: i16| b.extend_from_slice(&v.to_le_bytes());
     let rl = |b: &mut Vec<u8>, v: i32| b.extend_from_slice(&v.to_le_bytes());
-    rs(&mut b, 23); // AC1015
-    rs(&mut b, 15); // maintenance version
+    rs(&mut b, code);
+    rs(&mut b, maint);
     rl(&mut b, 1); // saves
     rl(&mut b, -1);
     rs(&mut b, 1);
     rs(&mut b, 0);
     rl(&mut b, 0);
     for _ in 0..2 {
-        rs(&mut b, 23);
-        rs(&mut b, 15);
+        rs(&mut b, code);
+        rs(&mut b, maint);
     }
     for v in [5, 0x893, 5, 0x893, 0, 1] {
         rs(&mut b, v);

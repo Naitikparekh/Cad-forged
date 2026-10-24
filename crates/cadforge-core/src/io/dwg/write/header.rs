@@ -1,6 +1,7 @@
 //! The header variables section of an AutoCAD 2000 file: every variable in its fixed order. Values CadForge keeps
 //! come from the drawing's DXF header, the rest are AutoCAD's defaults. Field order ported from ACadSharp (MIT).
 
+use super::super::Ver;
 use super::bitw::{crc16, BitW};
 use super::dxfin::Rec;
 use std::collections::HashMap;
@@ -14,7 +15,7 @@ pub struct Refs {
     pub dimstyle: u64,
     pub cmlstyle: u64,
     pub dimtxsty: u64,
-    /// BLOCK, LAYER, STYLE, LTYPE, VIEW, UCS, VPORT, APPID, DIMSTYLE and VP_ENT_HDR control objects.
+    /// BLOCK, LAYER, STYLE, LTYPE, VIEW, UCS, VPORT, APPID, DIMSTYLE and (2000) VP_ENT_HDR control objects.
     pub controls: [u64; 10],
     pub dict_group: u64,
     pub dict_mline: u64,
@@ -33,7 +34,8 @@ pub const START: [u8; 16] = [0xCF, 0x7B, 0x1F, 0x23, 0xFD, 0xDE, 0x38, 0xA9, 0x5
 pub const END: [u8; 16] = [0x30, 0x84, 0xE0, 0xDC, 0x02, 0x21, 0xC7, 0x56, 0xA0, 0x83, 0x97, 0x47, 0xB1, 0x92, 0xCC, 0xA0];
 
 /// The section, sentinels and CRC included. `julian` is the creation / update date (day, milliseconds).
-pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> {
+pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32), ver: Ver) -> Vec<u8> {
+    let r2004 = ver >= Ver::R2004;
     let f = |name: &str, code: i32, d: f64| h.get(name).map_or(d, |v| v.fd(code, d));
     let i = |name: &str, d: i64| h.get(name).map_or(d, |v| v.i(70, d)) as i16;
     let p3 = |name: &str, d: [f64; 3]| h.get(name).map_or(d, |v| [v.fd(10, d[0]), v.fd(20, d[1]), v.fd(30, d[2])]);
@@ -49,11 +51,16 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     }
     m.bl(24);
     m.bl(0);
-    m.h(5, 0); // current viewport entity header
+    if !r2004 {
+        m.h(5, 0); // current viewport entity header
+    }
     m.bit(true); // DIMASO
     m.bit(true); // DIMSHO
     for b in [false, false, true, true, false, true, false] {
         m.bit(b); // PLINEGEN ORTHOMODE REGENMODE FILLMODE QTEXTMODE PSLTSCALE LIMCHECK
+    }
+    if r2004 {
+        m.bit(false);
     }
     for b in [true, false, false, false] {
         m.bit(b); // USRTIMER SKPOLY ANGDIR SPLFRAME
@@ -73,6 +80,11 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     m.bs(i("$AUPREC", 0));
     m.bs(1); // ATTMODE
     m.bs(i("$PDMODE", 0));
+    if r2004 {
+        for _ in 0..3 {
+            m.bl(0);
+        }
+    }
     for v in [0, 0, 0, 0, 0, 8, 6, 6, 6, 6, 6, 6, 3, 70, 0, 64] {
         m.bs(v); // USERI1-5 SPLINESEGS SURFU SURFV SURFTYPE SURFTAB1 SURFTAB2 SPLINETYPE SHADEDGE SHADEDIF UNITMODE MAXACTVP
     }
@@ -102,10 +114,15 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
         m.bl(julian.0); // TDCREATE, TDUPDATE
         m.bl(julian.1);
     }
+    if r2004 {
+        for _ in 0..3 {
+            m.bl(0);
+        }
+    }
     for _ in 0..4 {
         m.bl(0); // TDINDWG TDUSRTIMER
     }
-    m.bs(256); // CECOLOR
+    cmc(&mut m, r2004, 256); // CECOLOR
     m.h(0, r.handseed);
     m.h(5, r.clayer);
     m.h(5, r.textstyle);
@@ -159,7 +176,7 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     m.bit(false); // DIMTIX
     m.bit(false); // DIMSOXD
     for _ in 0..3 {
-        m.bs(0); // DIMCLRD DIMCLRE DIMCLRT
+        cmc(&mut m, r2004, 0); // DIMCLRD DIMCLRE DIMCLRT
     }
     m.bs(0); // DIMADEC
     m.bs(i("$DIMDEC", if metric { 2 } else { 4 }));
@@ -186,8 +203,8 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     }
     m.bs(-2); // DIMLWD
     m.bs(-2); // DIMLWE
-    for c in r.controls {
-        m.h(3, c);
+    for c in &r.controls[..if r2004 { 9 } else { 10 }] {
+        m.h(3, *c);
     }
     m.h(5, r.dict_group);
     m.h(5, r.dict_mline);
@@ -199,12 +216,26 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     m.h(5, r.dict_layout);
     m.h(5, r.dict_plotsettings);
     m.h(5, r.dict_plotstyle);
+    if r2004 {
+        m.h(5, 0); // materials dictionary
+        m.h(5, 0); // colours dictionary
+    }
     // CELWEIGHT ByLayer, line weights not displayed, long names, colour-dependent plot styles
     m.bl(29 | 0x200 | 0x800 | 0x2000);
     m.bs(i("$INSUNITS", 4));
     m.bs(0); // CEPSNTYPE
     m.tv("{00000000-0000-0000-0000-000000000000}"); // FINGERPRINTGUID
     m.tv("{00000000-0000-0000-0000-000000000000}"); // VERSIONGUID
+    if r2004 {
+        for v in [0x7F, 0, 0, 0, 2, 0] {
+            m.rc(v); // SORTENTS INDEXCTL HIDETEXT XCLIPFRAME DIMASSOC HALOGAP
+        }
+        m.bs(257); // OBSCUREDCOLOR
+        m.bs(257); // INTERSECTIONCOLOR
+        m.rc(0); // OBSCUREDLTYPE
+        m.rc(0); // INTERSECTIONDISPLAY
+        m.tv(""); // PROJECTNAME
+    }
     m.h(5, r.paper);
     m.h(5, r.model);
     m.h(5, r.bylayer);
@@ -212,6 +243,11 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     m.h(5, r.continuous);
     for _ in 0..4 {
         m.bs(-1);
+    }
+    if r2004 {
+        m.bl(0);
+        m.bl(0);
+        m.bit(false);
     }
     m.align();
     let mut out = START.to_vec();
@@ -221,6 +257,20 @@ pub fn write(h: &HashMap<String, Rec>, r: &Refs, julian: (i32, i32)) -> Vec<u8> 
     out.extend_from_slice(&crc16(0xC0C1, &body).to_le_bytes());
     out.extend_from_slice(&END);
     out
+}
+
+fn cmc(m: &mut BitW, r2004: bool, aci: i16) {
+    if r2004 {
+        m.bs(0);
+        m.bl(match aci {
+            256 => 0xC000_0000u32,
+            0 => 0xC100_0000,
+            i => 0xC300_0000 | i as u32,
+        } as i32);
+        m.rc(0);
+    } else {
+        m.bs(aci);
+    }
 }
 
 /// ELEVATION, UCSORG, UCSXDIR, UCSYDIR, UCSNAME, UCSORTHOREF, UCSORTHOVIEW, UCSBASE and the six orthographic origins.

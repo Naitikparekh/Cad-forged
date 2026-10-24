@@ -81,8 +81,16 @@ def main(dxf_path, json_path):
         if lay != layer_by_name.get((first(r, 8) or '0').lower()):
             problems.append(f'{name}: layer {layers.get(lay)}')
         color = o.get('color')
-        color = color.get('index') if isinstance(color, dict) else color
-        if color != int(first(r, 62, '256')):
+        rgb = first(r, 420)
+        if isinstance(color, dict):
+            # 2004 files: LibreDWG gives the index (left out when 0) and the true colour
+            if rgb is not None:
+                if int(color.get('rgb', '0'), 16) & 0xFFFFFF != int(rgb):
+                    problems.append(f'{name}: true colour {color} != {int(rgb):06x}')
+                color = None
+            else:
+                color = color.get('index', 0)
+        if color is not None and color != int(first(r, 62, '256')):
             problems.append(f'{name}: colour {color} != {first(r, 62, "256")}')
         lw = int(first(r, 370, '-1'))
         want_lw = {-1: 29, -2: 30, -3: 31}.get(lw, LW.index(lw) if lw in LW else None)

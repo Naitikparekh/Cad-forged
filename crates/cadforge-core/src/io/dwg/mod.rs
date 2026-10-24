@@ -12,7 +12,7 @@ mod objects;
 mod to_dxf;
 pub mod write;
 
-pub use write::{dxf_to_dwg, write_dwg};
+pub use write::{dxf_to_dwg, write_dwg, write_dwg_as};
 
 use crate::drawing::Drawing;
 use std::collections::BTreeMap;
