@@ -13,6 +13,7 @@ mod layout;
 mod plot;
 mod settings;
 mod simple;
+mod standards;
 mod text;
 
 pub use colors::*;
@@ -73,6 +74,8 @@ pub enum Kind {
     EditText(TextEditState),
     FileBrowser(FileBrowserState),
     PageSetup(Option<PageSetupState>),
+    Standards(standards::StandardsState),
+    CheckStandards(standards::CheckState),
 }
 
 pub struct Dialog {
@@ -282,6 +285,8 @@ impl CadForgeApp {
             Kind::EditText(s) => self.ui_edit_text(ui, s),
             Kind::FileBrowser(s) => self.ui_file_browser(ui, s),
             Kind::PageSetup(s) => self.ui_pagesetup(ui, s.as_mut().expect("state")),
+            Kind::Standards(s) => self.ui_standards(ui, s),
+            Kind::CheckStandards(s) => self.ui_checkstandards(ui, s),
         }
     }
 
@@ -564,6 +569,8 @@ fn dialog_title_width(k: &Kind) -> (String, f32) {
         Kind::EditText(s) => (if s.multi { "Multiline Text Editor".into() } else { "Single Line Text".into() }, 460.0),
         Kind::FileBrowser(s) => (s.title.clone(), 560.0),
         Kind::PageSetup(_) => ("Page Setup".into(), 420.0),
+        Kind::Standards(_) => ("Configure Standards".into(), 460.0),
+        Kind::CheckStandards(_) => ("Check Standards".into(), 520.0),
     }
 }
 
@@ -593,6 +600,12 @@ impl Dialog {
     }
     pub fn aliasedit() -> Dialog {
         Dialog::new(Kind::AliasEdit(AliasState::default()))
+    }
+    pub fn standards() -> Dialog {
+        Dialog::new(Kind::Standards(Default::default()))
+    }
+    pub fn checkstandards() -> Dialog {
+        Dialog::new(Kind::CheckStandards(Default::default()))
     }
     pub fn textstyle() -> Dialog {
         Dialog::new(Kind::TextStyle(None))

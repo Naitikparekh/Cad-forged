@@ -13,6 +13,7 @@ pub mod ops;
 pub mod sample;
 pub mod solid;
 pub mod spatial;
+pub mod standards;
 pub mod style;
 pub mod text;
 pub mod view;

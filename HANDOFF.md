@@ -127,6 +127,14 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   App: OPEN / IMPORT / drop read bytes (`parse_drawing`), Save As has a type list (`SaveFormat` in
   `commands/ext_system/files.rs`, also `-SAVEAS` and `EXPORTDWG`), and a save reports `io::not_kept_in_dxf`.
   `cargo run -p cadforge-core --example rtdiff -- file` lists what changes in a DWG (or `RTDIFF_DXF=1` DXF) round trip.
+* **CAD standards** (`standards.rs`): `Drawing::standards` keeps a copy of each standards file's layers, linetypes and
+  dimension / multileader / table styles (`Standard::from_drawing`), so checking needs no file access (works in the
+  browser) and survives JSON, DXF and DWG (CADFORGE XRECORD key `standards`). `check` lists problems, `fix` / `fix_all`
+  apply them; the engine commands are in `commands/ext_system/standards.rs`, the dialogs in `app/src/dialogs/standards.rs`
+  (they run the commands, so each fix is one undo step). Named dimension styles are now written to the DIMSTYLE table and
+  read back from it; all styles also ride in the XRECORD (`dim_styles`, `mleader_styles`, `table_styles`, `cur_*`).
+* **Isometric drafting**: `SNAPSTYL` 1 switches `snap::snap_to_grid` to the 30° / 150° lattice (`Grid::iso`), ortho to
+  `snap::ortho_axes(ISOPLANE)`, the renderer to `grid_iso` lines and the crosshair to the plane's axes.
 * **Spatial index** (`spatial.rs`, `Drawing::candidates`): a uniform grid over entity bounds, built per space on first use
   after a change (`Caches` is cleared by every `touch()`), skipped below 512 entities. Callers loop over the returned
   positions in ascending order, so results equal a full scan (`tests/spatial_equiv.rs` proves it against the linear

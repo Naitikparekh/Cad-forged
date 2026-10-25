@@ -68,6 +68,8 @@ mod web {
                 "ucs": { "x": ed.doc.ucs.origin.x, "y": ed.doc.ucs.origin.y, "angle": ed.doc.ucs.angle },
                 "modelEntities": ed.doc.model.entities.len(),
                 "modelTypes": ed.doc.model.entities.iter().map(|e| e.type_name()).collect::<Vec<_>>(),
+                "standards": ed.doc.standards.files.len(),
+                "standardsProblems": cadforge_core::standards::check(&ed.doc).iter().map(|p| p.key()).collect::<Vec<_>>(),
             })
             .to_string()
         })

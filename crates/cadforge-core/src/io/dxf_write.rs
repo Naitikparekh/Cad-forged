@@ -79,6 +79,25 @@ pub fn cadforge_extras(doc: &Drawing, handles: &HashMap<u64, String>) -> Option<
     if let Some(p) = &doc.plot_styles {
         put("plot_styles", to_value(p.as_ref()));
     }
+    // the styles as CadForge has them (the DIMSTYLE table holds what AutoCAD reads; multileader and table styles are
+    // only here)
+    let st = &doc.settings;
+    let defaults = crate::style::Settings::default();
+    if st.dim_styles != defaults.dim_styles || st.cur_dim_style != defaults.cur_dim_style {
+        put("dim_styles", to_value(&st.dim_styles));
+        put("cur_dim_style", to_value(&st.cur_dim_style));
+    }
+    if !st.mleader_styles.is_empty() || !st.cur_mleader_style.is_empty() {
+        put("mleader_styles", to_value(&st.mleader_styles));
+        put("cur_mleader_style", to_value(&st.cur_mleader_style));
+    }
+    if !st.table_styles.is_empty() || !st.cur_table_style.is_empty() {
+        put("table_styles", to_value(&st.table_styles));
+        put("cur_table_style", to_value(&st.cur_table_style));
+    }
+    if !doc.standards.is_empty() {
+        put("standards", to_value(&doc.standards));
+    }
     // a solid's extrusion history, with its outlines by handle (they get new ids when the file is read); left out when
     // an outline is no longer in the drawing
     let programs: Vec<Value> = doc
@@ -682,7 +701,8 @@ impl<'a> W<'a> {
         self.dim_blocks.push(rec);
         self.common(o, "DIMENSION", &Props::of(e), Some("AcDbDimension"), None);
         o.out.s(2, &name).pt(dim_def_point(d), 0);
-        o.out.pt(geo.text.p, 1).i(70, 32 | ty | if d.tp.is_some() { 128 } else { 0 }).i(71, 5).s(3, "Standard");
+        let style = d.ds.as_deref().filter(|n| self.doc.settings.dim_styles.contains_key(*n)).unwrap_or("Standard");
+        o.out.pt(geo.text.p, 1).i(70, 32 | ty | if d.tp.is_some() { 128 } else { 0 }).i(71, 5).s(3, style);
         if let Some(t) = &d.txt {
             if !t.is_empty() {
                 o.out.s(1, t);
@@ -951,6 +971,9 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.s(9, "$LUNITS").i(70, 2).s(9, "$LUPREC").i(70, st.units.precision as i64);
     o.s(9, "$AUPREC").i(70, st.units.ang_precision as i64);
     let ds = st.cur_dim();
+    if st.dim_styles.contains_key(&st.cur_dim_style) {
+        o.s(9, "$DIMSTYLE").s(2, &st.cur_dim_style);
+    }
     o.s(9, "$DIMSCALE").n(40, ds.scale).s(9, "$DIMTXT").n(40, ds.txt).s(9, "$DIMASZ").n(40, ds.asz).s(9, "$DIMEXO").n(40, ds.exo).s(9, "$DIMEXE").n(40, ds.exe).s(9, "$DIMGAP").n(40, ds.gap).s(9, "$DIMDEC").i(70, ds.dec as i64).s(9, "$DIMCEN").n(40, ds.cen);
     o.s(0, "ENDSEC");
 
@@ -1011,9 +1034,22 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.s(0, "APPID").s(5, &cf_app).s(330, &hs["appid"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbRegAppTableRecord").s(2, CADFORGE_APP).i(70, 0);
     o.s(0, "ENDTAB");
 
-    table_start(&mut o, "DIMSTYLE", &hs["dimstyle"], 1);
-    o.s(0, "DIMSTYLE").s(105, &hs["dimstyleRec"]).s(330, &hs["dimstyle"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbDimStyleTableRecord").s(2, "Standard").i(70, 0);
-    o.n(40, ds.scale).n(41, ds.asz).n(42, ds.exo).n(43, 3.75).n(44, ds.exe).n(140, ds.txt).n(141, ds.cen).n(147, ds.gap).i(271, ds.dec as i64).i(77, ds.tad as i64);
+    // every dimension style, Standard first (it has the reserved handle)
+    let std_ds = st.dim_styles.get("Standard").unwrap_or(ds);
+    let others: Vec<(&String, &crate::style::DimStyle)> = st.dim_styles.iter().filter(|(k, _)| k.as_str() != "Standard").collect();
+    table_start(&mut o, "DIMSTYLE", &hs["dimstyle"], 1 + others.len());
+    let dimstyle_rec = |o: &mut Out, hnd: &str, name: &str, d: &crate::style::DimStyle| {
+        o.s(0, "DIMSTYLE").s(105, hnd).s(330, &hs["dimstyle"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbDimStyleTableRecord").s(2, name).i(70, 0);
+        if !d.pre.is_empty() || !d.suf.is_empty() {
+            o.s(3, &format!("{}<>{}", clean(&d.pre), clean(&d.suf)));
+        }
+        o.n(40, d.scale).n(41, d.asz).n(42, d.exo).n(43, 3.75).n(44, d.exe).n(140, d.txt).n(141, d.cen).n(144, d.lfac).n(147, d.gap).i(271, d.dec as i64).i(77, d.tad as i64).i(78, d.zin as i64);
+    };
+    dimstyle_rec(&mut o, &hs["dimstyleRec"], "Standard", std_ds);
+    for (name, d) in others {
+        let h = w.h();
+        dimstyle_rec(&mut o, &h, name, d);
+    }
     o.s(0, "ENDTAB");
     let br_count = 1 + sheets.len() + user_blocks.len() + w.dim_blocks.len();
     table_start(&mut o, "BLOCK_RECORD", &hs["blockRecord"], br_count);

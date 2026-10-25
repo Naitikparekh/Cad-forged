@@ -184,6 +184,8 @@ struct File {
     custom_ltypes: Vec<crate::defs::LinetypeDef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     plot_styles: Option<std::rc::Rc<crate::plotstyle::PlotStyleTable>>,
+    #[serde(default, skip_serializing_if = "crate::standards::Standards::is_empty")]
+    standards: crate::standards::Standards,
 }
 
 fn at_origin(p: &Pt) -> bool {
@@ -204,6 +206,8 @@ struct Snap {
     next_id: u64,
     #[serde(default)]
     base: Pt,
+    #[serde(default, skip_serializing_if = "crate::standards::Standards::is_empty")]
+    standards: crate::standards::Standards,
 }
 
 /// The state an undo step returns to: the drawing as JSON, plus the plot style table by reference (it is large, rarely changes
@@ -278,6 +282,8 @@ pub struct Drawing {
     pub custom_ltypes: Vec<crate::defs::LinetypeDef>,
     /// The plot style table the drawing plots with (kept inside the drawing so a plot looks the same everywhere).
     pub plot_styles: Option<std::rc::Rc<crate::plotstyle::PlotStyleTable>>,
+    /// Standards files (STANDARDS) the drawing is checked against, with copies of their definitions.
+    pub standards: crate::standards::Standards,
     undo_stack: Vec<UndoStep>,
     redo_stack: Vec<UndoStep>,
     pre: Option<Snapshot>,
@@ -313,6 +319,12 @@ impl Clone for Drawing {
         d.dirty = self.dirty;
         d.file_name = self.file_name.clone();
         d.dwg_version = self.dwg_version;
+        d.ucs = self.ucs;
+        d.ucs_named = self.ucs_named.clone();
+        d.custom_patterns = self.custom_patterns.clone();
+        d.custom_ltypes = self.custom_ltypes.clone();
+        d.plot_styles = self.plot_styles.clone();
+        d.standards = self.standards.clone();
         d
     }
 }
@@ -350,6 +362,7 @@ impl Drawing {
             custom_patterns: vec![],
             custom_ltypes: vec![],
             plot_styles: None,
+            standards: Default::default(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             pre: None,
@@ -1085,6 +1098,7 @@ impl Drawing {
             cur: self.cur.clone(),
             next_id: self.next_id,
             base: self.base,
+            standards: self.standards.clone(),
         };
         Snapshot { json: serde_json::to_string(&s).expect("snapshot serialises"), plot: self.plot_styles.clone() }
     }
@@ -1101,6 +1115,7 @@ impl Drawing {
         self.views = s.views;
         self.cur = s.cur;
         self.base = s.base;
+        self.standards = s.standards;
         self.next_id = self.next_id.max(s.next_id);
         if self.space != MODEL && !self.layouts.iter().any(|l| l.name == self.space) {
             self.space = MODEL.into();
@@ -1173,6 +1188,7 @@ impl Drawing {
             custom_patterns: self.custom_patterns.clone(),
             custom_ltypes: self.custom_ltypes.clone(),
             plot_styles: self.plot_styles.clone(),
+            standards: self.standards.clone(),
         };
         serde_json::to_value(f).expect("drawing serialises")
     }
@@ -1244,6 +1260,7 @@ impl Drawing {
         d.ucs_named = f.ucs_named;
         d.base = f.base;
         d.plot_styles = f.plot_styles;
+        d.standards = f.standards;
         for def in f.custom_ltypes {
             let _ = d.define_linetype(def);
         }

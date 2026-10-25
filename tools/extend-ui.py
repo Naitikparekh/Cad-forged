@@ -90,6 +90,7 @@ ICONS = {
     "status": '<circle class="l" cx="16" cy="16" r="11"/><path class="a" d="M16 10v1M16 14v8"/>',
     "time": '<circle class="l" cx="16" cy="16" r="11"/><path class="a" d="M16 8v8l6 3"/>',
     "refedit": '<path class="l" d="M7 4h12l6 6v18H7z"/><path class="o" d="M13 24l8-8 2 2-8 8-3 1z"/>',
+    "standards": '<rect class="l" x="6" y="4" width="20" height="24"/><path class="k" d="M10 10h12M10 15h12M10 20h6"/><path class="a" d="M17 23l3 3 7-8"/>',
     "isodraft": '<path class="l" d="M16 4l10.4 6v12L16 28 5.6 22V10z"/><path class="a" d="M16 16v12M16 16 5.6 10M16 16l10.4-6"/>',
 }
 
@@ -279,6 +280,11 @@ extend_panel("home", "Draw", add_slideout=[btn("TRACE", "Trace", "small", "trace
 extend_panel("home", "Modify", add_slideout=[btn("SETBYLAYER", "SetByLayer", "small", "chprop"), btn("HATCHGENERATEBOUNDARY", "Hatch Boundary", "small", "boundary")])
 extend_panel("annotate", "Text", add_slideout=[btn("TXT2MTXT", "Text to MText", "small", "scaletext")])
 extend_panel("output", "File", add_items=[stack(btn("DATAEXTRACTION", "Data Extraction", "small", "csv"))])
+
+put_panel("manage", panel("CAD Standards", [
+    btn("STANDARDS", "Configure", icon="standards"),
+    stack(btn("CHECKSTANDARDS", "Check", "small", "standards"), btn("LAYTRANS", "Layer Translator", "small", "layers")),
+]), after="Styles")
 
 json.dump(ribbon, open(assets / "ribbon.json", "w"), separators=(",", ":"))
 json.dump(icons, open(assets / "icons.json", "w"), separators=(",", ":"))

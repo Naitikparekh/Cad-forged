@@ -422,6 +422,17 @@ fn settings_drawing() -> Drawing {
     d.define_block("SITE", pt(0.0, 0.0), vec![Entity::circle(pt(0.0, 0.0), 5.0)]);
     d.blocks.get_mut("SITE").unwrap().xref = Some(cadforge_core::drawing::XrefInfo { path: "survey/site.dwg".into(), overlay: true, loaded: true });
     d.add(Entity::insert("SITE", pt(50.0, 50.0)));
+    // named dimension, multileader and table styles, a current one of each, and a dimension that uses one
+    let iso = cadforge_core::style::DimStyle { name: "ISO-25".into(), txt: 3.5, asz: 3.0, dec: 1, pre: "~".into(), suf: " mm".into(), ..Default::default() };
+    d.settings.dim_styles.insert("ISO-25".into(), iso);
+    d.settings.cur_dim_style = "ISO-25".into();
+    d.settings.mleader_styles.insert("Notes".into(), cadforge_core::style::MLeaderStyle { name: "Notes".into(), text_height: 4.0, arrow: 2.0, landing: 6.0 });
+    d.settings.cur_mleader_style = "Notes".into();
+    d.settings.table_styles.insert("Schedule".into(), cadforge_core::style::TableStyle { name: "Schedule".into(), text_height: 3.0, title: true });
+    d.settings.cur_table_style = "Schedule".into();
+    let mut dim = cadforge_core::dim::DimData::new(cadforge_core::dim::DimType::Lin);
+    (dim.p1, dim.p2, dim.dp, dim.ds) = (Some(pt(0.0, -10.0)), Some(pt(30.0, -10.0)), Some(pt(15.0, -20.0)), Some("ISO-25".into()));
+    d.add(Entity::dim(dim));
     d
 }
 
@@ -433,8 +444,9 @@ fn drawing_settings_and_pictures_open_again() {
         let hatch = d.model.entities.iter().find_map(|e| if let cadforge_core::entities::Kind::Hatch(h) = &e.kind { Some(h.pattern.clone()) } else { None });
         let pictures: Vec<_> = d.images.values().map(|p| (p.path.clone(), p.w, p.h, p.data.as_ref().map(|b| b.0.as_ref().clone()))).collect();
         let xrefs: Vec<_> = d.blocks.iter().map(|(k, b)| (k.clone(), rounded(&b.xref))).collect();
+        let dim_style = d.model.entities.iter().find_map(|e| if let cadforge_core::entities::Kind::Dim(x) = &e.kind { Some(x.ds.clone()) } else { None });
         format!(
-            "{} | {} | {} | {} | {} | {} | {} | {} | {} | {line:?} {hatch:?} | {pictures:?} | {xrefs:?}",
+            "{} | {} | {} | {} | {} | {} | {} | {} | {} | {line:?} {hatch:?} | {pictures:?} | {xrefs:?} | {} {} {} {} {} {} | {dim_style:?}",
             rounded(&d.views),
             rounded(&d.view),
             rounded(&d.ucs),
@@ -443,7 +455,13 @@ fn drawing_settings_and_pictures_open_again() {
             rounded(&d.cur),
             rounded(&d.custom_ltypes),
             rounded(&d.custom_patterns),
-            rounded(&d.plot_styles)
+            rounded(&d.plot_styles),
+            rounded(&d.settings.dim_styles),
+            d.settings.cur_dim_style,
+            rounded(&d.settings.mleader_styles),
+            d.settings.cur_mleader_style,
+            rounded(&d.settings.table_styles),
+            d.settings.cur_table_style,
         )
     };
     for (ver, _) in VERSIONS {

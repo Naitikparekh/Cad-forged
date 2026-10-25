@@ -557,6 +557,24 @@ await test('a drawing saved as a template (.dwt) starts a new, unnamed drawing t
   assert.equal(s.dirty, false);
 });
 
+await test('a dropped .dws standards file is checked, and Fix All in the Check Standards dialog fixes the drawing', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('-LAYER'); await t.cmd('Make'); await t.cmd('NotInTheStandard'); await t.cmd('');
+  await drop('office.dws', 'application/octet-stream', fs.readFileSync(dwgSample('AC1018')));
+  await page.waitForTimeout(900); await t.frame(4);
+  let s = await t.state();
+  assert.equal(s.standards, 1, JSON.stringify(s.history));
+  assert.ok(s.history.some(h => /Standards file associated with the drawing\. office\.dws: 21 layers/.test(h.text || h)), JSON.stringify(s.history));
+  assert.ok(s.standardsProblems.includes('Layer|NOTINTHESTANDARD'), JSON.stringify(s.standardsProblems));
+  await t.cmd('CHECKSTANDARDS'); await t.frame(6);
+  await page.mouse.click(702, 584); await t.frame(6);              // Fix All (the preferred fixes)
+  s = await t.state();
+  assert.ok(!s.layers.includes('NotInTheStandard') && s.layers.includes('Layer1'), 'replaced by the standard layer with its properties: ' + JSON.stringify(s.layers));
+  assert.ok(!s.standardsProblems.includes('Dimension style|STANDARD'), JSON.stringify(s.standardsProblems));
+  assert.ok(s.history.some(h => /problems? fixed\./.test(h.text || h)), JSON.stringify(s.history));
+  await page.keyboard.press('Escape'); await t.frame(4);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();

@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 336 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 338 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -384,6 +384,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `ACTRECORD` | `RECORD` | Starts the Action Recorder: records the commands you run so they can be replayed. |
 | `ACTSTOP` |  | Stops the Action Recorder and saves the macro as a script file. |
 | `APPLOAD` | `AP` | Loads applications and script files. |
+| `CHECKSTANDARDS` |  | Checks layers, linetypes and dimension, multileader and table styles against the standards files and fixes them. |
 | `COPYBASE` |  | Copies objects to the clipboard along with a specified base point. |
 | `COPYHIST` |  | Copies the text in the command line history to the clipboard. |
 | `GRAPHSCR` |  | Switches from the text window to the drawing area. |
@@ -397,6 +398,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `RIBBONCLOSE` |  | Closes the ribbon. |
 | `SAVEALL` |  | Saves all open drawings. |
 | `SHOWPALETTES` |  | Restores the display of hidden palettes. |
+| `STANDARDS` |  | Associates standards files (.dws, .dwg or .dxf) with the current drawing. |
 | `TEXTSCR` |  | Displays the text window. |
 | `TOOLPALETTESCLOSE` |  | Closes the Tool Palettes window. |
 | `VLISP` | `VLIDE` | Opens the AutoLISP console where routines can be typed, run and loaded. |

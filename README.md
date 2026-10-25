@@ -27,7 +27,7 @@ product.
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **314 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **338 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).
@@ -51,13 +51,21 @@ product.
 * **Working with files**: drag a file onto the window (drawings open, pictures attach, `.lsp` / `.scr` load, `.lin` /
   `.pat` add linetypes and hatch patterns); **autosave** every `SAVETIME` minutes with recovery of unsaved drawings after
   a crash (`DRAWINGRECOVERY`); `PUBLISH` writes every sheet as one multi-page PDF; `ARCHIVE` / `ETRANSMIT` pack a
-  drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files.
+  drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files;
+  saving over a file keeps the previous version as a `.bak` copy (`ISAVEBAK`); drawing templates (`.dwt`) start new
+  drawings.
+* **CAD standards**: `STANDARDS` associates standards files (`.dws`, or any `.dwg` / `.dxf`) and `CHECKSTANDARDS` lists
+  the layers, linetypes and dimension / multileader / table styles that differ from them and fixes them (a Check
+  Standards dialog, or one problem at a time on the command line); the association is saved with the drawing.
+* **Drafting aids**: isometric drafting (`ISODRAFT`, `ISOPLANE`, F5: isometric grid and snap, ortho and crosshair along
+  the current isoplane) and additional polar tracking angles (`POLARADDANG`).
 * **Files**: **AutoCAD DWG** opened from R14 to 2018 and saved as AutoCAD 2004 (the default) or 2000; **DXF R2000
   export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by other tools, and **binary DXF**,
   which `-DXFOUT` also writes); CadForge JSON projects; **plot to PDF / SVG / PNG** with paper size, scale, lineweights and
   monochrome options and a live preview. Open, Save, Save As ("Files of type"), Export and drag-and-drop all take DWG; a
   drawing saved as DWG or DXF opens again as the same drawing (dimensions stay dimensions, groups, tables, regions, 3D
-  solids, wipeouts, pictures, named views and UCSs, loaded linetypes and patterns are kept), and a save reports anything
+  solids, wipeouts, pictures, named views and UCSs, dimension / multileader / table styles, loaded linetypes and
+  patterns are kept), and a save reports anything
   the format cannot hold.
 
 ## Rust app: build, run, test

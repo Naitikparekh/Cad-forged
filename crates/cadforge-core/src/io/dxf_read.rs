@@ -1400,6 +1400,28 @@ fn apply_extras(doc: &mut Drawing, x: &serde_json::Value) {
     if let Some(p) = get::<crate::plotstyle::PlotStyleTable>(x, "plot_styles") {
         doc.plot_styles = Some(std::rc::Rc::new(p));
     }
+    if let Some(s) = get(x, "standards") {
+        doc.standards = s;
+    }
+    let st = &mut doc.settings;
+    if let Some(v) = get::<indexmap::IndexMap<String, crate::style::DimStyle>>(x, "dim_styles").filter(|v| v.contains_key("Standard")) {
+        st.dim_styles = v;
+    }
+    if let Some(v) = get(x, "cur_dim_style") {
+        st.cur_dim_style = v;
+    }
+    if let Some(v) = get(x, "mleader_styles") {
+        st.mleader_styles = v;
+    }
+    if let Some(v) = get(x, "cur_mleader_style") {
+        st.cur_mleader_style = v;
+    }
+    if let Some(v) = get(x, "table_styles") {
+        st.table_styles = v;
+    }
+    if let Some(v) = get(x, "cur_table_style") {
+        st.cur_table_style = v;
+    }
     let xrefs: indexmap::IndexMap<String, crate::drawing::XrefInfo> = get(x, "xrefs").unwrap_or_default();
     for (k, info) in xrefs {
         if let Some(b) = doc.blocks.get_mut(&k) {
@@ -1548,6 +1570,44 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             if (0.0..=8.0).contains(&dd) {
                 ds.dec = dd as i32;
             }
+        }
+    }
+    // ---- the DIMSTYLE table: the named dimension styles (the header variables above are those of the current style,
+    // which is Standard unless $DIMSTYLE names another)
+    {
+        let cur = header.get("$DIMSTYLE").and_then(|v| v.iter().find(|(c, _)| *c == 2)).map(|(_, v)| decode_text(v).trim().to_string()).unwrap_or_else(|| "Standard".into());
+        let empty: Vec<Rec> = vec![];
+        for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "DIMSTYLE") {
+            let name = decode_text(r.first(2).unwrap_or("")).trim().to_string();
+            if name.is_empty() || name.starts_with('*') || (name.eq_ignore_ascii_case("Standard") && cur.eq_ignore_ascii_case("Standard")) {
+                continue;
+            }
+            let b = crate::style::DimStyle::default();
+            let pos = |c: i32, d: f64| Some(r.num(c, d)).filter(|v| *v > 0.0 && v.is_finite()).unwrap_or(d);
+            let post = decode_text(r.first(3).unwrap_or(""));
+            let (pre, suf) = post.split_once("<>").map_or((String::new(), String::new()), |(a, z)| (a.to_string(), z.to_string()));
+            let key = if name.eq_ignore_ascii_case("Standard") { "Standard".to_string() } else { name.clone() };
+            let ds = crate::style::DimStyle {
+                name: key.clone(),
+                scale: pos(40, b.scale),
+                asz: pos(41, b.asz),
+                exo: r.num(42, b.exo),
+                exe: r.num(44, b.exe),
+                txt: pos(140, b.txt),
+                cen: r.num(141, b.cen),
+                lfac: Some(r.num(144, b.lfac)).filter(|v| *v != 0.0 && v.is_finite()).unwrap_or(1.0),
+                gap: r.num(147, b.gap),
+                dec: r.int(271, b.dec as i64).clamp(0, 8) as i32,
+                tad: r.int(77, 1) != 0,
+                zin: r.int(78, b.zin as i64) as i32,
+                pre,
+                suf,
+                ..b
+            };
+            doc.settings.dim_styles.insert(key, ds);
+        }
+        if let Some(k) = doc.settings.dim_styles.keys().find(|k| k.eq_ignore_ascii_case(&cur)).cloned() {
+            doc.settings.cur_dim_style = k;
         }
     }
 

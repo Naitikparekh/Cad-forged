@@ -23,6 +23,7 @@ mod files;
 pub use files::{with_ext, SaveFormat};
 mod layers;
 mod report;
+mod standards;
 mod view;
 mod vplayer;
 
@@ -161,6 +162,7 @@ pub fn register(r: &mut Registry) {
     clipboard::register(r);
     report::register(r, &st);
     files::register(r);
+    standards::register(r);
     r.alias("DISTANCE", "DIST");
     track_commands(r, &st);
 }

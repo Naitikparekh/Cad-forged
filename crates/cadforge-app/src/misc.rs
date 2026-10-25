@@ -50,6 +50,8 @@ impl CadForgeApp {
             "QSELECT" => self.dialog = Some(Dialog::qselect()),
             "ALIASEDIT" => self.dialog = Some(Dialog::aliasedit()),
             "STYLE" => self.dialog = Some(Dialog::textstyle()),
+            "STANDARDS" => self.dialog = Some(Dialog::standards()),
+            "CHECKSTANDARDS" => self.dialog = Some(Dialog::checkstandards()),
             "LAYERSTATE" => self.dialog = Some(Dialog::layerstate()),
             "ABOUT" => self.dialog = Some(Dialog::about()),
             "HELP" => self.dialog = Some(Dialog::help()),
@@ -118,6 +120,7 @@ impl CadForgeApp {
                 "pat" => ".pat,.txt",
                 "plotstyle" => ".ctb,.stb",
                 "template" => ".dwt,.dwg,.dxf,.json",
+                "standards" => ".dws,.dwg,.dxf,.dwt",
                 _ => ".dwg,.dwt,.dxf,.json,.cadforge",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
@@ -142,7 +145,7 @@ impl CadForgeApp {
         for f in dropped {
             let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             let Some(purpose) = dropped_purpose(&name) else {
-                self.toast(&format!("{name}: CadForge opens .dwg, .dxf and .json drawings, .png / .jpg pictures, .lsp / .scr, .lin, .pat, .ctb and .stb files."));
+                self.toast(&format!("{name}: CadForge opens .dwg, .dxf and .json drawings, .png / .jpg pictures, .lsp / .scr, .lin, .pat, .ctb and .stb files, and .dws standards files."));
                 continue;
             };
             #[cfg(not(target_arch = "wasm32"))]
@@ -181,8 +184,14 @@ impl CadForgeApp {
                 continue;
             }
             // drawings are read from their bytes (DWG and binary DXF are not text)
-            if matches!(p.purpose, "open" | "import" | "template") {
+            if matches!(p.purpose, "open" | "import" | "template" | "standards") {
                 match (p.purpose, self.parse_drawing(&p.name, &p.bytes)) {
+                    ("standards", Ok(doc)) => {
+                        use cadforge_engine::runtime::ArgVal;
+                        let json = serde_json::to_string(&cadforge_core::standards::Standard::from_drawing(&p.name, &doc)).unwrap_or_default();
+                        self.run_command("STANDARDS", Args::none().with("option", ArgVal::Str("Add".into())).with("json", ArgVal::Str(json)));
+                        self.h.pump();
+                    }
                     ("template", Ok(doc)) => {
                         self.ui.showing_start = false;
                         self.h.borrow_mut().new_from_template(doc);
@@ -202,6 +211,7 @@ impl CadForgeApp {
                     (_, Err(e)) => {
                         let what = match p.purpose {
                             "open" => "open",
+                            "standards" => "use as a standards file",
                             "template" => "start a drawing from",
                             _ => "import",
                         };
@@ -273,7 +283,7 @@ impl CadForgeApp {
     fn parse_drawing(&self, name: &str, bytes: &[u8]) -> Result<Drawing, String> {
         let base = strip_ext(name);
         let lower = name.to_lowercase();
-        if cadforge_core::io::is_dwg(bytes) || lower.ends_with(".dwg") {
+        if cadforge_core::io::is_dwg(bytes) || lower.ends_with(".dwg") || lower.ends_with(".dws") {
             cadforge_core::io::read_dwg(bytes, &base)
         } else if lower.ends_with(".dxf") || cadforge_core::io::is_binary_dxf(bytes) {
             cadforge_core::io::read_dxf_bytes(bytes, &base)
@@ -1003,7 +1013,7 @@ fn menubar_defs() -> Vec<(&'static str, Vec<MbEntry>)> {
         ),
         ("Insert", vec![c("INSERT", "Block..."), c("BLOCK", "Make Block..."), c("WBLOCK", "Write Block..."), S, c("IMPORT", "Import...")]),
         ("Format", vec![c("LAYER", "Layer..."), c("COLOR", "Color..."), c("LINETYPE", "Linetype..."), c("LWEIGHT", "Lineweight..."), S, c("STYLE", "Text Style..."), c("DIMSTYLE", "Dimension Style..."), c("UNITS", "Units...")]),
-        ("Tools", vec![c("PROPERTIES", "Properties"), c("TOOLPALETTES", "Tool Palettes"), S, c("DSETTINGS", "Drafting Settings..."), c("ALIASEDIT", "Edit Aliases..."), c("SCRIPT", "Run Script..."), S, c("OPTIONS", "Options...")]),
+        ("Tools", vec![c("PROPERTIES", "Properties"), c("TOOLPALETTES", "Tool Palettes"), S, c("DSETTINGS", "Drafting Settings..."), c("ALIASEDIT", "Edit Aliases..."), c("SCRIPT", "Run Script..."), S, c("STANDARDS", "CAD Standards: Configure..."), c("CHECKSTANDARDS", "CAD Standards: Check..."), c("LAYTRANS", "Layer Translator"), S, c("OPTIONS", "Options...")]),
         (
             "Draw",
             vec![
@@ -1078,6 +1088,7 @@ pub fn dropped_purpose(name: &str) -> Option<&'static str> {
         "lin" => "lin",
         "pat" => "pat",
         "ctb" | "stb" => "plotstyle",
+        "dws" => "standards",
         _ => return None,
     })
 }
@@ -1099,6 +1110,7 @@ mod drop_tests {
         assert_eq!(dropped_purpose("weave.pat"), Some("pat"));
         assert_eq!(dropped_purpose("office.CTB"), Some("plotstyle"));
         assert_eq!(dropped_purpose("named.stb"), Some("plotstyle"));
+        assert_eq!(dropped_purpose("office.DWS"), Some("standards"));
         assert_eq!(dropped_purpose("notes.docx"), None);
         assert_eq!(dropped_purpose("noext"), None);
     }
