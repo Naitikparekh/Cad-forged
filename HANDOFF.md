@@ -133,6 +133,10 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   apply them; the engine commands are in `commands/ext_system/standards.rs`, the dialogs in `app/src/dialogs/standards.rs`
   (they run the commands, so each fix is one undo step). Named dimension styles are now written to the DIMSTYLE table and
   read back from it; all styles also ride in the XRECORD (`dim_styles`, `mleader_styles`, `table_styles`, `cur_*`).
+* **Annotative objects** (`annotative.rs`): `Entity::anno` keeps the paper size (`size_of`: text / leader height, hatch
+  pattern scale, block X scale, `DimData::sc`); stored geometry is always sized for CANNOSCALE
+  (`Drawing::set_annotation_scale` resizes them), and `draw_viewport_content` draws each through `at_factor` with the
+  viewport's factor. DXF / DWG: XRECORD keys `annotative` (by handle), `cannoscale`, `scales`.
 * **Associative dimensions** (`dim_assoc.rs`): `DimData::assoc` ties defining points to an object's snap point (index in
   `snap_points_of` plus its kind) or, for radius / diameter, to the circle itself. `Drawing::end_command` runs
   `update_dim_associations`: dimensions made in the command (ids from `cmd_next_id`) are tied when DIMASSOC is 2, and

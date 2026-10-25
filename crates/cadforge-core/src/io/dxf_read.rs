@@ -1424,6 +1424,12 @@ fn apply_extras(doc: &mut Drawing, x: &serde_json::Value) {
     if let Some(v) = get(x, "cur_table_style") {
         st.cur_table_style = v;
     }
+    if let Some(v) = get::<Vec<crate::annotative::AnnoScale>>(x, "scales").filter(|v| !v.is_empty()) {
+        st.scales = v;
+    }
+    if let Some(v) = get(x, "cannoscale") {
+        st.cannoscale = v;
+    }
     let xrefs: indexmap::IndexMap<String, crate::drawing::XrefInfo> = get(x, "xrefs").unwrap_or_default();
     for (k, info) in xrefs {
         if let Some(b) = doc.blocks.get_mut(&k) {
@@ -1873,6 +1879,15 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
         if let (true, Ok(prog)) = (mapped, serde_json::from_value::<crate::solid::Program>(prog)) {
             if let Some(s) = doc.solids.iter_mut().find(|s| s.id == *id) {
                 s.program = Some(prog);
+            }
+        }
+    }
+    // annotative objects, by the new ids
+    for a in extras.as_ref().and_then(|x| x.get("annotative")).and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+        let id = a["h"].as_str().and_then(|h| ids_by_handle.get(&h.trim().to_uppercase()).copied());
+        if let (Some(id), Ok(anno)) = (id, serde_json::from_value::<crate::annotative::Annotative>(a["anno"].clone())) {
+            if let Some(e) = doc.by_id_mut(id) {
+                e.anno = Some(anno);
             }
         }
     }

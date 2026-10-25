@@ -27,7 +27,7 @@ product.
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **343 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **347 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).
@@ -54,6 +54,9 @@ product.
   drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files;
   saving over a file keeps the previous version as a `.bak` copy (`ISAVEBAK`); drawing templates (`.dwt`) start new
   drawings.
+* **Annotative objects**: text, leaders, dimensions, hatches and blocks can be annotative (CHPROP or the Properties
+  palette): they keep their paper size, follow the annotation scale (status bar, `CANNOSCALE`) and are drawn at each
+  layout viewport's own scale; `OBJECTSCALE`, `ANNOUPDATE`, `ANNORESET` and `SCALELISTEDIT`.
 * **Associative dimensions**: a dimension made on geometry (`DIMASSOC` 2, the default) follows it when the geometry is
   moved, stretched or scaled; `DIMREASSOCIATE`, `DIMDISASSOCIATE` and `DIMREGEN` manage the links, which are kept in
   DXF and DWG files CadForge writes.

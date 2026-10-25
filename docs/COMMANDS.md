@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 343 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 347 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -60,6 +60,8 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `ANNORESET` |  | Resets annotative objects to their size at the current annotation scale. |
+| `ANNOUPDATE` |  | Updates annotative objects to the current annotation scale. |
 | `BOUNDARY` | `BO` | Creates a region or a polyline from an area enclosed by objects. |
 | `DDEDIT` |  | Edits single-line text, multiline text, dimension text, table cells and attribute definitions. |
 | `DIM` |  | Creates multiple dimension types with a single command. |
@@ -91,7 +93,9 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `MLEADEREDIT` |  | Adds leader lines to, or removes them from, a multileader. |
 | `MLEADERSTYLE` | `MLS` | Creates and modifies multileader styles. |
 | `MTEXT` | `MT` `T` | Creates a multiline text object. |
+| `OBJECTSCALE` |  | Adds or deletes supported annotation scales for annotative objects. |
 | `QDIM` |  | Quickly creates a series of dimensions from selected objects. |
+| `SCALELISTEDIT` | `-SCALELISTEDIT` | Controls the list of scales available for layout viewports, page layouts and annotation. |
 | `SPELL` | `SP` | Checks spelling in a drawing against a built-in word list. |
 | `TABLEEDIT` | `TABLEDIT` | Edits the text of a table cell and inserts, deletes, merges and unmerges rows, columns and cells. |
 | `TABLESTYLE` | `TS` | Creates, modifies or sets the current table style. |

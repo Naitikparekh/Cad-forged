@@ -1,4 +1,5 @@
 //! CadForge core: the drawing database, entity geometry and everything that does not depend on a user interface.
+pub mod annotative;
 pub mod defs;
 pub mod dim;
 pub mod dim_assoc;

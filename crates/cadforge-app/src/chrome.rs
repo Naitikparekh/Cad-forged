@@ -586,6 +586,18 @@ impl CadForgeApp {
                 act: |a, ctx, r| a.units_menu(ctx, r),
                 menu: None,
             },
+            StatusItem {
+                id: "annoscale",
+                icon: None,
+                title: "Annotation Scale",
+                desc: "Sets the annotation scale: the size annotative objects have in model space.",
+                key: "",
+                label: None,
+                text: Some(|a| a.h.borrow().doc().map_or_else(|| "1:1".into(), |d| d.settings.cannoscale.clone())),
+                on: |_| false,
+                act: |a, ctx, r| a.annoscale_menu(ctx, r),
+                menu: None,
+            },
             StatusItem { id: "ws", icon: Some("gear"), title: "Workspace Switching", desc: "Switches between workspaces.", key: "", label: None, text: None, on: |_| false, act: |a, ctx, r| a.workspace_menu(ctx, r, true), menu: None },
             StatusItem { id: "clean", icon: Some("cleanscreen"), title: "Clean Screen", desc: "Clears the screen of toolbars and dockable windows (Ctrl+0).", key: "Ctrl+0", label: None, text: None, on: |a| a.ui.clean, act: |a, _, _| a.ui.clean = !a.ui.clean, menu: None },
         ]
@@ -686,6 +698,23 @@ impl CadForgeApp {
         v.push(MItem::Sep);
         v.push(MItem::item("Units...").on(|a| a.run_command("UNITS", Args::none())));
         self.dropup(ctx, r, v, 150.0);
+    }
+
+    fn annoscale_menu(&mut self, ctx: &egui::Context, r: Rect) {
+        let (cur, names): (String, Vec<String>) = self.h.borrow().doc().map_or((String::new(), vec![]), |d| (d.settings.cannoscale.clone(), d.settings.scales.iter().map(|s| s.name.clone()).collect()));
+        let mut v = vec![MItem::Header("Annotation scale".into())];
+        for n in names {
+            let pick = n.clone();
+            v.push(MItem::item(&n).checked(n == cur).on(move |a| {
+                let pick = pick.clone();
+                a.edit_doc("Annotation scale", move |d| {
+                    let _ = d.set_annotation_scale(&pick, false);
+                });
+            }));
+        }
+        v.push(MItem::Sep);
+        v.push(MItem::item("Custom...").on(|a| a.run_command("SCALELISTEDIT", Args::none())));
+        self.dropup(ctx, r, v, 170.0);
     }
 
     pub fn open_dsettings(&mut self, tab: &str) {

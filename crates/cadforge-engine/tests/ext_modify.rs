@@ -213,7 +213,7 @@ fn chprop_changes_color_layer_linetype_lineweight_scale_and_transparency() {
     let a = add_line(&s, p(0., 0.), p(10., 0.));
     let b = add_line(&s, p(0., 5.), p(10., 5.));
     s.cmd("CHPROP").click(5., 0.).click(5., 5.).enter();
-    assert_eq!(s.prompt(), "Enter property to change or [Color/LAyer/LType/ltScale/LWeight/Thickness/TRansparency]:");
+    assert_eq!(s.prompt(), "Enter property to change or [Color/LAyer/LType/ltScale/LWeight/Thickness/TRansparency/Annotative]:");
     s.ty("c");
     assert_eq!(s.prompt(), "Enter new color [Truecolor/COlorbook] <BYLAYER>:");
     s.ty("red").ty("la").ty("Walls").ty("lt").ty("dashed").ty("lw").ty("0.5").ty("s").ty("2").ty("tr").ty("40").enter();

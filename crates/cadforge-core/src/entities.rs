@@ -386,13 +386,16 @@ pub struct Entity {
     pub transp: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grp: Option<String>,
+    /// Annotative objects keep their paper size and are sized for the annotation scale (see `annotative.rs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anno: Option<crate::annotative::Annotative>,
     #[serde(flatten)]
     pub kind: Kind,
 }
 
 impl Entity {
     pub fn new(kind: Kind) -> Entity {
-        Entity { id: 0, layer: String::new(), color: None, ltype: None, lw: None, lts: None, transp: None, grp: None, kind }
+        Entity { id: 0, layer: String::new(), color: None, ltype: None, lw: None, lts: None, transp: None, grp: None, anno: None, kind }
     }
     pub fn line(a: Pt, b: Pt) -> Entity {
         Entity::new(Kind::Line { a, b })

@@ -1015,7 +1015,8 @@ impl<'a> Renderer<'a> {
                         continue;
                     }
                 }
-                sub.draw_entity(me, DrawOpts::default());
+                // annotative objects are drawn at the viewport's scale
+                sub.draw_entity(&cadforge_core::annotative::at_factor(me, cadforge_core::annotative::viewport_factor(s)), DrawOpts::default());
             }
             self.ops.extend(clip_ops_to_convex(sub.ops, &outline));
         }

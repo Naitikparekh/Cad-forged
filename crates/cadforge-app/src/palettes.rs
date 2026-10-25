@@ -540,6 +540,28 @@ impl CadForgeApp {
         if let Some(l) = pick {
             self.set_property("lw", None, l, None);
         }
+        // annotative (text, leaders, dimensions, hatches and block references)
+        if targets.iter().all(|e| cadforge_core::annotative::size_of(e).is_some()) {
+            let av = same(&|e| if e.anno.is_some() { "Yes".into() } else { "No".into() });
+            let mut pick: Option<bool> = None;
+            pal_row(self.t, ui, "Annotative", |ui| {
+                egui::ComboBox::from_id_salt("pal-anno").selected_text(av.clone().unwrap_or_else(|| "*VARIES*".into())).width(ui.available_width() - 4.0).show_ui(ui, |ui| {
+                    for (label, on) in [("Yes", true), ("No", false)] {
+                        if ui.selectable_label(av.as_deref() == Some(label), label).clicked() {
+                            pick = Some(on);
+                        }
+                    }
+                });
+            });
+            if let Some(on) = pick {
+                let ids: Vec<u64> = targets.iter().map(|e| e.id).collect();
+                self.edit_doc("Annotative", move |d| {
+                    for id in &ids {
+                        d.set_annotative(*id, on);
+                    }
+                });
+            }
+        }
     }
 
     fn geom_field(&mut self, ui: &mut egui::Ui, idx: usize, f: &Field, targets: &[Entity], ids: &[u64]) {

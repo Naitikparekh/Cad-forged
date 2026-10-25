@@ -6,6 +6,7 @@ use crate::registry::Registry;
 use crate::runtime::PromptSpec;
 use cadforge_core::entities::{Entity, Kind};
 
+mod annoscale;
 mod dimassoc;
 mod dims;
 mod leaders;
@@ -17,6 +18,7 @@ mod tolerance;
 pub fn register(r: &mut Registry) {
     dims::register(r);
     dimassoc::register(r);
+    annoscale::register(r);
     leaders::register(r);
     tables::register(r);
     textcmds::register(r);

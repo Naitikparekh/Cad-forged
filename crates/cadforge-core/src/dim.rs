@@ -57,6 +57,9 @@ pub struct DimData {
     /// Inspection frame (DIMINSPECT).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub insp: Option<DimInspect>,
+    /// Extra size factor on the style's (an annotative dimension's annotation scale).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sc: Option<f64>,
     /// Links of the defining points to the geometry they measure (an associative dimension follows it).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assoc: Vec<DimRef>,
@@ -101,7 +104,7 @@ pub enum InspShape {
 
 impl DimData {
     pub fn new(kind: DimType) -> DimData {
-        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None, assoc: vec![] }
+        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None, sc: None, assoc: vec![] }
     }
     /// Names of the defining-point fields of this dimension.
     pub fn point_mut(&mut self, key: &str) -> Option<&mut Option<Pt>> {
@@ -210,7 +213,7 @@ fn label_for(e: &DimData, st: &DimStyle, measured: f64, kind: DimType) -> String
 /// Derive drawable geometry from a dimension entity.
 pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
     let st = dim_style_of(e, settings).clone();
-    let k = st.scale;
+    let k = st.scale * e.sc.filter(|v| *v > 0.0 && v.is_finite()).unwrap_or(1.0);
     let (asz, exo, exe, gap, h) = (st.asz * k, st.exo * k, st.exe * k, st.gap * k, st.txt * k);
     let mut segs: Vec<Seg> = vec![];
     let mut arrows: Vec<Arrow> = vec![];

@@ -98,6 +98,15 @@ pub fn cadforge_extras(doc: &Drawing, handles: &HashMap<u64, String>) -> Option<
     if !doc.standards.is_empty() {
         put("standards", to_value(&doc.standards));
     }
+    // annotation scales, and the annotative objects by handle
+    if st.cannoscale != defaults.cannoscale || st.scales != defaults.scales {
+        put("cannoscale", to_value(&st.cannoscale));
+        put("scales", to_value(&st.scales));
+    }
+    let annotative: Vec<Value> = doc.model.entities.iter().filter_map(|e| Some(serde_json::json!({ "h": handles.get(&e.id)?, "anno": to_value(e.anno.as_ref()?).ok()? }))).collect();
+    if !annotative.is_empty() {
+        put("annotative", Ok(Value::Array(annotative)));
+    }
     // a solid's extrusion history, with its outlines by handle (they get new ids when the file is read); left out when
     // an outline is no longer in the drawing
     let programs: Vec<Value> = doc

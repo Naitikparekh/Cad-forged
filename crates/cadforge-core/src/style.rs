@@ -580,6 +580,20 @@ pub struct Settings {
     /// DIMASSOC: 2 new dimensions follow the geometry they measure, 1 or 0 they do not.
     #[serde(skip_serializing_if = "is_two")]
     pub dimassoc: i32,
+    /// CANNOSCALE: the annotation scale annotative objects are sized for in model space.
+    #[serde(skip_serializing_if = "is_one_to_one")]
+    pub cannoscale: String,
+    /// The scale list (SCALELISTEDIT).
+    #[serde(skip_serializing_if = "is_default_scales")]
+    pub scales: Vec<crate::annotative::AnnoScale>,
+}
+
+fn is_one_to_one(s: &String) -> bool {
+    s == "1:1"
+}
+
+fn is_default_scales(v: &Vec<crate::annotative::AnnoScale>) -> bool {
+    *v == crate::annotative::default_scales()
 }
 
 fn is_two(v: &i32) -> bool {
@@ -619,6 +633,8 @@ impl Default for Settings {
             image_frame: 1,
             image_draft: false,
             dimassoc: 2,
+            cannoscale: "1:1".into(),
+            scales: crate::annotative::default_scales(),
         }
     }
 }

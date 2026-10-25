@@ -64,9 +64,18 @@ fn parse_transp(t: &str) -> Result<Option<f64>, String> {
 /// Ask for properties until Enter and apply them to the selection.
 async fn change_properties(c: &Ctx, sel: &Selection) -> CmdResult<()> {
     loop {
-        let opts = ["Color", "LAyer", "LType", "ltScale", "LWeight", "Thickness", "TRansparency"];
+        let opts = ["Color", "LAyer", "LType", "ltScale", "LWeight", "Thickness", "TRansparency", "Annotative"];
         let r = c.keyword(ps("Enter property to change").options(&opts)).await?;
         let Some(kw) = r.kw() else { return Ok(()) };
+        if kw == "Annotative" {
+            let on = c.keyword(ps("Make annotative [Yes/No]").options(&["Yes", "No"]).default_str("Yes")).await?.kw() != Some("No");
+            let ids = sel.ents.clone();
+            let n = c.doc_mut(|d| d.change(|d| ids.iter().filter(|id| d.set_annotative(**id, on)).count()));
+            if n < sel.ents.len() {
+                c.log(&format!("{} of the selected objects cannot be annotative (text, leaders, dimensions, hatches and block references can).", sel.ents.len() - n));
+            }
+            continue;
+        }
         let prop: Result<Prop, String> = match kw {
             "Color" => c.string(ps("Enter new color [Truecolor/COlorbook]").default_str("BYLAYER")).await.map(|t| parse_color(&t.text).map(Prop::Color))?,
             "LAyer" => {
