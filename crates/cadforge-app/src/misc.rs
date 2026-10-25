@@ -50,6 +50,25 @@ impl CadForgeApp {
             "QSELECT" => self.dialog = Some(Dialog::qselect()),
             "ALIASEDIT" => self.dialog = Some(Dialog::aliasedit()),
             "STYLE" => self.dialog = Some(Dialog::textstyle()),
+            "DATALINK" => self.open_files(ctx, "datalink"),
+            "DATALINKUPDATE" => {
+                use cadforge_engine::runtime::ArgVal;
+                let file = args.str("file").unwrap_or_default().to_string();
+                // on the desktop the linked file is read where it is; in the browser it has to be chosen again
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let path = self.save_dir.join(&file);
+                    if let Ok(bytes) = std::fs::read(&path) {
+                        let text = String::from_utf8_lossy(&bytes).to_string();
+                        self.run_command("DATALINKUPDATE", Args::none().with("option", ArgVal::Str("Update".into())).with("file", ArgVal::Str(file)).with("text", ArgVal::Str(text)));
+                        self.h.pump();
+                        return;
+                    }
+                }
+                self.toast(&format!("Choose the linked file {file} to update its table."));
+                self.datalink_file = Some(file);
+                self.open_files(ctx, "datalinkupdate");
+            }
             "STANDARDS" => self.dialog = Some(Dialog::standards()),
             "CHECKSTANDARDS" => self.dialog = Some(Dialog::checkstandards()),
             "LAYERSTATE" => self.dialog = Some(Dialog::layerstate()),
@@ -121,6 +140,7 @@ impl CadForgeApp {
                 "plotstyle" => ".ctb,.stb",
                 "template" => ".dwt,.dwg,.dxf,.json",
                 "standards" => ".dws,.dwg,.dxf,.dwt",
+                "datalink" | "datalinkupdate" => ".csv,.txt",
                 _ => ".dwg,.dwt,.dxf,.json,.cadforge",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
@@ -250,6 +270,17 @@ impl CadForgeApp {
                 }
                 "pat" => {
                     self.run_command("LOADPAT", Args::none().with("text", cadforge_engine::runtime::ArgVal::Str(text.clone())));
+                    self.h.pump();
+                }
+                "datalink" => {
+                    use cadforge_engine::runtime::ArgVal;
+                    self.run_command("DATALINK", Args::none().with("file", ArgVal::Str(p.name.clone())).with("text", ArgVal::Str(text.clone())));
+                    self.h.pump();
+                }
+                "datalinkupdate" => {
+                    use cadforge_engine::runtime::ArgVal;
+                    let file = self.datalink_file.take().unwrap_or_else(|| p.name.clone());
+                    self.run_command("DATALINKUPDATE", Args::none().with("option", ArgVal::Str("Update".into())).with("file", ArgVal::Str(file)).with("text", ArgVal::Str(text.clone())));
                     self.h.pump();
                 }
                 "script" => {

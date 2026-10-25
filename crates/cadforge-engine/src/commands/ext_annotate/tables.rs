@@ -199,7 +199,7 @@ async fn table(c: Ctx, _a: Args) -> CmdResult<()> {
     let Some(cw) = c.distance(ps("Specify column width").default_num(8.0 * h).min(0.0).nonzero()).await?.value() else { return Ok(()) };
     let Some(rh) = c.distance(ps("Specify row height").default_num(2.0 * h).min(0.0).nonzero()).await?.value() else { return Ok(()) };
     let (nc, nr) = (cols as usize, rows as usize);
-    let mut t = TableData { p: Pt::ZERO, cols: vec![cw; nc], rows: vec![rh; nr], cells: vec![vec![String::new(); nc]; nr], h, merges: vec![], style: style.name.clone(), title: false, rot: 0.0 };
+    let mut t = TableData { p: Pt::ZERO, cols: vec![cw; nc], rows: vec![rh; nr], cells: vec![vec![String::new(); nc]; nr], h, merges: vec![], style: style.name.clone(), title: false, rot: 0.0, link: None };
     set_title(&mut t, style.title);
     let shape = t.clone();
     let Some(at) = c.point(ps("Specify insertion point").preview(move |_, p| vec![pv(Entity::new(Kind::Table(TableData { p, ..shape.clone() })))])).await?.pt() else { return Ok(()) };
@@ -368,7 +368,7 @@ mod tests {
     use super::*;
 
     fn grid(rows: usize, cols: usize) -> TableData {
-        TableData { p: pt(0.0, 0.0), cols: vec![10.0; cols], rows: vec![5.0; rows], cells: (0..rows).map(|r| (0..cols).map(|c| cell_name(r, c)).collect()).collect(), h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0.0 }
+        TableData { p: pt(0.0, 0.0), cols: vec![10.0; cols], rows: vec![5.0; rows], cells: (0..rows).map(|r| (0..cols).map(|c| cell_name(r, c)).collect()).collect(), h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0.0, link: None }
     }
 
     #[test]

@@ -281,6 +281,11 @@ extend_panel("home", "Modify", add_slideout=[btn("SETBYLAYER", "SetByLayer", "sm
 extend_panel("annotate", "Text", add_slideout=[btn("TXT2MTXT", "Text to MText", "small", "scaletext")])
 extend_panel("output", "File", add_items=[stack(btn("DATAEXTRACTION", "Data Extraction", "small", "csv"))])
 
+put_panel("insert", panel("Linking & Extraction", [
+    btn("DATALINK", "Data\nLink", icon="table"),
+    stack(btn("DATALINKUPDATE", "Update from Source", "small", "table", {"option": "Update"}), btn("DATALINKUPDATE", "Write to Source", "small", "table", {"option": "Write"})),
+]))
+
 put_panel("manage", panel("CAD Standards", [
     btn("STANDARDS", "Configure", icon="standards"),
     stack(btn("CHECKSTANDARDS", "Check", "small", "standards"), btn("LAYTRANS", "Layer Translator", "small", "layers")),

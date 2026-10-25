@@ -133,7 +133,7 @@ fn navigation_synonyms_resolve() {
 #[test]
 fn tableexport_writes_quoted_csv() {
     let s = Sim::new();
-    s.add(Entity::new(Kind::Table(TableData { p: p(0., 0.), cols: vec![20., 20.], rows: vec![8., 8.], cells: vec![vec!["Item".into(), "Note, \"quoted\"".into()], vec!["A".into(), "1".into()]], h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0.0 })));
+    s.add(Entity::new(Kind::Table(TableData { p: p(0., 0.), cols: vec![20., 20.], rows: vec![8., 8.], cells: vec![vec!["Item".into(), "Note, \"quoted\"".into()], vec!["A".into(), "1".into()]], h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0.0, link: None })));
     s.cmd("TABLEEXPORT").click(20., -4.);
     let (name, csv) = saved_file(&s).expect("a file");
     assert!(name.ends_with("-table.csv"), "{name}");

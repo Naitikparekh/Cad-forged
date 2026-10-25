@@ -128,6 +128,16 @@ pub struct TableData {
     pub title: bool,
     #[serde(default)]
     pub rot: f64,
+    /// The CSV file the cells come from (DATALINK); DATALINKUPDATE reads it again or writes the table to it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<DataLink>,
+}
+
+/// A table's link to a data file.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DataLink {
+    /// The file, as it was named when the link was made.
+    pub file: String,
 }
 
 /// WIPEOUT: a polygon that masks what is below it.
@@ -805,9 +815,11 @@ pub fn table_geometry(t: &TableData) -> (Vec<Seg>, Vec<TextData>) {
         }
     }
     let mut texts = vec![];
+    // formulas show their values
+    let shown = crate::table_calc::display(t);
     for r in 0..nr {
         for c in 0..nc {
-            let s = t.cells.get(r).and_then(|row| row.get(c)).map(String::as_str).unwrap_or("");
+            let s = shown.get(r).and_then(|row| row.get(c)).map(String::as_str).unwrap_or("");
             if s.is_empty() {
                 continue;
             }

@@ -491,7 +491,7 @@ fn text_of(s: &Sim, id: u64) -> TextData {
 /// One of everything FIND searches: text, table cells, a leader, a dimension override and a block attribute.
 fn find_fixture(s: &Sim) {
     s.add(Entity::text(p(0., 0.), 2.5, "Door DOOR hinge"));
-    s.add(Entity::new(Kind::Table(TableData { p: p(0., 100.), cols: vec![20., 20.], rows: vec![6.], cells: vec![vec!["Door".into(), "doors".into()]], h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0. })));
+    s.add(Entity::new(Kind::Table(TableData { p: p(0., 100.), cols: vec![20., 20.], rows: vec![6.], cells: vec![vec!["Door".into(), "doors".into()]], h: 2.5, merges: vec![], style: String::new(), title: false, rot: 0., link: None })));
     s.add(Entity::leader(vec![p(50., 0.), p(60., 10.)], "Back door", 2.5));
     let mut dd = DimData::new(DimType::Lin);
     (dd.p1, dd.p2, dd.dp, dd.ang, dd.txt) = (Some(p(0., 30.)), Some(p(10., 30.)), Some(p(5., 25.)), Some(0.), Some("<> DOOR".into()));

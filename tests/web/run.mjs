@@ -575,6 +575,20 @@ await test('a dropped .dws standards file is checked, and Fix All in the Check S
   await page.keyboard.press('Escape'); await t.frame(4);
 });
 
+await test('DATALINK makes a linked table from a CSV chosen in the file chooser', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const before = (await t.state()).types.filter(x => x === 'table').length;
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), t.cmd('DATALINK')]);
+  await fc.setFiles({ name: 'doors.csv', mimeType: 'text/csv', buffer: Buffer.from('Mark,Qty\nD1,2\nD2,3\nTotal,=SUM(B2:B3)\n') });
+  await page.waitForTimeout(600); await t.frame(4);
+  let s = await t.state(); assert.ok(/Enter for a new table/.test(s.prompt), s.prompt);
+  await page.keyboard.press('Enter'); await t.frame(3);
+  await t.cmd('0,0');
+  s = await t.state();
+  assert.equal(s.types.filter(x => x === 'table').length, before + 1, JSON.stringify(s.history));
+  assert.ok(s.history.some(h => /Table linked to doors\.csv \(4 rows, 2 columns\)/.test(h.text || h)), JSON.stringify(s.history));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();

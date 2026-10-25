@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 338 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 340 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -300,6 +300,8 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | Command | Aliases | Description |
 |---|---|---|
 | `DATAEXTRACTION` | `EATTEXT` | Extracts drawing data (block counts with attributes, or object counts) to a CSV file. |
+| `DATALINK` |  | Links a table to a CSV file: the file's cells fill the table. |
+| `DATALINKUPDATE` |  | Reads linked data files into their tables again, or writes the tables back to the files. |
 | `ETRANSMIT` |  | Lists the files needed to send a drawing to someone else. |
 | `PLOTSTYLE` |  | Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting. |
 | `PREVIEW` | `PRE` | Displays the drawing as it will be plotted. |

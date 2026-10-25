@@ -6,7 +6,7 @@ use cadforge_core::io::{read_dxf, write_dxf};
 use cadforge_core::text::{AttDef, TextData};
 
 fn table() -> TableData {
-    TableData { p: pt(10.0, 100.0), cols: vec![20.0, 30.0, 25.0], rows: vec![8.0, 6.0, 6.0], cells: vec![vec!["Title".into(), String::new(), String::new()], vec!["A".into(), "B".into(), "C".into()], vec![String::new(); 3]], h: 2.5, merges: vec![[0, 0, 0, 2]], style: String::new(), title: true, rot: 0.0 }
+    TableData { p: pt(10.0, 100.0), cols: vec![20.0, 30.0, 25.0], rows: vec![8.0, 6.0, 6.0], cells: vec![vec!["Title".into(), String::new(), String::new()], vec!["A".into(), "B".into(), "C".into()], vec![String::new(); 3]], h: 2.5, merges: vec![[0, 0, 0, 2]], style: String::new(), title: true, rot: 0.0, link: None }
 }
 
 #[test]

@@ -87,6 +87,8 @@ pub struct CadForgeApp {
     pub pal: PalState,
     pub pending_theme: Option<bool>,
     pub save_as_focused: bool,
+    /// The linked data file DATALINKUPDATE asked for (a file chosen for it is read as this one).
+    pub datalink_file: Option<String>,
     /// Set when input changed state after the panels were drawn: schedules one more frame.
     pub input_dirty: bool,
     /// Viewport rectangle shared with the web test hook.
@@ -164,6 +166,7 @@ impl CadForgeApp {
             pal: PalState::default(),
             pending_theme: None,
             save_as_focused: false,
+            datalink_file: None,
             input_dirty: false,
             rect_hook: Default::default(),
         };

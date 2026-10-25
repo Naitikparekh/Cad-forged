@@ -15,5 +15,6 @@ pub mod solid;
 pub mod spatial;
 pub mod standards;
 pub mod style;
+pub mod table_calc;
 pub mod text;
 pub mod view;

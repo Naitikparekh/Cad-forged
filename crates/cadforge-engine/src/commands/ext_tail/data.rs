@@ -1,4 +1,4 @@
-//! CSV extracts: TABLEEXPORT, ATTEXT and DATAEXTRACTION.
+//! CSV files: TABLEEXPORT, ATTEXT and DATAEXTRACTION write them; DATALINK and DATALINKUPDATE link a table to one.
 use super::ps;
 use crate::app::Event;
 use crate::commands::{def, run};
@@ -6,6 +6,7 @@ use crate::ctx::*;
 use crate::registry::Registry;
 use crate::runtime::*;
 use cadforge_core::entities::*;
+use cadforge_core::geom::Pt;
 use std::collections::BTreeMap;
 
 /// One CSV field, quoted when it holds a delimiter, quote or line break.
@@ -35,8 +36,135 @@ fn save(c: &Ctx, name: String, rows: &[String]) {
 async fn tableexport(c: Ctx, _a: Args) -> CmdResult<()> {
     let Some(id) = c.pick_entity(ps("Select a table").filter(|e| matches!(e.kind, Kind::Table(_)))).await? else { return Ok(()) };
     let Some(Entity { kind: Kind::Table(t), .. }) = c.entity_by_id(id) else { return Ok(()) };
-    let rows: Vec<String> = t.cells.iter().map(|r| csv_row(r)).collect();
+    // what the cells show: formulas give their values
+    let rows: Vec<String> = cadforge_core::table_calc::display(&t).iter().map(|r| csv_row(r)).collect();
     save(&c, format!("{}-table.csv", c.name()), &rows);
+    Ok(())
+}
+
+// ---------------------------------------------------------------- data links
+
+fn is_table(e: &Entity) -> bool {
+    matches!(e.kind, Kind::Table(_))
+}
+
+fn base_name(file: &str) -> &str {
+    file.rsplit(['/', '\\']).next().unwrap_or(file)
+}
+
+fn same_file(a: &str, b: &str) -> bool {
+    base_name(a).eq_ignore_ascii_case(base_name(b))
+}
+
+/// The CSV file: the `file` and `text` arguments, or ask the host for it (it starts the command again with them).
+fn csv_or_ask(c: &Ctx, a: &Args, action: &str) -> Option<(String, String)> {
+    if let Some(t) = a.str("text") {
+        return Some((a.str("file").unwrap_or("data.csv").to_string(), t.to_string()));
+    }
+    if c.app(|app| app.ui.dialogs) {
+        let args = a.clone();
+        c.app(|app| app.emit(Event::UiAction { name: action.into(), args }));
+    } else {
+        c.log_error(&format!("{action} needs a file chooser; pass the file's text as the \"text\" argument and its name as \"file\"."));
+    }
+    None
+}
+
+/// DATALINK: fill a table from a CSV file and keep the link (pick a table, or press Enter for a new one).
+async fn datalink(c: Ctx, a: Args) -> CmdResult<()> {
+    let Some((file, text)) = csv_or_ask(&c, &a, "DATALINK") else { return Ok(()) };
+    let cells = cadforge_core::table_calc::parse_csv(&text);
+    if cells.is_empty() {
+        c.log_error(&format!("{} has no cells.", base_name(&file)));
+        return Ok(());
+    }
+    let (nr, nc) = (cells.len(), cells.iter().map(Vec::len).max().unwrap_or(0));
+    let link = Some(DataLink { file: file.clone() });
+    let target = match a.id("entity") {
+        Some(id) => Some(id),
+        None => c.pick_entity(ps("Select a table to link or press Enter for a new table").filter(is_table).allow_enter()).await?,
+    };
+    match target {
+        Some(id) => {
+            c.doc_mut(|d| {
+                d.modify(id, |e| {
+                    if let Kind::Table(t) = &mut e.kind {
+                        cadforge_core::table_calc::fill_from_csv(t, &cells);
+                        t.link = link.clone();
+                    }
+                })
+            });
+        }
+        None => {
+            let style = c.doc(|d| d.settings.cur_table());
+            let h = style.text_height;
+            let mut t = TableData { p: Pt::ZERO, cols: vec![8.0 * h; nc], rows: vec![2.0 * h; nr], cells: vec![], h, merges: vec![], style: style.name.clone(), title: false, rot: 0.0, link };
+            cadforge_core::table_calc::fill_from_csv(&mut t, &cells);
+            let shape = t.clone();
+            let Some(at) = c.point(ps("Specify insertion point").preview(move |_, p| vec![PreviewItem::Entity(Entity::new(Kind::Table(TableData { p, ..shape.clone() })))])).await?.pt() else { return Ok(()) };
+            t.p = at;
+            c.add(Entity::new(Kind::Table(t)));
+        }
+    }
+    c.log(&format!("Table linked to {} ({nr} rows, {nc} columns).", base_name(&file)));
+    Ok(())
+}
+
+/// DATALINKUPDATE: Update reads the linked file again into every table linked to it; Write saves the tables back to
+/// their files (what the cells show).
+async fn datalinkupdate(c: Ctx, a: Args) -> CmdResult<()> {
+    let linked: Vec<(u64, String)> = c.doc(|d| d.entities().iter().filter_map(|e| if let Kind::Table(TableData { link: Some(l), .. }) = &e.kind { Some((e.id, l.file.clone())) } else { None }).collect());
+    if linked.is_empty() {
+        c.log_error("No table in this drawing is linked to a data file. Use DATALINK to link one.");
+        return Ok(());
+    }
+    let opt = match a.str("option") {
+        Some(o) => o.to_string(),
+        None => c.keyword(ps("Enter a data link option [Update data link/Write data link]").options(&["Update", "Write"]).default_str("Update")).await?.kw().unwrap_or("Update").to_string(),
+    };
+    let mut files: Vec<String> = vec![];
+    for (_, f) in &linked {
+        if !files.iter().any(|x| same_file(x, f)) {
+            files.push(f.clone());
+        }
+    }
+    if opt.to_ascii_uppercase().starts_with('W') {
+        for f in &files {
+            let csv: String = c.doc(|d| {
+                d.entities().iter().find_map(|e| match &e.kind {
+                    Kind::Table(t) if t.link.as_ref().is_some_and(|l| same_file(&l.file, f)) => Some(cadforge_core::table_calc::to_csv(t)),
+                    _ => None,
+                })
+            }).unwrap_or_default();
+            let name = base_name(f).to_string();
+            let msg = format!("Wrote the linked table to {name}.");
+            c.app(|app| {
+                app.emit(Event::SaveFile { name, data: csv.into_bytes(), mime: "text/csv".into() });
+                app.log(&msg, "info");
+            });
+        }
+        return Ok(());
+    }
+    // Update: one file at a time (the host reads it and starts the command again with its text)
+    let file = a.str("file").map(str::to_string).unwrap_or_else(|| files[0].clone());
+    let ask = if a.str("text").is_some() { a.clone() } else { Args::none().with("option", ArgVal::Str("Update".into())).with("file", ArgVal::Str(file.clone())) };
+    let Some((_, text)) = csv_or_ask(&c, &ask, "DATALINKUPDATE") else { return Ok(()) };
+    let cells = cadforge_core::table_calc::parse_csv(&text);
+    let ids: Vec<u64> = linked.iter().filter(|(_, f)| same_file(f, &file)).map(|(id, _)| *id).collect();
+    if ids.is_empty() {
+        c.log_error(&format!("No table is linked to {}.", base_name(&file)));
+        return Ok(());
+    }
+    c.doc_mut(|d| {
+        d.change(|d| {
+            for id in &ids {
+                if let Some(Entity { kind: Kind::Table(t), .. }) = d.by_id_mut(*id) {
+                    cadforge_core::table_calc::fill_from_csv(t, &cells);
+                }
+            }
+        })
+    });
+    c.log(&format!("Updated {} from {}.", if ids.len() == 1 { "1 linked table".to_string() } else { format!("{} linked tables", ids.len()) }, base_name(&file)));
     Ok(())
 }
 
@@ -126,6 +254,8 @@ async fn dataextraction(c: Ctx, _a: Args) -> CmdResult<()> {
 
 pub(super) fn register(r: &mut Registry) {
     r.define(def("Annotate", "TABLEEXPORT", run(tableexport)).title("Export Table").icon("table").desc("Exports data from a table object in CSV file format."));
+    r.define(def("Output", "DATALINK", run(datalink)).title("Data Link").icon("table").desc("Links a table to a CSV file: the file's cells fill the table."));
+    r.define(def("Output", "DATALINKUPDATE", run(datalinkupdate)).title("Update Data Links").icon("table").desc("Reads linked data files into their tables again, or writes the tables back to the files."));
     r.define(def("Blocks", "ATTEXT", run(attext)).title("Extract Attributes").icon("attedit").desc("Extracts block attribute data to a CSV file."));
     r.define(def("Output", "DATAEXTRACTION", run(dataextraction)).aliases(&["EATTEXT"]).title("Data Extraction").icon("table").desc("Extracts drawing data (block counts with attributes, or object counts) to a CSV file."));
 }
