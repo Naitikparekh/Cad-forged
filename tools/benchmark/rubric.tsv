@@ -53,8 +53,8 @@ drafting	coordinate-entry	1	Absolute, relative, polar and direct distance entry	
 drafting	ucs	0.5	User coordinate systems	crates/cadforge-engine/tests/ucs.rs::UCS	2D origin and rotation only
 drafting	selection-methods	1	Pick, window, crossing, fence, polygons, ALL, Last, Previous, add / remove	crates/cadforge-engine/src/runtime.rs::WP ; crates/cadforge-engine/tests/modify.rs::left-to-right window	
 drafting	qselect-filter	1	Quick select, select similar and filters	crates/cadforge-engine/tests/lisp_cad.rs::ssget_filters ; crates/cadforge-engine/tests/lisp_cad.rs::ssget_filters	
-drafting	grips	0.5	Grip editing: stretch, move, rotate, scale, mirror	crates/cadforge-core/src/entities.rs::enum GripKind	stretch and move only
-drafting	selection-preview	0.5	Rollover highlight and selection cycling	crates/cadforge-engine/src/select.rs::pick_all	no cycling UI
+drafting	grips	0.85	Grip editing: stretch, move, rotate, scale, mirror	crates/cadforge-core/src/entities.rs::enum GripKind ; crates/cadforge-engine/tests/modify.rs::grip_modes_cycle_with_enter_rotate_scale_mirror_and_copy	no multi-functional grip menus (add vertex, convert to arc, lengthen)
+drafting	selection-preview	1	Rollover highlight and selection cycling	crates/cadforge-engine/src/select.rs::pick_all ; crates/cadforge-engine/tests/modify.rs::selection_cycling_lists_overlapping_objects_to_choose_from ; crates/cadforge-app/src/viewport.rs::fn cycle_list_ui	
 drafting	properties	1	Properties palette and quick properties with live editing	crates/cadforge-app/src/palettes.rs::quick_props	
 drafting	matchprop	1	MATCHPROP, CHPROP and SETBYLAYER	crates/cadforge-engine/tests/ext_modify.rs::chprop_changes ; crates/cadforge-engine/tests/ext_tail.rs::setbylayer	
 drafting	layers	0.75	Layer manager, states, isolate, freeze, lock, lineweight, transparency	crates/cadforge-engine/tests/commands2.rs::LAYISO ; crates/cadforge-engine/tests/vplayer.rs::freeze_thaw_and_reset_in_all_viewports	no layer filter groups; viewport overrides have no palette columns (use VPLAYER)
@@ -62,7 +62,7 @@ drafting	inquiry	1	DIST, AREA, LIST, ID, MEASUREGEOM, MASSPROP, QUICKCALC	crates
 drafting	draw-order	1	Draw order and DRAWORDER front / back	crates/cadforge-engine/src/commands/system.rs::draworder	
 drafting	constraints	0	Geometric and dimensional constraints		not implemented
 drafting	isolate-objects	1	Isolate / hide objects	crates/cadforge-engine/src/commands/ext_tail/visibility.rs::ISOLATEOBJECTS ; crates/cadforge-engine/tests/visibility.rs::isolate_hides ; crates/cadforge-render/tests/hidden.rs::hidden_objects	
-drafting	undo-options	0.5	UNDO marks, groups, control and back	crates/cadforge-engine/src/commands/system.rs::UNDO	one step per command only
+drafting	undo-options	1	UNDO marks, groups, control and back	crates/cadforge-engine/src/commands/system.rs::UNDO ; crates/cadforge-engine/tests/undo_options.rs::back_undoes_everything_since_the_mark ; crates/cadforge-engine/tests/undo_options.rs::a_group_is_one_undo_step ; crates/cadforge-engine/tests/undo_options.rs::control_one_and_none_limit_what_can_be_undone	
 ui	ribbon	1	Ribbon with tabs, panels, slideouts, contextual tabs and minimise states	crates/cadforge-app/src/ribbon.rs::ribbon_mode ; crates/cadforge-app/assets/ribbon.json::hatchcreate	
 ui	app-menu-qat	1	Application menu, quick access toolbar, InfoCenter search	crates/cadforge-app/src/chrome.rs::Quick Access Toolbar ; crates/cadforge-app/src/chrome.rs::search	
 ui	doc-tabs-start	1	Drawing tabs, start page, recent files	crates/cadforge-app/src/chrome.rs::fn doctabs ; crates/cadforge-app/src/misc.rs::fn start_page	

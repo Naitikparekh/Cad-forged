@@ -467,6 +467,8 @@ pub struct Runtime {
     pub preview: Vec<PreviewItem>,
     /// First corner of an idle (no command) selection window.
     pub idle_window: Option<Pt>,
+    /// Selection cycling (SELECTIONCYCLING 2): the objects under a click, waiting for the user to choose one.
+    pub cycling: Option<(Pt, Vec<u64>)>,
     pub last_point: Option<Pt>,
     pub hot_grip: Option<GripRef>,
     /// Typed text originated from the dynamic-input tooltip.
@@ -492,6 +494,7 @@ impl Default for Runtime {
             recent_input: vec![],
             preview: vec![],
             idle_window: None,
+            cycling: None,
             last_point: None,
             hot_grip: None,
             dynamic_typing: false,
@@ -939,6 +942,24 @@ impl App {
             }
         }
         let ap = self.aperture_world(Some(self.sysvars.real("PICKBOX") + 4.0));
+        self.rt.cycling = None;
+        if !mods.shift && self.sysvars.int("SELECTIONCYCLING") == 2 {
+            // several objects under the pick (groups count once): let the user choose from a list
+            let all = pick_all(&self.editor().expect("editor").doc, raw, ap, None);
+            let mut seen: Vec<u64> = vec![];
+            let mut firsts: Vec<u64> = vec![];
+            for id in all {
+                if !seen.contains(&id) {
+                    seen.extend(self.group_ids(id));
+                    firsts.push(id);
+                }
+            }
+            if firsts.len() > 1 {
+                self.rt.cycling = Some((raw, firsts));
+                self.emit(Event::Change);
+                return;
+            }
+        }
         let hit = pick_at(&self.editor().expect("editor").doc, raw, ap, None, None);
         if let Some(id) = hit {
             let ids = self.group_ids(id);
@@ -1611,8 +1632,21 @@ impl App {
         }
     }
 
+    /// Selection cycling: choose `id` from the list (`None` closes the list without selecting).
+    pub fn choose_cycled(&mut self, id: Option<u64>) {
+        let Some((_, ids)) = self.rt.cycling.take() else { return };
+        if let Some(id) = id.filter(|i| ids.contains(i)) {
+            let group = self.group_ids(id);
+            if let Some(ed) = self.editor_mut() {
+                ed.sel.extend(group);
+            }
+        }
+        self.emit(Event::Change);
+    }
+
     pub fn escape(&mut self) {
         self.rt.idle_window = None;
+        self.rt.cycling = None;
         self.rt.override_ = None;
         if self.top_task().is_none() {
             if let Some(ed) = self.editor_mut() {

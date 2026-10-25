@@ -572,6 +572,7 @@ impl CadForgeApp {
             StatusItem { id: "polar", icon: Some("polar"), title: "Polar Tracking", desc: "Restricts cursor movement to specified angle increments (F10).", key: "F10", label: None, text: None, on: |a| a.sv("POLARMODE") != 0, act: |a, _, _| a.toggle_polar(), menu: Some(|a, ctx, r| a.polar_menu(ctx, r)) },
             StatusItem { id: "otrack", icon: Some("otrack"), title: "Object Snap Tracking", desc: "Tracks from acquired object snap points (F11).", key: "F11", label: None, text: None, on: |a| a.sv("OTRACKMODE") != 0, act: |a, _, _| a.toggle_sv("OTRACKMODE"), menu: None },
             StatusItem { id: "osnap", icon: Some("osnap"), title: "Object Snap", desc: "Snaps to geometric points on objects (F3).", key: "F3", label: None, text: None, on: |a| a.sv("OSMODE") & 16384 == 0, act: |a, _, _| a.toggle_osnap(), menu: Some(|a, ctx, r| a.osnap_menu(ctx, r)) },
+            StatusItem { id: "selcycle", icon: Some("select"), title: "Selection Cycling", desc: "Where objects overlap, a click lists them so you can choose one (Ctrl+W).", key: "Ctrl+W", label: None, text: None, on: |a| a.sv("SELECTIONCYCLING") == 2, act: |a, _, _| a.toggle_selection_cycling(), menu: None },
             StatusItem { id: "lwt", icon: Some("lweight"), title: "Show/Hide Lineweight", desc: "Displays objects with their assigned lineweights.", key: "", label: None, text: None, on: |a| a.sv("LWDISPLAY") != 0, act: |a, _, _| a.toggle_sv("LWDISPLAY"), menu: None },
             StatusItem { id: "qp", icon: Some("qprops"), title: "Quick Properties", desc: "Displays a Quick Properties panel for selected objects.", key: "", label: None, text: None, on: |a| a.ui.show_props, act: |a, _, _| a.ui.show_props = !a.ui.show_props, menu: None },
             StatusItem {
@@ -616,6 +617,9 @@ impl CadForgeApp {
         if !on {
             self.set_sv("ORTHOMODE", 0.0);
         }
+    }
+    pub fn toggle_selection_cycling(&self) {
+        self.set_sv("SELECTIONCYCLING", if self.sv("SELECTIONCYCLING") == 2 { 0.0 } else { 2.0 });
     }
     pub fn toggle_osnap(&self) {
         self.set_sv("OSMODE", (self.sv("OSMODE") ^ 16384) as f64);

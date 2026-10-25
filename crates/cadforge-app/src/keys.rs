@@ -111,6 +111,10 @@ impl CadForgeApp {
                             self.next_isoplane();
                             continue;
                         }
+                        if key == Key::W && !typing {
+                            self.toggle_selection_cycling();
+                            continue;
+                        }
                         if let Some(c) = cmd {
                             // normal text editing wins while typing in a field (or when the command line has text)
                             if typing && matches!(key, Key::A | Key::C | Key::X | Key::V | Key::Z | Key::Y) {

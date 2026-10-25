@@ -220,6 +220,73 @@ fn grip_editing_stretch_an_endpoint_and_move_a_line_from_its_midpoint_grip() {
 }
 
 #[test]
+fn grip_modes_cycle_with_enter_rotate_scale_mirror_and_copy() {
+    let s = Sim::new();
+    s.setvar("OSMODE", 16384.0);
+    add_line(&s, p(0., 0.), p(10., 0.));
+    s.click(5., 0.).click(10., 0.); // hot grip at the end
+    assert!(s.prompt().contains("** STRETCH **"), "{}", s.prompt());
+    s.enter();
+    assert!(s.prompt().contains("** MOVE **"), "{}", s.prompt());
+    s.enter();
+    assert!(s.prompt().contains("** ROTATE **"), "{}", s.prompt());
+    s.ty("90"); // about the hot grip
+    assert!(!s.busy(), "{}", s.log_text());
+    let (a, b) = ab(&s.ent(0));
+    near(a.x, 10.);
+    near(a.y, -10.);
+    near(b.x, 10.);
+    near(b.y, 0.);
+    // scale about the hot grip
+    s.click(10., 0.); // the line stays selected: its end grip
+    s.enter().enter().enter();
+    assert!(s.prompt().contains("** SCALE **"), "{}", s.prompt());
+    s.ty("2");
+    let (a, b) = ab(&s.ent(0));
+    near(a.y, -20.);
+    near(b.y, 0.);
+    // mirror about the line through the hot grip and a second point
+    s.click(10., 0.);
+    s.enter().enter().enter().enter();
+    assert!(s.prompt().contains("** MIRROR **"), "{}", s.prompt());
+    s.click(20., 0.);
+    let (a, b) = ab(&s.ent(0));
+    near(a.y, 20.);
+    near(b.y, 0.);
+    // Copy makes copies until Enter
+    s.click(10., 0.);
+    s.enter(); // MOVE
+    s.ty("Copy").click(30., 0.).click(50., 0.).enter();
+    assert_eq!(s.n(), 3, "{}", s.log_text());
+}
+
+#[test]
+fn selection_cycling_lists_overlapping_objects_to_choose_from() {
+    let s = Sim::new();
+    add_line(&s, p(0., 0.), p(10., 0.));
+    add_line(&s, p(0., 0.), p(10., 0.)); // a duplicate on top
+    let ids: Vec<u64> = s.ents().iter().map(|e| e.id).collect();
+    // off: a click picks one
+    s.click(5., 0.);
+    assert_eq!(s.sel_count(), 1);
+    s.esc();
+    s.setvar("SELECTIONCYCLING", 2.0);
+    s.click(5., 0.);
+    assert_eq!(s.sel_count(), 0, "nothing is picked yet");
+    let listed = s.h.borrow().rt.cycling.clone().map(|(_, l)| l).unwrap_or_default();
+    assert_eq!(listed.len(), 2, "{listed:?}");
+    s.h.borrow_mut().choose_cycled(Some(ids[0]));
+    assert_eq!(s.h.borrow().editor().unwrap().sel.iter().copied().collect::<Vec<_>>(), vec![ids[0]], "the one chosen in the list");
+    assert!(s.h.borrow().rt.cycling.is_none());
+    // Esc closes the list
+    s.esc();
+    s.click(5., 0.);
+    assert!(s.h.borrow().rt.cycling.is_some());
+    s.esc();
+    assert!(s.h.borrow().rt.cycling.is_none() && s.sel_count() == 0);
+}
+
+#[test]
 fn selecting_by_window_and_crossing_at_idle_esc_clears() {
     let s = Sim::new();
     add_line(&s, p(0., 0.), p(4., 0.));

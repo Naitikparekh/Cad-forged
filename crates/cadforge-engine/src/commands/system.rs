@@ -36,7 +36,53 @@ async fn u(c: Ctx, _a: Args) -> CmdResult<()> {
 async fn undo(c: Ctx, _a: Args) -> CmdResult<()> {
     let n = c.number(ps("Enter the number of operations to undo or [Auto/Control/BEgin/End/Mark/Back]").default_num(1.0).integer().min(1.0).options(&["Auto", "Control", "BEgin", "End", "Mark", "Back"])).await?;
     if let Some(k) = n.kw() {
-        c.log(&format!("UNDO {k}: not supported; each command is one undo step."));
+        use cadforge_core::drawing::UndoControl;
+        match k {
+            "Mark" => {
+                c.doc_mut(|d| d.undo_mark());
+                c.log("Mark placed: UNDO Back returns here.");
+            }
+            "Back" => {
+                let has_mark = c.doc(|d| d.undo_depth() > 0);
+                if !has_mark {
+                    c.log("Everything has been undone");
+                    return Ok(());
+                }
+                let (n, marked) = c.doc_mut(|d| d.undo_back());
+                c.ed(|e| e.prune());
+                c.log(&if marked { format!("Mark encountered: {n} {} undone", if n == 1 { "command" } else { "commands" }) } else { "Everything has been undone".to_string() });
+                c.emit();
+            }
+            "BEgin" => {
+                if c.doc_mut(|d| d.undo_begin()) {
+                    c.log("Undo group started: the commands until UNDO End are undone together.");
+                } else {
+                    c.log_error("An undo group is already open; end it with UNDO End.");
+                }
+            }
+            "End" => match c.doc_mut(|d| d.undo_end("Group")) {
+                Some(n) => c.log(&format!("Undo group ended ({n} {}).", if n == 1 { "command" } else { "commands" })),
+                None => c.log_error("No undo group is open."),
+            },
+            "Control" => {
+                let opt = c.keyword(ps("Enter an UNDO control option [All/None/One]").options(&["All", "None", "One"]).default_str("All")).await?.kw().unwrap_or("All").to_string();
+                let ctl = match opt.as_str() {
+                    "None" => UndoControl::None,
+                    "One" => UndoControl::One,
+                    _ => UndoControl::All,
+                };
+                c.doc_mut(|d| d.set_undo_control(ctl));
+                c.log(match ctl {
+                    UndoControl::None => "UNDO is off: changes can no longer be undone.",
+                    UndoControl::One => "UNDO keeps only the last step.",
+                    UndoControl::All => "UNDO keeps every step.",
+                });
+            }
+            _ => {
+                let on = c.keyword(ps("Enter UNDO Auto mode [ON/OFF]").options(&["ON", "OFF"]).default_str("ON")).await?.kw() != Some("OFF");
+                c.log(&format!("UNDO Auto {}: every command is already one undo step.", if on { "ON" } else { "OFF" }));
+            }
+        }
         return Ok(());
     }
     let want = n.value().unwrap_or(1.0) as usize;

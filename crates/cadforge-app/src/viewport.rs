@@ -397,7 +397,50 @@ impl CadForgeApp {
         }
         paint_ops(&painter, rect.min, &self.vp.cache_ops, rect);
         self.paint_overlay(&painter, ctx, rect, theme);
+        self.cycle_list_ui(ctx, rect);
         let _ = t;
+    }
+
+    /// Selection cycling: the objects under the click, to choose one (hovering a row highlights it).
+    fn cycle_list_ui(&mut self, ctx: &egui::Context, rect: Rect) {
+        let rows: Option<(Pos2, Vec<(u64, String)>)> = {
+            let a = self.h.borrow();
+            let ed = a.editor();
+            a.rt.cycling.as_ref().zip(ed).map(|((at, ids), ed)| {
+                let s = ed.view.to_screen(*at);
+                let rows = ids.iter().filter_map(|id| ed.entity_by_id(*id).map(|e| (*id, format!("{}  ({})", e.label(), if e.layer.is_empty() { "0" } else { e.layer.as_str() })))).collect();
+                (Pos2::new(rect.min.x + s.x as f32 + 14.0, rect.min.y + s.y as f32 + 10.0), rows)
+            })
+        };
+        let Some((pos, rows)) = rows else { return };
+        let t = self.t;
+        let mut chosen: Option<Option<u64>> = None;
+        egui::Area::new(egui::Id::new("selection-cycling")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_min_width(190.0);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Selection").strong().color(t.text));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("×").clicked() {
+                            chosen = Some(None);
+                        }
+                    });
+                });
+                for (id, label) in &rows {
+                    let r = ui.selectable_label(self.vp.hover == Some(*id), label);
+                    if r.hovered() {
+                        self.vp.hover = Some(*id);
+                    }
+                    if r.clicked() {
+                        chosen = Some(Some(*id));
+                    }
+                }
+            });
+        });
+        if let Some(c) = chosen {
+            self.h.borrow_mut().choose_cycled(c);
+            self.vp.hover = None;
+        }
     }
 
     fn paint_overlay(&mut self, painter: &egui::Painter, _ctx: &egui::Context, rect: Rect, theme: Theme) {

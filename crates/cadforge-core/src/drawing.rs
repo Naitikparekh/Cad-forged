@@ -222,6 +222,14 @@ struct UndoStep {
     label: String,
 }
 
+/// UNDO Control: All keeps every step, One only the last, None records nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UndoControl {
+    All,
+    One,
+    None,
+}
+
 /// Per-revision geometry caches (see `entities.rs`); cleared whenever the drawing changes.
 #[derive(Default)]
 pub struct Caches {
@@ -286,6 +294,12 @@ pub struct Drawing {
     pub standards: crate::standards::Standards,
     undo_stack: Vec<UndoStep>,
     redo_stack: Vec<UndoStep>,
+    /// UNDO Mark: undo stack depths UNDO Back returns to (oldest first).
+    undo_marks: Vec<usize>,
+    /// UNDO BEgin: the depth the open group started at; UNDO End makes the steps since then one step.
+    undo_group: Option<usize>,
+    /// UNDO Control: what is recorded.
+    pub undo_control: UndoControl,
     pre: Option<Snapshot>,
     cmd_active: bool,
     cmd_rev: u64,
@@ -367,6 +381,9 @@ impl Drawing {
             standards: Default::default(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            undo_marks: Vec::new(),
+            undo_group: None,
+            undo_control: UndoControl::All,
             pre: None,
             cmd_active: false,
             cmd_rev: 0,
@@ -1064,7 +1081,7 @@ impl Drawing {
         if self.cmd_active && self.rev != self.cmd_rev {
             self.update_dim_associations(self.cmd_next_id);
         }
-        if self.cmd_active && self.rev != self.cmd_rev {
+        if self.cmd_active && self.rev != self.cmd_rev && self.undo_control != UndoControl::None {
             if let Some(snap) = self.pre.take() {
                 self.undo_stack.push(UndoStep { snap, label: label.into() });
                 self.redo_stack.clear();
@@ -1088,9 +1105,78 @@ impl Drawing {
     }
 
     fn trim_undo(&mut self) {
+        let max = if self.undo_control == UndoControl::One { 1 } else { MAX_UNDO };
         let mut bytes: usize = self.undo_stack.iter().map(|s| s.snap.json.len()).sum();
-        while self.undo_stack.len() > MAX_UNDO || (bytes > MAX_UNDO_BYTES && self.undo_stack.len() > 1) {
+        let mut dropped = 0;
+        while self.undo_stack.len() > max || (bytes > MAX_UNDO_BYTES && self.undo_stack.len() > 1) {
             bytes -= self.undo_stack.remove(0).snap.json.len();
+            dropped += 1;
+        }
+        if dropped > 0 {
+            // marks and an open group count from the bottom of the stack
+            self.undo_marks = self.undo_marks.iter().filter_map(|m| m.checked_sub(dropped)).collect();
+            self.undo_group = self.undo_group.map(|g| g.saturating_sub(dropped));
+        }
+    }
+
+    /// UNDO Mark: UNDO Back returns to this point.
+    pub fn undo_mark(&mut self) {
+        let n = self.undo_stack.len();
+        if self.undo_marks.last() != Some(&n) {
+            self.undo_marks.push(n);
+        }
+    }
+
+    /// UNDO Back: undo every step since the last mark (everything when there is none; the mark is used up). Returns
+    /// how many steps were undone and whether a mark was reached.
+    pub fn undo_back(&mut self) -> (usize, bool) {
+        let target = self.undo_marks.pop();
+        let to = target.unwrap_or(0).min(self.undo_stack.len());
+        let mut n = 0;
+        while self.undo_stack.len() > to && self.undo().is_some() {
+            n += 1;
+        }
+        (n, target.is_some())
+    }
+
+    /// UNDO BEgin: the commands until UNDO End become one undo step. Returns false when a group is already open.
+    pub fn undo_begin(&mut self) -> bool {
+        if self.undo_group.is_some() {
+            return false;
+        }
+        self.undo_group = Some(self.undo_stack.len());
+        true
+    }
+
+    /// UNDO End: close the open group. Returns how many steps it joined (`None` when no group was open).
+    pub fn undo_end(&mut self, label: &str) -> Option<usize> {
+        let start = self.undo_group.take()?.min(self.undo_stack.len());
+        let n = self.undo_stack.len() - start;
+        if n > 1 {
+            // the group's undo step returns to the state before its first command
+            self.undo_stack.truncate(start + 1);
+            self.undo_stack[start].label = label.to_string();
+            self.undo_marks.retain(|m| *m <= start || *m > start + n);
+        }
+        Some(n)
+    }
+
+    pub fn undo_group_open(&self) -> bool {
+        self.undo_group.is_some()
+    }
+
+    /// UNDO Control: None also forgets the steps there are; One keeps only the last.
+    pub fn set_undo_control(&mut self, c: UndoControl) {
+        self.undo_control = c;
+        match c {
+            UndoControl::None => {
+                self.undo_stack.clear();
+                self.redo_stack.clear();
+                self.undo_marks.clear();
+                self.undo_group = None;
+            }
+            UndoControl::One => self.trim_undo(),
+            UndoControl::All => {}
         }
     }
 
@@ -1158,6 +1244,11 @@ impl Drawing {
 
     pub fn undo(&mut self) -> Option<String> {
         let step = self.undo_stack.pop()?;
+        let n = self.undo_stack.len();
+        self.undo_marks.retain(|m| *m <= n);
+        if self.undo_group.is_some_and(|g| g > n) {
+            self.undo_group = Some(n);
+        }
         let now = self.snapshot();
         self.redo_stack.push(UndoStep { snap: now, label: step.label.clone() });
         self.restore(&step.snap);
