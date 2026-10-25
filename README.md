@@ -71,6 +71,9 @@ product.
   moves control vertices and changes their weights.
 * **Drafting aids**: isometric drafting (`ISODRAFT`, `ISOPLANE`, F5: isometric grid and snap, ortho and crosshair along
   the current isoplane) and additional polar tracking angles (`POLARADDANG`).
+* **Touch screens**: two fingers pan and pinch-zoom the drawing, a tap picks, a finger held still is a right-click
+  (Enter in a selection, otherwise the shortcut menu), and a touch bar gives Enter / Cancel / Undo without a keyboard
+  (`TOUCHMODE`); a pen works like the mouse.
 * **Files**: **AutoCAD DWG** opened from R14 to 2018 and saved as AutoCAD 2004 (the default) or 2000; **DXF R2000
   export** (validated with `ezdxf`), tolerant **DXF import** (including DXFs written by other tools, and **binary DXF**,
   which `-DXFOUT` also writes); CadForge JSON projects; **plot to PDF / SVG / PNG** with paper size, scale, lineweights and

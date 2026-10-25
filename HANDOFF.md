@@ -159,6 +159,12 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   unchanged. The renderer draws bold as a double strike, italic as a shear (no new `Op` fields, so PDF / SVG / PNG
   need nothing). `%%d %%p %%c %%u %%o` work in single-line text too. `\c` true colour is read as blue-in-the-high-byte;
   that byte order is from memory of the format, not from a test against AutoCAD.
+* **Touch** (`viewport.rs`, `touch_input`): fingers are tracked from `egui::Event::Touch` in event order, and a
+  two-finger gesture sets the view from the view and finger positions taken when the second finger landed (not from
+  egui's per-frame `multi_touch` deltas, which lose the first move when the start and a move fall in one frame). The
+  web runner sends each tap twice as a pointer press (`pointerdown` and `touchstart`); the second press replaces the
+  first `Down`, so a tap is still one click. Long press = right-click after `LONG_PRESS_S`. The touch bar shows once
+  `has_touch_screen()` is true and `TOUCHMODE` is 1. Browser tests drive it with CDP `Input.dispatchTouchEvent`.
 * **Browser test harness**: `launch()` now proves the input path works before returning (keys typed right after start-up
   were sometimes lost); tests that type into a fresh page should still use `startCommand` / `until` rather than fixed sleeps.
 * **Gotcha**: do not run `cargo fmt` — the code base keeps its own longer-line style and has no rustfmt config, so it

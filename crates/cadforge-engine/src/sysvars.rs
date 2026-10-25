@@ -109,6 +109,7 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("TOOLTIPS", 1.0),
         ("NAVVCUBE", 1.0),
         ("NAVBAR", 1.0),
+        ("TOUCHMODE", 1.0),
         ("UCSICON", 1.0),
         ("UCSORG", 0.0),
         ("QPMODE", -1.0),

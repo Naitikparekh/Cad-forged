@@ -1,6 +1,6 @@
 //! The drawing viewport: scene painting from renderer ops, the interactive overlay (rubber band, snap markers,
-//! tracking, selection window, grips, crosshair), pointer / wheel input, realtime pan-zoom-orbit, viewport controls,
-//! navigation bar and dynamic-input tooltip.
+//! tracking, selection window, grips, crosshair), pointer / wheel / touch input, realtime pan-zoom-orbit, viewport
+//! controls, navigation bar and dynamic-input tooltip.
 use crate::app::CadForgeApp;
 use crate::gfx::{col, paint_ops};
 use crate::icons::Tint;
@@ -15,6 +15,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 const DRAG_PX: f32 = 5.0;
+/// Seconds a finger rests on the drawing before it counts as a right-click (the shortcut menu, or Enter).
+const LONG_PRESS_S: f64 = 0.6;
 const YELLOW: Color32 = Color32::from_rgb(0xff, 0xe1, 0x4d);
 
 pub struct Down {
@@ -24,12 +26,53 @@ pub struct Down {
     pub shift: bool,
     pub ctrl: bool,
     pub moved: bool,
+    /// Pressed by a finger (a touch screen) at time `t`, not the mouse.
+    pub touch: Option<f64>,
 }
 
 pub struct Panning {
     pub last: Pos2,
     pub orbit: bool,
     pub mode: Option<&'static str>,
+}
+
+/// Fingers on the drawing (touch screens).
+#[derive(Default)]
+pub struct Touches {
+    pts: Vec<(egui::TouchId, Pos2)>,
+    gesture: Option<Gesture>,
+    /// A two-finger gesture ran and fingers are still down: their presses do not click or select.
+    pub hold: bool,
+}
+
+/// A two-finger pan / pinch: where the fingers started (their midpoint and mean distance from it) and the view then.
+struct Gesture {
+    center: Pos2,
+    spread: f32,
+    view: cadforge_core::view::View,
+}
+
+impl Gesture {
+    /// The view with the fingers at `pts`: the drawing moved with their midpoint and zoomed about it as they spread.
+    fn view_for(&self, pts: &[(egui::TouchId, Pos2)], origin: Pos2) -> cadforge_core::view::View {
+        let (c, spread) = fingers(pts);
+        let mut v = self.view.clone();
+        let d = c - self.center;
+        v.pan(d.x as f64, d.y as f64);
+        let z = if self.spread > 1.0 { (spread / self.spread) as f64 } else { 1.0 };
+        if z.is_finite() && z > 0.0 {
+            let l = c - origin;
+            v.zoom_at(l.x as f64, l.y as f64, z);
+        }
+        v
+    }
+}
+
+/// The midpoint of the fingers and their mean distance from it.
+fn fingers(pts: &[(egui::TouchId, Pos2)]) -> (Pos2, f32) {
+    let n = pts.len().max(1) as f32;
+    let c = pts.iter().fold(Pos2::ZERO, |a, (_, p)| a + p.to_vec2() / n);
+    (c, pts.iter().map(|(_, p)| (*p - c).length()).sum::<f32>() / n)
 }
 
 #[derive(Default)]
@@ -56,6 +99,7 @@ pub struct ViewportState {
     pub realtime: Option<&'static str>,
     pub hover: Option<u64>,
     pub cube: CubeState,
+    pub touch: Touches,
     cache_key: u64,
     cache_ops: Vec<Op>,
     solid_cache: SolidCache,
@@ -146,6 +190,9 @@ impl CadForgeApp {
 
     fn viewport_input(&mut self, ctx: &egui::Context, resp: &egui::Response, rect: Rect) {
         let events = ctx.input(|i| i.events.clone());
+        if self.touch_input(ctx, &events, rect, &self.vp.blocked.clone()) {
+            return;
+        }
         if events.iter().any(|e| matches!(e, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_) | egui::Event::MouseWheel { .. })) {
             self.input_dirty = true;
         }
@@ -153,6 +200,7 @@ impl CadForgeApp {
         let blocked = self.vp.blocked.clone();
         let local = |p: Pos2| p - rect.min;
         let editing_modal = self.popup.is_some();
+        let touch_now = ctx.input(|i| (i.any_touches(), i.time));
         for ev in events {
             match ev {
                 egui::Event::PointerButton { pos, button, pressed, modifiers } => {
@@ -161,7 +209,7 @@ impl CadForgeApp {
                         if !inside || !hover || editing_modal {
                             continue;
                         }
-                        self.on_down(pos, local(pos), button, modifiers);
+                        self.on_down(pos, local(pos), button, modifiers, touch_now);
                     } else {
                         self.on_up(pos, local(pos), button, modifiers);
                     }
@@ -203,6 +251,79 @@ impl CadForgeApp {
         }
     }
 
+    /// Touch screens: two fingers pan and pinch-zoom the drawing, which stays under the fingers (the view is set from
+    /// where the gesture started, taken when the second finger lands, so nothing drifts or is lost however the touch
+    /// events fall into frames); the press the first finger made is dropped, so it neither picks nor starts a
+    /// selection window. A finger resting still on the drawing is a right-click. Returns true while a two-finger
+    /// gesture runs (until every finger is up).
+    fn touch_input(&mut self, ctx: &egui::Context, events: &[egui::Event], rect: Rect, blocked: &[Rect]) -> bool {
+        let mut t = std::mem::take(&mut self.vp.touch);
+        let current = |a: &Self| a.h.borrow().editor().map(|e| e.view.clone());
+        for ev in events {
+            let egui::Event::Touch { id, phase, pos, .. } = ev else { continue };
+            let before = t.pts.len();
+            let was = t.gesture.as_ref().filter(|_| before >= 2).map(|g| g.view_for(&t.pts, rect.min));
+            t.pts.retain(|(i, _)| i != id);
+            if matches!(phase, egui::TouchPhase::Start | egui::TouchPhase::Move) {
+                t.pts.push((*id, *pos));
+            }
+            if t.pts.len() == before {
+                continue;
+            }
+            // a finger landed or lifted: start the gesture again from here
+            let (c, spread) = fingers(&t.pts);
+            if t.pts.len() >= 2 && (t.gesture.is_some() || t.hold || (rect.contains(c) && !blocked.iter().any(|b| b.contains(c)))) {
+                if let Some(view) = was.clone().or_else(|| current(self)) {
+                    t.gesture = Some(Gesture { center: c, spread, view });
+                }
+            } else {
+                if let Some(v) = was {
+                    self.with_view(|cur| *cur = v);
+                }
+                t.gesture = None;
+            }
+        }
+        if let Some(g) = &t.gesture {
+            t.hold = true;
+            let v = g.view_for(&t.pts, rect.min);
+            self.with_view(|cur| *cur = v);
+            self.vp.down = None;
+            self.vp.drag_rect = None;
+            self.vp.hover = None;
+            self.input_dirty = true;
+            self.vp.touch = t;
+            return true;
+        }
+        if t.hold {
+            // the gesture lasts until every finger is up
+            t.hold = !t.pts.is_empty();
+            self.vp.down = None;
+            let hold = t.hold;
+            self.vp.touch = t;
+            return hold;
+        }
+        self.vp.touch = t;
+        let now = ctx.input(|i| i.time);
+        if let Some(d) = &self.vp.down {
+            if let Some(t0) = d.touch {
+                if !d.moved && self.vp.drag_rect.is_none() {
+                    if now - t0 >= LONG_PRESS_S {
+                        let (abs, shift, ctrl) = (d.abs, d.shift, d.ctrl);
+                        self.vp.down = None;
+                        if self.vp.realtime.is_some() {
+                            self.end_realtime();
+                        } else {
+                            self.context_menu_pending = Some((abs, shift, ctrl));
+                        }
+                    } else {
+                        ctx.request_repaint_after(std::time::Duration::from_secs_f64(LONG_PRESS_S - (now - t0) + 0.02));
+                    }
+                }
+            }
+        }
+        false
+    }
+
     pub fn with_view<R>(&mut self, f: impl FnOnce(&mut cadforge_core::view::View) -> R) -> Option<R> {
         let mut a = self.h.borrow_mut();
         a.editor_mut().map(|e| {
@@ -216,7 +337,10 @@ impl CadForgeApp {
         self.h.borrow().editor().map_or(pt(0.0, 0.0), |e| e.view.to_world(m.x as f64, m.y as f64))
     }
 
-    fn on_down(&mut self, abs: Pos2, local: egui::Vec2, button: egui::PointerButton, m: egui::Modifiers) {
+    fn on_down(&mut self, abs: Pos2, local: egui::Vec2, button: egui::PointerButton, m: egui::Modifiers, (touch, now): (bool, f64)) {
+        if self.vp.touch.hold {
+            return;
+        }
         let world = self.to_world(local.to_pos2());
         match button {
             egui::PointerButton::Middle => {
@@ -227,10 +351,11 @@ impl CadForgeApp {
                     self.vp.panning = Some(Panning { last: abs, orbit: false, mode: Some(mode) });
                     return;
                 }
-                self.vp.down = Some(Down { abs, world, button: 0, shift: m.shift, ctrl: m.command || m.ctrl, moved: false });
+                let touch = touch.then_some(now);
+                self.vp.down = Some(Down { abs, world, button: 0, shift: m.shift, ctrl: m.command || m.ctrl, moved: false, touch });
             }
             egui::PointerButton::Secondary => {
-                self.vp.down = Some(Down { abs, world, button: 2, shift: m.shift, ctrl: m.command || m.ctrl, moved: false });
+                self.vp.down = Some(Down { abs, world, button: 2, shift: m.shift, ctrl: m.command || m.ctrl, moved: false, touch: None });
             }
             _ => {}
         }
@@ -818,9 +943,9 @@ fn cube_hit(yaw: f64, pitch: f64, local: Pos2) -> Option<CubeHit> {
 impl CadForgeApp {
     fn viewport_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, rect: Rect) {
         let t = self.t;
-        let (prefs_cube, prefs_nav, prefs_ctl) = {
+        let (prefs_cube, prefs_nav, prefs_ctl, prefs_touch) = {
             let a = self.h.borrow();
-            (a.sysvars.int("NAVVCUBE") != 0, a.sysvars.int("NAVBAR") != 0, a.sysvars.int("VPCONTROL") != 0)
+            (a.sysvars.int("NAVVCUBE") != 0, a.sysvars.int("NAVBAR") != 0, a.sysvars.int("VPCONTROL") != 0, a.sysvars.int("TOUCHMODE") != 0)
         };
         // [-] [Top] [2D Wireframe]
         if prefs_ctl {
@@ -855,6 +980,38 @@ impl CadForgeApp {
         // navigation bar
         if prefs_nav {
             self.navbar(ui, ctx, rect);
+        }
+        // touch bar, once the screen has been touched
+        if prefs_touch && ctx.input(|i| i.has_touch_screen()) {
+            self.touch_bar(ui, rect);
+        }
+    }
+
+    /// Finger-sized Enter, Cancel and Undo buttons at the foot of the drawing, for touch screens without a keyboard
+    /// (TOUCHMODE 0 hides them). Undo types U at the prompt: the command's own Undo option, or the U command.
+    fn touch_bar(&mut self, ui: &mut egui::Ui, rect: Rect) {
+        let t = self.t;
+        let btns = ["Enter", "Cancel", "Undo"];
+        let (bw, bh, gap) = (76.0, 40.0, 6.0);
+        let w = btns.len() as f32 * (bw + gap) + gap;
+        let bar = Rect::from_min_size(Pos2::new(rect.center().x - w / 2.0, rect.bottom() - bh - 2.0 * gap - 12.0), vec2(w, bh + 2.0 * gap));
+        let p = ui.painter();
+        p.rect_filled(bar, CornerRadius::same(6), Color32::from_rgba_unmultiplied(t.chrome2.r(), t.chrome2.g(), t.chrome2.b(), 235));
+        p.rect_stroke(bar, CornerRadius::same(6), Stroke::new(1.0, t.border), StrokeKind::Inside);
+        self.vp.blocked.push(bar);
+        for (i, label) in btns.iter().enumerate() {
+            let r = Rect::from_min_size(bar.min + vec2(gap + i as f32 * (bw + gap), gap), vec2(bw, bh));
+            let resp = ui.interact(r, ui.id().with(("touchbar", i)), Sense::click());
+            let fill = if resp.is_pointer_button_down_on() { t.accent } else if resp.hovered() { t.hover } else { t.chrome };
+            ui.painter().rect_filled(r, CornerRadius::same(4), fill);
+            ui.painter().text(r.center(), Align2::CENTER_CENTER, *label, FontId::proportional(14.0), t.text);
+            if resp.clicked() {
+                match i {
+                    0 => self.h.enter(),
+                    1 => self.escape(),
+                    _ => self.h.text("U", false),
+                }
+            }
         }
     }
 

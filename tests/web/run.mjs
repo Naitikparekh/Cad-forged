@@ -589,6 +589,69 @@ await test('DATALINK makes a linked table from a CSV chosen in the file chooser'
   assert.ok(s.history.some(h => /Table linked to doors\.csv \(4 rows, 2 columns\)/.test(h.text || h)), JSON.stringify(s.history));
 });
 
+await test('touch screen: two fingers pan and pinch-zoom, a tap picks, a long press is a right-click (Enter), the touch bar has Enter / Cancel / Undo; a pen picks', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('ZOOM'); await t.cmd('C'); await t.cmd('0,0'); await t.cmd('100');
+  await t.cmd('L'); await t.cmd('-20,0'); await t.cmd('@40,0'); await page.keyboard.press('Enter'); await t.frame(3);
+  const n = (await t.state()).entities;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  const touch = async (type, pts) => { await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) }); await t.frame(1); };
+  const gesture = async (from, to, steps = 8) => {
+    await touch('touchStart', from);
+    for (let i = 1; i <= steps; i++) await touch('touchMove', from.map(([x, y], k) => [x + (to[k][0] - x) * i / steps, y + (to[k][1] - y) * i / steps]));
+    await touch('touchEnd', []); await t.frame(3);
+  };
+  // pinch apart about (700, 450): twice the finger distance is twice the zoom, the point between the fingers stays put
+  const s0 = await t.state();
+  const at = async () => { const p = await t.pt(10, 10); return [p.x, p.y]; };
+  const before = await at();
+  await gesture([[650, 450], [750, 450]], [[600, 450], [800, 450]]);
+  const s1 = await t.state();
+  assert.ok(Math.abs(s1.view.scale / s0.view.scale - 2) < 0.05, `zoom ${s1.view.scale / s0.view.scale}`);
+  const mid = [700, 450], after = await at();
+  assert.ok(Math.abs((after[0] - mid[0]) - 2 * (before[0] - mid[0])) < 3 && Math.abs((after[1] - mid[1]) - 2 * (before[1] - mid[1])) < 3, `${before} -> ${after}`);
+  // two fingers moving together pan the drawing with them
+  await gesture([[600, 400], [700, 400]], [[680, 440], [780, 440]]);
+  const panned = await at();
+  assert.ok(Math.abs(panned[0] - after[0] - 80) < 3 && Math.abs(panned[1] - after[1] - 40) < 3, `${after} -> ${panned}`);
+  let s = await t.state();
+  assert.equal(s.selected.length, 0, 'the gestures picked nothing'); assert.equal(s.busy, false); assert.equal(s.entities, n);
+  // a tap picks the line
+  const lp = await t.pt(10, 0);
+  await touch('touchStart', [[lp.x, lp.y]]); await touch('touchEnd', []); await t.frame(3);
+  assert.equal((await t.state()).selected.length, 1, 'tap selects');
+  await page.keyboard.press('Escape'); await t.frame(2);
+  // ERASE: tap the line, then rest a finger on empty space to finish the selection
+  await t.cmd('ERASE');
+  await touch('touchStart', [[lp.x, lp.y]]); await touch('touchEnd', []); await t.frame(3);
+  const empty = { x: lp.x, y: lp.y - 40 };
+  await touch('touchStart', [[empty.x, empty.y]]); await page.waitForTimeout(900); await touch('touchEnd', []); await t.frame(4);
+  s = await t.state();
+  assert.equal(s.busy, false, s.prompt); assert.equal(s.entities, n - 1, JSON.stringify(s.history));
+  // the touch bar: Enter, Cancel and Undo without a keyboard
+  const [vx, vy, vw, vh] = await page.evaluate(() => [...window.cf.viewport_rect()]);
+  const bar = i => [vx + vw / 2 + (i - 1) * 82, vy + vh - 38];
+  const tap = async ([x, y]) => { await touch('touchStart', [[x, y]]); await touch('touchEnd', []); await t.frame(3); };
+  await t.cmd('L');
+  for (const [dx, dy] of [[0, -60], [60, -60], [60, -120]]) await tap([lp.x + dx, lp.y + dy]);
+  await tap(bar(2));                                      // Undo: the second segment goes
+  await tap(bar(0));                                      // Enter ends LINE
+  s = await t.state();
+  assert.equal(s.busy, false, s.prompt); assert.equal(s.entities, n, JSON.stringify(s.history));
+  await t.cmd('C'); assert.equal((await t.state()).busy, true);
+  await tap(bar(1));                                      // Cancel
+  assert.equal((await t.state()).busy, false);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  // a pen works like the mouse: a tap with the pen picks the line
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const pen = async (type, x, y) => { await cdp.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1, pointerType: 'pen' }); await t.frame(1); };
+  const on = { x: lp.x + 30, y: lp.y - 60 };                 // on the segment drawn with taps above
+  await pen('mouseMoved', on.x, on.y); await pen('mousePressed', on.x, on.y); await pen('mouseReleased', on.x, on.y); await t.frame(3);
+  assert.equal((await t.state()).selected.length, 1, 'pen tap selects');
+  await page.keyboard.press('Escape'); await t.frame(2);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (t.logs.some(l => l.startsWith('[pageerror]') || l.includes('panicked'))) { console.log(t.logs.filter(l => l.startsWith('[pageerror]') || l.includes('panicked')).join('\n')); fail++; }
 await t.close();

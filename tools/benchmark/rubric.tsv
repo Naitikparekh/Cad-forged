@@ -82,7 +82,7 @@ ui	drag-drop	0.75	Dragging files and blocks into the drawing	crates/cadforge-app
 ui	localization	0	Interface in other languages		English only
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
 ui	hidpi	0.5	High-DPI scaling	tests/web/run.mjs::a high-DPI display	checked only that the canvas renders at native resolution in headless Chromium at scale 2; pointer mapping and real HiDPI hardware are untested
-ui	touch	0	Touch and pen input		not implemented
+ui	touch	0.75	Touch and pen input	crates/cadforge-app/src/viewport.rs::fn touch_input ; crates/cadforge-app/src/viewport.rs::fn touch_bar ; tests/web/run.mjs::touch screen: two fingers pan	native touch (winit) is the same egui path but untested; no pen pressure or digitizer tablet support
 annotation	text-styles	0.5	Text styles with any installed font and SHX fonts	crates/cadforge-app/src/dialogs/settings.rs::TextStyleState	five built-in fonts only
 annotation	dim-styles	1	Dimension style manager	crates/cadforge-app/src/dialogs/dimstyle.rs::DimStyle ; crates/cadforge-engine/tests/ext_annotate.rs::dim_styles	
 annotation	other-styles	1	Multileader and table styles	crates/cadforge-engine/tests/ext_annotate.rs::TABLESTYLE	

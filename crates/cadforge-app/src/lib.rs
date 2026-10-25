@@ -100,6 +100,12 @@ mod web {
         })
     }
 
+    /// The drawing area in page coordinates: left, top, width, height.
+    #[wasm_bindgen]
+    pub fn viewport_rect() -> Vec<f64> {
+        HOOK.with(|c| c.borrow().as_ref().and_then(|(_, r)| *r.borrow()).map_or(vec![], |r| r.iter().map(|v| *v as f64).collect()))
+    }
+
     /// Start the application on the canvas with the given element id.
     #[wasm_bindgen]
     pub async fn start(canvas_id: String) -> Result<(), JsValue> {
