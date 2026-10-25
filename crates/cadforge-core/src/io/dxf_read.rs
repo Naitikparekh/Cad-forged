@@ -1354,7 +1354,9 @@ fn cadforge_dim(r: &Rec) -> Option<crate::dim::DimData> {
     if json.is_empty() {
         return None;
     }
-    let d: crate::dim::DimData = serde_json::from_str(&json).ok()?;
+    let mut d: crate::dim::DimData = serde_json::from_str(&json).ok()?;
+    // links to other objects come from the CADFORGE XRECORD (by handle); ids in the dimension's own data are stale
+    d.assoc.clear();
     let close = |a: Pt, b: Option<Pt>| b.is_some_and(|b| dist(a, b) <= 1e-9 * (1.0 + a.x.abs().max(a.y.abs())));
     let zero = Some(pt(0.0, 0.0));
     let points = close(r.pt(0), Some(super::dxf_write::dim_def_point(&d)))
@@ -1872,6 +1874,26 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             if let Some(s) = doc.solids.iter_mut().find(|s| s.id == *id) {
                 s.program = Some(prog);
             }
+        }
+    }
+    // associative dimensions: their links, by the new ids of the objects
+    for a in extras.as_ref().and_then(|x| x.get("dim_assoc")).and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+        let id_of = |h: &serde_json::Value| h.as_str().and_then(|h| ids_by_handle.get(&h.trim().to_uppercase()).copied());
+        let Some(dim) = id_of(&a["dim"]) else { continue };
+        let refs: Vec<crate::dim::DimRef> = a["refs"]
+            .as_array()
+            .map(|rs| {
+                rs.iter()
+                    .filter_map(|r| {
+                        let mut r = r.clone();
+                        r["ent"] = id_of(&r["ent"])?.into();
+                        serde_json::from_value(r).ok()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(Entity { kind: Kind::Dim(d), .. }) = doc.by_id_mut(dim) {
+            d.assoc = refs;
         }
     }
     doc.images = std::mem::take(&mut ctx.images);

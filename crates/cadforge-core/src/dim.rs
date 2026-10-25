@@ -57,6 +57,26 @@ pub struct DimData {
     /// Inspection frame (DIMINSPECT).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub insp: Option<DimInspect>,
+    /// Links of the defining points to the geometry they measure (an associative dimension follows it).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assoc: Vec<DimRef>,
+}
+
+/// One defining point of an associative dimension, tied to a point of another object (see `dim_assoc.rs`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DimRef {
+    /// The defining point: `p1`, `p2`, `c` or `pt`.
+    pub key: String,
+    /// The object it lies on.
+    pub ent: u64,
+    /// Which of the object's snap points (its index in `snap_points_of`) and of what kind.
+    #[serde(default)]
+    pub i: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<crate::entities::SnapType>,
+    /// The point stays on the circle or arc, at the same angle from its centre (radius and diameter dimensions).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub radial: bool,
 }
 
 /// Inspection dimension data: label, inspection rate and frame shape.
@@ -81,7 +101,7 @@ pub enum InspShape {
 
 impl DimData {
     pub fn new(kind: DimType) -> DimData {
-        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None }
+        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None, assoc: vec![] }
     }
     /// Names of the defining-point fields of this dimension.
     pub fn point_mut(&mut self, key: &str) -> Option<&mut Option<Pt>> {

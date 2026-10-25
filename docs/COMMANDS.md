@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 340 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 343 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -71,12 +71,15 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `DIMCENTER` | `DCE` | Creates the center mark or the centerlines of circles and arcs. |
 | `DIMCONTINUE` | `DCO` | Creates a dimension that starts from an extension line of a previously created dimension. |
 | `DIMDIAMETER` | `DDI` | Creates a diameter dimension for a circle or an arc. |
+| `DIMDISASSOCIATE` | `DDA` | Removes associativity from selected dimensions. |
 | `DIMEDIT` | `DED` | Edits dimension text and extension lines. |
 | `DIMINSPECT` |  | Adds or removes inspection information for a selected dimension. |
 | `DIMJOGGED` | `DJO` | Creates jogged dimensions for circles and arcs. |
 | `DIMLINEAR` | `DLI` | Creates a linear dimension. |
 | `DIMORDINATE` | `DOR` | Creates ordinate dimensions. |
 | `DIMRADIUS` | `DRA` | Creates a radius dimension for a circle or an arc. |
+| `DIMREASSOCIATE` | `DRE` | Associates selected dimensions with the geometry at their points, so they follow it. |
+| `DIMREGEN` |  | Updates the locations of all associative dimensions. |
 | `DIMROTATED` |  | Creates a linear dimension whose dimension line is at a given angle. |
 | `DIMSPACE` |  | Adjusts the spacing between parallel linear dimensions. |
 | `DIMTEDIT` | `DIMTED` | Moves and rotates dimension text. |

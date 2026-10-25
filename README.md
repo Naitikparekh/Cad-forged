@@ -27,7 +27,7 @@ product.
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **340 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **343 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).
@@ -54,6 +54,9 @@ product.
   drawing with its pictures and a report into a ZIP; `-LINETYPE` Load and `LOADPAT` read acad.lin / acad.pat files;
   saving over a file keeps the previous version as a `.bak` copy (`ISAVEBAK`); drawing templates (`.dwt`) start new
   drawings.
+* **Associative dimensions**: a dimension made on geometry (`DIMASSOC` 2, the default) follows it when the geometry is
+  moved, stretched or scaled; `DIMREASSOCIATE`, `DIMDISASSOCIATE` and `DIMREGEN` manage the links, which are kept in
+  DXF and DWG files CadForge writes.
 * **Tables**: cells starting with `=` are formulas (cell references, ranges, `+ - * / ^`, SUM, AVERAGE, COUNT, MIN, MAX,
   ABS, ROUND, SQRT) and show their values on screen, in plots, exports and DXF/DWG; `DATALINK` fills a table from a CSV
   file and keeps the link, `DATALINKUPDATE` reads the file again or writes the table back to it.

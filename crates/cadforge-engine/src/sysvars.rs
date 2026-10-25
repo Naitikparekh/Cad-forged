@@ -133,6 +133,7 @@ const DRAWING_VARS: &[(&str, VarType)] = &[
     ("CELTSCALE", VarType::Real),
     ("PDMODE", VarType::Int),
     ("PDSIZE", VarType::Real),
+    ("DIMASSOC", VarType::Int),
     ("TEXTSIZE", VarType::Real),
     ("FILLETRAD", VarType::Real),
     ("CHAMFERA", VarType::Real),
@@ -237,6 +238,7 @@ fn drawing_get(name: &str, d: &Drawing) -> Option<Value> {
         "LTSCALE" => n(st.ltscale),
         "CELTSCALE" => n(st.celtscale),
         "PDMODE" => n(st.pdmode as f64),
+        "DIMASSOC" => n(st.dimassoc as f64),
         "PDSIZE" => n(st.pdsize),
         "TEXTSIZE" => n(st.text_height),
         "FILLETRAD" => n(st.fillet_radius),
@@ -270,6 +272,13 @@ fn drawing_set(name: &str, d: &mut Drawing, v: &Value) -> Result<(), String> {
         "LTSCALE" => d.settings.ltscale = pos(num()?)?,
         "CELTSCALE" => d.settings.celtscale = pos(num()?)?,
         "PDMODE" => d.settings.pdmode = num()? as i32,
+        "DIMASSOC" => {
+            let v = num()?;
+            if !(0.0..=2.0).contains(&v) {
+                return Err("DIMASSOC must be 0, 1 or 2.".into());
+            }
+            d.settings.dimassoc = v as i32;
+        }
         "PDSIZE" => d.settings.pdsize = num()?,
         "TEXTSIZE" => d.settings.text_height = pos(num()?)?,
         "FILLETRAD" => d.settings.fillet_radius = num()?.max(0.0),

@@ -289,6 +289,8 @@ pub struct Drawing {
     pre: Option<Snapshot>,
     cmd_active: bool,
     cmd_rev: u64,
+    /// `next_id` when the command began: entities from here on were made in it.
+    cmd_next_id: u64,
     caches: RefCell<Caches>,
 }
 
@@ -368,6 +370,7 @@ impl Drawing {
             pre: None,
             cmd_active: false,
             cmd_rev: 0,
+            cmd_next_id: 0,
             caches: RefCell::new(Caches::default()),
         }
     }
@@ -1052,10 +1055,15 @@ impl Drawing {
         self.cmd_active = true;
         self.pre = None;
         self.cmd_rev = self.rev;
+        self.cmd_next_id = self.next_id;
     }
 
-    /// End a command; if anything changed, the pre-image becomes an undo step.
+    /// End a command; if anything changed, associative dimensions follow their geometry and the pre-image becomes an
+    /// undo step.
     pub fn end_command(&mut self, label: &str) {
+        if self.cmd_active && self.rev != self.cmd_rev {
+            self.update_dim_associations(self.cmd_next_id);
+        }
         if self.cmd_active && self.rev != self.cmd_rev {
             if let Some(snap) = self.pre.take() {
                 self.undo_stack.push(UndoStep { snap, label: label.into() });

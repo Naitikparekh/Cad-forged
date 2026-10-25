@@ -577,6 +577,13 @@ pub struct Settings {
     /// IMAGEQUALITY draft: pictures are drawn without smoothing.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub image_draft: bool,
+    /// DIMASSOC: 2 new dimensions follow the geometry they measure, 1 or 0 they do not.
+    #[serde(skip_serializing_if = "is_two")]
+    pub dimassoc: i32,
+}
+
+fn is_two(v: &i32) -> bool {
+    *v == 2
 }
 
 fn is_one(v: &u8) -> bool {
@@ -611,6 +618,7 @@ impl Default for Settings {
             cur_table_style: String::new(),
             image_frame: 1,
             image_draft: false,
+            dimassoc: 2,
         }
     }
 }

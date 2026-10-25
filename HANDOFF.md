@@ -133,6 +133,12 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   apply them; the engine commands are in `commands/ext_system/standards.rs`, the dialogs in `app/src/dialogs/standards.rs`
   (they run the commands, so each fix is one undo step). Named dimension styles are now written to the DIMSTYLE table and
   read back from it; all styles also ride in the XRECORD (`dim_styles`, `mleader_styles`, `table_styles`, `cur_*`).
+* **Associative dimensions** (`dim_assoc.rs`): `DimData::assoc` ties defining points to an object's snap point (index in
+  `snap_points_of` plus its kind) or, for radius / diameter, to the circle itself. `Drawing::end_command` runs
+  `update_dim_associations`: dimensions made in the command (ids from `cmd_next_id`) are tied when DIMASSOC is 2, and
+  tied ones move after their geometry (with their dimension line when every tied point moved the same way). DXF / DWG:
+  the links leave the dimension's own JSON and go in the XRECORD (`dim_assoc`, by handle); `W::written_as` records the
+  real handle of entities that write other objects first (a dimension's block, a table's block).
 * **Isometric drafting**: `SNAPSTYL` 1 switches `snap::snap_to_grid` to the 30° / 150° lattice (`Grid::iso`), ortho to
   `snap::ortho_axes(ISOPLANE)`, the renderer to `grid_iso` lines and the crosshair to the plane's axes.
 * **Spatial index** (`spatial.rs`, `Drawing::candidates`): a uniform grid over entity bounds, built per space on first use

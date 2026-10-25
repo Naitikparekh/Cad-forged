@@ -115,6 +115,25 @@ pub fn cadforge_extras(doc: &Drawing, handles: &HashMap<u64, String>) -> Option<
     if !programs.is_empty() {
         put("programs", Ok(Value::Array(programs)));
     }
+    // associative dimensions: their links by handle (a link to an object that was not written is left out)
+    let assoc: Vec<Value> = doc
+        .model
+        .entities
+        .iter()
+        .filter_map(|e| {
+            let crate::entities::Kind::Dim(d) = &e.kind else { return None };
+            let dim = handles.get(&e.id)?;
+            let refs: Vec<Value> = d.assoc.iter().filter_map(|r| {
+                let mut v = to_value(r).ok()?;
+                v["ent"] = handles.get(&r.ent)?.clone().into();
+                Some(v)
+            }).collect();
+            (!refs.is_empty()).then(|| serde_json::json!({ "dim": dim, "refs": refs }))
+        })
+        .collect();
+    if !assoc.is_empty() {
+        put("dim_assoc", Ok(Value::Array(assoc)));
+    }
     // external references keep their contents as blocks; the link to the other drawing goes here
     let xrefs: indexmap::IndexMap<&String, &crate::drawing::XrefInfo> = doc.blocks.iter().filter_map(|(k, b)| b.xref.as_ref().map(|x| (k, x))).collect();
     if !xrefs.is_empty() {
@@ -323,6 +342,12 @@ impl<'a> W<'a> {
         let s = format!("{:X}", self.handle);
         self.handle += 1;
         s
+    }
+
+    /// Note the handle the entity just got from `common` (for entities that write other objects first, such as the
+    /// block of a dimension).
+    fn written_as(&mut self, id: u64) {
+        self.handle_of.insert(id, format!("{:X}", self.handle - 1));
     }
 
     fn common(&mut self, o: &mut EOut, ty: &str, p: &Props, sub: Option<&str>, layer: Option<&str>) {
@@ -700,6 +725,7 @@ impl<'a> W<'a> {
         let name = rec.name.clone();
         self.dim_blocks.push(rec);
         self.common(o, "DIMENSION", &Props::of(e), Some("AcDbDimension"), None);
+        self.written_as(e.id);
         o.out.s(2, &name).pt(dim_def_point(d), 0);
         let style = d.ds.as_deref().filter(|n| self.doc.settings.dim_styles.contains_key(*n)).unwrap_or("Standard");
         o.out.pt(geo.text.p, 1).i(70, 32 | ty | if d.tp.is_some() { 128 } else { 0 }).i(71, 5).s(3, style);
@@ -728,9 +754,10 @@ impl<'a> W<'a> {
                 o.out.s(100, if d.kind == DimType::Dia { "AcDbDiametricDimension" } else { "AcDbRadialDimension" }).pt(d.pt.unwrap_or(zero), 5).n(40, 0.0);
             }
         }
-        // CadForge's own description of the dimension, so that it opens again as the same (editable) dimension
+        // CadForge's own description of the dimension, so that it opens again as the same (editable) dimension (its
+        // links to other objects go in the CADFORGE XRECORD, by handle)
         o.out.s(1001, CADFORGE_APP);
-        for chunk in xdata_chunks(&ascii_json(d)) {
+        for chunk in xdata_chunks(&ascii_json(&crate::dim::DimData { assoc: vec![], ..d.clone() })) {
             o.out.s(1000, chunk);
         }
     }
@@ -828,6 +855,7 @@ impl<'a> W<'a> {
         self.cur_grp = grp;
         self.dim_blocks.push(DimBlock { lines: inner.out.lines, ..rec });
         self.common(o, "INSERT", props, Some("AcDbBlockReference"), None);
+        self.written_as(e.id);
         o.out.s(2, &name).pt(pt(0.0, 0.0), 0).n(41, 1.0).n(42, 1.0).n(43, 1.0).n(50, 0.0);
         let json = ascii_json(&e.kind);
         if json.len() <= 15_000 {

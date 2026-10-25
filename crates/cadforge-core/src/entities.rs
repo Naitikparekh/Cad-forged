@@ -1654,7 +1654,7 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
 
 // ---------------------------------------------------------------- object snap points
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SnapType {
     End,
     Mid,
