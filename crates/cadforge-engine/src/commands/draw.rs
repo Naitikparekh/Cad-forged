@@ -953,8 +953,79 @@ async fn ellipse(c: Ctx, args: Args) -> CmdResult<()> {
 
 // ---------------------------------------------------------------- SPLINE
 
+/// A closed control-vertex spline: the first `deg` vertices repeated at the end with uniform knots (periodic).
+fn closed_cv(deg: usize, cv: &[Pt]) -> Option<cadforge_core::nurbs::Nurbs> {
+    let deg = deg.clamp(1, cv.len().saturating_sub(1).max(1));
+    let mut all = cv.to_vec();
+    all.extend_from_slice(&cv[..deg.min(cv.len())]);
+    let knots: Vec<f64> = (0..all.len() + deg + 1).map(|i| i as f64).collect();
+    cadforge_core::nurbs::Nurbs::new(deg, all, vec![], knots)
+}
+
+/// SPLINE with the control vertex method: the points are the control polygon of a curve of degree `deg`.
+async fn spline_cv(c: &Ctx, first: Pt, deg: usize) -> CmdResult<()> {
+    use cadforge_core::nurbs::Nurbs;
+    let mut cv = vec![first];
+    loop {
+        let snapshot = cv.clone();
+        let opts: &[&str] = if cv.len() > 2 { &["Undo", "Close"] } else { &["Undo"] };
+        let r = c
+            .point(ps("Enter next point").options(opts).base(*cv.last().expect("vertex")).allow_enter().preview(move |_, p| {
+                let mut v = snapshot.clone();
+                v.push(p);
+                vec![pv(Entity::nurbs(Nurbs::clamped(deg, v.clone()))), pv(Entity::pline_pts(&v, false))]
+            }))
+            .await?;
+        match r.kw() {
+            Some("Undo") => {
+                if cv.len() > 1 {
+                    cv.pop();
+                }
+                continue;
+            }
+            Some("Close") => {
+                if let Some(n) = closed_cv(deg, &cv) {
+                    c.add(Entity::nurbs(n));
+                }
+                return Ok(());
+            }
+            _ => {}
+        }
+        let Some(p) = r.pt() else { break };
+        cv.push(p);
+    }
+    if cv.len() > 1 {
+        c.add(Entity::nurbs(Nurbs::clamped(deg, cv)));
+    }
+    Ok(())
+}
+
 async fn spline(c: Ctx, _a: Args) -> CmdResult<()> {
-    let Some(first) = c.point(ps("Specify first point")).await?.pt() else { return Ok(()) };
+    // Method and Degree are remembered (SPLMETHOD, SPLDEGREE)
+    let first = loop {
+        let cv = c.pref("SPLMETHOD") == 1.0;
+        let (label, opts): (&str, &[&str]) = if cv { ("Specify first point or [Method/Degree]", &["Method", "Degree"]) } else { ("Specify first point or [Method]", &["Method"]) };
+        let r = c.point(ps(label).options(opts)).await?;
+        match r.kw() {
+            Some("Method") => {
+                let cur = if cv { "CV" } else { "Fit" };
+                let m = c.keyword(ps("Enter spline creation method [Fit/CV]").options(&["Fit", "CV"]).default_str(cur)).await?;
+                let _ = c.setvar("SPLMETHOD", if m.kw() == Some("CV") { 1.0 } else { 0.0 });
+            }
+            Some("Degree") => {
+                if let Some(d) = c.number(ps("Enter degree of spline").default_num(c.pref("SPLDEGREE").clamp(1.0, 10.0)).integer().min(1.0).max(10.0)).await?.value() {
+                    let _ = c.setvar("SPLDEGREE", d);
+                }
+            }
+            _ => match r.pt() {
+                Some(p) => break p,
+                None => return Ok(()),
+            },
+        }
+    };
+    if c.pref("SPLMETHOD") == 1.0 {
+        return spline_cv(&c, first, c.pref("SPLDEGREE").clamp(1.0, 10.0) as usize).await;
+    }
     let mut fit = vec![first];
     let mut closed = false;
     loop {

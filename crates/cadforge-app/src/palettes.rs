@@ -106,7 +106,7 @@ pub fn geom_fields(e: &Entity) -> Vec<Field> {
             ro_n("Minor radius", |e| if let Kind::Ellipse(el) = &e.kind { len(el.m) * el.ratio } else { 0.0 }),
             Field { label: "Radius ratio", unit: None, kind: FKind::Num { min: Some(1e-6), max: Some(1.0) }, get: Box::new(|e, _| Val::Num(if let Kind::Ellipse(el) = &e.kind { el.ratio } else { 0.0 })), set: Some(Box::new(|e, v| if let (Kind::Ellipse(el), Val::Num(n)) = (&mut e.kind, v) { el.ratio = *n })) },
         ],
-        Kind::Spline { .. } => vec![boolf("Closed", |e| matches!(&e.kind, Kind::Spline { closed: true, .. }), |e, v| if let Kind::Spline { closed, .. } = &mut e.kind { *closed = v }), ro_n("Fit points", |e| if let Kind::Spline { fit, .. } = &e.kind { fit.len() as f64 } else { 0.0 })],
+        Kind::Spline { .. } => vec![boolf("Closed", |e| matches!(&e.kind, Kind::Spline { closed: true, .. }), |e, v| if let Kind::Spline { closed, .. } = &mut e.kind { *closed = v }), ro_n("Fit points", |e| if let Kind::Spline { fit, .. } = &e.kind { fit.len() as f64 } else { 0.0 }), ro_n("Control vertices", |e| if let Kind::Spline { nurbs: Some(n), .. } = &e.kind { n.cv.len() as f64 } else { 0.0 }), ro_n("Degree", |e| if let Kind::Spline { nurbs: Some(n), .. } = &e.kind { n.deg as f64 } else { 3.0 })],
         Kind::Point { .. } => vec![
             x("Position X", |e| if let Kind::Point { p } = &e.kind { p.x } else { 0.0 }, |e, v| if let Kind::Point { p } = &mut e.kind { p.x = v }),
             x("Position Y", |e| if let Kind::Point { p } = &e.kind { p.y } else { 0.0 }, |e, v| if let Kind::Point { p } = &mut e.kind { p.y = v }),

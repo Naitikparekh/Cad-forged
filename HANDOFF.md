@@ -133,6 +133,10 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   apply them; the engine commands are in `commands/ext_system/standards.rs`, the dialogs in `app/src/dialogs/standards.rs`
   (they run the commands, so each fix is one undo step). Named dimension styles are now written to the DIMSTYLE table and
   read back from it; all styles also ride in the XRECORD (`dim_styles`, `mleader_styles`, `table_styles`, `cur_*`).
+* **NURBS splines** (`nurbs.rs`): `Kind::Spline { nurbs }` holds the exact curve; `fit` then keeps a file's fit points
+  as data. Geometry goes through `entities::spline_curve`. Moving a fit point (grip or SPLINEDIT) drops the NURBS and
+  refits through the fit points; a CV spline's grips are its vertices. DXF reads control points / weights / knots
+  exactly (after the CadForge Bezier-chain check) and writes them back; the DWG writer now writes weights.
 * **Annotative objects** (`annotative.rs`): `Entity::anno` keeps the paper size (`size_of`: text / leader height, hatch
   pattern scale, block X scale, `DimData::sc`); stored geometry is always sized for CANNOSCALE
   (`Drawing::set_annotation_scale` resizes them), and `draw_viewport_content` draws each through `at_factor` with the

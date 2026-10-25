@@ -100,6 +100,8 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("HIGHLIGHT", 1.0),
         ("SELECTIONPREVIEW", 3.0),
         ("SELECTIONCYCLING", 0.0),
+        ("SPLMETHOD", 0.0),
+        ("SPLDEGREE", 3.0),
         ("VPCONTROL", 1.0),
         ("MENUBAR", 0.0),
         ("LAYLOCKFADECTL", 50.0),

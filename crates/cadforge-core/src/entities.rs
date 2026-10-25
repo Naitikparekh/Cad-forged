@@ -352,7 +352,9 @@ pub enum Kind {
     Arc { c: Pt, r: f64, a0: f64, a1: f64 },
     Pline { v: Vec<Vertex>, #[serde(default)] closed: bool },
     Ellipse(EllipseData),
-    Spline { fit: Vec<Pt>, #[serde(default)] closed: bool },
+    /// A spline through fit points, or (with `nurbs`) defined exactly by control vertices, weights and knots; `fit`
+    /// then holds the fit points a file gave, if any.
+    Spline { fit: Vec<Pt>, #[serde(default)] closed: bool, #[serde(default, skip_serializing_if = "Option::is_none")] nurbs: Option<Box<crate::nurbs::Nurbs>> },
     Point { p: Pt },
     Text(TextData),
     Dim(DimData),
@@ -429,7 +431,12 @@ impl Entity {
         Entity::new(Kind::Ellipse(EllipseData { c, m, ratio, t0, t1 }))
     }
     pub fn spline(fit: Vec<Pt>, closed: bool) -> Entity {
-        Entity::new(Kind::Spline { fit, closed })
+        Entity::new(Kind::Spline { fit, closed, nurbs: None })
+    }
+    /// A spline defined by its control vertices (and weights and knots).
+    pub fn nurbs(n: crate::nurbs::Nurbs) -> Entity {
+        let closed = n.closed();
+        Entity::new(Kind::Spline { fit: vec![], closed, nurbs: Some(Box::new(n)) })
     }
     pub fn point(p: Pt) -> Entity {
         Entity::new(Kind::Point { p })
@@ -564,6 +571,14 @@ pub fn ellipse_points(e: &EllipseData, n: usize) -> Vec<Pt> {
     let sw = ellipse_sweep(e);
     let steps = 8usize.max((n as f64 * sw / TAU).ceil() as usize);
     (0..=steps).map(|i| ellipse_point(e, e.t0 + sw * i as f64 / steps as f64)).collect()
+}
+
+/// Points along a spline: its NURBS when it has one, otherwise the curve through its fit points.
+pub fn spline_curve(fit: &[Pt], closed: bool, nurbs: Option<&crate::nurbs::Nurbs>, per_span: usize) -> Vec<Pt> {
+    match nurbs {
+        Some(n) => n.sample(per_span),
+        None => spline_points(fit, closed, per_span),
+    }
 }
 
 /// Centripetal Catmull-Rom through the fit points; returns a dense point list.
@@ -733,7 +748,7 @@ fn compute_segs(e: &Entity, doc: &Drawing, depth: usize) -> Vec<Seg> {
         }
         Kind::Pline { v, closed } => pline_segs(v, *closed),
         Kind::Ellipse(el) => lines_from_pts(&ellipse_points(el, 96), ellipse_is_full(el)),
-        Kind::Spline { fit, closed } => lines_from_pts(&spline_points(fit, *closed, 14), false),
+        Kind::Spline { fit, closed, nurbs } => lines_from_pts(&spline_curve(fit, *closed, nurbs.as_deref(), 14), false),
         Kind::Point { .. } | Kind::Text(_) | Kind::Hatch(_) => vec![],
         Kind::Dim(d) => dim_geometry(d, &doc.settings).segs,
         Kind::Leader { pts, .. } => lines_from_pts(pts, false),
@@ -1132,9 +1147,12 @@ pub fn transform_entity(e: &mut Entity, m: &Mat) {
                 el.t1 = norm_angle(t1);
             }
         }
-        Kind::Spline { fit, .. } => {
+        Kind::Spline { fit, nurbs, .. } => {
             for p in fit.iter_mut() {
                 *p = mp(*p);
+            }
+            if let Some(n) = nurbs {
+                n.map(&mp);
             }
         }
         Kind::Point { p } => *p = mp(*p),
@@ -1286,6 +1304,16 @@ pub fn stretch_entity(e: &mut Entity, win: &Bounds, d: Pt, doc: &Drawing) -> boo
                 if inside(q.pt()) {
                     q.x += d.x;
                     q.y += d.y;
+                    c = true;
+                }
+            }
+            c
+        }
+        Kind::Spline { nurbs: Some(n), fit, .. } => {
+            let mut c = false;
+            for q in n.cv.iter_mut().chain(fit.iter_mut()) {
+                if inside(*q) {
+                    mv(q);
                     c = true;
                 }
             }
@@ -1483,6 +1511,8 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
             let n = pt(-el.m.y * el.ratio, el.m.x * el.ratio);
             vec![grip("c", el.c, Move), grip("a0", el.c + el.m, Stretch), grip("a1", el.c - el.m, Stretch), grip("b0", el.c + n, Stretch), grip("b1", el.c - n, Stretch)]
         }
+        // a spline made from control vertices shows them; one with fit points shows those
+        Kind::Spline { fit, nurbs: Some(n), .. } if fit.is_empty() => n.cv.iter().enumerate().map(|(i, p)| grip(&format!("v{}", i), *p, Stretch)).collect(),
         Kind::Spline { fit, .. } => fit.iter().enumerate().map(|(i, p)| grip(&format!("f{}", i), *p, Stretch)).collect(),
         Kind::Point { p } | Kind::Xline { p, .. } | Kind::Ray { p, .. } => vec![grip("p", *p, Move)],
         Kind::Text(t) => vec![grip("p", t.p, Move)],
@@ -1614,7 +1644,18 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
                 el.ratio = (dot(to - el.c, n).abs() / len(oe.m)).clamp(1e-6, 1.0);
             }
         }
-        (Kind::Spline { fit, .. }, _) => fit[idx(id)] = to,
+        (Kind::Spline { nurbs: Some(n), .. }, _) if id.starts_with('v') => {
+            if let Some(q) = n.cv.get_mut(idx(id)) {
+                *q = to;
+            }
+        }
+        (Kind::Spline { fit, nurbs, .. }, _) => {
+            // moving a fit point refits the curve through the fit points
+            if let Some(q) = fit.get_mut(idx(id)) {
+                *q = to;
+                *nurbs = None;
+            }
+        }
         (Kind::Wipeout(w), _) => {
             if let Some(q) = w.pts.get_mut(idx(id)) {
                 *q = to;
@@ -1715,6 +1756,12 @@ fn compute_snaps(e: &Entity, doc: &Drawing) -> Vec<SnapPt> {
                 push(ellipse_point(el, el.t0), SnapType::End);
                 push(ellipse_point(el, el.t1), SnapType::End);
             }
+            out
+        }
+        Kind::Spline { fit, nurbs: Some(n), .. } if fit.is_empty() => {
+            let (t0, t1) = n.domain();
+            push(n.at(t0), SnapType::End);
+            push(n.at(t1), SnapType::End);
             out
         }
         Kind::Spline { fit, .. } => {

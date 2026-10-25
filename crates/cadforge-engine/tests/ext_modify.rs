@@ -1045,7 +1045,7 @@ fn spline4(s: &Sim) -> u64 {
 }
 fn spline_state(s: &Sim, id: u64) -> (Vec<Pt>, bool) {
     match s.doc(|d| d.by_id(id).unwrap().kind.clone()) {
-        Kind::Spline { fit, closed } => (fit, closed),
+        Kind::Spline { fit, closed, .. } => (fit, closed),
         k => panic!("{k:?}"),
     }
 }

@@ -193,3 +193,34 @@ fn spline_point_xline_and_donut_create_objects() {
         k => panic!("{k:?}"),
     }
 }
+
+#[test]
+fn spline_by_control_vertices_and_its_editing() {
+    use cadforge_core::entities::{grips_of, Kind};
+    let p = cadforge_core::geom::pt;
+    let s = Sim::new();
+    s.setvar("OSMODE", 16384.0);
+    s.cmd("SPLINE").ty("Method").ty("CV").ty("Degree").ty("2");
+    s.ty("0,0").ty("10,10").ty("20,0").ty("30,10").enter();
+    let Kind::Spline { fit, nurbs: Some(n), .. } = s.ent(0).kind else { panic!("a control-vertex spline: {}", s.log_text()) };
+    assert!(fit.is_empty());
+    assert_eq!((n.deg, n.cv.len()), (2, 4));
+    assert_eq!(n.knots, vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0]);
+    let pts = n.sample(8);
+    assert_eq!((pts[0], *pts.last().unwrap()), (p(0., 0.), p(30., 10.)), "clamped: it starts and ends at the end vertices");
+    assert_eq!(s.pref("SPLMETHOD"), 1.0, "the method is remembered");
+    // the grips are the control vertices; moving one changes the vertex, not a fit point
+    let gr = s.doc(|d| grips_of(&s.ent(0), d));
+    assert_eq!(gr.len(), 4);
+    // SPLINEDIT: move the second vertex and give the third a weight
+    s.cmd("SPLINEDIT").click(0., 0.).ty("Edit vertex").ty("Move").ty("Next").ty("10,20").ty("eXit").ty("Weight").ty("20,0").ty("3").ty("eXit").ty("eXit");
+    let Kind::Spline { nurbs: Some(n), .. } = s.ent(0).kind else { panic!() };
+    assert_eq!(n.cv[1], p(10., 20.), "{}", s.log_text());
+    assert_eq!(n.w, vec![1.0, 1.0, 3.0, 1.0]);
+    // a closed control-vertex spline wraps around smoothly
+    s.cmd("SPLINE").ty("0,50").ty("10,60").ty("20,50").ty("Close");
+    let Kind::Spline { nurbs: Some(c), closed, .. } = s.ent(1).kind else { panic!("{}", s.log_text()) };
+    assert!(closed && c.closed(), "{c:?}");
+    s.cmd("SPLINE").ty("Method").ty("Fit").ty("0,80").ty("10,90").enter();
+    assert!(matches!(s.ent(2).kind, Kind::Spline { nurbs: None, .. }), "back to fit points");
+}

@@ -1,7 +1,7 @@
 //! OFFSET: parallel copies of lines, arcs, circles, polylines (with extended corners), ellipses and splines.
 use super::path::*;
 use crate::drawing::Drawing;
-use crate::entities::{ellipse_is_full, ellipse_point, ellipse_sweep, segs_of, spline_points, Entity, Kind};
+use crate::entities::{ellipse_is_full, ellipse_point, ellipse_sweep, segs_of, spline_curve, Entity, Kind};
 use crate::geom::*;
 
 /// Which side of a path (left = +1, right = -1) is the point on?
@@ -150,7 +150,7 @@ pub fn offset_entity(e: &Entity, dist_: f64, side_point: Pt, doc: &Drawing) -> R
                     let sw = ellipse_sweep(el);
                     ((0..=128).map(|i| ellipse_point(el, el.t0 + sw * i as f64 / 128.0)).collect::<Vec<_>>(), ellipse_is_full(el))
                 }
-                Kind::Spline { fit, closed } => (spline_points(fit, *closed, 14), *closed),
+                Kind::Spline { fit, closed, nurbs } => (spline_curve(fit, *closed, nurbs.as_deref(), 14), *closed),
                 _ => unreachable!(),
             };
             let lines: Vec<Seg> = pts.windows(2).map(|w| Seg::line(w[0], w[1])).collect();

@@ -433,7 +433,25 @@ fn settings_drawing() -> Drawing {
     let mut dim = cadforge_core::dim::DimData::new(cadforge_core::dim::DimType::Lin);
     (dim.p1, dim.p2, dim.dp, dim.ds) = (Some(pt(0.0, -10.0)), Some(pt(30.0, -10.0)), Some(pt(15.0, -20.0)), Some("ISO-25".into()));
     d.add(Entity::dim(dim));
+    // a rational spline (an exact quarter circle) and a cubic one of control vertices
+    let w = std::f64::consts::FRAC_1_SQRT_2;
+    d.add(Entity::nurbs(cadforge_core::nurbs::Nurbs::new(2, vec![pt(60.0, 0.0), pt(60.0, 10.0), pt(50.0, 10.0)], vec![1.0, w, 1.0], vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0]).unwrap()));
+    d.add(Entity::nurbs(cadforge_core::nurbs::Nurbs::clamped(3, vec![pt(0.0, 60.0), pt(10.0, 75.0), pt(25.0, 55.0), pt(40.0, 70.0), pt(55.0, 60.0)])));
     d
+}
+
+#[test]
+fn control_vertex_splines_open_again_exactly() {
+    let d = settings_drawing();
+    let splines = |d: &Drawing| -> Vec<cadforge_core::nurbs::Nurbs> { d.model.entities.iter().filter_map(|e| if let cadforge_core::entities::Kind::Spline { nurbs: Some(n), .. } = &e.kind { Some((**n).clone()) } else { None }).collect() };
+    let want = splines(&d);
+    assert_eq!(want.len(), 2);
+    for (ver, _) in VERSIONS {
+        assert_eq!(splines(&read_dwg(&write_dwg_as(&d, ver).unwrap(), "s").unwrap()), want, "{}", ver.label());
+    }
+    // (plain DXF writes 15 significant digits)
+    let dxf = splines(&read_dxf(&write_dxf(&d), "s").unwrap());
+    assert_eq!(rounded(&dxf), rounded(&want), "DXF");
 }
 
 #[test]

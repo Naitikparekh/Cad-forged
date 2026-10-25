@@ -2,7 +2,7 @@
 //! (port of `src/solid/mesh.js`). A solid has outward (CCW) faces.
 use super::{Mesh, Solid, V3};
 use crate::drawing::Drawing;
-use crate::entities::{ellipse_is_full, ellipse_point, segs_of, spline_points, Entity, Kind};
+use crate::entities::{ellipse_is_full, ellipse_point, segs_of, spline_curve, Entity, Kind};
 use crate::geom::*;
 use std::collections::HashMap;
 
@@ -24,8 +24,8 @@ fn loop_of_entity(e: &Entity, tol: f64) -> Option<Loop> {
             Some((0..96).map(|i| ellipse_point(el, TAU * i as f64 / 96.0)).collect())
         }
         Kind::Pline { v, closed: true } => Some(dedupe(&tess_segs(&pline_segs(v, true), tol))),
-        Kind::Spline { fit, closed: true } => {
-            let mut p = spline_points(fit, true, 16);
+        Kind::Spline { fit, closed: true, nurbs } => {
+            let mut p = spline_curve(fit, true, nurbs.as_deref(), 16);
             p.pop();
             Some(dedupe(&p))
         }

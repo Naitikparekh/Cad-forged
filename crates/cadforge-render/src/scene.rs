@@ -231,8 +231,8 @@ impl<'a> Renderer<'a> {
                 self.arc_into(&mut pts, el.c, rx, rx * el.ratio, rot, el.t0, sw);
                 Some(vec![Poly { pts, closed: false }])
             }
-            Kind::Spline { fit, closed } => {
-                let pts: Vec<[f64; 2]> = spline_points(fit, *closed, 14).into_iter().map(|p| self.dev(p)).collect();
+            Kind::Spline { fit, closed, nurbs } => {
+                let pts: Vec<[f64; 2]> = spline_curve(fit, *closed, nurbs.as_deref(), 14).into_iter().map(|p| self.dev(p)).collect();
                 Some(vec![Poly { pts, closed: *closed }])
             }
             Kind::Xline { p, d } | Kind::Ray { p, d } => {

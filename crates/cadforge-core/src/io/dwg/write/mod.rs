@@ -989,21 +989,26 @@ impl<'a> Writer<'a> {
                 let flags = r.i(70, 0);
                 let knots: Vec<f64> = r.all(40).iter().map(|v| v.trim().parse().unwrap_or(0.0)).collect();
                 let ctrl = points(r, 10);
+                let weights: Vec<f64> = r.all(41).iter().map(|v| v.trim().parse().unwrap_or(1.0)).collect();
+                let weighted = weights.len() == ctrl.len() && flags & 4 != 0;
                 o.m.bl(1); // control points (not fit points)
                 o.m.bl(r.i(71, 3) as i32);
-                o.m.bit(flags & 4 != 0);
+                o.m.bit(weighted);
                 o.m.bit(flags & 1 != 0);
                 o.m.bit(flags & 2 != 0);
                 o.m.bd(r.fd(42, 1e-10));
                 o.m.bd(r.fd(43, 1e-10));
                 o.m.bl(knots.len() as i32);
                 o.m.bl(ctrl.len() as i32);
-                o.m.bit(false);
+                o.m.bit(weighted);
                 for k in knots {
                     o.m.bd(k);
                 }
-                for p in ctrl {
+                for (i, p) in ctrl.into_iter().enumerate() {
                     o.m.bd3(p);
+                    if weighted {
+                        o.m.bd(weights[i]);
+                    }
                 }
                 o
             }

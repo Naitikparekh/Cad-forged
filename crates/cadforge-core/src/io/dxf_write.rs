@@ -538,7 +538,27 @@ impl<'a> W<'a> {
                 let full = sweep >= TAU - 1e-9;
                 o.out.n(41, if full { 0.0 } else { el.t0 }).n(42, if full { TAU } else { el.t0 + sweep });
             }
-            Kind::Spline { fit, closed } => {
+            Kind::Spline { fit, closed, nurbs: Some(n) } => {
+                // the exact curve: control vertices, weights and knots (and the fit points, when it came with them)
+                let flags = 8 | (*closed as i64) | if n.rational() { 4 } else { 0 };
+                self.common(o, "SPLINE", &props, Some("AcDbSpline"), None);
+                o.out.n(210, 0.0).n(220, 0.0).n(230, 1.0).i(70, flags).i(71, n.deg as i64).i(72, n.knots.len() as i64).i(73, n.cv.len() as i64).i(74, fit.len() as i64).n(42, 1e-10).n(43, 1e-10).n(44, 1e-10);
+                for k in &n.knots {
+                    o.out.n(40, *k);
+                }
+                if n.rational() {
+                    for i in 0..n.cv.len() {
+                        o.out.n(41, n.weight(i));
+                    }
+                }
+                for p in &n.cv {
+                    o.out.pt(*p, 0);
+                }
+                for p in fit {
+                    o.out.pt(*p, 1);
+                }
+            }
+            Kind::Spline { fit, closed, .. } => {
                 let bz = spline_beziers(fit, *closed);
                 if bz.is_empty() {
                     return;

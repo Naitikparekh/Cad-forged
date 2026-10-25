@@ -66,6 +66,9 @@ product.
 * **CAD standards**: `STANDARDS` associates standards files (`.dws`, or any `.dwg` / `.dxf`) and `CHECKSTANDARDS` lists
   the layers, linetypes and dimension / multileader / table styles that differ from them and fixes them (a Check
   Standards dialog, or one problem at a time on the command line); the association is saved with the drawing.
+* **Splines**: `SPLINE` draws through fit points or (Method CV, any degree) by control vertices; splines from AutoCAD
+  files keep their exact control vertices, weights and knots and are saved back unchanged (DXF and DWG); `SPLINEDIT`
+  moves control vertices and changes their weights.
 * **Drafting aids**: isometric drafting (`ISODRAFT`, `ISOPLANE`, F5: isometric grid and snap, ortho and crosshair along
   the current isoplane) and additional polar tracking angles (`POLARADDANG`).
 * **Files**: **AutoCAD DWG** opened from R14 to 2018 and saved as AutoCAD 2004 (the default) or 2000; **DXF R2000

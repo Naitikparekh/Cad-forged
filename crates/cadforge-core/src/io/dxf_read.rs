@@ -788,6 +788,18 @@ fn convert_kind(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     return out;
                 }
             }
+            // the exact curve, when the file defines it by control vertices (fit points come along as data)
+            if r.ty == "SPLINE" {
+                let w = if weights.len() == ctrl.len() { weights.clone() } else { vec![] };
+                if let Some(n) = crate::nurbs::Nurbs::new(deg, ctrl.clone(), w, knots.clone()) {
+                    let mut e = Entity::nurbs(n);
+                    if let Kind::Spline { fit: f, .. } = &mut e.kind {
+                        *f = if fit.len() >= 2 { fit.clone() } else { vec![] };
+                    }
+                    push(e, false, &mut out);
+                    return out;
+                }
+            }
             let pts: Option<Vec<Pt>> = if fit.len() >= 2 {
                 Some(fit.clone())
             } else if ctrl.len() > deg && knots.len() == ctrl.len() + deg + 1 {

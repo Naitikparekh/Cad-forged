@@ -156,18 +156,27 @@ fn spline_control_point_import() {
     let spline = |d: &Drawing| d.model.entities.iter().find_map(|e| if let Kind::Spline { fit, .. } = &e.kind { Some(fit.clone()) } else { None }).unwrap();
     // CadForge's spline (written as Bezier control points) opens again with its fit points
     assert_eq!(spline(&read_dxf(&text, "x").unwrap()), vec![pt(150.0, 0.0), pt(160.0, 20.0), pt(175.0, 5.0), pt(190.0, 25.0)]);
-    // control points that are not CadForge's (the second one moved): the curve is sampled
+    // control points that are not CadForge's (the second one moved): the exact control-vertex curve
     let mut lines: Vec<String> = text.split("\r\n").map(String::from).collect();
     let at = lines.iter().position(|l| l == "AcDbSpline").unwrap();
     // group codes follow the "AcDbSpline" value at every other line
     let second = (at + 1..lines.len()).step_by(2).filter(|&i| lines[i].trim() == "10").nth(1).unwrap();
-    lines[second + 1] = (lines[second + 1].trim().parse::<f64>().unwrap() + 1.0).to_string();
+    let moved_x = lines[second + 1].trim().parse::<f64>().unwrap() + 1.0;
+    lines[second + 1] = moved_x.to_string();
     let moved = lines.join("\r\n");
-    let fit = spline(&read_dxf(&moved, "x").unwrap());
-    assert!(fit.len() > 10);
-    near(fit[0].x, 150.0, 1e-6);
-    near(fit.last().unwrap().x, 190.0, 1e-6);
-    near(fit.last().unwrap().y, 25.0, 1e-6);
+    let nurbs = |d: &Drawing| d.model.entities.iter().find_map(|e| if let Kind::Spline { fit, nurbs, .. } = &e.kind { Some((fit.clone(), nurbs.clone())) } else { None }).unwrap();
+    let read = read_dxf(&moved, "x").unwrap();
+    let (fit, n) = nurbs(&read);
+    let n = n.expect("kept as control vertices, weights and knots");
+    assert!(fit.is_empty());
+    assert_eq!((n.deg, n.cv.len()), (3, 10));
+    near(n.cv[1].x, moved_x, 1e-12);
+    let s = n.sample(8);
+    near(s[0].x, 150.0, 1e-9);
+    near(s.last().unwrap().x, 190.0, 1e-9);
+    near(s.last().unwrap().y, 25.0, 1e-9);
+    // and saved again exactly
+    assert_eq!(nurbs(&read_dxf(&write_dxf(&read), "x").unwrap()).1, Some(n));
 }
 
 #[test]

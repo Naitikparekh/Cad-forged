@@ -146,9 +146,28 @@ fn entity_list(e: &Entity, doc: &cadforge_core::drawing::Drawing) -> Value {
             g.push(pair(52, rad(h.pa)));
             g.push(pair(91, Value::Int(h.loops.len() as i64)));
         }
-        Kind::Spline { fit, closed } => {
-            g.push(pair(70, Value::Int(*closed as i64)));
+        Kind::Spline { fit, closed, nurbs } => {
+            let rational = nurbs.as_ref().is_some_and(|n| n.rational());
+            g.push(pair(70, Value::Int(*closed as i64 | if rational { 4 } else { 0 } | 8)));
+            if let Some(n) = nurbs {
+                g.push(pair(71, Value::Int(n.deg as i64)));
+                g.push(pair(72, Value::Int(n.knots.len() as i64)));
+                g.push(pair(73, Value::Int(n.cv.len() as i64)));
+            }
             g.push(pair(74, Value::Int(fit.len() as i64)));
+            if let Some(n) = nurbs {
+                for k in &n.knots {
+                    g.push(pair(40, Value::Real(*k)));
+                }
+                if rational {
+                    for i in 0..n.cv.len() {
+                        g.push(pair(41, Value::Real(n.weight(i))));
+                    }
+                }
+                for q in &n.cv {
+                    g.push(point_group(10, *q));
+                }
+            }
             for q in fit {
                 g.push(point_group(11, *q));
             }

@@ -97,13 +97,84 @@ async fn blend(c: Ctx, _a: Args) -> CmdResult<()> {
 /// Fit points and closed flag of a spline.
 fn spline_of(c: &Ctx, id: u64) -> Option<(Vec<Pt>, bool)> {
     match c.entity_by_id(id)?.kind {
-        Kind::Spline { fit, closed } => Some((fit, closed)),
+        Kind::Spline { fit, closed, .. } => Some((fit, closed)),
         _ => None,
     }
 }
 
+/// Store fit points: the curve is refitted through them (a control-vertex definition it had is dropped).
 fn store_spline(c: &Ctx, id: u64, fit: Vec<Pt>, closed: bool) {
-    c.doc_mut(|d| d.modify(id, |e| e.kind = Kind::Spline { fit, closed }));
+    c.doc_mut(|d| d.modify(id, |e| e.kind = Kind::Spline { fit, closed, nurbs: None }));
+}
+
+/// The control-vertex definition of a spline made of control vertices (no fit points).
+fn nurbs_of(c: &Ctx, id: u64) -> Option<cadforge_core::nurbs::Nurbs> {
+    match c.entity_by_id(id)?.kind {
+        Kind::Spline { fit, nurbs: Some(n), .. } if fit.is_empty() => Some(*n),
+        _ => None,
+    }
+}
+
+fn store_nurbs(c: &Ctx, id: u64, n: cadforge_core::nurbs::Nurbs) {
+    c.doc_mut(|d| d.modify(id, |e| e.kind = Entity::nurbs(n.clone()).kind));
+}
+
+/// Edit vertex: move control vertices or change their weights.
+async fn edit_vertex(c: &Ctx, id: u64, hist: &mut Vec<cadforge_core::nurbs::Nurbs>) -> CmdResult<()> {
+    let mut at = 0usize;
+    loop {
+        let Some(n) = nurbs_of(c, id) else { return Ok(()) };
+        let r = c.keyword(ps("Enter a vertex editing option").options(&["Move", "Weight", "eXit"]).default_str("eXit")).await?;
+        match r.kw() {
+            Some("Move") => loop {
+                let Some(n) = nurbs_of(c, id) else { return Ok(()) };
+                let count = n.cv.len();
+                at = at.min(count - 1);
+                let snapshot = n.clone();
+                let spec = ps("Specify new location or").options(&["Next", "Previous", "Select point", "eXit"]).default_str("N").allow_enter().no_ortho().base(n.cv[at]).preview(move |_, p| {
+                    let mut m = snapshot.clone();
+                    m.cv[at] = p;
+                    vec![pv(Entity::nurbs(m))]
+                });
+                match c.point(spec).await? {
+                    PointR::Kw(k) if k == "Next" => at = (at + 1) % count,
+                    PointR::Kw(k) if k == "Previous" => at = (at + count - 1) % count,
+                    PointR::Kw(k) if k == "Select point" => {
+                        if let Some(p) = c.point(ps("Select point")).await?.pt() {
+                            at = nearest_fit(&n.cv, p);
+                        }
+                    }
+                    PointR::Kw(_) => break,
+                    PointR::Enter(_) => at = (at + 1) % count,
+                    other => {
+                        if let Some(p) = other.pt() {
+                            hist.push(n.clone());
+                            let mut m = n.clone();
+                            m.cv[at] = p;
+                            store_nurbs(c, id, m);
+                            at = (at + 1).min(count - 1);
+                        }
+                    }
+                }
+            },
+            Some("Weight") => {
+                let Some(p) = c.point(ps("Select control vertex")).await?.pt() else { continue };
+                let i = nearest_fit(&n.cv, p);
+                let Some(w) = c.number(ps("Enter new weight").default_num(n.weight(i)).min(0.0).nonzero()).await?.value() else { continue };
+                hist.push(n.clone());
+                let mut m = n.clone();
+                if m.w.is_empty() {
+                    m.w = vec![1.0; m.cv.len()];
+                }
+                m.w[i] = w;
+                if m.w.iter().all(|x| (*x - 1.0).abs() < 1e-12) {
+                    m.w.clear();
+                }
+                store_nurbs(c, id, m);
+            }
+            _ => return Ok(()),
+        }
+    }
 }
 
 /// Index of the fit point nearest `p`.
@@ -177,8 +248,8 @@ async fn fit_data(c: &Ctx, id: u64, hist: &mut History) -> CmdResult<()> {
     }
 }
 
-/// Edits a fit-point spline: fit data (move, add, delete), close/open, reverse and undo. Control-vertex splines
-/// do not exist in this drawing model, so Edit vertex and Refine are not offered.
+/// Edits a spline: a fit-point spline's fit data (move, add, delete), close / open, reverse and undo; a control-vertex
+/// spline's vertices (move, weight) and direction.
 async fn splineedit(c: Ctx, _a: Args) -> CmdResult<()> {
     let pre: Vec<u64> = c.ed(|e| e.selected().into_iter().filter(|x| matches!(x.kind, Kind::Spline { .. })).map(|x| x.id).collect());
     let id = match pre[..] {
@@ -189,6 +260,26 @@ async fn splineedit(c: Ctx, _a: Args) -> CmdResult<()> {
         },
     };
     let mut hist: History = vec![];
+    // a spline made of control vertices: edit them
+    if nurbs_of(&c, id).is_some() {
+        let mut cv_hist: Vec<cadforge_core::nurbs::Nurbs> = vec![];
+        loop {
+            let Some(n) = nurbs_of(&c, id) else { return Ok(()) };
+            let r = c.keyword(ps("Enter an option").options(&["Edit vertex", "rEverse", "Undo", "eXit"]).default_str("eXit")).await?;
+            match r.kw() {
+                Some("Edit vertex") => edit_vertex(&c, id, &mut cv_hist).await?,
+                Some("rEverse") => {
+                    cv_hist.push(n.clone());
+                    store_nurbs(&c, id, n.reversed());
+                }
+                Some("Undo") => match cv_hist.pop() {
+                    Some(m) => store_nurbs(&c, id, m),
+                    None => c.log("Nothing to undo."),
+                },
+                _ => return Ok(()),
+            }
+        }
+    }
     loop {
         let Some((fit, closed)) = spline_of(&c, id) else { return Ok(()) };
         let opts = ["Fit data", if closed { "Open" } else { "Close" }, "rEverse", "Undo", "eXit"];
@@ -222,5 +313,5 @@ async fn splineedit(c: Ctx, _a: Args) -> CmdResult<()> {
 
 pub fn register(r: &mut Registry) {
     r.define(dm("BLEND", run(blend)).title("Blend Curve").icon("spline").desc("Creates a spline in the gap between two selected lines or open curves (tangent or smooth continuity)."));
-    r.define(dm("SPLINEDIT", run(splineedit)).aliases(&["SPE"]).title("Edit Spline").icon("pedit").desc("Edits a fit-point spline: move, add or delete fit points, close or open it, reverse it."));
+    r.define(dm("SPLINEDIT", run(splineedit)).aliases(&["SPE"]).title("Edit Spline").icon("pedit").desc("Edits a spline: fit points (move, add, delete, close, open) or control vertices (move, weight), and its direction."));
 }
