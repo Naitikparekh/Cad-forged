@@ -512,12 +512,19 @@ impl CadForgeApp {
     }
 
     /// A copy of the drawing as DWG; the drawing keeps its own file name.
+    /// Export a copy as a CadForge project; the drawing keeps its own file (a later Save still writes DWG or DXF).
+    pub fn export_project(&mut self) {
+        let Some((name, json)) = self.h.borrow().doc().map(|d| (format!("{}{FILE_EXT}", strip_ext(&d.name)), to_json(d))) else { return };
+        self.deliver_file(&name, json.into_bytes(), "application/json");
+        self.h.borrow_mut().log(&format!("Exported {name}."), "info");
+    }
+
     pub fn export_dwg(&mut self, fmt: SaveFormat) {
         let r = {
             let a = self.h.borrow();
             let Some(doc) = a.doc() else { return };
             let mut copy = doc.clone();
-            fmt.encode(&mut copy).map(|(b, m)| (format!("{}.dwg", doc.name), b, m, fmt.not_kept_note(doc)))
+            fmt.encode(&mut copy).map(|(b, m)| (format!("{}.dwg", strip_ext(&doc.name)), b, m, fmt.not_kept_note(doc)))
         };
         match r {
             Ok((name, bytes, mime, note)) => {
@@ -591,10 +598,7 @@ impl CadForgeApp {
             MItem::item("PNG image (*.png)").on(|a| a.dialog = Some(crate::dialogs::Dialog::plot("png"))),
             MItem::item("OBJ mesh (*.obj)").on(|a| a.export_mesh("obj")),
             MItem::item("STL mesh (*.stl)").on(|a| a.export_mesh("stl")),
-            MItem::item("CadForge project (*.json)").on(|a| {
-                let n = a.h.borrow().doc().map(|d| d.name.clone()).unwrap_or_default();
-                a.write_doc(&format!("{n}{FILE_EXT}"));
-            }),
+            MItem::item("CadForge project (*.json)").on(|a| a.export_project()),
         ];
         self.open_popup(ctx, Popup::new(rect.min + vec2(40.0, 40.0), items));
     }
