@@ -27,7 +27,7 @@ product.
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **347 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **354 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).
@@ -71,6 +71,10 @@ product.
   moves control vertices and changes their weights.
 * **Drafting aids**: isometric drafting (`ISODRAFT`, `ISOPLANE`, F5: isometric grid and snap, ortho and crosshair along
   the current isoplane) and additional polar tracking angles (`POLARADDANG`).
+* **Interface customization**: `CUI` / `QUICKCUI` / `CUSTOMIZE` add Quick Access Toolbar buttons, keyboard shortcuts
+  (Ctrl / Alt combinations or function keys) and ribbon panels of your own (a Custom tab); `CUIEXPORT` / `CUIIMPORT`
+  write and read them as `.cui.json` files, `CUILOAD` / `CUIUNLOAD` load and unload partial customization groups, and
+  the customization is kept between sessions.
 * **Interface languages**: `LOCALE` (or Options > Display > Language) shows the ribbon, menus, status bar, palettes and
   dialog frames in German (`DEU`), French (`FRA`) or Spanish (`ESP`); command prompts and descriptions stay English.
 * **Touch screens**: two fingers pan and pinch-zoom the drawing, a tap picks, a finger held still is a right-click

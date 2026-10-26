@@ -2,6 +2,7 @@
 //! command set. UI-agnostic: the egui front end (and the headless tests) drive it through [`app::Handle`].
 pub mod app;
 pub mod autosave;
+pub mod cui;
 pub mod ctx;
 pub mod editor;
 pub mod lisp;

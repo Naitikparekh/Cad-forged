@@ -57,7 +57,6 @@ pub struct UiState {
     pub flyout_panel: Option<(String, egui::Rect)>,
     pub layer_dd: Option<egui::Rect>,
     pub layer_dd_frame: u64,
-    pub qat_custom: Vec<(String, Option<serde_json::Value>, String)>,
     pub search_focus: bool,
     pub app_menu: Option<(egui::Rect, Option<usize>)>,
 }
@@ -83,6 +82,8 @@ pub struct CadForgeApp {
     pub save_dir: PathBuf,
     pub context_menu_pending: Option<(egui::Pos2, bool, bool)>,
     pub shift_prev: bool,
+    /// The customization revision last stored (see `cadforge_engine::cui`).
+    pub cui_saved: u64,
     pub last_cmd_row: Option<egui::Rect>,
     pub pal: PalState,
     pub pending_theme: Option<bool>,
@@ -144,7 +145,6 @@ impl CadForgeApp {
                 flyout_panel: None,
                 layer_dd: None,
                 layer_dd_frame: 0,
-                qat_custom: vec![],
                 search_focus: false,
                 app_menu: None,
             },
@@ -162,6 +162,7 @@ impl CadForgeApp {
             save_dir: std::env::current_dir().unwrap_or_default(),
             context_menu_pending: None,
             shift_prev: false,
+            cui_saved: 0,
             last_cmd_row: None,
             pal: PalState::default(),
             pending_theme: None,
@@ -173,6 +174,7 @@ impl CadForgeApp {
         #[cfg(target_arch = "wasm32")]
         crate::install_hook(app.h.clone(), app.rect_hook.clone());
         app.load_user_aliases();
+        app.load_customization();
         app.recover_autosaved();
         app
     }
@@ -204,6 +206,23 @@ impl CadForgeApp {
         }
         // the timer needs a frame now and then even when nothing is happening
         ctx.request_repaint_after(std::time::Duration::from_secs(20));
+    }
+
+    /// The customization stored by an earlier session.
+    pub fn load_customization(&mut self) {
+        if let Some(c) = crate::platform::store_get("cui").and_then(|s| serde_json::from_str::<cadforge_engine::cui::CuiState>(&s).ok()) {
+            self.h.borrow_mut().cui = c;
+        }
+    }
+
+    /// Store the customization when it has changed.
+    fn store_customization(&mut self) {
+        let rev = self.h.borrow().cui.rev;
+        if rev != self.cui_saved {
+            self.cui_saved = rev;
+            let json = serde_json::to_string(&self.h.borrow().cui).unwrap_or_default();
+            crate::platform::store_set("cui", &json);
+        }
     }
 
     pub fn toast(&mut self, msg: &str) {
@@ -310,6 +329,7 @@ impl eframe::App for CadForgeApp {
         if let Some(dark) = self.pending_theme.take() {
             self.set_dark(&ctx, dark);
         }
+        self.store_customization();
         let locale = self.h.borrow().sysvars.string("LOCALE");
         crate::i18n::set_lang(crate::i18n::from_code(&locale).unwrap_or(crate::i18n::Lang::En));
         self.handle_keys(&ctx);

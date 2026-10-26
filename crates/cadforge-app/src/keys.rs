@@ -32,6 +32,25 @@ impl CadForgeApp {
                         }
                         continue;
                     }
+                    // keyboard shortcuts of the customization come first
+                    if !repeat && (ctrl || modifiers.alt || key.name().starts_with('F')) {
+                        let mut combo: Vec<&str> = vec![];
+                        if ctrl {
+                            combo.push("Ctrl");
+                        }
+                        if modifiers.alt {
+                            combo.push("Alt");
+                        }
+                        if modifiers.shift {
+                            combo.push("Shift");
+                        }
+                        combo.push(key.name());
+                        let cmd = self.h.borrow().cui.shortcut(&combo.join("+"));
+                        if let Some(cmd) = cmd {
+                            self.run_command(&cmd, Args::none());
+                            continue;
+                        }
+                    }
                     // function keys always work
                     if !ctrl {
                         let handled = match key {

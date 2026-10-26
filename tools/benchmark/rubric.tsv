@@ -77,7 +77,7 @@ ui	themes	1	Dark and light themes	tests/web/run.mjs::light theme
 ui	shortcuts	1	Function keys and Ctrl shortcuts	crates/cadforge-app/src/keys.rs::Key::	
 ui	tooltips	1	Rollover tooltips with command help	crates/cadforge-app/src/chrome.rs::fn cmd_tip|cmd_tip	
 ui	lisp-console	0.75	Visual LISP console / editor	crates/cadforge-app/src/dialogs/simple.rs::fn ui_vlisp ; tests/web/run.mjs::AutoLISP console	console only, no editor with debugger
-ui	cui	0	User interface customization		not implemented
+ui	cui	0.6	User interface customization	crates/cadforge-engine/src/cui.rs::pub struct CuiState ; crates/cadforge-engine/tests/cui.rs::partial_customizations_load_and_unload ; crates/cadforge-app/src/dialogs/cui.rs::fn ui_cui ; tests/web/run.mjs::CUILOAD: a customization file adds a shortcut	Quick Access Toolbar buttons, keyboard shortcuts and ribbon panels of your own, partial groups, import/export, kept between sessions; no AutoCAD .cuix files, menus, toolbars, mouse buttons or double-click actions, and the built-in ribbon panels cannot be edited
 ui	drag-drop	0.75	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	files only: blocks cannot be dragged out of the palette into the drawing
 ui	localization	0.5	Interface in other languages	crates/cadforge-app/src/i18n.rs::fn every_interface_string_is_translated ; crates/cadforge-app/assets/lang/de.tsv::Beschriftungsmaßstab ; tests/web/run.mjs::LOCALE DEU shows the ribbon in German	German, French and Spanish for the ribbon, menus, status bar, palettes and dialog frames; command prompts, command descriptions, dialog bodies and command names stay English; no other languages
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
@@ -139,7 +139,7 @@ extend	aliases	1	Command alias editing (acad.pgp)	crates/cadforge-engine/tests/e
 extend	action-recorder	1	Action recorder macros	crates/cadforge-engine/tests/ext_tail.rs::the_action_recorder	
 extend	plugin-api	0	.NET / ObjectARX plugin API		not implemented
 extend	com-activex	0	COM / ActiveX / VBA automation		not implemented
-extend	cui-workspaces	0.25	UI customization and workspaces	crates/cadforge-app/src/chrome.rs::fn set_workspace	workspaces only
+extend	cui-workspaces	0.6	UI customization and workspaces	crates/cadforge-app/src/chrome.rs::fn set_workspace ; crates/cadforge-engine/src/commands/ext_system/cui.rs::async fn cuiload ; crates/cadforge-engine/tests/cui.rs::export_import_round_trip	workspaces are fixed presets; customization files are CadForge JSON (.cui.json), not AutoCAD .cuix
 extend	custom-defs	0.6	Custom linetypes, hatches and shapes	crates/cadforge-engine/src/commands/ext_tail/defs.rs::fn loadpat ; crates/cadforge-engine/tests/defs_files.rs::without_text_the_host ; tests/web/run.mjs::LOADPAT reads a .pat file	linetypes and hatch patterns only: no shape (.shx) files
 extend	library	0.5	Embeddable libraries	crates/cadforge-engine/src/sim.rs::pub struct Sim	Rust crates, no stable API promise
 platform	desktop	0.75	Native desktop application	crates/cadforge-app/src/main.rs::fn main	built and run headless on Linux only

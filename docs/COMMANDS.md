@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 347 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 354 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -148,6 +148,18 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `IMAGECLIP` | `ICL` | Crops the display of a selected image to a specified boundary. |
 | `IMAGEFRAME` |  | Controls whether image frames are shown and plotted. |
 | `IMAGEQUALITY` |  | Controls the display quality of images. |
+
+## Customize
+
+| Command | Aliases | Description |
+|---|---|---|
+| `CUI` |  | Customizes the Quick Access Toolbar, keyboard shortcuts and ribbon panels of your own. |
+| `CUIEXPORT` |  | Writes your customizations (toolbar buttons, shortcuts, ribbon panels) to a .cui.json file. |
+| `CUIIMPORT` |  | Adds the customizations of a .cui.json file to yours. |
+| `CUILOAD` |  | Loads a .cui.json file as a partial customization group. |
+| `CUIUNLOAD` |  | Unloads a partial customization group. |
+| `CUSTOMIZE` |  | Opens the Customize User Interface dialog at the ribbon panels of your own. |
+| `QUICKCUI` |  | Opens the Customize User Interface dialog at the Quick Access Toolbar. |
 
 ## Drafting
 

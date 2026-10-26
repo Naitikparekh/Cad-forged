@@ -7,6 +7,7 @@ use cadforge_engine::runtime::{DialogReply, DialogReq, TextEditSpec};
 use eframe::egui::{self, vec2, Color32, CornerRadius, FontFamily, FontId, Margin, RichText, Stroke};
 
 mod colors;
+mod cui;
 mod dimstyle;
 mod files;
 mod layout;
@@ -17,6 +18,7 @@ mod standards;
 mod text;
 
 pub use colors::*;
+pub use cui::*;
 pub use dimstyle::*;
 pub use files::*;
 pub use layout::*;
@@ -58,6 +60,7 @@ pub enum Kind {
     Purge(Option<PurgeState>),
     LayerStates(LayerStatesState),
     AliasEdit(AliasState),
+    Cui(CuiDlgState),
     QSelect(Option<QSelectState>),
     TextStyle(Option<TextStyleState>),
     Units(Option<UnitsState>),
@@ -263,6 +266,7 @@ impl CadForgeApp {
             Kind::Purge(s) => self.ui_purge(ui, s.as_mut().expect("state")),
             Kind::LayerStates(s) => self.ui_layerstates(ui, s),
             Kind::AliasEdit(s) => self.ui_aliasedit(ui, s),
+            Kind::Cui(s) => self.ui_cui(ui, s),
             Kind::QSelect(s) => self.ui_qselect(ui, s.as_mut().expect("state")),
             Kind::TextStyle(s) => self.ui_textstyle(ui, s.as_mut().expect("state")),
             Kind::Units(s) => self.ui_units(ui, s.as_mut().expect("state")),
@@ -553,6 +557,7 @@ fn dialog_title_width(k: &Kind) -> (String, f32) {
         Kind::Purge(_) => ("Purge".into(), 380.0),
         Kind::LayerStates(_) => ("Layer States Manager".into(), 420.0),
         Kind::AliasEdit(_) => ("Edit Aliases".into(), 500.0),
+        Kind::Cui(_) => ("Customize User Interface".into(), 560.0),
         Kind::QSelect(_) => ("Quick Select".into(), 420.0),
         Kind::TextStyle(_) => ("Text Style".into(), 380.0),
         Kind::Units(_) => ("Drawing Units".into(), 420.0),
@@ -600,6 +605,9 @@ impl Dialog {
     }
     pub fn aliasedit() -> Dialog {
         Dialog::new(Kind::AliasEdit(AliasState::default()))
+    }
+    pub fn cui(tab: &str) -> Dialog {
+        Dialog::new(Kind::Cui(CuiDlgState::at(tab)))
     }
     pub fn standards() -> Dialog {
         Dialog::new(Kind::Standards(Default::default()))

@@ -122,6 +122,8 @@ pub struct App {
     pub lisp: Rc<crate::lisp::Interp>,
     /// Autosave bookkeeping (see [`crate::autosave`]).
     pub autosave: crate::autosave::AutoSaveState,
+    /// The user interface customization (see [`crate::cui`]); the host stores it.
+    pub cui: crate::cui::CuiState,
 }
 
 impl App {
@@ -152,6 +154,7 @@ impl App {
             lisp_pause: None,
             lisp: Rc::new(crate::lisp::Interp::new()),
             autosave: Default::default(),
+            cui: Default::default(),
         }
     }
 

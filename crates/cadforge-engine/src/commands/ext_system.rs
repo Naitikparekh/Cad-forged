@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 mod clipboard;
+mod cui;
 mod drafting;
 mod files;
 pub use files::{with_ext, SaveFormat};
@@ -163,6 +164,7 @@ pub fn register(r: &mut Registry) {
     report::register(r, &st);
     files::register(r);
     standards::register(r);
+    cui::register(r);
     r.alias("DISTANCE", "DIST");
     track_commands(r, &st);
 }

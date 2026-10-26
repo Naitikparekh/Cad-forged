@@ -51,6 +51,9 @@ impl CadForgeApp {
             "ALIASEDIT" => self.dialog = Some(Dialog::aliasedit()),
             "STYLE" => self.dialog = Some(Dialog::textstyle()),
             "DATALINK" => self.open_files(ctx, "datalink"),
+            "CUI" => self.dialog = Some(Dialog::cui(args.str("tab").unwrap_or("qat"))),
+            "CUILOAD" => self.open_files(ctx, "cuiload"),
+            "CUIIMPORT" => self.open_files(ctx, "cuiimport"),
             "DATALINKUPDATE" => {
                 use cadforge_engine::runtime::ArgVal;
                 let file = args.str("file").unwrap_or_default().to_string();
@@ -141,6 +144,7 @@ impl CadForgeApp {
                 "template" => ".dwt,.dwg,.dxf,.json",
                 "standards" => ".dws,.dwg,.dxf,.dwt",
                 "datalink" | "datalinkupdate" => ".csv,.txt",
+                "cuiload" | "cuiimport" => ".json",
                 _ => ".dwg,.dwt,.dxf,.json,.cadforge",
             };
             platform::pick_files(accept, purpose == "open", purpose, self.inbox.clone(), ctx.clone());
@@ -275,6 +279,12 @@ impl CadForgeApp {
                 "datalink" => {
                     use cadforge_engine::runtime::ArgVal;
                     self.run_command("DATALINK", Args::none().with("file", ArgVal::Str(p.name.clone())).with("text", ArgVal::Str(text.clone())));
+                    self.h.pump();
+                }
+                "cuiload" | "cuiimport" => {
+                    use cadforge_engine::runtime::ArgVal;
+                    let cmd = if p.purpose == "cuiload" { "CUILOAD" } else { "CUIIMPORT" };
+                    self.run_command(cmd, Args::none().with("file", ArgVal::Str(p.name.clone())).with("text", ArgVal::Str(text.clone())));
                     self.h.pump();
                 }
                 "datalinkupdate" => {

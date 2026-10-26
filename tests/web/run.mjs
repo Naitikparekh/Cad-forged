@@ -589,6 +589,55 @@ await test('DATALINK makes a linked table from a CSV chosen in the file chooser'
   assert.ok(s.history.some(h => /Table linked to doors\.csv \(4 rows, 2 columns\)/.test(h.text || h)), JSON.stringify(s.history));
 });
 
+await test('CUILOAD: a customization file adds a shortcut and a toolbar button; CUIUNLOAD removes them; CUIIMPORT survives a reload', async () => {
+  const t2 = await launch();                    // a fresh browser: no stored customization
+  try {
+    const p2 = t2.page;
+    const busyWith = async (re, what) => until(t2, async () => { const x = await t2.state(); return x.busy && re.test(x.prompt) && x; }, what);
+    const file = { name: 'site.cui.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ cadforge_cui: 1, qat: [{ cmd: 'RECTANG' }], shortcuts: [{ keys: 'Ctrl+Shift+K', cmd: 'CIRCLE' }], panels: [{ title: 'Site', cmds: ['LINE', 'RECTANG'] }] })) };
+    const tabs = { x: 0, y: 36, width: 900, height: 24 };
+    const before = await p2.screenshot({ clip: tabs });
+    const [fc] = await Promise.all([p2.waitForEvent('filechooser', { timeout: 10000 }), t2.cmd('CUILOAD')]);
+    await fc.setFiles(file);
+    await until(t2, async () => (await t2.state()).history.some(h => /Customization group "site" loaded: 1 toolbar button, 1 shortcut, 1 ribbon panel/.test(h)), 'the group to load');
+    await t2.frame(4);
+    assert.ok(!before.equals(await p2.screenshot({ clip: tabs })), 'a Custom tab joins the ribbon');
+    // the shortcut starts CIRCLE
+    await p2.mouse.move(700, 450);
+    await p2.keyboard.press('Control+Shift+KeyK'); await t2.frame(3);
+    await busyWith(/center/i, 'CIRCLE from the shortcut');
+    await p2.keyboard.press('Escape'); await t2.frame(3);
+    // the Quick Access Toolbar has the file's button after the five standard ones
+    await p2.mouse.click(190, 17); await t2.frame(3);
+    await busyWith(/first corner/i, 'RECTANG from the toolbar button');
+    await p2.keyboard.press('Escape'); await t2.frame(3);
+    await t2.cmd('CUIUNLOAD'); await t2.cmd('site');
+    await p2.keyboard.press('Control+Shift+KeyK'); await t2.frame(3);
+    assert.equal((await t2.state()).busy, false, 'the shortcut is gone with its group');
+    // CUIIMPORT makes it the user's own: stored, so a reload keeps it
+    const [fc2] = await Promise.all([p2.waitForEvent('filechooser', { timeout: 10000 }), t2.cmd('CUIIMPORT')]);
+    await fc2.setFiles(file);
+    await until(t2, async () => (await t2.state()).history.some(h => /Imported from site\.cui\.json/.test(h)), 'the import');
+    await t2.frame(3);
+    const [d] = await Promise.all([p2.waitForEvent('download', { timeout: 10000 }), t2.cmd('CUIEXPORT')]);
+    const exported = JSON.parse(fs.readFileSync(await d.path(), 'utf8'));
+    assert.equal(d.suggestedFilename(), 'custom.cui.json');
+    assert.deepEqual(exported.shortcuts, [{ keys: 'Ctrl+Shift+K', cmd: 'CIRCLE' }]);
+    await p2.reload();
+    await p2.waitForFunction(() => !document.getElementById('loading') || document.getElementById('loading').textContent.startsWith('Could not'), null, { timeout: 60000 });
+    await until(t2, async () => { try { return (await t2.state()).editors >= 1; } catch { return false; } }, 'the app to start again');
+    await p2.mouse.move(700, 450); await p2.mouse.click(700, 450); await t2.frame(3);
+    await p2.keyboard.press('Escape'); await t2.frame(2);
+    await p2.keyboard.press('Control+Shift+KeyK'); await t2.frame(3);
+    await busyWith(/center/i, 'the stored shortcut after a reload');
+    await p2.keyboard.press('Escape'); await t2.frame(2);
+    // the dialog opens and closes
+    await t2.cmd('CUI'); await t2.frame(3);
+    await p2.keyboard.press('Escape'); await t2.frame(3);
+    assert.equal((await t2.state()).busy, false);
+  } finally { await t2.close(); }
+});
+
 await test('LOCALE DEU shows the ribbon in German, ENU brings English back', async () => {
   await page.keyboard.press('Escape'); await t.frame(2);
   const clip = { x: 0, y: 28, width: 900, height: 140 };

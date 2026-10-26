@@ -167,6 +167,21 @@ impl CadForgeApp {
 
     fn ribbon_tabs(&self) -> Vec<Tab> {
         let mut v: Vec<Tab> = self.rib.tabs.iter().filter(|t| !self.ui.ribbon_hidden.contains(&t.id)).cloned().collect();
+        // the Custom tab: the ribbon panels of the user's customization and the loaded partial ones
+        let (panels, reg) = {
+            let a = self.h.borrow();
+            (a.cui.effective().panels, a.registry.clone())
+        };
+        let panels: Vec<Panel> = panels
+            .into_iter()
+            .filter_map(|p| {
+                let items: Vec<Item> = p.cmds.into_iter().filter(|c| reg.has_command(c)).map(|cmd| Item::Btn { cmd, size: "large".into(), label: None, icon: None, args: None, menu: None }).collect();
+                (!items.is_empty()).then(|| Panel { title: p.title, launcher: None, prio: None, items, slideout: vec![] })
+            })
+            .collect();
+        if !panels.is_empty() && !self.ui.ribbon_hidden.contains("custom") {
+            v.push(Tab { id: "custom".into(), title: "Custom".into(), contextual: false, panels });
+        }
         if let Some(s) = self.h.borrow().hatch_session.as_ref() {
             let mut t = if s.editing.is_some() { self.rib.hatchedit.clone() } else { self.rib.hatch.clone() };
             t.id = if s.editing.is_some() { "hatchedit".into() } else { "hatchcreate".into() };
@@ -896,10 +911,9 @@ impl CadForgeApp {
         });
     }
 
-    pub fn qat_add(&mut self, cmd: &str, args: Option<serde_json::Value>, icon: &str) {
-        let key = (cmd.to_string(), args.clone(), icon.to_string());
-        if !self.ui.qat_custom.iter().any(|q| q.0 == key.0 && q.1 == key.1) {
-            self.ui.qat_custom.push(key);
+    pub fn qat_add(&mut self, cmd: &str, args: Option<serde_json::Value>, _icon: &str) {
+        if !self.h.borrow_mut().cui.add_qat(cmd, args) {
+            self.toast("That button is already on the Quick Access Toolbar.");
         }
     }
 }

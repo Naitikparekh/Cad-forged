@@ -28,10 +28,11 @@ impl FileBrowserState {
             "template" => vec!["dwt", "dwg", "dxf", "json"],
             "standards" => vec!["dws", "dwg", "dxf", "dwt"],
             "datalink" | "datalinkupdate" => vec!["csv", "txt"],
+            "cuiload" | "cuiimport" => vec!["json"],
             _ => vec!["dwg", "dwt", "dxf", "json", "cadforge"],
         };
         let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), "lin" => "Load Linetypes".into(), "plotstyle" => "Load Plot Style Table".into(), "pat" => "Load Hatch Patterns".into(), "template" => "Select Template".into(), "standards" => "Select Standards File".into(), "datalink" | "datalinkupdate" => "Select Data File".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
+        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), "lin" => "Load Linetypes".into(), "plotstyle" => "Load Plot Style Table".into(), "pat" => "Load Hatch Patterns".into(), "template" => "Select Template".into(), "standards" => "Select Standards File".into(), "datalink" | "datalinkupdate" => "Select Data File".into(), "cuiload" => "Load Customization File".into(), "cuiimport" => "Import Customization File".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
     }
 
     fn reload(&mut self) {

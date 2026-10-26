@@ -134,6 +134,31 @@ impl CadForgeApp {
             }
             x += 27.0;
         }
+        // buttons of the customization (CUI, or a right-click on a ribbon button)
+        let custom = self.h.borrow().cui.effective().qat;
+        for (i, q) in custom.iter().enumerate() {
+            let icon = {
+                let a = self.h.borrow();
+                a.registry.get(&q.cmd).map(|d| if d.icon.is_empty() { d.name.to_lowercase() } else { d.icon.clone() })
+            };
+            let Some(icon) = icon else { continue };
+            let r = Rect::from_min_size(Pos2::new(x, rect.top() + 4.0), vec2(26.0, 26.0));
+            let resp = self.icon_button(ui, ("qat-custom", i), r, &icon, false, true);
+            let resp = self.cmd_tip(resp, &q.cmd, None);
+            if resp.clicked() {
+                self.run_command(&q.cmd, crate::data::args_from_json(q.args.as_ref()));
+            }
+            if resp.secondary_clicked() && self.h.borrow().cui.main.qat.contains(q) {
+                let q2 = q.clone();
+                let pos = r.left_bottom();
+                self.open_popup(ctx, crate::menu::Popup::new(pos, vec![MItem::item("Remove from Quick Access Toolbar").on(move |app| {
+                    let mut a = app.h.borrow_mut();
+                    a.cui.main.qat.retain(|x| *x != q2);
+                    a.cui.touch();
+                })]));
+            }
+            x += 27.0;
+        }
         p.line_segment([Pos2::new(x + 4.0, rect.center().y - 9.0), Pos2::new(x + 4.0, rect.center().y + 9.0)], Stroke::new(1.0, t.sep));
         x += 10.0;
         for (cmd, icon, label, enabled) in [("U", "undo", "Undo", can_undo), ("REDO", "redo", "Redo", can_redo)] {

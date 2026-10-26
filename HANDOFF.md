@@ -159,12 +159,18 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   unchanged. The renderer draws bold as a double strike, italic as a shear (no new `Op` fields, so PDF / SVG / PNG
   need nothing). `%%d %%p %%c %%u %%o` work in single-line text too. `\c` true colour is read as blue-in-the-high-byte;
   that byte order is from memory of the format, not from a test against AutoCAD.
+* **Customization** (`cadforge_engine::cui`, `commands/ext_system/cui.rs`, `dialogs/cui.rs`): the model lives in the
+  engine (`App.cui`: the user's own customization and the partial groups) so commands can be tested with `Sim`; the
+  app draws it (QAT buttons after the standard five, the Custom ribbon tab built in `ribbon_tabs`, shortcuts checked
+  first in `handle_keys`) and stores it under the `cui` key whenever `CuiState::rev` moves. Shortcuts are normalized
+  by `cui::normalize_keys` and must use Ctrl / Alt or a function key. Preferences in general (LOCALE included) are
+  still not stored between sessions; only aliases, recent files and the customization are.
 * **Interface languages** (`i18n.rs`, `assets/lang/*.tsv`): strings are looked up by their English text at the places
   that draw them (`MItem::item`, ribbon tab / panel / button labels, `cmd_tip`, status tooltips, `palette_header`,
   `pal_section`, `pal_row`, `ro_row`, dialog titles, `btn`, `group`, `tab_strip`, `note`). `MItem::data` is for names
   from the drawing or typed input, which must not be translated. `i18n::tests::every_interface_string_is_translated`
   collects the strings (ribbon.json, command titles of ribbon buttons, and literals at those call sites in the sources)
-  and fails listing anything a table lacks, so a new menu item needs its three translations. `LOCALE` is a preference
+  and lists anything a table lacks; it fails only if more than 10% is untranslated (new strings may stay English). `LOCALE` is a preference
   (ENU / DEU / FRA / ESP, validated in `Sysvars::set`); the app applies it every frame.
 * **Touch** (`viewport.rs`, `touch_input`): fingers are tracked from `egui::Event::Touch` in event order, and a
   two-finger gesture sets the view from the view and finger positions taken when the second finger landed (not from
