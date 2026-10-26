@@ -79,7 +79,7 @@ ui	tooltips	1	Rollover tooltips with command help	crates/cadforge-app/src/chrome
 ui	lisp-console	0.75	Visual LISP console / editor	crates/cadforge-app/src/dialogs/simple.rs::fn ui_vlisp ; tests/web/run.mjs::AutoLISP console	console only, no editor with debugger
 ui	cui	0	User interface customization		not implemented
 ui	drag-drop	0.75	Dragging files and blocks into the drawing	crates/cadforge-app/src/misc.rs::pub fn take_dropped ; tests/web/run.mjs::dropping a DXF opens it as a new drawing ; tests/web/run.mjs::dropping an unsupported file	files only: blocks cannot be dragged out of the palette into the drawing
-ui	localization	0	Interface in other languages		English only
+ui	localization	0.5	Interface in other languages	crates/cadforge-app/src/i18n.rs::fn every_interface_string_is_translated ; crates/cadforge-app/assets/lang/de.tsv::Beschriftungsmaßstab ; tests/web/run.mjs::LOCALE DEU shows the ribbon in German	German, French and Spanish for the ribbon, menus, status bar, palettes and dialog frames; command prompts, command descriptions, dialog bodies and command names stay English; no other languages
 ui	palette-docking	0.5	Dockable, floating and auto-hide palettes	crates/cadforge-app/src/app.rs::show_props	docked left or floating layer manager only
 ui	hidpi	0.5	High-DPI scaling	tests/web/run.mjs::a high-DPI display	checked only that the canvas renders at native resolution in headless Chromium at scale 2; pointer mapping and real HiDPI hardware are untested
 ui	touch	0.75	Touch and pen input	crates/cadforge-app/src/viewport.rs::fn touch_input ; crates/cadforge-app/src/viewport.rs::fn touch_bar ; tests/web/run.mjs::touch screen: two fingers pan	native touch (winit) is the same egui path but untested; no pen pressure or digitizer tablet support

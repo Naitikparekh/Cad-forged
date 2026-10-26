@@ -221,6 +221,8 @@ pub struct OptionsState {
     pub sc_default: bool,
     pub sc_edit: bool,
     pub sc_cmd: bool,
+    /// LOCALE: the interface language.
+    pub locale: String,
 }
 
 impl OptionsState {
@@ -247,6 +249,7 @@ impl OptionsState {
             sc_default: sc & 1 != 0,
             sc_edit: sc & 2 != 0,
             sc_cmd: sc & 4 != 0,
+            locale: sv.string("LOCALE"),
         }
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
@@ -267,6 +270,7 @@ impl OptionsState {
         app.set_sv("AUTOCOMPLETE", self.auto as i64 as f64);
         let sc = (self.sc_default as i64) | ((self.sc_edit as i64) << 1) | ((self.sc_cmd as i64) << 2) | 8;
         app.set_sv("SHORTCUTMENU", sc as f64);
+        let _ = app.h.borrow_mut().setvar("LOCALE", self.locale.as_str());
     }
 }
 
@@ -280,6 +284,13 @@ impl CadForgeApp {
                         ui.label("Theme");
                         ui.selectable_value(&mut s.dark, true, "Dark");
                         ui.selectable_value(&mut s.dark, false, "Light");
+                    });
+                });
+                self.group(ui, "Language", |ui| {
+                    ui.horizontal(|ui| {
+                        for (_, code, name) in crate::i18n::LANGS {
+                            ui.selectable_value(&mut s.locale, code.to_string(), name);
+                        }
                     });
                 });
                 self.group(ui, "Crosshair", |ui| {

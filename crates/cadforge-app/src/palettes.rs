@@ -280,7 +280,7 @@ impl CadForgeApp {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
         ui.painter().rect_filled(r, 0.0, t.ribbon);
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.border));
-        ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, title, FontId::new(12.5, FontFamily::Name("bold".into())), t.text);
+        ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, crate::i18n::tr(title), FontId::new(12.5, FontFamily::Name("bold".into())), t.text);
         let xr = Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(18.0, 18.0));
         let resp = ui.interact(xr, ui.id().with(("pal-x", title)), Sense::click());
         if resp.hovered() {
@@ -398,7 +398,7 @@ impl CadForgeApp {
         let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
         ui.painter().rect_filled(r, 0.0, t.ribbon_title);
         crate::chrome::chevron(ui.painter(), r.left_center() + vec2(12.0, 0.0), 3.5, !open, t.text2);
-        ui.painter().text(r.left_center() + vec2(24.0, 0.0), Align2::LEFT_CENTER, title, FontId::new(12.0, FontFamily::Name("bold".into())), t.text);
+        ui.painter().text(r.left_center() + vec2(24.0, 0.0), Align2::LEFT_CENTER, crate::i18n::tr(title), FontId::new(12.0, FontFamily::Name("bold".into())), t.text);
         if resp.clicked() {
             if open {
                 self.pal.collapsed.insert(title);
@@ -578,8 +578,8 @@ impl CadForgeApp {
         });
         let shown = if same { Some(vals[0].clone()) } else { None };
         let label = match f.unit {
-            Some(u) => format!("{} ({u})", f.label),
-            None => f.label.to_string(),
+            Some(u) => format!("{} ({u})", crate::i18n::tr(f.label)),
+            None => crate::i18n::tr(f.label).to_string(),
         };
         let fmt = |v: &Val| match v {
             Val::Num(n) => fmt_num(*n, doc_prec, true),
@@ -843,7 +843,7 @@ impl CadForgeApp {
             if let Some(d) = a.doc() {
                 for f in geom_fields(e).into_iter().take(6) {
                     let v = (f.get)(e, d);
-                    rows.push((f.label.to_string(), match v {
+                    rows.push((crate::i18n::tr(f.label).to_string(), match v {
                         Val::Num(n) => fmt_num(n, prec, true),
                         Val::Text(s) => s,
                         Val::Bool(b) => if b { "Yes".into() } else { "No".into() },
@@ -955,7 +955,7 @@ impl CadForgeApp {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(6.0);
-                    ui.add(egui::TextEdit::singleline(&mut self.pal.lm_search).hint_text("Search for layer").desired_width(180.0));
+                    ui.add(egui::TextEdit::singleline(&mut self.pal.lm_search).hint_text(crate::i18n::tr("Search for layer")).desired_width(180.0));
                 });
             });
             ui.horizontal_top(|ui| {
@@ -1238,7 +1238,7 @@ enum LmAction {
 fn pal_row(t: crate::theme::Tokens, ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
     ui.horizontal(|ui| {
         let w = ui.available_width();
-        ui.add_sized([w * 0.42, 20.0], egui::Label::new(RichText::new(label).color(t.text2)).truncate());
+        ui.add_sized([w * 0.42, 20.0], egui::Label::new(RichText::new(crate::i18n::tr(label)).color(t.text2)).truncate());
         add(ui);
     });
 }
@@ -1246,7 +1246,7 @@ fn pal_row(t: crate::theme::Tokens, ui: &mut egui::Ui, label: &str, add: impl Fn
 fn ro_row(ui: &mut egui::Ui, t: &crate::theme::Tokens, k: &str, v: &str) {
     ui.horizontal(|ui| {
         let w = ui.available_width();
-        ui.add_sized([w * 0.42, 20.0], egui::Label::new(RichText::new(k).color(t.text2)).truncate());
+        ui.add_sized([w * 0.42, 20.0], egui::Label::new(RichText::new(crate::i18n::tr(k)).color(t.text2)).truncate());
         ui.label(RichText::new(v).color(t.text));
     });
 }

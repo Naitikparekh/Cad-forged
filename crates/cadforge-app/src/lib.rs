@@ -4,6 +4,7 @@ pub mod chrome;
 pub mod data;
 pub mod dialogs;
 pub mod gfx;
+pub mod i18n;
 pub mod icons;
 pub mod keys;
 pub mod layouts_ui;
@@ -68,6 +69,7 @@ mod web {
                 "ucs": { "x": ed.doc.ucs.origin.x, "y": ed.doc.ucs.origin.y, "angle": ed.doc.ucs.angle },
                 "modelEntities": ed.doc.model.entities.len(),
                 "modelTypes": ed.doc.model.entities.iter().map(|e| e.type_name()).collect::<Vec<_>>(),
+                "locale": a.sysvars.string("LOCALE"),
                 "standards": ed.doc.standards.files.len(),
                 "standardsProblems": cadforge_core::standards::check(&ed.doc).iter().map(|p| p.key()).collect::<Vec<_>>(),
             })

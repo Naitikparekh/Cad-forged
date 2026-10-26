@@ -310,6 +310,8 @@ impl eframe::App for CadForgeApp {
         if let Some(dark) = self.pending_theme.take() {
             self.set_dark(&ctx, dark);
         }
+        let locale = self.h.borrow().sysvars.string("LOCALE");
+        crate::i18n::set_lang(crate::i18n::from_code(&locale).unwrap_or(crate::i18n::Lang::En));
         self.handle_keys(&ctx);
         self.process_events(&ctx);
         self.layout(ui, &ctx);

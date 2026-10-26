@@ -81,7 +81,7 @@ impl CadForgeApp {
         let (title, desc, name, alias) = {
             let a = self.h.borrow();
             match a.registry.get(cmd) {
-                Some(d) => (label.map(str::to_string).unwrap_or_else(|| d.title.clone()), d.desc.clone(), d.name.clone(), a.registry.alias_of(&d.name)),
+                Some(d) => (label.map(str::to_string).unwrap_or_else(|| crate::i18n::tr(&d.title).to_string()), d.desc.clone(), d.name.clone(), a.registry.alias_of(&d.name)),
                 None => (label.unwrap_or(cmd).to_string(), String::new(), cmd.to_string(), None),
             }
         };
@@ -92,9 +92,9 @@ impl CadForgeApp {
             if !desc.is_empty() {
                 ui.label(RichText::new(desc).color(t.text2));
             }
-            let mut line = format!("Command: {name}");
+            let mut line = format!("{}: {name}", crate::i18n::tr("Command"));
             if let Some(a) = alias {
-                line.push_str(&format!("   Alias: {a}"));
+                line.push_str(&format!("   {}: {a}", crate::i18n::tr("Alias")));
             }
             ui.label(RichText::new(line).small().color(t.text3));
         })
@@ -157,7 +157,7 @@ impl CadForgeApp {
                         .into_iter()
                         .enumerate()
                         .map(|(i, l)| {
-                            MItem::item(&l).on(move |app| {
+                            MItem::data(&l).on(move |app| {
                                 for _ in 0..=i {
                                     app.run_command("U", Args::none());
                                 }
@@ -203,7 +203,7 @@ impl CadForgeApp {
             self.run_command("HELP", Args::none());
         }
         let search = Rect::from_min_size(Pos2::new(help.left() - 282.0, rect.top() + 5.0), vec2(270.0, 24.0));
-        let edit = egui::TextEdit::singleline(&mut self.ui.search).hint_text("Type a keyword or phrase").desired_width(search.width()).margin(Margin::symmetric(8, 4)).text_color(t.text);
+        let edit = egui::TextEdit::singleline(&mut self.ui.search).hint_text(crate::i18n::tr("Type a keyword or phrase")).desired_width(search.width()).margin(Margin::symmetric(8, 4)).text_color(t.text);
         let resp = ui.put(search, edit);
         self.icons.paint(ui.painter(), "search", Rect::from_center_size(Pos2::new(search.right() - 14.0, search.center().y), vec2(14.0, 14.0)), &t, Tint::Mono(t.text3));
         if resp.has_focus() && !self.ui.search.trim().is_empty() {
@@ -383,7 +383,7 @@ impl CadForgeApp {
         let presp = ui.interact(pr, ui.id().with("plus-tab"), Sense::click());
         tab_shape(&p, pr, if presp.hovered() { t.ribbon_title } else { t.chrome2 }, t.border);
         self.icons.paint(&p, "plus", Rect::from_center_size(pr.center(), vec2(12.0, 12.0)), &t, Tint::Mono(t.text2));
-        presp.on_hover_text("New drawing (Ctrl+N)").clone().clicked().then(|| self.run_command("NEW", Args::none()));
+        presp.on_hover_text(crate::i18n::tr("New drawing (Ctrl+N)")).clone().clicked().then(|| self.run_command("NEW", Args::none()));
         if let Some(i) = activate {
             self.ui.showing_start = false;
             self.h.borrow_mut().set_active(i);
@@ -456,8 +456,8 @@ impl CadForgeApp {
             if let Some(s) = &text {
                 p.text(Pos2::new(cx, r.center().y), Align2::LEFT_CENTER, s, FontId::proportional(12.0), t.text);
             }
-            let extra = if it.key.is_empty() { String::new() } else { format!("Shortcut: {}", it.key) };
-            let (title, desc) = (it.title, it.desc);
+            let extra = if it.key.is_empty() { String::new() } else { format!("{}: {}", crate::i18n::tr("Shortcut"), it.key) };
+            let (title, desc) = (crate::i18n::tr(it.title), crate::i18n::tr(it.desc));
             let resp = resp.on_hover_ui(move |ui| {
                 ui.set_max_width(280.0);
                 ui.label(RichText::new(title).strong().color(t.text));
@@ -709,7 +709,7 @@ impl CadForgeApp {
         let mut v = vec![MItem::Header("Annotation scale".into())];
         for n in names {
             let pick = n.clone();
-            v.push(MItem::item(&n).checked(n == cur).on(move |a| {
+            v.push(MItem::data(&n).checked(n == cur).on(move |a| {
                 let pick = pick.clone();
                 a.edit_doc("Annotation scale", move |d| {
                     let _ = d.set_annotation_scale(&pick, false);
@@ -877,7 +877,7 @@ impl CadForgeApp {
         let clip = Rect::from_min_max(Pos2::new(x.min(row.right() - 40.0), row.top()), row.right_bottom() - vec2(6.0, 0.0));
         let tp = p.with_clip_rect(clip);
         if text.is_empty() && !busy {
-            tp.text(Pos2::new(clip.left(), row.center().y), Align2::LEFT_CENTER, "Type a command", mono.clone(), t.text3);
+            tp.text(Pos2::new(clip.left(), row.center().y), Align2::LEFT_CENTER, crate::i18n::tr("Type a command"), mono.clone(), t.text3);
         }
         let g = tp.layout_no_wrap(text.clone(), mono.clone(), t.text);
         let caret_x = {
@@ -955,7 +955,7 @@ impl CadForgeApp {
         let autoc = self.sv("AUTOCOMPLETE") != 0;
         let lines = self.ui.cmd.lines;
         let items = vec![
-            MItem::item("Recent Commands").sub(if recent.is_empty() { vec![MItem::item("No recent commands").disabled(true)] } else { recent.iter().map(|c| { let c2 = c.clone(); MItem::item(c).on(move |a| a.run_command(&c2, Args::none())) }).collect() }),
+            MItem::item("Recent Commands").sub(if recent.is_empty() { vec![MItem::item("No recent commands").disabled(true)] } else { recent.iter().map(|c| { let c2 = c.clone(); MItem::data(c).on(move |a| a.run_command(&c2, Args::none())) }).collect() }),
             MItem::item("Input Settings").sub(vec![MItem::item("AutoComplete").checked(autoc).on(|a| a.toggle_sv("AUTOCOMPLETE")), MItem::item("Search system variables").checked(true).disabled(true)]),
             MItem::Sep,
             MItem::item("Command line lines").sub([1usize, 2, 3, 5, 8, 12].iter().map(|n| { let n = *n; MItem::item(&format!("{n} line{}", if n > 1 { "s" } else { "" })).checked(lines == n).on(move |a| { a.ui.cmd.lines = n; a.ui.cmd.lines_f = n as f32; }) }).collect()),

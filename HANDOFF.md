@@ -159,6 +159,13 @@ Rust gaps relative to the JS app: none known in commands; solids' booleans run s
   unchanged. The renderer draws bold as a double strike, italic as a shear (no new `Op` fields, so PDF / SVG / PNG
   need nothing). `%%d %%p %%c %%u %%o` work in single-line text too. `\c` true colour is read as blue-in-the-high-byte;
   that byte order is from memory of the format, not from a test against AutoCAD.
+* **Interface languages** (`i18n.rs`, `assets/lang/*.tsv`): strings are looked up by their English text at the places
+  that draw them (`MItem::item`, ribbon tab / panel / button labels, `cmd_tip`, status tooltips, `palette_header`,
+  `pal_section`, `pal_row`, `ro_row`, dialog titles, `btn`, `group`, `tab_strip`, `note`). `MItem::data` is for names
+  from the drawing or typed input, which must not be translated. `i18n::tests::every_interface_string_is_translated`
+  collects the strings (ribbon.json, command titles of ribbon buttons, and literals at those call sites in the sources)
+  and fails listing anything a table lacks, so a new menu item needs its three translations. `LOCALE` is a preference
+  (ENU / DEU / FRA / ESP, validated in `Sysvars::set`); the app applies it every frame.
 * **Touch** (`viewport.rs`, `touch_input`): fingers are tracked from `egui::Event::Touch` in event order, and a
   two-finger gesture sets the view from the view and finger positions taken when the second finger landed (not from
   egui's per-frame `multi_touch` deltas, which lose the first move when the start and a move fall in one frame). The

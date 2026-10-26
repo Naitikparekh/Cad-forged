@@ -1,0 +1,580 @@
+# CadForge interface: English <TAB> translation (\n = line break). Checked by i18n::tests.
+2-Point	2 points
+3-Point	3 points
+3D Rotate	Rotation 3D
+3D Scale	Echelle 3D
+3D Tools	Outils 3D
+3D\nMove	Déplacer\n3D
+About CadForge	A propos de CadForge
+Add	Ajouter
+Add to Quick Access Toolbar	Ajouter à la barre d'outils Accès rapide
+Add...	Ajouter...
+Add/Remove	Ajouter/Supprimer
+Adjust Space	Ajuster l'espacement
+Alias	Alias
+Align	Aligner
+Aligned	Alignée
+Angle	Angle
+Angular	Angulaire
+Annotate	Annoter
+Annotation	Annotation
+Annotation Scale	Echelle d'annotation
+Annotation scale	Echelle d'annotation
+Applications	Applications
+Arc	Arc
+Arc Length	Longueur d'arc
+Arc length	Longueur d'arc
+Area	Aire
+Array	Réseau
+At Origin	A l'origine
+Attach	Attacher
+Attach Xref	Attacher une xréf
+Audit	Contrôler
+AutoCAD 2000 DWG (*.dwg)	AutoCAD 2000 DWG (*.dwg)
+AutoCAD 2004 DWG (*.dwg)	AutoCAD 2004 DWG (*.dwg)
+AutoComplete	Saisie semi-automatique
+AutoLISP\nConsole	Console\nAutoLISP
+AutoSnap	AutoSnap
+Axis, End	Axe, Extrémité
+Base X	Base X
+Base Y	Base Y
+Baseline	Ligne de base
+Binary	Binaire
+Binary DXF (*.dxf)	DXF binaire (*.dxf)
+Bind	Lier
+Blend	Raccord
+Block	Bloc
+Block Definition	Définition de bloc
+Block Editor	Editeur de blocs
+Block name	Nom du bloc
+Blocks\nPalette	Palette\nBlocs
+Boolean	Booléen
+Boundaries	Contours
+Boundary	Contour
+Box	Boîte
+Break	Coupure
+Brightness	Luminosité
+Bring to Front	Mettre au premier plan
+ByBlock	DuBloc
+ByLayer	DuCalque
+CAD Standards	Normes de CAO
+CadForge	CadForge
+CadForge project (*.json)	Projet CadForge (*.json)
+Cancel	Annuler
+Center	Centre
+Center Mark	Marque de centre
+Center X	Centre X
+Center Y	Centre Y
+Center, Diameter	Centre, Diamètre
+Center, Radius	Centre, Rayon
+Center, Start, Angle	Centre, Départ, Angle
+Center, Start, End	Centre, Départ, Fin
+Center, Start, Length	Centre, Départ, Longueur
+Centimeters	Centimètres
+Chamfer	Chanfrein
+Chamfer Edge	Chanfreiner l'arête
+Change Properties	Modifier les propriétés
+Change to Current Layer	Changer pour le calque courant
+Check	Vérifier
+Check Again	Vérifier à nouveau
+Check Standards	Vérifier les normes
+Check Standards...	Vérifier les normes...
+Circle	Cercle
+Circumference	Circonférence
+Clean Screen	Ecran nettoyé
+Clean\nScreen	Ecran\nnettoyé
+Clear	Effacer
+Clear All	Tout effacer
+Clear History	Effacer l'historique
+Clears the screen of toolbars and dockable windows (Ctrl+0).	Masque les barres d'outils et les fenêtres ancrables (Ctrl+0).
+Click to insert this block	Cliquez pour insérer ce bloc
+Clip	Découper
+Clip Image	Découper l'image
+Clip Xref	Découper la xréf
+Clipboard	Presse-papiers
+Close	Fermer
+Close All Other Drawings	Fermer tous les autres dessins
+Close Reference	Fermer la référence
+Closed	Fermé
+Colour scheme	Jeu de couleurs
+Columns	Colonnes
+Command	Commande
+Command Line	Ligne de commande
+Command line	Ligne de commande
+Command line lines	Lignes de la ligne de commande
+Commands	Commandes
+Cone	Cône
+Configure	Configurer
+Configure Standards	Configurer les normes
+Construction Line	Droite
+Contents	Contenu
+Continue	Continuer
+Contrast	Contraste
+Control vertices	Sommets de contrôle
+Coordinates	Coordonnées
+Copy	Copier
+Copy History	Copier l'historique
+Copy Layout	Copier la présentation
+Copy Selection	Copier la sélection
+Copy result	Copier le résultat
+Create	Créer
+Create Block	Créer un bloc
+Crosshair	Réticule
+Custom scale	Echelle personnalisée
+Custom...	Personnalisé...
+Customization	Personnalisation
+Cut	Couper
+Cylinder	Cylindre
+DXF (*.dxf)	DXF (*.dxf)
+Data	Données
+Data Extraction	Extraction de données
+Data\nLink	Liaison\nde données
+Default	Par défaut
+Define Attributes	Définir les attributs
+Define\nAttributes	Définir\nles attributs
+Degree	Degré
+Delete	Supprimer
+Delta X	Delta X
+Delta Y	Delta Y
+Deselect All	Tout désélectionner
+Diameter	Diamètre
+Dimension	Cote
+Dimension Style	Style de cote
+Dimension Style Manager	Gestionnaire des styles de cote
+Dimension input	Saisie des cotes
+Dimension\nStyle	Style\nde cote
+Dimensions	Cotes
+Disassociate	Dissocier
+Display	Affichage
+Display Grid	Afficher la grille
+Display elements	Eléments d'affichage
+Display locked	Afficher verrouillé
+Displays a Quick Properties panel for selected objects.	Affiche le panneau Propriétés rapides pour les objets sélectionnés.
+Displays a reference grid in the drawing area (F7).	Affiche une grille de référence dans la zone de dessin (F7).
+Displays command prompts and coordinate input near the cursor (F12).	Affiche les invites de commande et la saisie des coordonnées près du curseur (F12).
+Displays objects with their assigned lineweights.	Affiche les objets avec leur épaisseur de ligne.
+Distance	Distance
+Divide	Diviser
+Donut	Anneau
+Drafting	Dessin
+Drafting Settings	Paramètres de dessin
+Draw	Dessiner
+Draw Order	Ordre de tracé
+Drawing	Dessin
+Drawing Limits	Limites du dessin
+Drawing Units	Unités du dessin
+Drawing Utilities	Utilitaires de dessin
+Draws in isometric planes: an isometric grid and snap, with ortho along the axes of the current plane (F5 or Ctrl+E switches the plane).	Dessine dans les plans isométriques : grille et accrochage isométriques, ortho le long des axes du plan courant (F5 ou Ctrl+E change de plan).
+Dynamic Input	Saisie dynamique
+Edit	Modifier
+Edit Aliases	Modifier les alias
+Edit Aliases...	Modifier les alias...
+Edit Attribute	Modifier l'attribut
+Edit Hatch	Modifier les hachures
+Edit Polyline	Modifier la polyligne
+Edit Reference	Modifier la référence
+Edit Spline	Modifier la spline
+Edit Table	Modifier le tableau
+Edit Text	Modifier le texte
+Edit...	Modifier...
+Edit\nAliases	Modifier\nles alias
+Ellipse	Ellipse
+Elliptical Arc	Arc elliptique
+End X	Fin X
+End Y	Fin Y
+End angle	Angle de fin
+Enter	Entrée
+Erase	Effacer
+Exit	Quitter
+Explode	Décomposer
+Export DXF	Exporter DXF
+Export OBJ	Exporter OBJ
+Export PDF	Exporter PDF
+Export STL	Exporter STL
+Export Table	Exporter le tableau
+Extend	Prolonger
+Extents	Etendue
+External Refs	Références externes
+Extract Attributes	Extraire les attributs
+Extract Data	Extraire les données
+Extrude	Extrusion
+Fade	Fondu
+Feet	Pieds
+Field	Champ
+File	Fichier
+Fillet	Raccord
+Fillet Edge	Raccorder l'arête
+Filter	Filtre
+Find Text	Rechercher du texte
+Fit	Ajuster
+Fit points	Points d'ajustement
+Fix	Corriger
+Fix All	Tout corriger
+From	Depuis
+Front	Face
+General	Général
+Geometry	Géométrie
+Gradient	Dégradé
+Grid Settings...	Paramètres de la grille...
+Group	Groupe
+Groups	Groupes
+Hatch	Hachures
+Hatch Boundary	Contour de hachures
+Hatch Creation	Création de hachures
+Hatch Editor	Editeur de hachures
+Hatch Settings	Paramètres de hachures
+Height	Hauteur
+Help	Aide
+Home	Début
+ID Point	Point ID
+Icon Off	Icône désactivée
+Icon On	Icône activée
+Ignore	Ignorer
+Image	Image
+Import	Importer
+Import\nDXF / JSON	Importer\nDXF / JSON
+Inches	Pouces
+Index Color	Couleur d'index
+Input Settings	Paramètres de saisie
+Insert	Insérer
+Insert Block	Insérer un bloc
+Insert Block...	Insérer un bloc...
+Insertion scale	Echelle d'insertion
+Interfere	Interférence
+Intersect	Intersection
+Isometric Drafting	Dessin isométrique
+Jogged	Raccourcie
+Join	Joindre
+Justify Text	Justifier le texte
+Keyboard	Clavier
+Language	Langue
+Layer Delete	Supprimer le calque
+Layer Freeze	Geler le calque
+Layer Isolate	Isoler le calque
+Layer Lock	Verrouiller le calque
+Layer Off	Désactiver le calque
+Layer States	Etats de calque
+Layer States Manager	Gestionnaire des états de calque
+Layer Translator	Convertisseur de calques
+Layer Unisolate	Annuler l'isolement du calque
+Layer Unlock	Déverrouiller le calque
+Layer\nProperties	Propriétés\ndes calques
+Layers	Calques
+Layout	Présentation
+Layout Viewports	Fenêtres de présentation
+Layout\nWizard	Assistant\nPrésentation
+Leader	Ligne de repère
+Leaders	Lignes de repère
+Length	Longueur
+Lengthen	Modifier la longueur
+Line	Ligne
+Linear	Linéaire
+Linear precision	Précision linéaire
+Lines	Lignes
+Linetype Manager	Gestionnaire des types de ligne
+Linetype\nManager	Gestionnaire\ndes types de ligne
+Lineweight Settings	Paramètres d'épaisseur de ligne
+Linking & Extraction	Liaison et extraction
+List	Liste
+Load	Charger
+Load Application	Charger une application
+Load Hatch Patterns	Charger des motifs de hachures
+Load Linetypes	Charger des types de ligne
+Load Plot Style Table	Charger une table de styles de tracé
+Load file...	Charger un fichier...
+Load\nApplication	Charger\nl'application
+Loft	Lissage
+Loops	Boucles
+Major radius	Grand rayon
+Make Current	Rendre courant
+Manage	Gérer
+Manager	Gestionnaire
+Mass\nProperties	Propriétés\nmécaniques
+Match	Faire correspondre
+Match Layer	Faire correspondre le calque
+Match Properties	Copier les propriétés
+Match\nProperties	Copier les\npropriétés
+Maximize Viewport	Agrandir la fenêtre
+Measure	Mesurer
+Measurement	Mesure
+Menu Bar	Barre de menus
+Meters	Mètres
+Millimeters	Millimètres
+Minimize Ribbon	Réduire le ruban
+Minor radius	Petit rayon
+Mirror	Miroir
+Misc	Divers
+Model	Objet
+Model Space	Espace objet
+Model or Paper Space	Espace objet ou papier
+Model\nSpace	Espace\nobjet
+Modify	Modification
+Modify...	Modifier...
+Move	Déplacer
+Move Origin	Déplacer l'origine
+Multileader	Ligne de repère multiple
+Multileader\nStyle	Style de ligne\nde repère multiple
+Multiline	Multiligne
+Multiline Text	Texte multiligne
+Multiline Text Editor	Editeur de texte multiligne
+Multiline\nText	Texte\nmultiligne
+Multiple Points	Plusieurs points
+Named Views	Vues nommées
+Named\nViews	Vues\nnommées
+Navigate	Naviguer
+New	Nouveau
+New Layout	Nouvelle présentation
+New UCS...	Nouveau SCU...
+New drawing (Ctrl+N)	Nouveau dessin (Ctrl+N)
+New layout	Nouvelle présentation
+New\nLayout	Nouvelle\nprésentation
+Next Problem	Problème suivant
+No blocks defined	Aucun bloc défini
+No recent commands	Aucune commande récente
+No recent input	Aucune saisie récente
+None	Aucun
+OBJ mesh (*.obj)	Maillage OBJ (*.obj)
+Object	Objet
+Object Snap	Accrochage aux objets
+Object Snap Settings...	Paramètres d'accrochage aux objets...
+Object Snap Tracking	Repérage par accrochage aux objets
+Object Snap modes	Modes d'accrochage aux objets
+Object snap tracking	Repérage par accrochage aux objets
+Objects	Objets
+Offset	Décaler
+On	Activé
+Open	Ouvrir
+Open Drawing	Ouvrir un dessin
+Open...	Ouvrir...
+Options	Options
+Options...	Options...
+Orbit	Orbite
+Ordinate	Ordonnée
+Ortho Mode	Mode Ortho
+Orthographic	Orthogonale
+Osnap Settings...	Paramètres d'accrochage...
+Other Formats	Autres formats
+Other...	Autre...
+Output	Sortie
+Overkill	Supprimer les doublons
+PDF (*.pdf)	PDF (*.pdf)
+PNG image (*.png)	Image PNG (*.png)
+Page Setup	Mise en page
+Page Setup Manager...	Gestionnaire des mises en page...
+Page\nSetup	Mise en\npage
+Palettes	Palettes
+Pan	Panoramique
+Paper\nSpace	Espace\npapier
+Parallel	Parallèle
+Paste	Coller
+Path Array	Réseau le long d'une trajectoire
+Pattern	Motif
+Perimeter	Périmètre
+Perspective	Perspective
+Pickbox and grips	Boîte de sélection et poignées
+Plan\nView	Vue en\nplan
+Plot	Tracer
+Plot...	Tracer...
+Pointer input	Saisie du pointeur
+Polar Array	Réseau polaire
+Polar Tracking	Repérage polaire
+Polar angle settings	Paramètres d'angle polaire
+Polygon	Polygone
+Polygonal	Polygonale
+Polyline	Polyligne
+Polysolid	Polysolide
+Position X	Position X
+Position Y	Position Y
+Presspull	Appuyer/Tirer
+Preview	Aperçu
+Previous	Précédent
+Primary Units	Unités principales
+Primitives	Primitives
+Properties	Propriétés
+Purge	Purger
+Purge All	Tout purger
+Pyramid	Pyramide
+Quick Dim	Cotation rapide
+Quick Properties	Propriétés rapides
+Quick Select	Sélection rapide
+Quick Select...	Sélection rapide...
+QuickCalc	CalcRapide
+Radius	Rayon
+Ray	Demi-droite
+Reassociate	Réassocier
+Recent Commands	Commandes récentes
+Recent Input	Saisies récentes
+Rectangle	Rectangle
+Rectangular	Rectangulaire
+Rectangular Array	Réseau rectangulaire
+Redo	Rétablir
+Reference	Référence
+Regen	Regen
+Regen All	Tout régénérer
+Region	Région
+Remove	Supprimer
+Rename	Renommer
+Reset	Réinitialiser
+Restore	Restaurer
+Restore...	Restaurer...
+Restricts cursor movement to horizontal or vertical (F8).	Limite le déplacement du curseur à l'horizontale ou à la verticale (F8).
+Restricts cursor movement to specified angle increments (F10).	Limite le déplacement du curseur aux incréments d'angle définis (F10).
+Restricts cursor movement to specified intervals (F9).	Limite le déplacement du curseur aux intervalles définis (F9).
+Revision Cloud	Nuage de révision
+Revolve	Révolution
+Right	Droite
+Right-click customization	Personnalisation du clic droit
+Rotate	Rotation
+Rotation	Rotation
+Rows	Rangées
+Run	Exécuter
+Run\nScript	Exécuter\nun script
+SE Iso	Iso SE
+STL mesh (*.stl)	Maillage STL (*.stl)
+SVG (*.svg)	SVG (*.svg)
+SW Iso	Iso SO
+Save	Enregistrer
+Save As	Enregistrer sous
+Save Block	Enregistrer le bloc
+Save Block As	Enregistrer le bloc sous
+Save Drawing As	Enregistrer le dessin sous
+Save...	Enregistrer...
+Scale	Echelle
+Scale Text	Echelle du texte
+Scale X	Echelle X
+Scale Y	Echelle Y
+Search for layer	Rechercher un calque
+Search system variables	Rechercher des variables système
+Select	Sélectionner
+Select All	Tout sélectionner
+Select Color	Sélectionner une couleur
+Select Color...	Sélectionner une couleur...
+Select Data File	Sélectionner un fichier de données
+Select Image File	Sélectionner un fichier image
+Select Script	Sélectionner un script
+Select Similar	Sélectionner les objets similaires
+Select Standards File	Sélectionner un fichier de normes
+Select Template	Sélectionner un gabarit
+Selection	Sélection
+Selection Cycling	Cycle de sélection
+Selection modes	Modes de sélection
+Send to Back	Mettre en arrière-plan
+Set Current	Définir courant
+SetByLayer	DéfinirDuCalque
+Sets linear and angular units.	Définit les unités linéaires et angulaires.
+Sets the annotation scale: the size annotative objects have in model space.	Définit l'échelle d'annotation : la taille des objets annotatifs dans l'espace objet.
+Shell	Gaine
+Shortcut	Raccourci
+Shortcut Keys	Touches de raccourci
+Shortcut:	Raccourci :
+Show Panels	Afficher les groupes de fonctions
+Show Tabs	Afficher les onglets
+Show/Hide Lineweight	Afficher/masquer l'épaisseur de ligne
+Shows whether the sheet (PAPER) or model space (MODEL) is active. In a layout, click to switch between the sheet and the active viewport.	Indique si la feuille (PAPIER) ou l'espace objet (OBJET) est actif. Dans une présentation, cliquez pour passer de la feuille à la fenêtre active.
+Single	Unique
+Single Line	Une ligne
+Single Line Text	Texte sur une ligne
+Sketch	Esquisse
+Slice	Section
+Snap Mode	Mode Accrochage
+Snap Overrides	Remplacements d'accrochage
+Snap Settings...	Paramètres d'accrochage...
+Snap and Grid	Accrochage et grille
+Snap type	Type d'accrochage
+Snaps to geometric points on objects (F3).	S'accroche aux points géométriques des objets (F3).
+Solid	Solide
+Solid Edit	Modifier le solide
+Spelling	Orthographe
+Sphere	Sphère
+Spline	Spline
+Start X	Départ X
+Start Y	Départ Y
+Start angle	Angle de départ
+Start, Center, Angle	Départ, Centre, Angle
+Start, Center, End	Départ, Centre, Fin
+Start, Center, Length	Départ, Centre, Longueur
+Start, End, Angle	Départ, Fin, Angle
+Start, End, Direction	Départ, Fin, Direction
+Start, End, Radius	Départ, Fin, Rayon
+Status	Etat
+Status bar items	Eléments de la barre d'état
+Stretch	Etirer
+Style	Style
+Styles	Styles
+Subtract	Soustraction
+Sweep	Balayage
+Switches between workspaces.	Passe d'un espace de travail à l'autre.
+Symbols and Arrows	Symboles et flèches
+Table	Tableau
+Table Style	Style de tableau
+Table height	Hauteur du tableau
+Table width	Largeur du tableau
+Table\nStyle	Style\nde tableau
+Tables	Tableaux
+Tan, Tan, Radius	Tan, Tan, Rayon
+Temporary track point	Point de repérage temporaire
+Text	Texte
+Text Position	Position du texte
+Text Style	Style de texte
+Text height	Hauteur du texte
+Text override	Remplacement du texte
+Text to MText	Texte en texte multiligne
+Text\nStyle	Style\nde texte
+Thaw All Layers	Libérer tous les calques
+Thicken	Epaissir
+Time	Heure
+Tolerance	Tolérance
+Tool Palettes	Palettes d'outils
+Tool\nPalettes	Palettes\nd'outils
+Top	Dessus
+Torus	Tore
+Total angle	Angle total
+Trace	Trace
+Tracking Settings...	Paramètres de repérage...
+Tracks from acquired object snap points (F11).	Effectue un repérage à partir des points d'accrochage acquis (F11).
+Trim	Ajuster
+True Color	Couleurs vraies
+Turn All Layers On	Activer tous les calques
+Type a command	Entrez une commande
+Type a keyword or phrase	Entrez un mot-clé ou une expression
+Undo	Annuler
+Ungroup	Dissocier
+Union	Union
+Unitless	Sans unité
+Units	Unités
+Units...	Unités...
+Up	Haut
+Update	Mettre à jour
+Update from Source	Mettre à jour depuis la source
+Update\nExtrusion	Mettre à jour\nl'extrusion
+User Interface	Interface utilisateur
+User Preferences	Préférences utilisateur
+Utilities	Utilitaires
+Vertices	Sommets
+View	Vue
+Viewport Configuration List	Liste des configurations de fenêtres
+Viewport\nArray	Réseau\nde fenêtres
+Views	Vues
+Visual LISP Console	Console Visual LISP
+Visual Styles	Styles visuels
+Volume	Volume
+Wedge	Biseau
+Where objects overlap, a click lists them so you can choose one (Ctrl+W).	Lorsque des objets se superposent, un clic les liste pour en choisir un (Ctrl+W).
+Width	Largeur
+Window	Fenêtre
+Wipeout	Nettoyage
+Workspace Switching	Changement d'espace de travail
+World	Général
+World\nUCS	SCU\ngénéral
+Write Block	Ecrire un bloc
+Write to Source	Ecrire dans la source
+Z Rotate...	Rotation autour de Z...
+Zoom	Zoom
+Zoom Extents	Zoom Etendu
+Zoom In	Zoom avant
+Zoom Object	Zoom Objet
+Zoom Out	Zoom arrière
+Zoom Previous	Zoom Précédent
+Zoom Window	Zoom Fenêtre
+Zoom\nExtents	Zoom\nEtendu
+Zoom\nWindow	Zoom\nFenêtre

@@ -261,7 +261,7 @@ impl CadForgeApp {
             .map(|o| {
                 let label = cadforge_engine::parse::option_name(o);
                 let o2 = o.clone();
-                crate::menu::MItem::item(&label).on(move |a| a.h.keyword(&o2))
+                crate::menu::MItem::data(&label).on(move |a| a.h.keyword(&o2))
             })
             .collect();
         if let Some(r) = self.last_cmd_row {

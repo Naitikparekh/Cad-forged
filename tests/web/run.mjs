@@ -589,6 +589,22 @@ await test('DATALINK makes a linked table from a CSV chosen in the file chooser'
   assert.ok(s.history.some(h => /Table linked to doors\.csv \(4 rows, 2 columns\)/.test(h.text || h)), JSON.stringify(s.history));
 });
 
+await test('LOCALE DEU shows the ribbon in German, ENU brings English back', async () => {
+  await page.keyboard.press('Escape'); await t.frame(2);
+  const clip = { x: 0, y: 28, width: 900, height: 140 };
+  const en = await page.screenshot({ clip });
+  await t.cmd('LOCALE'); await t.cmd('DEU'); await t.frame(4);
+  assert.equal((await t.state()).locale, 'DEU');
+  const de = await page.screenshot({ clip });
+  assert.ok(!en.equals(de), 'the ribbon is drawn again with other text');
+  await t.cmd('LOCALE'); await t.cmd('XYZ');
+  assert.equal((await t.state()).locale, 'DEU', 'an unknown language changes nothing');
+  await page.keyboard.press('Escape'); await t.frame(2);
+  await t.cmd('LOCALE'); await t.cmd('ENU'); await t.frame(4);
+  assert.equal((await t.state()).locale, 'ENU');
+  assert.ok(en.equals(await page.screenshot({ clip })), 'English again, pixel for pixel');
+});
+
 await test('touch screen: two fingers pan and pinch-zoom, a tap picks, a long press is a right-click (Enter), the touch bar has Enter / Cancel / Undo; a pen picks', async () => {
   await page.keyboard.press('Escape'); await t.frame(2);
   await t.cmd('ZOOM'); await t.cmd('C'); await t.cmd('0,0'); await t.cmd('100');

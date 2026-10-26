@@ -71,6 +71,8 @@ product.
   moves control vertices and changes their weights.
 * **Drafting aids**: isometric drafting (`ISODRAFT`, `ISOPLANE`, F5: isometric grid and snap, ortho and crosshair along
   the current isoplane) and additional polar tracking angles (`POLARADDANG`).
+* **Interface languages**: `LOCALE` (or Options > Display > Language) shows the ribbon, menus, status bar, palettes and
+  dialog frames in German (`DEU`), French (`FRA`) or Spanish (`ESP`); command prompts and descriptions stay English.
 * **Touch screens**: two fingers pan and pinch-zoom the drawing, a tap picks, a finger held still is a right-click
   (Enter in a selection, otherwise the shortcut menu), and a touch bar gives Enter / Cancel / Undo without a keyboard
   (`TOUCHMODE`); a pen works like the mouse.

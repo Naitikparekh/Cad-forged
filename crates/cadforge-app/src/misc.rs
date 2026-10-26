@@ -905,13 +905,13 @@ impl CadForgeApp {
             let mut items = vec![
                 MItem::item("Enter").shortcut("Enter").on(|a| a.h.enter()),
                 MItem::item("Cancel").shortcut("Esc").on(|a| a.escape()),
-                MItem::item("Recent Input").sub(if recent_input.is_empty() { vec![MItem::item("No recent input").disabled(true)] } else { recent_input.iter().map(|t| { let t2 = t.clone(); MItem::item(t).on(move |a| a.h.text(&t2, false)) }).collect() }),
+                MItem::item("Recent Input").sub(if recent_input.is_empty() { vec![MItem::item("No recent input").disabled(true)] } else { recent_input.iter().map(|t| { let t2 = t.clone(); MItem::data(t).on(move |a| a.h.text(&t2, false)) }).collect() }),
                 MItem::Sep,
             ];
             if has_opts {
                 for o in &opts {
                     let o2 = o.clone();
-                    items.push(MItem::item(o.split(" (").next().unwrap_or(o)).on(move |a| a.h.keyword(&o2)));
+                    items.push(MItem::data(o.split(" (").next().unwrap_or(o)).on(move |a| a.h.keyword(&o2)));
                 }
                 items.push(MItem::Sep);
             }
@@ -938,7 +938,7 @@ impl CadForgeApp {
         }
         let paste = MItem::item("Paste").icon("paste").shortcut("Ctrl+V").disabled(!has_clip).on(cmd("PASTECLIP"));
         let clipboard = MItem::item("Clipboard").sub(vec![MItem::item("Cut").icon("cutclip").shortcut("Ctrl+X").disabled(sel == 0).on(cmd("CUTCLIP")), MItem::item("Copy").icon("copyclip").shortcut("Ctrl+C").disabled(sel == 0).on(cmd("COPYCLIP")), paste]);
-        let recent = MItem::item("Recent Input").sub(if recent_cmds.is_empty() { vec![MItem::item("No recent commands").disabled(true)] } else { recent_cmds.iter().map(|c| { let c2 = c.clone(); MItem::item(c).on(move |a| a.run_command(&c2, Args::none())) }).collect() });
+        let recent = MItem::item("Recent Input").sub(if recent_cmds.is_empty() { vec![MItem::item("No recent commands").disabled(true)] } else { recent_cmds.iter().map(|c| { let c2 = c.clone(); MItem::data(c).on(move |a| a.run_command(&c2, Args::none())) }).collect() });
         let repeat = last.map(|l| { let l2 = l.clone(); MItem::item(&format!("Repeat {l}")).on(move |a| a.run_command(&l2, Args::none())) });
         let mut items: Vec<MItem> = vec![];
         if let Some(r) = repeat {

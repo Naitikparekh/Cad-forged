@@ -26,7 +26,12 @@ pub enum MItem {
 }
 
 impl MItem {
+    /// An item labelled in the interface language (see [`crate::i18n`]).
     pub fn item(label: &str) -> MItem {
+        MItem::data(crate::i18n::tr(label))
+    }
+    /// An item showing a name from the drawing or the user (a layer, a block, typed input) as it is.
+    pub fn data(label: &str) -> MItem {
         MItem::Item(MenuItem { label: label.to_string(), ..Default::default() })
     }
     fn with(mut self, f: impl FnOnce(&mut MenuItem)) -> MItem {
@@ -178,7 +183,7 @@ impl CadForgeApp {
                         }
                         MItem::Header(h) => {
                             let (r, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
-                            ui.painter().text(Pos2::new(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, h.to_uppercase(), FontId::proportional(10.0), t.text3);
+                            ui.painter().text(Pos2::new(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, crate::i18n::tr(h).to_uppercase(), FontId::proportional(10.0), t.text3);
                         }
                         MItem::Item(m) => {
                             let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), if m.disabled { Sense::hover() } else { Sense::click() });

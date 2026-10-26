@@ -298,7 +298,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `ROTATE3D` |  | Moves objects about a 3D axis. |
 | `SCALE` | `SC` | Enlarges or reduces selected objects, keeping the proportions the same. |
 | `SCALETEXT` |  | Enlarges or reduces selected text objects without changing their locations. |
-| `SPLINEDIT` | `SPE` | Edits a fit-point spline: move, add or delete fit points, close or open it, reverse it. |
+| `SPLINEDIT` | `SPE` | Edits a spline: fit points (move, add, delete, close, open) or control vertices (move, weight), and its direction. |
 | `STRETCH` | `S` | Stretches objects crossed by a selection window or polygon. |
 | `TRIM` | `TR` | Trims objects to meet the edges of other objects. |
 
@@ -466,6 +466,7 @@ Type a variable name at the command line to view or change it.
 | `ISOPLANE` | `0` |
 | `LAYERPMODE` | `1` |
 | `LAYLOCKFADECTL` | `50` |
+| `LOCALE` | `ENU` |
 | `LWDISPLAY` | `0` |
 | `MAXHATCH` | `60000` |
 | `MENUBAR` | `0` |
@@ -486,6 +487,7 @@ Type a variable name at the command line to view or change it.
 | `QPMODE` | `-1` |
 | `QTEXTMODE` | `0` |
 | `SAVETIME` | `10` |
+| `SELECTIONCYCLING` | `0` |
 | `SELECTIONPREVIEW` | `3` |
 | `SHORTCUTMENU` | `11` |
 | `SNAPANG` | `0` |
@@ -493,8 +495,11 @@ Type a variable name at the command line to view or change it.
 | `SNAPSTYL` | `0` |
 | `SNAPUNIT_X` | `10` |
 | `SNAPUNIT_Y` | `10` |
+| `SPLDEGREE` | `3` |
+| `SPLMETHOD` | `0` |
 | `THEME` | `dark` |
 | `TOOLTIPS` | `1` |
+| `TOUCHMODE` | `1` |
 | `TRACEWID` | `0.05` |
 | `TRANSPARENCYDISPLAY` | `1` |
 | `UCSICON` | `1` |

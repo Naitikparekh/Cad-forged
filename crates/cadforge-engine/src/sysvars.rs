@@ -129,8 +129,12 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
     m.insert("BACKGROUND".into(), Value::Str(String::new()));
     m.insert("PLINEWID".into(), n(0.0));
     m.insert("POLARADDANG".into(), Value::Str(String::new()));
+    m.insert("LOCALE".into(), Value::Str("ENU".into()));
     m
 }
+
+/// The interface languages LOCALE takes: English, German, French, Spanish.
+pub const LOCALES: [&str; 4] = ["ENU", "DEU", "FRA", "ESP"];
 
 const DRAWING_VARS: &[(&str, VarType)] = &[
     ("LTSCALE", VarType::Real),
@@ -418,6 +422,11 @@ impl Sysvars {
             let r = drawing_set(&u, doc, &v);
             doc.touch();
             r?;
+        } else if u == "LOCALE" {
+            // the code, or its first two letters (de, fr, es, en)
+            let t = value.text().trim().to_uppercase();
+            let code = LOCALES.iter().find(|c| **c == t || (t.len() == 2 && c.starts_with(&t))).ok_or_else(|| format!("LOCALE must be one of {}.", LOCALES.join(", ")))?;
+            self.prefs.insert(u.clone(), Value::Str(code.to_string()));
         } else if let Some(cur) = self.prefs.get(&u).cloned() {
             let new = match cur {
                 Value::Str(_) => Value::Str(value.text()),
@@ -502,6 +511,18 @@ pub fn polar_add_angles(s: &str) -> Vec<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn locale_takes_the_interface_languages() {
+        let mut sv = Sysvars::default();
+        assert_eq!(sv.string("LOCALE"), "ENU");
+        sv.set("LOCALE", "deu", None).unwrap();
+        assert_eq!(sv.string("LOCALE"), "DEU");
+        sv.set("LOCALE", "fr", None).unwrap();
+        assert_eq!(sv.string("LOCALE"), "FRA");
+        assert_eq!(sv.set("LOCALE", "JPN", None), Err("LOCALE must be one of ENU, DEU, FRA, ESP.".to_string()));
+        assert_eq!(sv.string("LOCALE"), "FRA", "a bad value changes nothing");
+    }
 
     #[test]
     fn prefs_and_drawing_vars() {

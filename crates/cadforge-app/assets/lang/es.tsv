@@ -1,0 +1,580 @@
+# CadForge interface: English <TAB> translation (\n = line break). Checked by i18n::tests.
+2-Point	2 puntos
+3-Point	3 puntos
+3D Rotate	Girar 3D
+3D Scale	Escala 3D
+3D Tools	Herramientas 3D
+3D\nMove	Desplazar\n3D
+About CadForge	Acerca de CadForge
+Add	Añadir
+Add to Quick Access Toolbar	Añadir a la barra de herramientas de acceso rápido
+Add...	Añadir...
+Add/Remove	Añadir/Eliminar
+Adjust Space	Ajustar espacio
+Alias	Alias
+Align	Alinear
+Aligned	Alineada
+Angle	Ángulo
+Angular	Angular
+Annotate	Anotar
+Annotation	Anotación
+Annotation Scale	Escala de anotación
+Annotation scale	Escala de anotación
+Applications	Aplicaciones
+Arc	Arco
+Arc Length	Longitud de arco
+Arc length	Longitud de arco
+Area	Área
+Array	Matriz
+At Origin	En el origen
+Attach	Enlazar
+Attach Xref	Enlazar refX
+Audit	Revisar
+AutoCAD 2000 DWG (*.dwg)	AutoCAD 2000 DWG (*.dwg)
+AutoCAD 2004 DWG (*.dwg)	AutoCAD 2004 DWG (*.dwg)
+AutoComplete	Autocompletar
+AutoLISP\nConsole	Consola\nAutoLISP
+AutoSnap	AutoSnap
+Axis, End	Eje, Final
+Base X	Base X
+Base Y	Base Y
+Baseline	Línea base
+Binary	Binario
+Binary DXF (*.dxf)	DXF binario (*.dxf)
+Bind	Unir
+Blend	Fusionar
+Block	Bloque
+Block Definition	Definición de bloque
+Block Editor	Editor de bloques
+Block name	Nombre de bloque
+Blocks\nPalette	Paleta\nBloques
+Boolean	Booleana
+Boundaries	Contornos
+Boundary	Contorno
+Box	Prisma rectangular
+Break	Partir
+Brightness	Brillo
+Bring to Front	Traer al frente
+ByBlock	PorBloque
+ByLayer	PorCapa
+CAD Standards	Normas CAD
+CadForge	CadForge
+CadForge project (*.json)	Proyecto CadForge (*.json)
+Cancel	Cancelar
+Center	Centro
+Center Mark	Marca de centro
+Center X	Centro X
+Center Y	Centro Y
+Center, Diameter	Centro, diámetro
+Center, Radius	Centro, radio
+Center, Start, Angle	Centro, inicio, ángulo
+Center, Start, End	Centro, inicio, fin
+Center, Start, Length	Centro, inicio, longitud
+Centimeters	Centímetros
+Chamfer	Chaflán
+Chamfer Edge	Chaflán de arista
+Change Properties	Cambiar propiedades
+Change to Current Layer	Cambiar a capa actual
+Check	Comprobar
+Check Again	Comprobar de nuevo
+Check Standards	Comprobar normas
+Check Standards...	Comprobar normas...
+Circle	Círculo
+Circumference	Circunferencia
+Clean Screen	Pantalla limpia
+Clean\nScreen	Pantalla\nlimpia
+Clear	Borrar
+Clear All	Borrar todo
+Clear History	Borrar historial
+Clears the screen of toolbars and dockable windows (Ctrl+0).	Oculta las barras de herramientas y las ventanas anclables (Ctrl+0).
+Click to insert this block	Haga clic para insertar este bloque
+Clip	Delimitar
+Clip Image	Delimitar imagen
+Clip Xref	Delimitar refX
+Clipboard	Portapapeles
+Close	Cerrar
+Close All Other Drawings	Cerrar todos los demás dibujos
+Close Reference	Cerrar referencia
+Closed	Cerrado
+Colour scheme	Combinación de colores
+Columns	Columnas
+Command	Comando
+Command Line	Línea de comando
+Command line	Línea de comando
+Command line lines	Líneas de la línea de comando
+Commands	Comandos
+Cone	Cono
+Configure	Configurar
+Configure Standards	Configurar normas
+Construction Line	Línea auxiliar
+Contents	Contenido
+Continue	Continuar
+Contrast	Contraste
+Control vertices	Vértices de control
+Coordinates	Coordenadas
+Copy	Copiar
+Copy History	Copiar historial
+Copy Layout	Copiar presentación
+Copy Selection	Copiar selección
+Copy result	Copiar resultado
+Create	Crear
+Create Block	Crear bloque
+Crosshair	Cursor en cruz
+Custom scale	Escala personalizada
+Custom...	Personalizado...
+Customization	Personalización
+Cut	Cortar
+Cylinder	Cilindro
+DXF (*.dxf)	DXF (*.dxf)
+Data	Datos
+Data Extraction	Extracción de datos
+Data\nLink	Vínculo\nde datos
+Default	Por defecto
+Define Attributes	Definir atributos
+Define\nAttributes	Definir\natributos
+Degree	Grado
+Delete	Suprimir
+Delta X	Delta X
+Delta Y	Delta Y
+Deselect All	Deseleccionar todo
+Diameter	Diámetro
+Dimension	Cota
+Dimension Style	Estilo de cota
+Dimension Style Manager	Administrador de estilos de cota
+Dimension input	Entrada de cotas
+Dimension\nStyle	Estilo\nde cota
+Dimensions	Cotas
+Disassociate	Disociar
+Display	Visualización
+Display Grid	Mostrar rejilla
+Display elements	Elementos de visualización
+Display locked	Mostrar bloqueado
+Displays a Quick Properties panel for selected objects.	Muestra el panel Propiedades rápidas de los objetos seleccionados.
+Displays a reference grid in the drawing area (F7).	Muestra una rejilla de referencia en el área de dibujo (F7).
+Displays command prompts and coordinate input near the cursor (F12).	Muestra las solicitudes de comando y la entrada de coordenadas junto al cursor (F12).
+Displays objects with their assigned lineweights.	Muestra los objetos con su grosor de línea asignado.
+Distance	Distancia
+Divide	Dividir
+Donut	Arandela
+Drafting	Dibujo
+Drafting Settings	Parámetros de dibujo
+Draw	Dibujo
+Draw Order	Ordenar objetos
+Drawing	Dibujo
+Drawing Limits	Límites del dibujo
+Drawing Units	Unidades de dibujo
+Drawing Utilities	Utilidades de dibujo
+Draws in isometric planes: an isometric grid and snap, with ortho along the axes of the current plane (F5 or Ctrl+E switches the plane).	Dibuja en planos isométricos: rejilla y resolución isométricas, orto según los ejes del plano actual (F5 o Ctrl+E cambia de plano).
+Dynamic Input	Entrada dinámica
+Edit	Editar
+Edit Aliases	Editar alias
+Edit Aliases...	Editar alias...
+Edit Attribute	Editar atributo
+Edit Hatch	Editar sombreado
+Edit Polyline	Editar polilínea
+Edit Reference	Editar referencia
+Edit Spline	Editar spline
+Edit Table	Editar tabla
+Edit Text	Editar texto
+Edit...	Editar...
+Edit\nAliases	Editar\nalias
+Ellipse	Elipse
+Elliptical Arc	Arco elíptico
+End X	Fin X
+End Y	Fin Y
+End angle	Ángulo final
+Enter	Intro
+Erase	Borrar
+Exit	Salir
+Explode	Descomponer
+Export DXF	Exportar DXF
+Export OBJ	Exportar OBJ
+Export PDF	Exportar PDF
+Export STL	Exportar STL
+Export Table	Exportar tabla
+Extend	Alargar
+Extents	Extensión
+External Refs	Referencias externas
+Extract Attributes	Extraer atributos
+Extract Data	Extraer datos
+Extrude	Extrusión
+Fade	Atenuación
+Feet	Pies
+Field	Campo
+File	Archivo
+Fillet	Empalme
+Fillet Edge	Empalme de arista
+Filter	Filtro
+Find Text	Buscar texto
+Fit	Ajustar
+Fit points	Puntos de ajuste
+Fix	Corregir
+Fix All	Corregir todo
+From	Desde
+Front	Frontal
+General	General
+Geometry	Geometría
+Gradient	Degradado
+Grid Settings...	Parámetros de rejilla...
+Group	Grupo
+Groups	Grupos
+Hatch	Sombreado
+Hatch Boundary	Contorno de sombreado
+Hatch Creation	Creación de sombreado
+Hatch Editor	Editor de sombreado
+Hatch Settings	Parámetros de sombreado
+Height	Altura
+Help	Ayuda
+Home	Inicio
+ID Point	Punto ID
+Icon Off	Icono desactivado
+Icon On	Icono activado
+Ignore	Ignorar
+Image	Imagen
+Import	Importar
+Import\nDXF / JSON	Importar\nDXF / JSON
+Inches	Pulgadas
+Index Color	Color de índice
+Input Settings	Parámetros de entrada
+Insert	Insertar
+Insert Block	Insertar bloque
+Insert Block...	Insertar bloque...
+Insertion scale	Escala de inserción
+Interfere	Interferencia
+Intersect	Intersección
+Isometric Drafting	Dibujo isométrico
+Jogged	Recodo
+Join	Juntar
+Justify Text	Justificar texto
+Keyboard	Teclado
+Language	Idioma
+Layer Delete	Suprimir capa
+Layer Freeze	Inutilizar capa
+Layer Isolate	Aislar capa
+Layer Lock	Bloquear capa
+Layer Off	Desactivar capa
+Layer States	Estados de capa
+Layer States Manager	Administrador de estados de capa
+Layer Translator	Convertidor de capas
+Layer Unisolate	Desaislar capa
+Layer Unlock	Desbloquear capa
+Layer\nProperties	Propiedades\nde capa
+Layers	Capas
+Layout	Presentación
+Layout Viewports	Ventanas de presentación
+Layout\nWizard	Asistente\nde presentación
+Leader	Directriz
+Leaders	Directrices
+Length	Longitud
+Lengthen	Longitud
+Line	Línea
+Linear	Lineal
+Linear precision	Precisión lineal
+Lines	Líneas
+Linetype Manager	Administrador de tipos de línea
+Linetype\nManager	Administrador\nde tipos de línea
+Lineweight Settings	Parámetros de grosor de línea
+Linking & Extraction	Vinculación y extracción
+List	Lista
+Load	Cargar
+Load Application	Cargar aplicación
+Load Hatch Patterns	Cargar patrones de sombreado
+Load Linetypes	Cargar tipos de línea
+Load Plot Style Table	Cargar tabla de estilos de trazado
+Load file...	Cargar archivo...
+Load\nApplication	Cargar\naplicación
+Loft	Solevación
+Loops	Bucles
+Major radius	Radio mayor
+Make Current	Establecer actual
+Manage	Administrar
+Manager	Administrador
+Mass\nProperties	Propiedades\nfísicas
+Match	Igualar
+Match Layer	Igualar capa
+Match Properties	Igualar propiedades
+Match\nProperties	Igualar\npropiedades
+Maximize Viewport	Maximizar ventana
+Measure	Medir
+Measurement	Medición
+Menu Bar	Barra de menús
+Meters	Metros
+Millimeters	Milímetros
+Minimize Ribbon	Minimizar cinta
+Minor radius	Radio menor
+Mirror	Simetría
+Misc	Varios
+Model	Modelo
+Model Space	Espacio modelo
+Model or Paper Space	Espacio modelo o papel
+Model\nSpace	Espacio\nmodelo
+Modify	Modificar
+Modify...	Modificar...
+Move	Desplazar
+Move Origin	Desplazar origen
+Multileader	Directriz múltiple
+Multileader\nStyle	Estilo de\ndirectriz múltiple
+Multiline	Multilínea
+Multiline Text	Texto de líneas múltiples
+Multiline Text Editor	Editor de texto de líneas múltiples
+Multiline\nText	Texto de\nlíneas múltiples
+Multiple Points	Varios puntos
+Named Views	Vistas guardadas
+Named\nViews	Vistas\nguardadas
+Navigate	Navegar
+New	Nuevo
+New Layout	Nueva presentación
+New UCS...	Nuevo SCP...
+New drawing (Ctrl+N)	Nuevo dibujo (Ctrl+N)
+New layout	Nueva presentación
+New\nLayout	Nueva\npresentación
+Next Problem	Problema siguiente
+No blocks defined	No hay bloques definidos
+No recent commands	No hay comandos recientes
+No recent input	No hay entradas recientes
+None	Ninguno
+OBJ mesh (*.obj)	Malla OBJ (*.obj)
+Object	Objeto
+Object Snap	Referencia a objetos
+Object Snap Settings...	Parámetros de referencia a objetos...
+Object Snap Tracking	Rastreo de referencia a objetos
+Object Snap modes	Modos de referencia a objetos
+Object snap tracking	Rastreo de referencia a objetos
+Objects	Objetos
+Offset	Desfase
+On	Activado
+Open	Abrir
+Open Drawing	Abrir dibujo
+Open...	Abrir...
+Options	Opciones
+Options...	Opciones...
+Orbit	Órbita
+Ordinate	Coordenada
+Ortho Mode	Modo Orto
+Orthographic	Ortogonal
+Osnap Settings...	Parámetros de referencia...
+Other Formats	Otros formatos
+Other...	Otro...
+Output	Salida
+Overkill	Suprimir duplicados
+PDF (*.pdf)	PDF (*.pdf)
+PNG image (*.png)	Imagen PNG (*.png)
+Page Setup	Configurar página
+Page Setup Manager...	Administrador de configuraciones de página...
+Page\nSetup	Configurar\npágina
+Palettes	Paletas
+Pan	Encuadre
+Paper\nSpace	Espacio\npapel
+Parallel	Paralelo
+Paste	Pegar
+Path Array	Matriz de camino
+Pattern	Patrón
+Perimeter	Perímetro
+Perspective	Perspectiva
+Pickbox and grips	Selección y pinzamientos
+Plan\nView	Vista\nen planta
+Plot	Trazar
+Plot...	Trazar...
+Pointer input	Entrada del puntero
+Polar Array	Matriz polar
+Polar Tracking	Rastreo polar
+Polar angle settings	Parámetros de ángulo polar
+Polygon	Polígono
+Polygonal	Poligonal
+Polyline	Polilínea
+Polysolid	Polisólido
+Position X	Posición X
+Position Y	Posición Y
+Presspull	Pulsar/Tirar
+Preview	Vista preliminar
+Previous	Previo
+Primary Units	Unidades principales
+Primitives	Primitivas
+Properties	Propiedades
+Purge	Limpiar
+Purge All	Limpiar todo
+Pyramid	Pirámide
+Quick Dim	Cota rápida
+Quick Properties	Propiedades rápidas
+Quick Select	Selección rápida
+Quick Select...	Selección rápida...
+QuickCalc	Calculadora rápida
+Radius	Radio
+Ray	Rayo
+Reassociate	Reasociar
+Recent Commands	Comandos recientes
+Recent Input	Entradas recientes
+Rectangle	Rectángulo
+Rectangular	Rectangular
+Rectangular Array	Matriz rectangular
+Redo	Rehacer
+Reference	Referencia
+Regen	Regen
+Regen All	Regenerar todo
+Region	Región
+Remove	Eliminar
+Rename	Renombrar
+Reset	Restablecer
+Restore	Restituir
+Restore...	Restituir...
+Restricts cursor movement to horizontal or vertical (F8).	Restringe el movimiento del cursor a horizontal o vertical (F8).
+Restricts cursor movement to specified angle increments (F10).	Restringe el movimiento del cursor a incrementos de ángulo especificados (F10).
+Restricts cursor movement to specified intervals (F9).	Restringe el movimiento del cursor a intervalos especificados (F9).
+Revision Cloud	Nube de revisión
+Revolve	Revolución
+Right	Derecha
+Right-click customization	Personalización del botón derecho
+Rotate	Girar
+Rotation	Rotación
+Rows	Filas
+Run	Ejecutar
+Run\nScript	Ejecutar\nscript
+SE Iso	Iso SE
+STL mesh (*.stl)	Malla STL (*.stl)
+SVG (*.svg)	SVG (*.svg)
+SW Iso	Iso SO
+Save	Guardar
+Save As	Guardar como
+Save Block	Guardar bloque
+Save Block As	Guardar bloque como
+Save Drawing As	Guardar dibujo como
+Save...	Guardar...
+Scale	Escala
+Scale Text	Escalar texto
+Scale X	Escala X
+Scale Y	Escala Y
+Search for layer	Buscar capa
+Search system variables	Buscar variables de sistema
+Select	Seleccionar
+Select All	Seleccionar todo
+Select Color	Seleccionar color
+Select Color...	Seleccionar color...
+Select Data File	Seleccionar archivo de datos
+Select Image File	Seleccionar archivo de imagen
+Select Script	Seleccionar script
+Select Similar	Seleccionar similares
+Select Standards File	Seleccionar archivo de normas
+Select Template	Seleccionar plantilla
+Selection	Selección
+Selection Cycling	Ciclo de selección
+Selection modes	Modos de selección
+Send to Back	Enviar al fondo
+Set Current	Establecer actual
+SetByLayer	DefinirPorCapa
+Sets linear and angular units.	Establece las unidades lineales y angulares.
+Sets the annotation scale: the size annotative objects have in model space.	Establece la escala de anotación: el tamaño de los objetos anotativos en el espacio modelo.
+Shell	Funda
+Shortcut	Método abreviado
+Shortcut Keys	Teclas de método abreviado
+Shortcut:	Método abreviado:
+Show Panels	Mostrar grupos
+Show Tabs	Mostrar fichas
+Show/Hide Lineweight	Mostrar/ocultar grosor de línea
+Shows whether the sheet (PAPER) or model space (MODEL) is active. In a layout, click to switch between the sheet and the active viewport.	Indica si está activa la hoja (PAPEL) o el espacio modelo (MODELO). En una presentación, haga clic para cambiar entre la hoja y la ventana activa.
+Single	Única
+Single Line	Una línea
+Single Line Text	Texto en una línea
+Sketch	Bosquejo
+Slice	Corte
+Snap Mode	Modo Resolución
+Snap Overrides	Modificaciones de referencia
+Snap Settings...	Parámetros de resolución...
+Snap and Grid	Resolución y rejilla
+Snap type	Tipo de resolución
+Snaps to geometric points on objects (F3).	Se ajusta a los puntos geométricos de los objetos (F3).
+Solid	Sólido
+Solid Edit	Editar sólido
+Spelling	Ortografía
+Sphere	Esfera
+Spline	Spline
+Start X	Inicio X
+Start Y	Inicio Y
+Start angle	Ángulo inicial
+Start, Center, Angle	Inicio, centro, ángulo
+Start, Center, End	Inicio, centro, fin
+Start, Center, Length	Inicio, centro, longitud
+Start, End, Angle	Inicio, fin, ángulo
+Start, End, Direction	Inicio, fin, dirección
+Start, End, Radius	Inicio, fin, radio
+Status	Estado
+Status bar items	Elementos de la barra de estado
+Stretch	Estirar
+Style	Estilo
+Styles	Estilos
+Subtract	Diferencia
+Sweep	Barrido
+Switches between workspaces.	Cambia entre espacios de trabajo.
+Symbols and Arrows	Símbolos y flechas
+Table	Tabla
+Table Style	Estilo de tabla
+Table height	Altura de tabla
+Table width	Anchura de tabla
+Table\nStyle	Estilo\nde tabla
+Tables	Tablas
+Tan, Tan, Radius	Tan, tan, radio
+Temporary track point	Punto de rastreo temporal
+Text	Texto
+Text Position	Posición del texto
+Text Style	Estilo de texto
+Text height	Altura del texto
+Text override	Modificación de texto
+Text to MText	Texto a texto de líneas múltiples
+Text\nStyle	Estilo\nde texto
+Thaw All Layers	Reutilizar todas las capas
+Thicken	Engrosar
+Time	Hora
+Tolerance	Tolerancia
+Tool Palettes	Paletas de herramientas
+Tool\nPalettes	Paletas de\nherramientas
+Top	Superior
+Torus	Toroide
+Total angle	Ángulo total
+Trace	Trazo
+Tracking Settings...	Parámetros de rastreo...
+Tracks from acquired object snap points (F11).	Rastrea desde los puntos de referencia adquiridos (F11).
+Trim	Recortar
+True Color	Color verdadero
+Turn All Layers On	Activar todas las capas
+Type a command	Escriba un comando
+Type a keyword or phrase	Escriba una palabra clave o frase
+Undo	Deshacer
+Ungroup	Desagrupar
+Union	Unión
+Unitless	Sin unidad
+Units	Unidades
+Units...	Unidades...
+Up	Arriba
+Update	Actualizar
+Update from Source	Actualizar desde el origen
+Update\nExtrusion	Actualizar\nextrusión
+User Interface	Interfaz de usuario
+User Preferences	Preferencias de usuario
+Utilities	Utilidades
+Vertices	Vértices
+View	Vista
+Viewport Configuration List	Lista de configuraciones de ventanas
+Viewport\nArray	Matriz\nde ventanas
+Views	Vistas
+Visual LISP Console	Consola de Visual LISP
+Visual Styles	Estilos visuales
+Volume	Volumen
+Wedge	Cuña
+Where objects overlap, a click lists them so you can choose one (Ctrl+W).	Donde los objetos se superponen, un clic los enumera para elegir uno (Ctrl+W).
+Width	Anchura
+Window	Ventana
+Wipeout	Cobertura
+Workspace Switching	Cambio de espacio de trabajo
+World	Universal
+World\nUCS	SCP\nuniversal
+Write Block	Escribir bloque
+Write to Source	Escribir en el origen
+Z Rotate...	Girar en Z...
+Zoom	Zoom
+Zoom Extents	Zoom Extensión
+Zoom In	Ampliar
+Zoom Object	Zoom Objeto
+Zoom Out	Reducir
+Zoom Previous	Zoom Previo
+Zoom Window	Zoom Ventana
+Zoom\nExtents	Zoom\nExtensión
+Zoom\nWindow	Zoom\nVentana

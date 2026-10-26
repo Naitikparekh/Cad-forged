@@ -196,7 +196,7 @@ impl CadForgeApp {
             // title bar
             let (tr, _) = ui.allocate_exact_size(vec2(width, 30.0), egui::Sense::hover());
             ui.painter().rect_filled(tr, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.ribbon_title);
-            ui.painter().text(tr.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, &title, FontId::new(13.0, FontFamily::Name("bold".into())), t.text);
+            ui.painter().text(tr.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, crate::i18n::tr(&title), FontId::new(13.0, FontFamily::Name("bold".into())), t.text);
             let xr = egui::Rect::from_center_size(tr.right_center() - vec2(16.0, 0.0), vec2(20.0, 20.0));
             let xresp = ui.interact(xr, ui.id().with("dlg-x"), egui::Sense::click());
             if xresp.hovered() {
@@ -474,7 +474,7 @@ impl CadForgeApp {
 
     pub fn btn(&self, ui: &mut egui::Ui, label: &str, primary: bool) -> egui::Response {
         let t = self.t;
-        let text = RichText::new(label).color(if primary { Color32::WHITE } else { t.text });
+        let text = RichText::new(crate::i18n::tr(label)).color(if primary { Color32::WHITE } else { t.text });
         let b = egui::Button::new(text).min_size(vec2(78.0, 24.0)).fill(if primary { t.accent } else { t.raised }).stroke(Stroke::new(1.0, if primary { t.accent2 } else { t.sep }));
         ui.add(b)
     }
@@ -506,13 +506,13 @@ impl CadForgeApp {
     }
 
     pub fn note(&self, ui: &mut egui::Ui, text: &str) {
-        ui.label(RichText::new(text).small().color(self.t.text3));
+        ui.label(RichText::new(crate::i18n::tr(text)).small().color(self.t.text3));
     }
 
     pub fn group<R>(&self, ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let t = self.t;
         egui::Frame::new().stroke(Stroke::new(1.0, t.border)).corner_radius(CornerRadius::same(3)).inner_margin(Margin::symmetric(10, 8)).show(ui, |ui| {
-            ui.label(RichText::new(title).color(t.text2).small());
+            ui.label(RichText::new(crate::i18n::tr(title)).color(t.text2).small());
             add(ui)
         }).inner
     }
@@ -523,7 +523,7 @@ impl CadForgeApp {
             ui.spacing_mut().item_spacing.x = 2.0;
             for (i, name) in tabs.iter().enumerate() {
                 let active = *cur == i;
-                let b = egui::Button::new(RichText::new(*name).color(if active { t.text } else { t.text2 })).fill(if active { t.raised } else { Color32::TRANSPARENT }).stroke(Stroke::new(1.0, if active { t.sep } else { Color32::TRANSPARENT })).min_size(vec2(0.0, 24.0));
+                let b = egui::Button::new(RichText::new(crate::i18n::tr(name)).color(if active { t.text } else { t.text2 })).fill(if active { t.raised } else { Color32::TRANSPARENT }).stroke(Stroke::new(1.0, if active { t.sep } else { Color32::TRANSPARENT })).min_size(vec2(0.0, 24.0));
                 if ui.add(b).clicked() {
                     *cur = i;
                 }

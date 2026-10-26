@@ -188,7 +188,7 @@ impl CadForgeApp {
         p.rect_filled(strip, 0.0, t.chrome);
         let mut x = rect.left() + 6.0;
         for tab in &tabs {
-            let g = p.layout_no_wrap(tab.title.clone(), FontId::proportional(12.5), t.text);
+            let g = p.layout_no_wrap(crate::i18n::tr(&tab.title).to_string(), FontId::proportional(12.5), t.text);
             let w = g.size().x + 28.0;
             let r = Rect::from_min_size(Pos2::new(x, strip.top() + 2.0), vec2(w, TABS_H - 2.0));
             let resp = ui.interact(r, ui.id().with(("rtab", &tab.id)), Sense::click());
@@ -202,7 +202,7 @@ impl CadForgeApp {
             }
             let color = if tab.contextual { Color32::from_rgb(0xff, 0xd3, 0x7a) } else if active || resp.hovered() { t.text } else { t.text2 };
             let font = if active { FontId::new(12.5, FontFamily::Name("bold".into())) } else { FontId::proportional(12.5) };
-            p.text(r.center() + vec2(0.0, 1.0), Align2::CENTER_CENTER, &tab.title, font, color);
+            p.text(r.center() + vec2(0.0, 1.0), Align2::CENTER_CENTER, crate::i18n::tr(&tab.title), font, color);
             if resp.clicked() {
                 self.ui.ribbon_tab = tab.id.clone();
                 if self.ui.ribbon_mode == 1 {
@@ -326,7 +326,7 @@ impl CadForgeApp {
 
     fn panel_width(&self, p: &Painter, panel: &Panel) -> f32 {
         let w: f32 = panel.items.iter().map(|i| self.item_size(p, i).w).sum::<f32>() + 2.0 * panel.items.len().saturating_sub(1) as f32 + 4.0;
-        let tw = p.layout_no_wrap(panel.title.clone(), FontId::proportional(11.0), Color32::WHITE).size().x + 30.0;
+        let tw = p.layout_no_wrap(crate::i18n::tr(&panel.title).to_string(), FontId::proportional(11.0), Color32::WHITE).size().x + 30.0;
         w.max(tw)
     }
 
@@ -340,6 +340,8 @@ impl CadForgeApp {
         let titles_only = self.ui.ribbon_mode == 2 && !in_flyout;
         // which panels collapse? (lowest priority first among panels after the second)
         let widths: Vec<f32> = tab.panels.iter().map(|pl| self.panel_width(&p, pl) + 8.0).collect();
+        // a collapsed panel is a button wide enough for its (translated) title
+        let narrow: Vec<f32> = tab.panels.iter().map(|pl| (p.layout_no_wrap(crate::i18n::tr(&pl.title).to_string(), FontId::proportional(11.5), Color32::WHITE).size().x + 12.0).max(58.0)).collect();
         let mut collapsed = vec![false; tab.panels.len()];
         if !titles_only {
             let avail = body.width() - 8.0;
@@ -351,11 +353,11 @@ impl CadForgeApp {
                     break;
                 }
                 collapsed[i] = true;
-                total -= widths[i] - 62.0;
+                total -= widths[i] - narrow[i] - 4.0;
             }
         }
         for (i, panel) in tab.panels.iter().enumerate() {
-            let pw = if collapsed[i] { 58.0 } else { widths[i] - 8.0 };
+            let pw = if collapsed[i] { narrow[i] } else { widths[i] - 8.0 };
             let prect = Rect::from_min_size(Pos2::new(x, top), vec2(pw, body.bottom() - top - 1.0));
             if collapsed[i] {
                 self.collapsed_panel(ui, ctx, prect, panel);
@@ -381,7 +383,7 @@ impl CadForgeApp {
         }
         let icon = self.first_icon(&panel.items);
         self.icons.paint(&p, &icon, Rect::from_center_size(Pos2::new(btn.center().x, btn.top() + 22.0), vec2(32.0, 32.0)), &t, Tint::Normal);
-        p.text(Pos2::new(btn.center().x, btn.top() + 46.0), Align2::CENTER_CENTER, &panel.title, FontId::proportional(11.5), t.text);
+        p.text(Pos2::new(btn.center().x, btn.top() + 46.0), Align2::CENTER_CENTER, crate::i18n::tr(&panel.title), FontId::proportional(11.5), t.text);
         chevron(&p, Pos2::new(btn.center().x, btn.top() + 60.0), 3.5, false, t.text2);
         if resp.clicked() {
             self.ui.flyout_panel = if self.ui.flyout_panel.as_ref().map(|x| x.0.as_str()) == Some(panel.title.as_str()) { None } else { Some((panel.title.clone(), btn)) };
@@ -445,7 +447,7 @@ impl CadForgeApp {
             p.rect_filled(title_rect, 0.0, t.ribbon_title);
         }
         let tcolor = if has_slide && (tresp.hovered() || open) { t.text } else { t.text3 };
-        let g = p.layout_no_wrap(panel.title.clone(), FontId::proportional(11.0), tcolor);
+        let g = p.layout_no_wrap(crate::i18n::tr(&panel.title).to_string(), FontId::proportional(11.0), tcolor);
         let tw = g.size().x;
         p.galley(Pos2::new(title_rect.center().x - tw / 2.0 - if has_slide { 6.0 } else { 0.0 }, title_rect.center().y - g.size().y / 2.0), g, tcolor);
         if has_slide {
@@ -460,7 +462,7 @@ impl CadForgeApp {
                 let lresp = ui.interact(lr, ui.id().with(("launch", &panel.title)), Sense::click());
                 self.icons.paint(&p, "launcher", lr, &t, Tint::Mono(if lresp.hovered() { t.text } else { t.text3 }));
                 let cmd = l.clone();
-                if lresp.on_hover_text(format!("{} settings", panel.title)).clicked() {
+                if lresp.on_hover_text(crate::i18n::tr(&panel.title)).clicked() {
                     self.run_command(&cmd, Args::none());
                 }
             }
@@ -633,7 +635,7 @@ impl CadForgeApp {
                 } else {
                     for n in names {
                         let n2 = n.clone();
-                        v.push(MItem::item(&n).icon("block").on(move |a| a.run_command("INSERT", Args::none().with("name", cadforge_engine::runtime::ArgVal::Str(n2.clone())))));
+                        v.push(MItem::data(&n).icon("block").on(move |a| a.run_command("INSERT", Args::none().with("name", cadforge_engine::runtime::ArgVal::Str(n2.clone())))));
                     }
                 }
                 v
@@ -757,7 +759,7 @@ impl CadForgeApp {
                 for l in all_linetypes().iter() {
                     let n = l.name.to_string();
                     let disp = cadforge_core::style::ltype_display(l.name);
-                    items.push(MItem::item(&disp).on(move |a| a.set_property("ltype", None, None, Some(n.clone()))));
+                    items.push(MItem::data(&disp).on(move |a| a.set_property("ltype", None, None, Some(n.clone()))));
                 }
                 items.push(MItem::Sep);
                 items.push(MItem::item("Other...").on(|a| a.run_command("LINETYPE", Args::none())));
@@ -909,8 +911,9 @@ impl Area {
     }
 }
 
+/// A button's label in the interface language: its own, or its command's title.
 fn plain_label(label: Option<&str>, title: &str) -> String {
-    label.map(str::to_string).unwrap_or_else(|| title.to_string())
+    crate::i18n::tr(label.unwrap_or(title)).to_string()
 }
 
 fn natord(a: &str, b: &str) -> std::cmp::Ordering {
