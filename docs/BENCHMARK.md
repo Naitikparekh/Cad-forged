@@ -13,7 +13,7 @@ This number is a self-assessment against a written rubric, not a measurement aga
 | Command breadth: core inventory | registry vs. acad-commands.tsv (usage-weighted) | 10 | 99.5% | 9.9 |
 | Command breadth: long tail | registry vs. acad-longtail.tsv (usage-weighted) | 10 | 33.7% | 3.4 |
 | Command aliases (acad.pgp) | registry vs. acad-aliases.tsv | 2 | 100.0% | 2.0 |
-| Commands exercised by automated tests | registered commands named by a test | 8 | 94.4% | 7.5 |
+| Commands exercised by automated tests | registered commands named by a test | 8 | 94.4% | 7.6 |
 | Object types and drawing model | checklist | 8 | 75.2% | 6.0 |
 | File formats and interchange | checklist | 10 | 84.2% | 8.4 |
 | Drafting aids, selection, inquiry | checklist | 8 | 88.7% | 7.1 |
@@ -28,7 +28,7 @@ This number is a self-assessment against a written rubric, not a measurement aga
 
 Command inventory: 286 core commands (weighted by how often drawings use them) and 182 long-tail commands. 283 / 286 core and 56 / 182 long-tail commands exist in the registry; commands that only report "not supported" earn part of their weight (`tools/benchmark/stubs.tsv`). All 100% of the standard `acad.pgp` aliases resolve to the right command.
 
-Test inventory: 801 Rust tests and 50 browser tests (headless Chromium driving the WebAssembly build).
+Test inventory: 816 Rust tests and 50 browser tests (headless Chromium driving the WebAssembly build).
 
 ## How to read it
 

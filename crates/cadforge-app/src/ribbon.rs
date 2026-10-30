@@ -331,7 +331,7 @@ impl CadForgeApp {
                 let sizes: Vec<Sz> = items.iter().map(|i| self.item_size(p, i)).collect();
                 Sz { w: sizes.iter().map(|s| s.w).sum(), h: sizes.iter().map(|s| s.h).fold(0.0, f32::max) }
             }
-            Item::Combo { kind } => Sz { w: if kind == "visualstyle" { 160.0 } else { 190.0 }, h: SMALL_H },
+            Item::Combo { kind } => Sz { w: match kind.as_str() { "visualstyle" => 160.0, "textstyle" | "dimstyle" | "mleaderstyle" | "tablestyle" | "annoscale" => 150.0, _ => 190.0 }, h: SMALL_H },
             Item::HatchPick => Sz { w: 58.0, h: LARGE_H },
             Item::Patterns => Sz { w: 7.0 * 60.0 + 6.0 * 3.0, h: 72.0 },
             Item::HatchProps => Sz { w: 190.0, h: 72.0 },
@@ -735,6 +735,23 @@ impl CadForgeApp {
                     p.text(Pos2::new(x + 52.0, cy), Align2::LEFT_CENTER, text, font.clone(), t.text);
                 }
             }
+            "textstyle" | "dimstyle" | "mleaderstyle" | "tablestyle" | "annoscale" => {
+                let (icon, name) = {
+                    let a = self.h.borrow();
+                    let st = a.doc().map(|d| &d.settings);
+                    match kind {
+                        "dimstyle" => ("dim", st.map_or_else(String::new, |s| s.cur_dim_style.clone())),
+                        "mleaderstyle" => ("mleader", st.map_or_else(String::new, |s| s.cur_mleader_style.clone())),
+                        "tablestyle" => ("tablestyle", st.map_or_else(String::new, |s| s.cur_table_style.clone())),
+                        "annoscale" => ("annotative", st.map_or_else(String::new, |s| s.cannoscale.clone())),
+                        _ => ("textstyle", "Standard".to_string()),
+                    }
+                };
+                let icon = if self.icons.has(icon) { icon } else { "mtext" };
+                self.icons.paint(&p, icon, Rect::from_center_size(Pos2::new(x + 7.0, cy), vec2(14.0, 14.0)), &t, Tint::Normal);
+                let name = if name.is_empty() { "Standard".to_string() } else { name };
+                p.with_clip_rect(Rect::from_min_max(r.min, r.right_bottom() - vec2(18.0, 0.0))).text(Pos2::new(x + 20.0, cy), Align2::LEFT_CENTER, name, font.clone(), t.text);
+            }
             _ => {
                 let style = self.h.borrow().editor().map(|e| e.visual_style.clone()).unwrap_or_default();
                 p.text(Pos2::new(x, cy), Align2::LEFT_CENTER, style, font.clone(), t.text);
@@ -748,6 +765,53 @@ impl CadForgeApp {
 
     fn combo_menu(&mut self, ctx: &egui::Context, kind: &str, r: Rect) {
         match kind {
+            "annoscale" => self.annoscale_menu(ctx, r),
+            "textstyle" | "dimstyle" | "mleaderstyle" | "tablestyle" => {
+                // the drawing's styles of that kind; a click makes one current, the last item opens its manager
+                let (cur, names) = {
+                    let a = self.h.borrow();
+                    let Some(st) = a.doc().map(|d| &d.settings) else { return };
+                    match kind {
+                        "dimstyle" => (st.cur_dim_style.clone(), st.dim_styles.keys().cloned().collect::<Vec<_>>()),
+                        "mleaderstyle" => (st.cur_mleader_style.clone(), st.mleader_styles.keys().cloned().collect()),
+                        "tablestyle" => (st.cur_table_style.clone(), st.table_styles.keys().cloned().collect()),
+                        _ => ("Standard".to_string(), vec!["Standard".to_string()]),
+                    }
+                };
+                let mut names = names;
+                if names.is_empty() {
+                    names.push(if cur.is_empty() { "Standard".into() } else { cur.clone() });
+                }
+                let k = kind.to_string();
+                let mut items: Vec<MItem> = names
+                    .into_iter()
+                    .map(|n| {
+                        let (n2, k2) = (n.clone(), k.clone());
+                        MItem::data(&n).checked(n.eq_ignore_ascii_case(&cur) || (cur.is_empty() && n == "Standard")).on(move |a| {
+                            let (n3, k3) = (n2.clone(), k2.clone());
+                            a.edit_doc("Set current style", move |d| {
+                                d.will_change();
+                                match k3.as_str() {
+                                    "dimstyle" => d.settings.cur_dim_style = n3.clone(),
+                                    "mleaderstyle" => d.settings.cur_mleader_style = n3.clone(),
+                                    "tablestyle" => d.settings.cur_table_style = n3.clone(),
+                                    _ => {}
+                                }
+                                d.touch();
+                            });
+                        })
+                    })
+                    .collect();
+                items.push(MItem::Sep);
+                let (label, cmd) = match kind {
+                    "dimstyle" => ("Manage Dimension Styles...", "DIMSTYLE"),
+                    "mleaderstyle" => ("Manage Multileader Styles...", "MLEADERSTYLE"),
+                    "tablestyle" => ("Manage Table Styles...", "TABLESTYLE"),
+                    _ => ("Manage Text Styles...", "STYLE"),
+                };
+                items.push(MItem::item(label).on(move |a| a.run_command(cmd, Args::none())));
+                self.dropdown(ctx, r, items, 190.0);
+            }
             "layer" => {
                 self.ui.layer_dd = Some(r);
                 self.ui.layer_dd_frame = ctx.cumulative_frame_nr();

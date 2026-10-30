@@ -27,7 +27,7 @@ product.
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **354 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **359 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).

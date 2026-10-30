@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 354 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 359 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -60,9 +60,13 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `AIMLEADEREDITADD` |  | Adds a leader line to a multileader. |
+| `AIMLEADEREDITREMOVE` |  | Removes a leader line from a multileader. |
 | `ANNORESET` |  | Resets annotative objects to their size at the current annotation scale. |
 | `ANNOUPDATE` |  | Updates annotative objects to the current annotation scale. |
 | `BOUNDARY` | `BO` | Creates a region or a polyline from an area enclosed by objects. |
+| `CENTERLINE` | `CL` | Draws the centerline between two selected lines. |
+| `CENTERMARK` | `CM` | Adds center marks to selected circles and arcs. |
 | `DDEDIT` |  | Edits single-line text, multiline text, dimension text, table cells and attribute definitions. |
 | `DIM` |  | Creates multiple dimension types with a single command. |
 | `DIMALIGNED` | `DAL` | Creates an aligned linear dimension. |
@@ -90,6 +94,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `HATCH` | `BH` `BHATCH` `H` | Fills an enclosed area or selected objects with a hatch pattern. |
 | `HATCHEDIT` | `HE` | Modifies an existing hatch or fill. |
 | `MLEADER` | `LE` `LEADER` `MLD` `QLEADER` | Creates a leader line with annotation text. |
+| `MLEADERALIGN` | `MLA` | Aligns the text of selected multileaders with one of them. |
 | `MLEADEREDIT` |  | Adds leader lines to, or removes them from, a multileader. |
 | `MLEADERSTYLE` | `MLS` | Creates and modifies multileader styles. |
 | `MTEXT` | `MT` `T` | Creates a multiline text object. |

@@ -729,7 +729,7 @@ impl CadForgeApp {
         self.dropup(ctx, r, v, 150.0);
     }
 
-    fn annoscale_menu(&mut self, ctx: &egui::Context, r: Rect) {
+    pub fn annoscale_menu(&mut self, ctx: &egui::Context, r: Rect) {
         let (cur, names): (String, Vec<String>) = self.h.borrow().doc().map_or((String::new(), vec![]), |d| (d.settings.cannoscale.clone(), d.settings.scales.iter().map(|s| s.name.clone()).collect()));
         let mut v = vec![MItem::Header("Annotation scale".into())];
         for n in names {

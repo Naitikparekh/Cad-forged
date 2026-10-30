@@ -293,6 +293,67 @@ put_panel("manage", panel("CAD Standards", [
     stack(btn("CHECKSTANDARDS", "Check", "small", "standards"), btn("LAYTRANS", "Layer Translator", "small", "layers")),
 ]), after="Styles")
 
+# ---------------------------------------------------------------- Annotate, laid out like AutoCAD's
+ICONS["centerline"] = '<path class="l" d="M5 7h22M5 25h22"/><path class="a" d="M3 16h4M10 16h5M18 16h4M25 16h4"/>'
+icons["centerline"] = ICONS["centerline"]
+ICONS["mleaderadd"] = '<path class="l" d="M5 26 14 15h12"/><path class="o" d="M20 5v8M16 9h8"/>'
+icons["mleaderadd"] = ICONS["mleaderadd"]
+ICONS["mleaderremove"] = '<path class="l" d="M5 26 14 15h12"/><path class="o" d="M16 9h8"/>'
+icons["mleaderremove"] = ICONS["mleaderremove"]
+ICONS["mleaderalign"] = '<path class="k" d="M20 4v24"/><path class="l" d="M4 10l6 3h10M6 24l6-3h8"/>'
+icons["mleaderalign"] = ICONS["mleaderalign"]
+
+ICONS["annotative"] = '<path class="l" d="M4 27 13 5h6l9 22"/><path class="a" d="M9 19h14"/><rect class="a" x="20" y="21" width="9" height="7"/>'
+icons["annotative"] = ICONS["annotative"]
+ICONS["diminspect"] = '<rect class="l" x="4" y="10" width="24" height="12" rx="6"/><path class="a" d="M10 16h12"/><path class="o" d="M16 4v4M16 24v4"/>'
+icons["diminspect"] = ICONS["diminspect"]
+
+def combo(kind):
+    return {"t": "combo", "kind": kind}
+
+def row(*items):
+    items = [i for i in items if i]
+    return {"t": "row", "items": items} if items else None
+
+DIM_TYPES = [mi(c, l, i) for c, l, i in [("DIMLINEAR", "Linear", "dimlinear"), ("DIMALIGNED", "Aligned", "dimaligned"), ("DIMANGULAR", "Angular", "dimangular"), ("DIMARC", "Arc Length", "dimarc"), ("DIMRADIUS", "Radius", "dimradius"), ("DIMDIAMETER", "Diameter", "dimdiameter"), ("DIMJOGGED", "Jogged", "dimjogged"), ("DIMORDINATE", "Ordinate", "dimordinate")]]
+annotate_panels = [p for p in [
+    panel("Text", [
+        btn("MTEXT", "Multiline\nText", icon="mtext", menu=[mi("MTEXT", "Multiline Text", "mtext"), mi("TEXT", "Single Line", "text")]),
+        stack(combo("textstyle"), btn("SPELL", "Check Spelling", "small", "spell"), btn("FIND", "Find Text", "small", "find")),
+    ], launcher="STYLE", slideout=[btn("TEXTEDIT", "Edit Text", "small", "textedit"), btn("SCALETEXT", "Scale Text", "small", "scaletext"), btn("JUSTIFYTEXT", "Justify Text", "small", "justifytext"), btn("FIELD", "Field", "small", "field"), btn("TXT2MTXT", "Text to MText", "small", "scaletext")]),
+    panel("Dimensions", [
+        btn("DIM", "Dimension", icon="dim"),
+        btn("QDIM", "Quick", icon="qdim"),
+        stack(btn("DIMLINEAR", "Linear", "small", "dimlinear", menu=DIM_TYPES),
+              btn("DIMCONTINUE", "Continue", "small", "dimcontinue", menu=[mi("DIMCONTINUE", "Continue", "dimcontinue"), mi("DIMBASELINE", "Baseline", "dimbaseline")]),
+              combo("dimstyle")),
+        stack(row(btn("DIMBREAK", "Break", "icon", "dimbreak"), btn("DIMSPACE", "Adjust Space", "icon", "dimspace"), btn("DIMINSPECT", "Inspect", "icon", "diminspect")),
+              row(btn("DIMREGEN", "Update", "icon", "dim"), btn("DIMREASSOCIATE", "Reassociate", "icon", "dim"), btn("DIMDISASSOCIATE", "Disassociate", "icon", "dim")),
+              row(btn("DIMEDIT", "Oblique", "icon", "dimedit"), btn("DIMTEDIT", "Text Angle", "icon", "textedit"), btn("TOLERANCE", "Tolerance", "icon", "tolerance"))),
+    ], launcher="DIMSTYLE"),
+    panel("Centerlines", [
+        btn("CENTERMARK", "Center\nMark", icon="dimcenter"),
+        btn("CENTERLINE", "Centerline", icon="centerline"),
+    ]),
+    panel("Leaders", [
+        btn("MLEADER", "Multileader", icon="mleader"),
+        stack(combo("mleaderstyle"), btn("AIMLEADEREDITADD", "Add Leader", "small", "mleaderadd"), btn("AIMLEADEREDITREMOVE", "Remove Leader", "small", "mleaderremove")),
+        stack(btn("MLEADERALIGN", "Align", "small", "mleaderalign"), btn("MLEADEREDIT", "Edit", "small", "mleader")),
+    ], launcher="MLEADERSTYLE"),
+    panel("Tables", [
+        btn("TABLE", "Table", icon="table"),
+        stack(combo("tablestyle"), btn("DATAEXTRACTION", "Extract Data", "small", "csv"), btn("DATALINK", "Link Data", "small", "table")),
+    ], launcher="TABLESTYLE"),
+    panel("Markup", [
+        btn("REVCLOUD", "Revision\nCloud", icon="revcloud"),
+        btn("WIPEOUT", "Wipeout", icon="wipeout"),
+    ]),
+    panel("Annotation Scaling", [
+        stack(combo("annoscale"), btn("OBJECTSCALE", "Add/Delete Scales", "small", "annotative"), btn("ANNORESET", "Sync Scale Positions", "small", "annotative")),
+    ]),
+] if p]
+tab("annotate")["panels"] = annotate_panels
+
 json.dump(ribbon, open(assets / "ribbon.json", "w"), separators=(",", ":"))
 json.dump(icons, open(assets / "icons.json", "w"), separators=(",", ":"))
 print("ribbon tabs:", [t["id"] for t in ribbon["tabs"]], "icons:", len(icons))

@@ -7,6 +7,7 @@ use crate::runtime::PromptSpec;
 use cadforge_core::entities::{Entity, Kind};
 
 mod annoscale;
+mod centers;
 mod dimassoc;
 mod dims;
 mod leaders;
@@ -20,6 +21,7 @@ pub fn register(r: &mut Registry) {
     dimassoc::register(r);
     annoscale::register(r);
     leaders::register(r);
+    centers::register(r);
     tables::register(r);
     textcmds::register(r);
     tolerance::register(r);
@@ -30,6 +32,10 @@ fn ps(message: &str) -> PromptSpec {
 }
 
 /// A fresh anonymous group id, so that the parts of one annotation select together.
+fn plural(n: usize, w: &str) -> String {
+    format!("{n} {w}{}", if n == 1 { "" } else { "s" })
+}
+
 fn group_id(c: &Ctx) -> String {
     let serial = c.app(|a| {
         a.mem.group_serial += 1;
