@@ -925,15 +925,22 @@ fn cell_at(yaw: f64, pitch: f64, c0: Pos2, p: Pos2) -> Option<CubeHit> {
     None
 }
 
-const ARROWS: [(f32, f32, i32, i32); 4] = [(-50.0, 0.0, -1, 0), (50.0, 0.0, 1, 0), (0.0, -52.0, 0, -1), (0.0, 52.0, 0, 1)];
+/// The rotate arrows: between the cube and the compass ring, clear of the ring's letters.
+const ARROWS: [(f32, f32, i32, i32); 4] = [(-35.0, 0.0, -1, 0), (35.0, 0.0, 1, 0), (0.0, -35.0, 0, -1), (0.0, 35.0, 0, 1)];
+
+/// Looking straight at a face of the cube (plan, or level and square to a side): only then are the rotate arrows shown.
+fn face_on(yaw: f64, pitch: f64) -> bool {
+    let q = std::f64::consts::FRAC_PI_2;
+    pitch.abs() > 1.05 || (pitch.abs() < 0.03 && ((yaw / q).round() * q - yaw).abs() < 0.03)
+}
 
 fn cube_hit(yaw: f64, pitch: f64, local: Pos2) -> Option<CubeHit> {
     let c0 = Pos2::new(CUBE / 2.0, CUBE / 2.0);
     if (local - Pos2::new(14.0, 14.0)).length() < 11.0 {
         return Some(CubeHit::Home);
     }
-    for (i, a) in ARROWS.iter().enumerate() {
-        if (local - (c0 + vec2(a.0, a.1))).length() < 9.0 {
+    for (i, a) in ARROWS.iter().enumerate().filter(|_| face_on(yaw, pitch)) {
+        if (local - (c0 + vec2(a.0, a.1))).length() < 7.0 {
             return Some(CubeHit::Arrow(i));
         }
     }
@@ -1124,13 +1131,35 @@ impl CadForgeApp {
         let c0 = r.min + vec2(CUBE / 2.0, CUBE / 2.0);
         let plan = pitch.abs() > 1.05;
         if plan {
-            p.circle_stroke(c0, 47.0, Stroke::new(1.2, if dark { Color32::from_rgba_unmultiplied(230, 236, 243, 140) } else { Color32::from_rgba_unmultiplied(40, 50, 60, 128) }));
+            // the compass: N, E, S and W sit in gaps of the ring
+            const RING: f32 = 47.0;
+            let ring_col = if dark { Color32::from_rgba_unmultiplied(230, 236, 243, 140) } else { Color32::from_rgba_unmultiplied(40, 50, 60, 128) };
+            let text_col = if dark { Color32::from_rgb(0xdf, 0xe5, 0xec) } else { Color32::from_rgb(0x2a, 0x33, 0x3c) };
+            let mut gaps: Vec<f32> = vec![];
             for (label, ang) in [("N", std::f64::consts::FRAC_PI_2), ("E", 0.0), ("S", -std::f64::consts::FRAC_PI_2), ("W", std::f64::consts::PI)] {
                 let rr = cam_rot(yaw, pitch, [ang.cos(), ang.sin(), 0.0]);
-                let h = rr[0].hypot(rr[1]);
-                let (x, y) = (40.0 * rr[0] / h.max(0.4) * h, -40.0 * rr[1] / h.max(0.4) * h);
-                let pos = c0 + vec2(x as f32 * 1.22, y as f32 * 1.22);
-                p.text(pos, Align2::CENTER_CENTER, label, FontId::new(10.0, egui::FontFamily::Name("bold".into())), if dark { Color32::from_rgb(0xdf, 0xe5, 0xec) } else { Color32::from_rgb(0x2a, 0x33, 0x3c) });
+                let a = (-rr[1] as f32).atan2(rr[0] as f32);
+                gaps.push(a);
+                let pos = c0 + vec2(a.cos(), a.sin()) * RING;
+                p.text(pos, Align2::CENTER_CENTER, label, FontId::new(10.5, egui::FontFamily::Name("bold".into())), text_col);
+            }
+            let gap = 0.2f32;
+            let near = |a: f32| gaps.iter().any(|g| ((a - g + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI).abs() < gap);
+            let n = 160;
+            let mut run: Vec<Pos2> = vec![];
+            for i in 0..=n {
+                let a = i as f32 / n as f32 * std::f32::consts::TAU;
+                if near(a) {
+                    if run.len() > 1 {
+                        p.add(Shape::line(std::mem::take(&mut run), Stroke::new(1.2, ring_col)));
+                    }
+                    run.clear();
+                } else {
+                    run.push(c0 + vec2(a.cos(), a.sin()) * RING);
+                }
+            }
+            if run.len() > 1 {
+                p.add(Shape::line(run, Stroke::new(1.2, ring_col)));
             }
         }
         let hov_cell = if let Some(CubeHit::Cell { face, i, j }) = hover { Some((face, i, j)) } else { None };
@@ -1163,7 +1192,7 @@ impl CadForgeApp {
         let home_col = if hover == Some(CubeHit::Home) { Color32::from_rgb(0x5b, 0xb8, 0xff) } else if dark { Color32::from_rgb(0xae, 0xb9, 0xc6) } else { Color32::from_rgb(0x55, 0x61, 0x6e) };
         let o = r.min;
         p.add(Shape::convex_polygon(vec![o + vec2(14.0, 7.0), o + vec2(21.0, 14.0), o + vec2(18.5, 14.0), o + vec2(18.5, 20.0), o + vec2(9.5, 20.0), o + vec2(9.5, 14.0), o + vec2(7.0, 14.0)], home_col, Stroke::NONE));
-        for (i, a) in ARROWS.iter().enumerate() {
+        for (i, a) in ARROWS.iter().enumerate().filter(|_| face_on(yaw, pitch)) {
             let hc = if hover == Some(CubeHit::Arrow(i)) { Color32::from_rgb(0x5b, 0xb8, 0xff) } else if dark { Color32::from_rgb(0xae, 0xb9, 0xc6) } else { Color32::from_rgb(0x55, 0x61, 0x6e) };
             let (cx, cy) = (c0.x + a.0, c0.y + a.1);
             let (dx, dy) = (a.2 as f32, a.3 as f32);
