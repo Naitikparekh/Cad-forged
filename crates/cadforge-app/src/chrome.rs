@@ -1006,18 +1006,5 @@ pub fn chevron(p: &egui::Painter, c: Pos2, r: f32, up: bool, color: Color32) {
 }
 
 pub fn logo(p: &egui::Painter, c: Pos2, size: f32) {
-    let k = size / 28.0;
-    let o = c - vec2(14.0 * k, 14.0 * k);
-    let pt = |x: f32, y: f32| o + vec2(x * k, y * k);
-    p.add(Shape::convex_polygon(vec![pt(14.0, 2.5), pt(24.0, 8.2), pt(24.0, 19.8), pt(14.0, 25.5), pt(4.0, 19.8), pt(4.0, 8.2)], Color32::from_rgb(0x2b, 0x8f, 0xe0), Stroke::NONE));
-    p.add(Shape::convex_polygon(vec![pt(14.0, 2.5), pt(24.0, 8.2), pt(14.0, 14.0), pt(4.0, 8.2)], Color32::from_rgb(0x5b, 0xb8, 0xff), Stroke::NONE));
-    p.add(Shape::convex_polygon(vec![pt(14.0, 14.0), pt(14.0, 25.5), pt(4.0, 19.8), pt(4.0, 8.2)], Color32::from_rgb(0x1a, 0x6f, 0xb5), Stroke::NONE));
-    let mut pts = vec![];
-    let start = -25.7f32.to_radians();
-    let sweep = -(360.0f32 - 51.4).to_radians();
-    for i in 0..=20 {
-        let a = start + sweep * i as f32 / 20.0;
-        pts.push(pt(14.0 + 6.0 * a.cos(), 14.0 + 6.0 * a.sin()));
-    }
-    p.add(Shape::line(pts, Stroke::new(2.2 * k, Color32::WHITE)));
+    crate::logo::paint(p, c, size, true);
 }

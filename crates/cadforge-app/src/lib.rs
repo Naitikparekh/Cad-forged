@@ -5,6 +5,7 @@ pub mod data;
 pub mod dialogs;
 pub mod gfx;
 pub mod i18n;
+pub mod logo;
 pub mod icons;
 pub mod keys;
 pub mod layouts_ui;

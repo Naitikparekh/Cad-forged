@@ -11,4 +11,5 @@ cargo build -p cadforge-app --lib --target wasm32-unknown-unknown --profile "$pr
 rm -rf dist-web && mkdir -p dist-web
 wasm-bindgen --target web --no-typescript --out-dir dist-web "target/wasm32-unknown-unknown/$dir/cadforge_app.wasm"
 cp crates/cadforge-app/web/index.html dist-web/index.html
+cp crates/cadforge-app/assets/logo/cadforge-64.png dist-web/favicon.png
 ls -la dist-web
