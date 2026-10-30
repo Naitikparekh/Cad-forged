@@ -1,8 +1,10 @@
-//! The flat icon set (32×32 grid), parsed once from `assets/icons.json` (exported from the web UI) and painted with
-//! egui shapes. Icons are tiny SVG fragments: `<path>`, `<circle>`, `<rect>` and `<ellipse>` with a colour class.
-use crate::gfx::fill_mesh;
+//! The flat icon set (32×32 grid), parsed once from `assets/icons.json`. Icons are tiny SVG fragments: `<path>`,
+//! `<circle>`, `<rect>` and `<ellipse>` with a colour class. Each icon is rasterized with anti-aliasing at the exact
+//! pixel size it is shown at (round caps and joins, a soft tint inside closed outlines), snapped to the pixel grid and
+//! kept as a texture.
 use crate::theme::Tokens;
-use eframe::egui::{Color32, Painter, Pos2, Rect, Shape, Stroke};
+use eframe::egui::{self, Color32, Painter, Pos2, Rect, TextureHandle, TextureOptions};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,11 +25,20 @@ struct Prim {
     cls: Cls,
     subs: Vec<(Vec<[f64; 2]>, bool)>,
     opacity: f32,
+    /// A small outlined square in a colour: drawn solid, as a grip.
+    grip: bool,
 }
 
 pub struct Icons {
     map: HashMap<String, Vec<Prim>>,
+    /// Rasterized icons by (name, pixel size, palette).
+    cache: RefCell<HashMap<(String, u32, [u32; 5]), TextureHandle>>,
 }
+
+/// Stroke weights (in 32-unit icon space) and the strength of the tint inside closed outlines.
+pub const STROKE: f32 = 2.1;
+pub const STROKE_THIN: f32 = 1.5;
+pub const BODY_ALPHA: f32 = 0.15;
 
 /// How to colour an icon.
 #[derive(Clone, Copy)]
@@ -279,6 +290,7 @@ fn parse(svg: &str) -> Vec<Prim> {
         rest = &rest[i + j + 2..];
         let cls = cls_of(attr(tag, "class").unwrap_or("l"));
         let opacity = attr(tag, "opacity").and_then(|v| v.parse().ok()).unwrap_or(1.0);
+        let grip = tag.starts_with("<rect") && !is_fill(cls) && cls != Cls::K && cls != Cls::L && num(tag, "width") <= 6.0 && num(tag, "height") <= 6.0;
         let subs = if tag.starts_with("<path") {
             parse_path(attr(tag, "d").unwrap_or(""))
         } else if tag.starts_with("<circle") {
@@ -305,7 +317,7 @@ fn parse(svg: &str) -> Vec<Prim> {
         } else {
             continue;
         };
-        out.push(Prim { cls, subs, opacity });
+        out.push(Prim { cls, subs, opacity, grip });
     }
     out
 }
@@ -313,51 +325,164 @@ fn parse(svg: &str) -> Vec<Prim> {
 impl Icons {
     pub fn load() -> Icons {
         let raw: HashMap<String, String> = serde_json::from_str(include_str!("../assets/icons.json")).expect("icons.json");
-        Icons { map: raw.iter().map(|(k, v)| (k.clone(), parse(v))).collect() }
+        Icons { map: raw.iter().map(|(k, v)| (k.clone(), parse(v))).collect(), cache: RefCell::new(HashMap::new()) }
     }
 
     pub fn has(&self, name: &str) -> bool {
         self.map.contains_key(name)
     }
 
-    /// Paint icon `name` into `rect` (a 32-unit square scaled to fit).
-    pub fn paint(&self, painter: &Painter, name: &str, rect: Rect, t: &Tokens, tint: Tint) {
-        let prims = self.map.get(name).or_else(|| self.map.get("cursor"));
-        let Some(prims) = prims else { return };
-        let k = rect.width().min(rect.height()) / 32.0;
-        let org = Pos2::new(rect.center().x - 16.0 * k, rect.center().y - 16.0 * k);
-        let map = |p: &[f64; 2]| Pos2::new(org.x + p[0] as f32 * k, org.y + p[1] as f32 * k);
-        for pr in prims {
-            let base = match tint {
-                Tint::Mono(c) => c,
-                Tint::Normal => match pr.cls {
-                    Cls::L | Cls::FL => t.ic_l,
-                    Cls::A | Cls::FA => t.ic_a,
-                    Cls::O | Cls::FO => t.ic_o,
-                    Cls::G => t.ic_g,
-                    Cls::K | Cls::FK => t.ic_k,
-                },
-            };
-            let mut color = base.gamma_multiply(pr.opacity);
-            if pr.cls == Cls::FK {
-                color = color.gamma_multiply(0.25);
+    pub fn names(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.map.keys().cloned().collect();
+        v.sort();
+        v
+    }
+
+    /// Icon `name` as `px`×`px` premultiplied RGBA, coloured by `pal` (line, accent, orange, green, grey).
+    pub fn raster(&self, name: &str, px: u32, pal: [Color32; 5]) -> Option<tiny_skia::Pixmap> {
+        let prims = self.map.get(name).or_else(|| self.map.get("cursor"))?;
+        let mut pm = tiny_skia::Pixmap::new(px.max(1), px.max(1))?;
+        let k = px as f32 / 32.0;
+        let tf = tiny_skia::Transform::from_scale(k, k);
+        let path_of = |subs: &[(Vec<[f64; 2]>, bool)], closed_only: bool| -> Option<tiny_skia::Path> {
+            let mut pb = tiny_skia::PathBuilder::new();
+            for (pts, closed) in subs {
+                if pts.len() < 2 || (closed_only && (!closed || pts.len() < 3)) {
+                    continue;
+                }
+                pb.move_to(pts[0][0] as f32, pts[0][1] as f32);
+                for p in &pts[1..] {
+                    pb.line_to(p[0] as f32, p[1] as f32);
+                }
+                if *closed {
+                    pb.close();
+                }
             }
+            pb.finish()
+        };
+        let paint_of = |c: Color32, alpha: f32| {
+            let mut p = tiny_skia::Paint::default();
+            p.anti_alias = true;
+            p.set_color(tiny_skia::Color::from_rgba8(c.r(), c.g(), c.b(), ((c.a() as f32) * alpha).round().clamp(0.0, 255.0) as u8));
+            p
+        };
+        for pr in prims {
+            let base = match pr.cls {
+                Cls::L | Cls::FL => pal[0],
+                Cls::A | Cls::FA => pal[1],
+                Cls::O | Cls::FO => pal[2],
+                Cls::G => pal[3],
+                Cls::K | Cls::FK => pal[4],
+            };
+            let alpha = pr.opacity * if pr.cls == Cls::FK { 0.3 } else { 1.0 };
             if is_fill(pr.cls) {
-                let loops: Vec<Vec<[f64; 2]>> = pr.subs.iter().filter(|s| s.0.len() >= 3).map(|s| s.0.iter().map(|p| [p[0] * k as f64, p[1] * k as f64]).collect()).collect();
-                let m = fill_mesh(&loops, color, org);
-                if !m.is_empty() {
-                    painter.add(Shape::mesh(m));
+                if let Some(path) = path_of(&pr.subs, false) {
+                    pm.fill_path(&path, &paint_of(base, alpha), tiny_skia::FillRule::EvenOdd, tf, None);
                 }
-            } else {
-                let w = (if pr.cls == Cls::K { 1.4 } else { 1.7 } * k).max(0.9);
-                for (pts, closed) in &pr.subs {
-                    if pts.len() < 2 {
-                        continue;
+                continue;
+            }
+            // grips (small squares) are solid, like the grips on the drawing
+            if pr.grip {
+                if let Some(path) = path_of(&pr.subs, false) {
+                    pm.fill_path(&path, &paint_of(base, alpha), tiny_skia::FillRule::EvenOdd, tf, None);
+                }
+                continue;
+            }
+            // a soft tint inside closed outlines gives shapes body: stronger at the top, fading down
+            if pr.cls != Cls::K {
+                if let Some(path) = path_of(&pr.subs, true) {
+                    let b = path.bounds();
+                    let stop = |a: f32| tiny_skia::Color::from_rgba8(base.r(), base.g(), base.b(), ((base.a() as f32) * alpha * a).round().clamp(0.0, 255.0) as u8);
+                    let shader = tiny_skia::LinearGradient::new(
+                        tiny_skia::Point::from_xy(b.left(), b.top()),
+                        tiny_skia::Point::from_xy(b.left(), b.bottom()),
+                        vec![tiny_skia::GradientStop::new(0.0, stop(BODY_ALPHA * 1.7)), tiny_skia::GradientStop::new(1.0, stop(BODY_ALPHA * 0.5))],
+                        tiny_skia::SpreadMode::Pad,
+                        tiny_skia::Transform::identity(),
+                    );
+                    let mut paint = tiny_skia::Paint::default();
+                    paint.anti_alias = true;
+                    match shader {
+                        Some(sh) => paint.shader = sh,
+                        None => paint = paint_of(base, alpha * BODY_ALPHA),
                     }
-                    let v: Vec<Pos2> = pts.iter().map(map).collect();
-                    painter.add(if *closed { Shape::closed_line(v, Stroke::new(w, color)) } else { Shape::line(v, Stroke::new(w, color)) });
+                    pm.fill_path(&path, &paint, tiny_skia::FillRule::EvenOdd, tf, None);
                 }
+            }
+            if let Some(path) = path_of(&pr.subs, false) {
+                // at small sizes keep lines at least one device pixel wide
+                let w = (if pr.cls == Cls::K { STROKE_THIN } else { STROKE }).max(1.0 / k);
+                let stroke = tiny_skia::Stroke { width: w, line_cap: tiny_skia::LineCap::Round, line_join: tiny_skia::LineJoin::Round, ..Default::default() };
+                pm.stroke_path(&path, &paint_of(base, alpha), &stroke, tf, None);
             }
         }
+        Some(pm)
+    }
+
+    /// Paint icon `name` into `rect` (a 32-unit square scaled to fit, snapped to whole device pixels).
+    pub fn paint(&self, painter: &Painter, name: &str, rect: Rect, t: &Tokens, tint: Tint) {
+        let pal = match tint {
+            Tint::Mono(c) => [c; 5],
+            Tint::Normal => [t.ic_l, t.ic_a, t.ic_o, t.ic_g, t.ic_k],
+        };
+        let ctx = painter.ctx();
+        let ppp = ctx.pixels_per_point();
+        let px = (rect.width().min(rect.height()) * ppp).round().max(4.0) as u32;
+        let key = (name.to_string(), px, pal.map(|c| u32::from_le_bytes(c.to_array())));
+        let tex = {
+            let mut cache = self.cache.borrow_mut();
+            if let Some(t) = cache.get(&key) {
+                t.clone()
+            } else {
+                let Some(pm) = self.raster(name, px, pal) else { return };
+                let img = egui::ColorImage::from_rgba_premultiplied([px as usize, px as usize], pm.data());
+                let t = ctx.load_texture(format!("icon:{name}:{px}:{:?}", key.2), img, TextureOptions::LINEAR);
+                cache.insert(key, t.clone());
+                t
+            }
+        };
+        // whole device pixels, so a 1 px line stays 1 px
+        let side = px as f32 / ppp;
+        let min = Pos2::new(((rect.center().x - side / 2.0) * ppp).round() / ppp, ((rect.center().y - side / 2.0) * ppp).round() / ppp);
+        painter.image(tex.id(), Rect::from_min_size(min, egui::vec2(side, side)), Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Writes a contact sheet of every icon (dark and light theme, 32 and 16 px) to `$ICON_SHEET` when set.
+    #[test]
+    fn every_icon_rasterizes() {
+        let icons = Icons::load();
+        let (d, l) = (crate::theme::DARK, crate::theme::LIGHT);
+        let names = icons.names();
+        for n in &names {
+            let pm = icons.raster(n, 32, [d.ic_l, d.ic_a, d.ic_o, d.ic_g, d.ic_k]).unwrap();
+            assert!(pm.data().chunks(4).any(|p| p[3] > 0), "{n} is empty");
+        }
+        let Ok(out) = std::env::var("ICON_SHEET") else { return };
+        let cols = 16u32;
+        let rows = (names.len() as u32).div_ceil(cols);
+        let cell = 44u32;
+        let mut sheet = tiny_skia::Pixmap::new(cols * cell * 2, rows * cell).unwrap();
+        for (half, th) in [(0u32, d), (1, l)] {
+            let bg = th.ribbon;
+            let rect = tiny_skia::Rect::from_xywh((half * cols * cell) as f32, 0.0, (cols * cell) as f32, (rows * cell) as f32).unwrap();
+            let mut p = tiny_skia::Paint::default();
+            p.set_color_rgba8(bg.r(), bg.g(), bg.b(), 255);
+            sheet.fill_rect(rect, &p, tiny_skia::Transform::identity(), None);
+            for (i, n) in names.iter().enumerate() {
+                let (cx, cy) = (half * cols * cell + (i as u32 % cols) * cell, (i as u32 / cols) * cell);
+                let pal = [th.ic_l, th.ic_a, th.ic_o, th.ic_g, th.ic_k];
+                let big = icons.raster(n, 32, pal).unwrap();
+                sheet.draw_pixmap(cx as i32 + 2, cy as i32 + 2, big.as_ref(), &tiny_skia::PixmapPaint::default(), tiny_skia::Transform::identity(), None);
+                let small = icons.raster(n, 16, pal).unwrap();
+                sheet.draw_pixmap(cx as i32 + 26, cy as i32 + 26, small.as_ref(), &tiny_skia::PixmapPaint::default(), tiny_skia::Transform::identity(), None);
+            }
+        }
+        sheet.save_png(&out).unwrap();
+        std::fs::write(format!("{out}.txt"), names.join("\n")).unwrap();
     }
 }
