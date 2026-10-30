@@ -8,6 +8,8 @@ pub struct Picked {
     pub purpose: &'static str,
     pub name: String,
     pub bytes: Vec<u8>,
+    /// The folder the file came from (desktop only).
+    pub dir: Option<std::path::PathBuf>,
 }
 
 pub type Inbox = Rc<RefCell<Vec<Picked>>>;
@@ -65,7 +67,7 @@ mod imp {
                     let name = f.name();
                     if let Ok(buf) = wasm_bindgen_futures::JsFuture::from(f.array_buffer()).await {
                         let bytes = js_sys::Uint8Array::new(&buf).to_vec();
-                        inbox.borrow_mut().push(Picked { purpose, name, bytes });
+                        inbox.borrow_mut().push(Picked { purpose, name, bytes, dir: None });
                         ctx.request_repaint();
                     }
                 });

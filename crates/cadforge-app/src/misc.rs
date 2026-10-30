@@ -152,7 +152,40 @@ impl CadForgeApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let _ = ctx;
-            self.dialog = Some(crate::dialogs::Dialog::file_open(purpose));
+            // Windows and macOS: the system's own Open dialog
+            #[cfg(any(windows, target_os = "macos"))]
+            {
+                let exts = crate::dialogs::FileBrowserState::exts(purpose);
+                let dlg = rfd::FileDialog::new().set_title(crate::dialogs::FileBrowserState::title(purpose)).set_directory(&self.save_dir).add_filter("Supported files", &exts).add_filter("All files", &["*"]);
+                let paths = if purpose == "open" { dlg.pick_files().unwrap_or_default() } else { dlg.pick_file().into_iter().collect() };
+                for path in paths {
+                    self.pick_path(purpose, &path);
+                }
+                return;
+            }
+            #[allow(unreachable_code)]
+            {
+                self.dialog = Some(crate::dialogs::Dialog::file_open(purpose, self.save_dir.clone()));
+            }
+        }
+    }
+
+    /// Read a file from disk into the inbox, as if it had been chosen for `purpose` (native only).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn pick_path(&mut self, purpose: &'static str, path: &std::path::Path) {
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                if let Some(d) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+                    self.save_dir = d.to_path_buf();
+                    platform::store_set("last_dir", &d.to_string_lossy());
+                }
+                self.inbox.borrow_mut().push(Picked { purpose, name, bytes, dir: path.parent().map(|d| d.to_path_buf()) });
+            }
+            Err(e) => {
+                self.h.borrow_mut().log(&format!("Could not read {}: {e}", path.display()), "error");
+                self.toast(&format!("Could not read {name}: {e}"));
+            }
         }
     }
 
@@ -174,7 +207,7 @@ impl CadForgeApp {
             };
             #[cfg(not(target_arch = "wasm32"))]
             match f.bytes() {
-                Ok(bytes) => self.inbox.borrow_mut().push(Picked { purpose, name, bytes }),
+                Ok(bytes) => self.inbox.borrow_mut().push(Picked { purpose, name, bytes, dir: f.path().parent().map(|d| d.to_path_buf()) }),
                 Err(e) => self.toast(&format!("Could not read {name}: {e}")),
             }
             // browsers read files asynchronously: the bytes arrive in the inbox a moment later
@@ -183,7 +216,7 @@ impl CadForgeApp {
                 let (inbox, ctx2) = (self.inbox.clone(), ctx.clone());
                 wasm_bindgen_futures::spawn_local(async move {
                     if let Ok(bytes) = f.bytes_async().await {
-                        inbox.borrow_mut().push(Picked { purpose, name, bytes });
+                        inbox.borrow_mut().push(Picked { purpose, name, bytes, dir: None });
                         ctx2.request_repaint();
                     }
                 });
@@ -224,6 +257,11 @@ impl CadForgeApp {
                     }
                     ("open", Ok(mut doc)) => {
                         doc.file_name = Some(p.name.clone());
+                        doc.file_dir = p.dir.as_ref().map(|d| d.to_string_lossy().to_string());
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if let Some(d) = &p.dir {
+                            self.save_dir = d.clone();
+                        }
                         doc.dirty = false;
                         let note = skipped_note(&doc);
                         self.adopt(doc);
@@ -322,6 +360,11 @@ impl CadForgeApp {
 
     /// A drawing file: DWG (by its signature), DXF (text or binary) or a CadForge project.
     fn parse_drawing(&self, name: &str, bytes: &[u8]) -> Result<Drawing, String> {
+        // a reader fault on an unusual file is reported, not a crash of the whole program
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Self::parse_drawing_inner(name, bytes))).unwrap_or_else(|_| Err("the file has content CadForge cannot read yet (the reader stopped). Please send the file so it can be supported.".to_string()))
+    }
+
+    fn parse_drawing_inner(name: &str, bytes: &[u8]) -> Result<Drawing, String> {
         let base = strip_ext(name);
         let lower = name.to_lowercase();
         if cadforge_core::io::is_dwg(bytes) || lower.ends_with(".dwg") || lower.ends_with(".dws") {
@@ -372,7 +415,12 @@ impl CadForgeApp {
         let mut list: Vec<serde_json::Value> = platform::store_get("recent").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         list.retain(|r| r.get("name").and_then(|n| n.as_str()) != Some(doc.name.as_str()));
         let time = (self.time * 1000.0) as i64;
-        list.insert(0, serde_json::json!({ "name": doc.name, "time": time, "json": if json.len() < MAX_RECENT_BYTES { Some(json) } else { None } }));
+        // on the desktop the file itself is reopened; the copy is for the browser and as a fallback
+        let path = match (&doc.file_dir, &doc.file_name) {
+            (Some(d), Some(f)) => Some(std::path::Path::new(d).join(f).to_string_lossy().to_string()),
+            _ => None,
+        };
+        list.insert(0, serde_json::json!({ "name": doc.name, "time": time, "path": path, "json": if json.len() < MAX_RECENT_BYTES { Some(json) } else { None } }));
         list.truncate(MAX_RECENT);
         platform::store_set("recent", &serde_json::to_string(&list).unwrap_or_default());
     }
@@ -383,8 +431,17 @@ impl CadForgeApp {
     }
 
     pub fn open_recent(&mut self, name: &str, json: Option<String>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let list: Vec<serde_json::Value> = platform::store_get("recent").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+            let path = list.iter().find(|r| r.get("name").and_then(|n| n.as_str()) == Some(name)).and_then(|r| r.get("path")?.as_str().map(std::path::PathBuf::from));
+            if let Some(p) = path.filter(|p| p.is_file()) {
+                self.pick_path("open", &p);
+                return;
+            }
+        }
         match json {
-            None => self.toast(&format!("{name} is too large to reopen from history. Use Open to choose the file.")),
+            None => self.toast(&format!("{name} could not be found again. Use Open to choose the file.")),
             Some(j) => match from_json(&j, name) {
                 Ok(d) => self.adopt(d),
                 Err(e) => self.toast(&e),
@@ -417,7 +474,42 @@ impl CadForgeApp {
             _ => fmt,
         };
         let suggested = with_ext(&file.unwrap_or(name), fmt);
-        self.dialog = Some(crate::dialogs::Dialog::save_as(&suggested, fmt));
+        // Windows and macOS: the system's own Save dialog, opening in the drawing's folder
+        #[cfg(any(windows, target_os = "macos"))]
+        {
+            let dir = self.h.borrow().doc().and_then(|d| d.file_dir.clone()).map(std::path::PathBuf::from).unwrap_or_else(|| self.save_dir.clone());
+            let mut dlg = rfd::FileDialog::new().set_title("Save Drawing As").set_directory(&dir).set_file_name(&suggested);
+            let mut order: Vec<SaveFormat> = vec![fmt];
+            order.extend(SaveFormat::ALL.iter().copied().filter(|f| *f != fmt));
+            for f in &order {
+                let ext = f.ext().rsplit('.').next().unwrap_or("dwg").to_string();
+                dlg = dlg.add_filter(f.label(), &[ext.as_str()]);
+            }
+            if let Some(path) = dlg.save_file() {
+                let typed = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(suggested);
+                let lower = typed.to_lowercase();
+                // the extension typed decides the format; none typed keeps the chosen one
+                let chosen = if [".dwg", ".dxf", ".dwt", ".json"].iter().any(|e| lower.ends_with(e)) {
+                    let d = self.h.borrow().doc().map(|d| SaveFormat::of(&typed, d)).unwrap_or(fmt);
+                    if d == SaveFormat::Dwg2004 && fmt == SaveFormat::Dwg2000 { fmt } else { d }
+                } else {
+                    fmt
+                };
+                if let Some(d) = path.parent() {
+                    self.save_dir = d.to_path_buf();
+                    platform::store_set("last_dir", &d.to_string_lossy());
+                    if let Some(ed) = self.h.borrow_mut().editor_mut() {
+                        ed.doc.file_dir = Some(d.to_string_lossy().to_string());
+                    }
+                }
+                self.write_doc_as(&with_ext(&typed, chosen), chosen);
+            }
+            return;
+        }
+        #[allow(unreachable_code)]
+        {
+            self.dialog = Some(crate::dialogs::Dialog::save_as(&suggested, fmt));
+        }
     }
 
     pub fn save_as(&mut self, _ctx: &egui::Context) {
@@ -496,7 +588,12 @@ impl CadForgeApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let _ = mime;
-            let path = self.save_dir.join(name);
+            // the drawing goes back to its own folder; a new drawing to the folder last used
+            let dir = self.h.borrow().doc().and_then(|d| d.file_dir.clone()).map(std::path::PathBuf::from).unwrap_or_else(|| self.save_dir.clone());
+            let path = dir.join(name);
+            if let Some(ed) = self.h.borrow_mut().editor_mut() {
+                ed.doc.file_dir = Some(dir.to_string_lossy().to_string());
+            }
             let keep = self.h.borrow().sysvars.int("ISAVEBAK") != 0;
             match cadforge_engine::autosave::write_keeping_backup(&path, &bytes, keep) {
                 Ok(bak) => {

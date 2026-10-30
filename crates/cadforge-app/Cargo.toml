@@ -31,6 +31,9 @@ winresource = "0.1"
 env_logger = "0.11"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+rfd = "0.15"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

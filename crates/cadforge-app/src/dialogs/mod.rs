@@ -648,8 +648,8 @@ impl Dialog {
     pub fn lweight_pick(value: Option<i32>) -> Dialog {
         Dialog::new(Kind::Lweight(LweightState::new(value, true)))
     }
-    pub fn file_open(purpose: &'static str) -> Dialog {
-        Dialog::new(Kind::FileBrowser(FileBrowserState::open(purpose)))
+    pub fn file_open(purpose: &'static str, dir: std::path::PathBuf) -> Dialog {
+        Dialog::new(Kind::FileBrowser(FileBrowserState::open(purpose, dir)))
     }
     pub fn edit_text(spec: TextEditSpec) -> Dialog {
         Dialog::new(Kind::EditText(TextEditState::new(spec)))

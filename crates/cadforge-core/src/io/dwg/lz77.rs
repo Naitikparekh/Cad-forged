@@ -111,6 +111,10 @@ pub fn decompress18(src: &[u8], limit: usize) -> R<Vec<u8>> {
 
 /// R2007-style decompression of `src[start..start + len]` into exactly `out_len` bytes.
 pub fn decompress21(src: &[u8], start: usize, len: usize, out_len: usize) -> R<Vec<u8>> {
+    // no page expands past 64 times its input (and 64 MB): a larger size is damage, not data
+    if out_len as u64 > (len as u64).saturating_mul(64).max(1 << 26) {
+        return Err(BAD.into());
+    }
     let mut d = Dec21 { src, i: start, end: start.checked_add(len).ok_or(BAD)?.min(src.len()), op: 0, length: 0, offset: 0, out: vec![0u8; out_len], o: 0 };
     d.run()?;
     Ok(d.out)

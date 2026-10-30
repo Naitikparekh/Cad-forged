@@ -161,9 +161,14 @@ impl<'a> DwgFile<'a> {
                 let csize = rl(&smap, p + 4)? as usize;
                 let offset = rll(&smap, p + 8)?;
                 p += 16;
-                // zero pages are not stored: fill the gap
-                while (out.len() as u64) < offset && max_size > 0 && out.len() < (1 << 31) {
-                    out.resize(out.len() + max_size as usize, 0);
+                // zero pages are not stored: fill the gap (whole pages), but never past what the file can hold
+                if (out.len() as u64) < offset && max_size > 0 {
+                    let gap = offset - out.len() as u64;
+                    let want = out.len() as u64 + gap.div_ceil(max_size).saturating_mul(max_size);
+                    if want > size_cap(d) {
+                        return Err(BAD.into());
+                    }
+                    out.resize(want as usize, 0);
                 }
                 let Some(&seek) = pages.get(&num) else { continue };
                 let data_at = seek + 32;
@@ -233,7 +238,10 @@ impl<'a> DwgFile<'a> {
                 let usize_ = rll(&smap, p + 24)? as usize;
                 let csize = rll(&smap, p + 32)? as usize;
                 p += 56;
-                if (out.len() as u64) < poff && poff - (out.len() as u64) < (1 << 31) {
+                if (out.len() as u64) < poff {
+                    if poff > size_cap(d) {
+                        return Err(BAD.into());
+                    }
                     out.resize(poff as usize, 0);
                 }
                 let Some(&(seek, psize)) = pages.get(&page_id) else { continue };
@@ -243,6 +251,9 @@ impl<'a> DwgFile<'a> {
                     let v = (csize + 7) & !7;
                     let factor = v.div_ceil(251);
                     bytes = deinterleave(&bytes, factor * 251, factor, 251);
+                }
+                if usize_ as u64 > size_cap(d) || csize as u64 > size_cap(d) {
+                    return Err(BAD.into());
                 }
                 if csize != usize_ {
                     bytes = decompress21(&bytes, 0, csize, usize_)?;
@@ -358,10 +369,19 @@ impl<'a> DwgFile<'a> {
     }
 }
 
+/// The most a section of a file of this size can expand to: a damaged size field (gigabytes) is rejected instead of
+/// filling memory (and the screen freezing while it is zeroed).
+fn size_cap(d: &[u8]) -> u64 {
+    (d.len() as u64).saturating_mul(64).max(1 << 26)
+}
+
 /// A system page (page map, section map) of R2004+: a 20 byte header then compressed data.
 fn system_page(d: &[u8], at: usize) -> R<Vec<u8>> {
     let usize_ = rl(d, at + 4)? as usize;
     let csize = rl(d, at + 8)? as usize;
+    if usize_ as u64 > size_cap(d) {
+        return Err(BAD.into());
+    }
     let raw = d.get(at + 20..(at + 20).checked_add(csize).ok_or(BAD)?).ok_or(BAD)?;
     let mut out = decompress18(raw, usize_.max(16) * 2)?;
     out.truncate(usize_);

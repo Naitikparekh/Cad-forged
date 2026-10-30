@@ -175,6 +175,19 @@ impl CadForgeApp {
         crate::install_hook(app.h.clone(), app.rect_hook.clone());
         app.load_user_aliases();
         app.load_customization();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(d) = crate::platform::store_get("last_dir").map(std::path::PathBuf::from).filter(|d| d.is_dir()) {
+                app.save_dir = d;
+            }
+            // files given on the command line (a double-click in Explorer or Finder, "Open with")
+            for arg in std::env::args_os().skip(1) {
+                let p = std::path::PathBuf::from(arg);
+                if p.is_file() {
+                    app.pick_path("open", &p);
+                }
+            }
+        }
         app.recover_autosaved();
         app
     }

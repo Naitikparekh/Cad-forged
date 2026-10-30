@@ -270,6 +270,8 @@ pub struct Drawing {
     pub view: Option<ViewState>,
     pub dirty: bool,
     pub file_name: Option<String>,
+    /// The folder the drawing was opened from or saved to (desktop only; not part of the drawing's data).
+    pub file_dir: Option<String>,
     /// The DWG version a save as DWG writes: AutoCAD 2000 (`Ver::R2000`) when the drawing came from a 2000 or older
     /// file or Save As chose it, otherwise AutoCAD 2004 (`None`).
     pub dwg_version: Option<crate::io::dwg::Ver>,
@@ -334,6 +336,7 @@ impl Clone for Drawing {
         d.view = self.view;
         d.dirty = self.dirty;
         d.file_name = self.file_name.clone();
+        d.file_dir = self.file_dir.clone();
         d.dwg_version = self.dwg_version;
         d.ucs = self.ucs;
         d.ucs_named = self.ucs_named.clone();
@@ -368,6 +371,7 @@ impl Drawing {
             view: None,
             dirty: false,
             file_name: None,
+            file_dir: None,
             dwg_version: None,
             skipped: Default::default(),
             paper_skipped: 0,

@@ -17,8 +17,9 @@ pub struct FileBrowserState {
 }
 
 impl FileBrowserState {
-    pub fn open(purpose: &'static str) -> FileBrowserState {
-        let exts = match purpose {
+    /// The file extensions a purpose takes.
+    pub fn exts(purpose: &str) -> Vec<&'static str> {
+        match purpose {
             "script" => vec!["scr", "txt"],
             "image" => vec!["png", "jpg", "jpeg"],
             "lisp" => vec!["lsp", "scr", "txt"],
@@ -30,9 +31,17 @@ impl FileBrowserState {
             "datalink" | "datalinkupdate" => vec!["csv", "txt"],
             "cuiload" | "cuiimport" => vec!["json"],
             _ => vec!["dwg", "dwt", "dxf", "json", "cadforge"],
-        };
-        let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        FileBrowserState { title: match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), "lin" => "Load Linetypes".into(), "plotstyle" => "Load Plot Style Table".into(), "pat" => "Load Hatch Patterns".into(), "template" => "Select Template".into(), "standards" => "Select Standards File".into(), "datalink" | "datalinkupdate" => "Select Data File".into(), "cuiload" => "Load Customization File".into(), "cuiimport" => "Import Customization File".into(), _ => "Open Drawing".into() }, purpose, dir, entries: vec![], sel: None, exts, loaded: false }
+        }
+    }
+
+    /// The dialog title for a purpose.
+    pub fn title(purpose: &str) -> String {
+        match purpose { "import" => "Import".into(), "script" => "Select Script".into(), "image" => "Select Image File".into(), "lisp" => "Load Application".into(), "lin" => "Load Linetypes".into(), "plotstyle" => "Load Plot Style Table".into(), "pat" => "Load Hatch Patterns".into(), "template" => "Select Template".into(), "standards" => "Select Standards File".into(), "datalink" | "datalinkupdate" => "Select Data File".into(), "cuiload" => "Load Customization File".into(), "cuiimport" => "Import Customization File".into(), _ => "Open Drawing".into() }
+    }
+
+    pub fn open(purpose: &'static str, dir: PathBuf) -> FileBrowserState {
+        let dir = if dir.is_dir() { dir } else { std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")) };
+        FileBrowserState { title: Self::title(purpose), purpose, dir, entries: vec![], sel: None, exts: Self::exts(purpose), loaded: false }
     }
 
     fn reload(&mut self) {
@@ -125,7 +134,7 @@ impl CadForgeApp {
         match std::fs::read(&path) {
             Ok(bytes) => {
                 self.save_dir = s.dir.clone();
-                self.inbox.borrow_mut().push(Picked { purpose: s.purpose, name, bytes });
+                self.inbox.borrow_mut().push(Picked { purpose: s.purpose, name, bytes, dir: Some(s.dir.clone()) });
             }
             Err(e) => {
                 self.h.borrow_mut().log(&format!("Could not read {}: {e}", path.display()), "error");
