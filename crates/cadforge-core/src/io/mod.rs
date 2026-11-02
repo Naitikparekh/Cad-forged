@@ -23,6 +23,8 @@ pub fn not_kept_in_dxf(d: &crate::drawing::Drawing, r2000: bool) -> Vec<String> 
         }
     };
     let ents: Vec<&crate::entities::Entity> = d.all_entities().collect();
+    let bad = ents.iter().filter(|e| dxf_write::unwritable(e, d).is_some()).count();
+    count(bad, "broken object is", "broken objects are", "left out (a radius or text height of 0, a coordinate that is not a number...): other CAD programs refuse the whole file for one");
     // 3D solids are saved as polyface meshes with their extrusion history, as long as the outlines it names still exist
     let ids: std::collections::HashSet<u64> = ents.iter().map(|e| e.id).collect();
     let orphaned = d.solids.iter().filter(|s| s.program.as_ref().is_some_and(|p| p.features.iter().flat_map(|f| &f.profile).any(|i| !ids.contains(i)))).count();

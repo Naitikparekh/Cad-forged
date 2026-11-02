@@ -47,6 +47,70 @@ pub fn xdata_chunks(s: &str) -> Vec<&str> {
 /// colour / linetype / lineweight, loaded linetypes and hatch patterns, the plot style table, which blocks are external
 /// references, the extrusion histories of 3D solids (their outlines named by the handles in `handles`, CadForge id to
 /// handle), and the pictures' data (DXF and DWG only name picture files). None when there is nothing to keep.
+/// Why AutoCAD would refuse an object in a DXF or DWG file (and with it the whole drawing): a coordinate that is not
+/// a number, a radius or text height of 0, an ellipse ratio outside (0, 1], an insert scale of 0, a polyline or
+/// spline without enough points. None when the object can be written.
+pub fn unwritable(e: &Entity, doc: &Drawing) -> Option<&'static str> {
+    let ok = |v: f64| v.is_finite();
+    let pos = |v: f64| v.is_finite() && v > 0.0;
+    // (min / max skip a NaN, so the points themselves are looked at)
+    let fin = |p: &Pt| p.x.is_finite() && p.y.is_finite();
+    let pts_ok = match &e.kind {
+        Kind::Line { a, b } => fin(a) && fin(b),
+        Kind::Circle { c, .. } | Kind::Arc { c, .. } => fin(c),
+        Kind::Point { p } => fin(p),
+        Kind::Xline { p, d } | Kind::Ray { p, d } => fin(p) && fin(d),
+        Kind::Pline { v, .. } => v.iter().all(|v| [v.x, v.y, v.b, v.sw, v.ew].into_iter().all(ok)),
+        Kind::Ellipse(el) => fin(&el.c) && fin(&el.m),
+        Kind::Spline { fit, nurbs, .. } => fit.iter().all(fin) && nurbs.as_ref().is_none_or(|n| n.cv.iter().all(fin) && n.knots.iter().all(|k| k.is_finite()) && n.w.iter().all(|w| w.is_finite())),
+        Kind::Text(t) => fin(&t.p) && t.rot.is_finite(),
+        Kind::Leader { pts, .. } => pts.iter().all(fin),
+        Kind::Insert(i) => fin(&i.p),
+        _ => true,
+    };
+    if !pts_ok || bounds_of(e, doc).is_some_and(|b| ![b.min_x, b.min_y, b.max_x, b.max_y].into_iter().all(ok)) {
+        return Some("a coordinate that is not a number");
+    }
+    match &e.kind {
+        Kind::Circle { r, .. } | Kind::Arc { r, .. } if !pos(*r) => Some("a radius of 0"),
+        Kind::Arc { a0, a1, .. } if !ok(*a0) || !ok(*a1) => Some("an angle that is not a number"),
+        Kind::Text(t) if !pos(t.h) => Some("a text height of 0"),
+        Kind::Leader { pts, .. } if pts.len() < 2 => Some("a leader without two points"),
+        Kind::Ellipse(el) if !(el.ratio > 0.0 && el.ratio <= 1.0) || !(el.m.x.hypot(el.m.y) > 0.0) || !ok(el.t0) || !ok(el.t1) => Some("an ellipse without a size"),
+        Kind::Insert(i) if !(i.sx.is_finite() && i.sy.is_finite() && i.sx != 0.0 && i.sy != 0.0 && i.rot.is_finite()) => Some("an insert scale of 0"),
+        Kind::Pline { v, .. } if v.is_empty() => Some("a polyline without vertices"),
+        Kind::Spline { fit, nurbs, .. } if nurbs.as_ref().map_or(fit.len() < 2, |n| n.cv.len() <= n.deg || n.knots.len() != n.cv.len() + n.deg + 1) => Some("a spline without enough points"),
+        _ => None,
+    }
+}
+
+/// The CLASSES section: DXF name, C++ class, application, proxy flags, whether it is an entity.
+const DXF_CLASSES: [(&str, &str, &str, i64, bool); 7] = [
+    ("ACDBDICTIONARYWDFLT", "AcDbDictionaryWithDefault", "ObjectDBX Classes", 0, false),
+    ("ACDBPLACEHOLDER", "AcDbPlaceHolder", "ObjectDBX Classes", 0, false),
+    ("LAYOUT", "AcDbLayout", "ObjectDBX Classes", 0, false),
+    ("IMAGEDEF", "AcDbRasterImageDef", "ISM", 0, false),
+    ("IMAGEDEF_REACTOR", "AcDbRasterImageDefReactor", "ISM", 1, false),
+    ("IMAGE", "AcDbRasterImage", "ISM", 2175, true),
+    ("WIPEOUT", "AcDbWipeout", "WipeOut", 2175, true),
+];
+
+/// `v` encoded for DXF and cut into pieces of at most `max` bytes, each ending on a whole character (never inside an
+/// encoded `\U+XXXX`); always at least one piece.
+fn text_pieces(v: &str, max: usize) -> Vec<String> {
+    let mut out = vec![];
+    let mut cur = String::new();
+    for ch in v.chars() {
+        let e = enc(ch.encode_utf8(&mut [0u8; 4]));
+        if !cur.is_empty() && cur.len() + e.len() > max {
+            out.push(std::mem::take(&mut cur));
+        }
+        cur.push_str(&e);
+    }
+    out.push(cur);
+    out
+}
+
 pub fn cadforge_extras(doc: &Drawing, handles: &HashMap<u64, String>) -> Option<String> {
     use serde_json::{to_value, Map, Value};
     let mut m = Map::new();
@@ -223,7 +287,13 @@ fn enc(s: &str) -> String {
             '\u{2300}' => out.push_str("%%c"),
             '\u{00B0}' => out.push_str("%%d"),
             '\u{00B1}' => out.push_str("%%p"),
-            c if (' '..='~').contains(&c) || c == '\r' || c == '\n' || c == '\t' => out.push(c),
+            // a value is one line: line breaks and tabs are written as AutoCAD's caret codes (a raw line break would
+            // end the value and break the file), and a caret as "^ "
+            '\n' => out.push_str("^J"),
+            '\r' => {}
+            '\t' => out.push_str("^I"),
+            '^' => out.push_str("^ "),
+            c if (' '..='~').contains(&c) => out.push(c),
             c if (c as u32) > 0xFFFF => out.push('?'),
             c => out.push_str(&format!("\\U+{:04X}", c as u32)),
         }
@@ -279,6 +349,25 @@ impl Out {
     fn s(&mut self, code: i32, v: &str) -> &mut Self {
         self.lines.push(code.to_string());
         self.lines.push(enc(v));
+        self
+    }
+    /// MTEXT contents as AutoCAD writes them: 250-character pieces in group 3, the last piece in group 1 (AutoCAD
+    /// stops reading a line longer than 2049 characters). Pieces end on whole characters, so an encoded `\U+XXXX`
+    /// is never cut.
+    fn mtext(&mut self, v: &str) -> &mut Self {
+        let pieces = text_pieces(v, 250);
+        let n = pieces.len();
+        for (i, p) in pieces.into_iter().enumerate() {
+            self.lines.push(if i + 1 == n { "1".into() } else { "3".into() });
+            self.lines.push(p);
+        }
+        self
+    }
+    /// A single-line text value (TEXT, ATTRIB, ATTDEF): AutoCAD holds at most 255 characters.
+    fn text1(&mut self, v: &str) -> &mut Self {
+        let first = text_pieces(v, 255).into_iter().next().unwrap_or_default();
+        self.lines.push("1".into());
+        self.lines.push(first);
         self
     }
     /// Point with group codes 10+i / 20+i / 30+i.
@@ -413,7 +502,7 @@ impl<'a> W<'a> {
     fn text(&mut self, o: &mut EOut, p: Pt, h: f64, s: &str, rot: f64, jh: HJust, jv: VJust, props: &Props, layer: Option<&str>, style: Option<&str>) {
         self.common(o, "TEXT", props, Some("AcDbText"), layer);
         let sty = self.style_name(style);
-        o.out.pt(p, 0).n(40, h).s(1, &clean(s)).n(50, deg(rot)).s(7, &sty);
+        o.out.pt(p, 0).n(40, h).text1(&clean(s)).n(50, deg(rot)).s(7, &sty);
         if let Some(st) = style.map(|n| self.doc.settings.text_style_named(n)).filter(|st| (st.width - 1.0).abs() > 1e-9 || st.oblique != 0.0) {
             o.out.n(41, st.width).n(51, st.oblique);
         }
@@ -496,10 +585,15 @@ impl<'a> W<'a> {
 
     fn lwpoly(&mut self, o: &mut EOut, verts: &[Vertex], closed: bool, props: &Props) {
         self.common(o, "LWPOLYLINE", props, Some("AcDbPolyline"), None);
-        o.out.i(90, verts.len() as i64).i(70, closed as i64).n(43, 0.0);
+        // a constant width (43) only when no vertex has its own; then every vertex gets its widths, as AutoCAD writes
+        let widths = verts.iter().any(|v| v.sw != 0.0 || v.ew != 0.0);
+        o.out.i(90, verts.len() as i64).i(70, closed as i64);
+        if !widths {
+            o.out.n(43, 0.0);
+        }
         for v in verts {
             o.out.n(10, v.x).n(20, v.y);
-            if v.sw != 0.0 || v.ew != 0.0 {
+            if widths {
                 o.out.n(40, v.sw).n(41, v.ew);
             }
             if v.b != 0.0 {
@@ -521,6 +615,11 @@ impl<'a> W<'a> {
             }),
             _ => None,
         };
+        if unwritable(e, self.doc).is_some() {
+            // AutoCAD discards the whole drawing for one such object: it is left out (Save says so)
+            self.cur_grp = outer;
+            return;
+        }
         self.handle_of.entry(e.id).or_insert_with(|| format!("{:X}", self.handle));
         self.write_kind(o, e);
         self.cur_grp = outer;
@@ -597,7 +696,7 @@ impl<'a> W<'a> {
                 let a = t.att.as_ref().expect("att");
                 self.common(o, "ATTDEF", &props, Some("AcDbText"), None);
                 let sty = self.style_name(t.style.as_deref());
-                o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, &sty);
+                o.out.pt(t.p, 0).n(40, t.h).text1(&clean(&t.s)).n(50, deg(t.rot)).s(7, &sty);
                 if jh_code(t.jh) != 0 || jv_code(t.jv) != 0 {
                     o.out.i(72, jh_code(t.jh) as i64);
                     o.out.pt(t.p, 1);
@@ -609,7 +708,7 @@ impl<'a> W<'a> {
                 if t.multi {
                     self.common(o, "MTEXT", &props, Some("AcDbMText"), None);
                     let body: Vec<String> = t.s.split('\n').map(clean).collect();
-                    o.out.pt(t.p, 0).n(40, t.h).n(41, t.w.unwrap_or(0.0)).i(71, attach(t.jh, t.jv) as i64).i(72, 1).s(1, &body.join("\\P")).s(7, &self.style_name(t.style.as_deref())).n(11, t.rot.cos()).n(21, t.rot.sin()).n(31, 0.0);
+                    o.out.pt(t.p, 0).n(40, t.h).n(41, t.w.unwrap_or(0.0)).i(71, attach(t.jh, t.jv) as i64).i(72, 1).mtext(&body.join("\\P")).s(7, &self.style_name(t.style.as_deref())).n(11, t.rot.cos()).n(21, t.rot.sin()).n(31, 0.0);
                 } else {
                     self.text(o, t.p, t.h, &t.s, t.rot, t.jh, t.jv, &props, None, t.style.as_deref());
                 }
@@ -636,7 +735,7 @@ impl<'a> W<'a> {
                         self.common(o, "ATTRIB", &props, Some("AcDbText"), None);
                         let t = &a.t;
                         let sty = self.style_name(t.style.as_deref());
-                        o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, &sty);
+                        o.out.pt(t.p, 0).n(40, t.h).text1(&clean(&t.s)).n(50, deg(t.rot)).s(7, &sty);
                         if jh_code(t.jh) != 0 || jv_code(t.jv) != 0 {
                             o.out.i(72, jh_code(t.jh) as i64);
                             o.out.pt(t.p, 1);
@@ -679,7 +778,7 @@ impl<'a> W<'a> {
                     self.common(o, "MTEXT", &props, Some("AcDbMText"), None);
                     let body = s.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}");
                     let body: Vec<String> = body.split('\n').map(clean).collect();
-                    o.out.pt(pt(last.x + h * 0.4, last.y), 0).n(40, *h).n(41, 0.0).i(71, 4).i(72, 1).s(1, &body.join("\\P")).s(7, "Standard").n(11, 1.0).n(21, 0.0).n(31, 0.0);
+                    o.out.pt(pt(last.x + h * 0.4, last.y), 0).n(40, *h).n(41, 0.0).i(71, 4).i(72, 1).mtext(&body.join("\\P")).s(7, "Standard").n(11, 1.0).n(21, 0.0).n(31, 0.0);
                 }
             }
             Kind::Hatch(ha) => {
@@ -1047,6 +1146,14 @@ pub fn write_dxf(doc: &Drawing) -> String {
         o.s(9, "$TEXTSTYLE").s(7, &st.cur_text().name);
     }
     o.s(9, "$DIMSCALE").n(40, ds.scale).s(9, "$DIMTXT").n(40, ds.txt).s(9, "$DIMASZ").n(40, ds.asz).s(9, "$DIMEXO").n(40, ds.exo).s(9, "$DIMEXE").n(40, ds.exe).s(9, "$DIMGAP").n(40, ds.gap).s(9, "$DIMDEC").i(70, ds.dec as i64).s(9, "$DIMCEN").n(40, ds.cen);
+    o.s(0, "ENDSEC");
+
+    // ---------- CLASSES: the application-defined object types a file may use (AutoCAD reads LAYOUT, IMAGE, WIPEOUT
+    // and the rest only when they are declared; the same list the DWG writer declares)
+    o.s(0, "SECTION").s(2, "CLASSES");
+    for (dxf, cpp, app, proxy, entity) in DXF_CLASSES {
+        o.s(0, "CLASS").s(1, dxf).s(2, cpp).s(3, app).i(90, proxy).i(280, 0).i(281, entity as i64);
+    }
     o.s(0, "ENDSEC");
 
     // ---------- TABLES

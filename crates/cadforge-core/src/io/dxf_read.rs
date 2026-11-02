@@ -1354,13 +1354,13 @@ fn cadforge_wrapped(r: &Rec) -> Option<Kind> {
 }
 
 /// The strings of an entity's extended data for one application (empty when it has none).
-fn xdata_strings<'a>(r: &'a Rec, app: &str) -> Vec<&'a str> {
+fn xdata_strings(r: &Rec, app: &str) -> Vec<String> {
     let mut mine = false;
     let mut out = vec![];
     for (c, v) in &r.g {
         match *c {
             1001 => mine = v.trim().eq_ignore_ascii_case(app),
-            1000 if mine => out.push(v.as_str()),
+            1000 if mine => out.push(uncaret(v).into_owned()),
             _ => {}
         }
     }
@@ -1396,7 +1396,7 @@ fn cadforge_extras(objects: &[Rec]) -> Option<serde_json::Value> {
     let app = super::dxf_write::CADFORGE_APP;
     let handle = objects.iter().filter(|r| r.ty == "DICTIONARY").find_map(|d| d.g.windows(2).find(|p| p[0].0 == 3 && p[0].1.trim() == app && p[1].0 == 350).map(|p| p[1].1.trim().to_uppercase()))?;
     let x = objects.iter().find(|r| r.ty == "XRECORD" && r.first(5).is_some_and(|h| h.trim().eq_ignore_ascii_case(&handle)))?;
-    serde_json::from_str(&x.all(1).concat()).ok()
+    serde_json::from_str(&x.all(1).iter().map(|s| uncaret(s)).collect::<String>()).ok()
 }
 
 /// Put back what the CADFORGE XRECORD keeps: named views, the last view, the current and named UCSs, the current
@@ -1611,7 +1611,7 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             if name.is_empty() || name.starts_with('*') || r.int(70, 0) & 1 != 0 {
                 continue;
             }
-            let family = xdata_strings(r, "ACAD").into_iter().map(|v| decode_text(v).trim().to_string()).find(|v| !v.is_empty());
+            let family = xdata_strings(r, "ACAD").into_iter().map(|v| decode_text(&v).trim().to_string()).find(|v| !v.is_empty());
             let file = decode_text(r.first(3).unwrap_or("")).trim().to_string();
             let font = family.or_else(|| Some(file).filter(|f| !f.is_empty())).unwrap_or_else(|| "arial.ttf".into());
             let width = Some(r.num(41, 1.0)).filter(|w| *w > 0.0 && w.is_finite()).unwrap_or(1.0);
