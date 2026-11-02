@@ -1483,12 +1483,19 @@ impl<'a> Writer<'a> {
     fn objects(&mut self) {
         let d = self.d;
         let mut root_done = false;
+        // the DXF's multiline style and plot style dictionaries: this writer makes its own (below)
+        const OWN: [&str; 3] = ["ACAD_MLINESTYLE", "ACAD_PLOTSETTINGS", "ACAD_PLOTSTYLENAME"];
+        let skip: std::collections::HashSet<u64> = d.objects.iter().filter(|r| r.handle() == self.dict_root).flat_map(|r| r.g.windows(2).filter(|p| p[0].0 == 3 && OWN.contains(&p[0].1.as_str())).map(|p| hex(&p[1].1)).collect::<Vec<_>>()).collect();
         for r in &d.objects {
             let h = r.handle();
+            if skip.contains(&h) {
+                continue;
+            }
             match r.ty.as_str() {
                 "DICTIONARY" => {
                     let mut entries: Vec<(String, u64)> = r.g.windows(2).filter(|p| p[0].0 == 3 && matches!(p[1].0, 350 | 360)).map(|p| (p[0].1.clone(), hex(&p[1].1))).collect();
                     if h == self.dict_root {
+                        entries.retain(|e| !OWN.contains(&e.0.as_str()));
                         entries.push(("ACAD_MLINESTYLE".into(), self.dict_mline));
                         entries.push(("ACAD_PLOTSETTINGS".into(), self.dict_plotsettings));
                         entries.push(("ACAD_PLOTSTYLENAME".into(), self.dict_plotstyle));

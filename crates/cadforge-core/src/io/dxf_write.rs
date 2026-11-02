@@ -1050,7 +1050,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
 
     // handles of fixed table objects
     let mut hs: HashMap<&str, String> = HashMap::new();
-    for k in ["vport", "ltype", "layer", "style", "view", "ucs", "appid", "dimstyle", "blockRecord", "dictRoot", "dictGroup", "vportRec", "styleRec", "appidRec", "dimstyleRec", "msRec", "msBlock", "msEnd"] {
+    for k in ["vport", "ltype", "layer", "style", "view", "ucs", "appid", "dimstyle", "blockRecord", "dictRoot", "dictGroup", "vportRec", "styleRec", "appidRec", "dimstyleRec", "msRec", "msBlock", "msEnd", "dictMline", "mlineStd", "dictPlotStyle", "placeholder"] {
         hs.insert(k, w.h());
     }
     for b in &user_blocks {
@@ -1166,6 +1166,8 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.n(10, 0.0).n(20, 0.0).n(11, 1.0).n(21, 1.0).n(12, (ext.min_x + ext.max_x) / 2.0).n(22, (ext.min_y + ext.max_y) / 2.0).n(13, 0.0).n(23, 0.0).n(14, 10.0).n(24, 10.0).n(15, 10.0).n(25, 10.0);
     o.n(16, 0.0).n(26, 0.0).n(36, 1.0).n(17, 0.0).n(27, 0.0).n(37, 0.0).n(40, (ext.max_y - ext.min_y).max(1.0) * 1.2).n(41, 1.5).n(42, 50.0).n(43, 0.0).n(44, 0.0).n(50, 0.0).n(51, 0.0);
     o.i(71, 0).i(72, 100).i(73, 1).i(74, 3).i(75, 0).i(76, 1).i(77, 0).i(78, 0);
+    // the AutoCAD 2000 fields: render mode, UCS per viewport, the UCS (world), elevation
+    o.i(281, 0).i(65, 1).n(110, 0.0).n(120, 0.0).n(130, 0.0).n(111, 1.0).n(121, 0.0).n(131, 0.0).n(112, 0.0).n(122, 1.0).n(132, 0.0).i(79, 0).n(146, 0.0);
     o.s(0, "ENDTAB");
 
     table_start(&mut o, "LTYPE", &hs["ltype"], 2 + ltype_names.len());
@@ -1196,7 +1198,8 @@ pub fn write_dxf(doc: &Drawing) -> String {
             o.i(420, tc);
         }
         let lt = if linetype(&l.ltype).is_some() { l.ltype.as_str() } else { "Continuous" };
-        o.s(6, lt).i(290, l.plot as i64).i(370, l.lw as i64);
+        // 390: the plot style ("Normal"), which every AutoCAD 2000+ layer names
+        o.s(6, lt).i(290, l.plot as i64).i(370, l.lw as i64).s(390, &hs["placeholder"]);
     }
     o.s(0, "ENDTAB");
 
@@ -1230,6 +1233,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     let std_ds = st.dim_styles.get("Standard").unwrap_or(ds);
     let others: Vec<(&String, &crate::style::DimStyle)> = st.dim_styles.iter().filter(|(k, _)| k.as_str() != "Standard").collect();
     table_start(&mut o, "DIMSTYLE", &hs["dimstyle"], 1 + others.len());
+    o.s(100, "AcDbDimStyleTable").i(71, 0);
     let dimstyle_rec = |o: &mut Out, hnd: &str, name: &str, d: &crate::style::DimStyle| {
         o.s(0, "DIMSTYLE").s(105, hnd).s(330, &hs["dimstyle"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbDimStyleTableRecord").s(2, name).i(70, 0);
         if !d.pre.is_empty() || !d.suf.is_empty() {
@@ -1249,7 +1253,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     let br_count = 1 + sheets.len() + user_blocks.len() + w.dim_blocks.len();
     table_start(&mut o, "BLOCK_RECORD", &hs["blockRecord"], br_count);
     let rec = |o: &mut Out, name: &str, hnd: &str, layout: Option<&str>| {
-        o.s(0, "BLOCK_RECORD").s(5, hnd).s(330, &hs["blockRecord"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbBlockTableRecord").s(2, name).i(70, 0).i(280, 1).i(281, 0);
+        o.s(0, "BLOCK_RECORD").s(5, hnd).s(330, &hs["blockRecord"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbBlockTableRecord").s(2, name);
         if let Some(l) = layout {
             o.s(340, l);
         }
@@ -1297,6 +1301,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     o.s(0, "SECTION").s(2, "OBJECTS");
     let dict_images = w.h();
     o.s(0, "DICTIONARY").s(5, &hs["dictRoot"]).i(330, 0).s(100, "AcDbDictionary").i(281, 1).s(3, "ACAD_GROUP").s(350, &hs["dictGroup"]).s(3, "ACAD_LAYOUT").s(350, &dict_layout);
+    o.s(3, "ACAD_MLINESTYLE").s(350, &hs["dictMline"]).s(3, "ACAD_PLOTSTYLENAME").s(350, &hs["dictPlotStyle"]);
     if !w.image_defs.is_empty() {
         o.s(3, "ACAD_IMAGE_DICT").s(350, &dict_images);
     }
@@ -1310,6 +1315,14 @@ pub fn write_dxf(doc: &Drawing) -> String {
             o.s(1, chunk);
         }
     }
+    // the multiline styles (Standard) and the plot style names (Normal), which AutoCAD expects in every drawing
+    o.s(0, "DICTIONARY").s(5, &hs["dictMline"]).s(102, "{ACAD_REACTORS").s(330, &hs["dictRoot"]).s(102, "}").s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1).s(3, "Standard").s(350, &hs["mlineStd"]);
+    o.s(0, "MLINESTYLE").s(5, &hs["mlineStd"]).s(102, "{ACAD_REACTORS").s(330, &hs["dictMline"]).s(102, "}").s(330, &hs["dictMline"]).s(100, "AcDbMlineStyle").s(2, "Standard").i(70, 0).s(3, "").i(62, 256).n(51, 90.0).n(52, 90.0).i(71, 2);
+    for off in [0.5, -0.5] {
+        o.n(49, off).i(62, 256).s(6, "BYLAYER");
+    }
+    o.s(0, "ACDBDICTIONARYWDFLT").s(5, &hs["dictPlotStyle"]).s(102, "{ACAD_REACTORS").s(330, &hs["dictRoot"]).s(102, "}").s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1).s(3, "Normal").s(350, &hs["placeholder"]).s(100, "AcDbDictionaryWithDefault").s(340, &hs["placeholder"]);
+    o.s(0, "ACDBPLACEHOLDER").s(5, &hs["placeholder"]).s(102, "{ACAD_REACTORS").s(330, &hs["dictPlotStyle"]).s(102, "}").s(330, &hs["dictPlotStyle"]);
     o.s(0, "DICTIONARY").s(5, &hs["dictGroup"]).s(330, &hs["dictRoot"]).s(100, "AcDbDictionary").i(281, 1);
     let groups: Vec<&(String, String, Vec<String>)> = w.groups.iter().filter(|g| !g.2.is_empty()).collect();
     for (id, h, _) in &groups {

@@ -75,6 +75,32 @@ fn the_file_has_nothing_autocad_refuses() {
     for cls in ["LAYOUT", "IMAGE", "WIPEOUT"] {
         assert!(g.windows(2).any(|w| w[0] == (0, "CLASS".into()) && w[1] == (1, cls.into())), "class {cls}");
     }
+    // what AutoCAD 2000+ expects in every drawing: the multiline style and plot style dictionaries, a plot style on
+    // each layer, and no AutoCAD 2007 codes on block records (the file says AutoCAD 2000)
+    for key in ["ACAD_MLINESTYLE", "ACAD_PLOTSTYLENAME"] {
+        assert!(g.iter().any(|(c, v)| *c == 3 && v == key), "{key}");
+    }
+    for ty in ["MLINESTYLE", "ACDBDICTIONARYWDFLT", "ACDBPLACEHOLDER"] {
+        assert!(g.iter().any(|(c, v)| *c == 0 && v == ty), "{ty}");
+    }
+    let records = |ty: &str| -> Vec<Vec<(i32, String)>> {
+        let mut out = vec![];
+        let mut cur: Option<Vec<(i32, String)>> = None;
+        for (c, v) in &g {
+            if *c == 0 {
+                out.extend(cur.take());
+                if v == ty {
+                    cur = Some(vec![]);
+                }
+            } else if let Some(r) = &mut cur {
+                r.push((*c, v.clone()));
+            }
+        }
+        out.extend(cur);
+        out
+    };
+    assert!(records("LAYER").iter().all(|r| r.iter().any(|(c, _)| *c == 390)), "every layer names its plot style");
+    assert!(records("BLOCK_RECORD").iter().all(|r| !r.iter().any(|(c, _)| matches!(c, 70 | 280 | 281))));
     // the broken objects are left out, and Save says so
     assert_eq!(g.iter().filter(|(c, v)| *c == 0 && v == "CIRCLE").count(), 0);
     assert!(!g.iter().any(|(c, v)| *c == 1 && v == "flat"));
