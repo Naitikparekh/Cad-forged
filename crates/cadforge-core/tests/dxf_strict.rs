@@ -101,6 +101,25 @@ fn the_file_has_nothing_autocad_refuses() {
     };
     assert!(records("LAYER").iter().all(|r| r.iter().any(|(c, _)| *c == 390)), "every layer names its plot style");
     assert!(records("BLOCK_RECORD").iter().all(|r| !r.iter().any(|(c, _)| matches!(c, 70 | 280 | 281))));
+    // every text style names a font file; the first layout's objects are in ENTITIES and its block is empty
+    assert!(records("STYLE").iter().all(|r| r.iter().any(|(c, v)| *c == 3 && !v.is_empty())), "group 3 font file");
+    let mut in_block = String::new();
+    let mut section = String::new();
+    for w in g.windows(2) {
+        if w[0] == (0, "SECTION".into()) {
+            section = w[1].1.clone();
+        }
+        if w[0] == (0, "BLOCK".into()) {
+            in_block.clear();
+        }
+        if section == "BLOCKS" && w[0].0 == 2 && in_block.is_empty() {
+            in_block = w[0].1.clone();
+        }
+        if section == "BLOCKS" && w[0].0 == 0 && !matches!(w[0].1.as_str(), "BLOCK" | "ENDBLK") {
+            assert_ne!(in_block, "*Paper_Space", "an object in the *Paper_Space block");
+        }
+    }
+    assert!(g.windows(2).any(|w| w[0] == (0, "VIEWPORT".into())), "the drawing has a layout");
     // the broken objects are left out, and Save says so
     assert_eq!(g.iter().filter(|(c, v)| *c == 0 && v == "CIRCLE").count(), 0);
     assert!(!g.iter().any(|(c, v)| *c == 1 && v == "flat"));

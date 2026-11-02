@@ -479,8 +479,14 @@ impl<'a> Writer<'a> {
         for rec in &recs {
             let name = rec.s(2);
             let Some(b) = d.blocks.iter().find(|b| b.begin.s(2) == name) else { continue };
-            let list = if name == "*Model_Space" { &d.entities } else { &b.ents };
-            self.block(rec, b, list)?;
+            // the ENTITIES section holds model space and (group 67 = 1) the first layout, *Paper_Space
+            let paper = |e: &&Rec| e.i(67, 0) == 1;
+            let list: Vec<Rec> = match name {
+                "*Model_Space" => d.entities.iter().filter(|e| !paper(e)).cloned().collect(),
+                "*Paper_Space" => b.ents.iter().chain(d.entities.iter().filter(paper)).cloned().collect(),
+                _ => b.ents.clone(),
+            };
+            self.block(rec, b, &list)?;
         }
         self.objects();
         Ok(())

@@ -84,6 +84,17 @@ pub fn unwritable(e: &Entity, doc: &Drawing) -> Option<&'static str> {
     }
 }
 
+/// The file name of a TrueType family, as AutoCAD writes it in a text style (Windows' names for the common ones).
+fn ttf_file_of(family: &str) -> String {
+    let f = family.trim().to_lowercase();
+    let known = [("arial", "arial.ttf"), ("times new roman", "times.ttf"), ("courier new", "cour.ttf"), ("calibri", "calibri.ttf"), ("verdana", "verdana.ttf"), ("tahoma", "tahoma.ttf"), ("segoe ui", "segoeui.ttf"), ("georgia", "georgia.ttf"), ("consolas", "consola.ttf"), ("century gothic", "gothic.ttf"), ("arial narrow", "arialn.ttf"), ("cambria", "cambria.ttc")];
+    match known.iter().find(|(k, _)| *k == f) {
+        Some((_, file)) => file.to_string(),
+        None if f.is_empty() => "arial.ttf".into(),
+        None => format!("{}.ttf", f.replace(' ', "")),
+    }
+}
+
 /// The CLASSES section: DXF name, C++ class, application, proxy flags, whether it is an entity.
 const DXF_CLASSES: [(&str, &str, &str, i64, bool); 7] = [
     ("ACDBDICTIONARYWDFLT", "AcDbDictionaryWithDefault", "ObjectDBX Classes", 0, false),
@@ -526,7 +537,7 @@ impl<'a> W<'a> {
             }
         }
         o.out.i(90, if id == 1 { 557088 } else if locked { 16384 } else { 0 }).s(1, "").i(281, 0).i(71, 0).i(74, 0);
-        o.out.n(110, 0.0).n(120, 0.0).n(130, 0.0).n(111, 1.0).n(121, 0.0).n(131, 0.0).n(112, 0.0).n(122, 1.0).n(132, 0.0).i(79, 0).n(146, 0.0).i(282, 0);
+        o.out.n(110, 0.0).n(120, 0.0).n(130, 0.0).n(111, 1.0).n(121, 0.0).n(131, 0.0).n(112, 0.0).n(122, 1.0).n(132, 0.0).i(79, 0).n(146, 0.0);
     }
 
     /// IMAGE entity; the picture itself stays outside the file (IMAGEDEF carries its path), as in AutoCAD.
@@ -1211,7 +1222,8 @@ pub fn write_dxf(doc: &Drawing) -> String {
     for ts in &text_styles {
         let hnd = if ts.name.eq_ignore_ascii_case("Standard") { hs["styleRec"].clone() } else { w.h() };
         let is_file = std::path::Path::new(&ts.font).extension().is_some();
-        let file = if is_file { ts.font.clone() } else { String::new() };
+        // AutoCAD always names a font file in group 3 (a missing file is replaced by its substitute font)
+        let file = if is_file { ts.font.clone() } else { ttf_file_of(&ts.font) };
         o.s(0, "STYLE").s(5, &hnd).s(330, &hs["style"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbTextStyleTableRecord").s(2, &ts.name).i(70, 0).n(40, ts.height).n(41, ts.width).n(50, ts.oblique).i(71, 0).n(42, if ts.height > 0.0 { ts.height } else { 2.5 }).s(3, &file).s(4, "");
         if !is_file {
             o.s(1001, "ACAD").s(1000, &ts.font).i(1071, 34);
@@ -1280,8 +1292,11 @@ pub fn write_dxf(doc: &Drawing) -> String {
         o.s(0, "ENDBLK").s(5, end_h).s(330, owner).s(100, "AcDbEntity").s(8, layer).s(100, "AcDbBlockEnd");
     };
     block(&mut o, "*Model_Space", &hs["msBlock"], &hs["msEnd"], &hs["msRec"], &[], pt(0.0, 0.0), "0");
+    // the first layout's objects (*Paper_Space) go in the ENTITIES section (group 67 = 1) and its block stays empty,
+    // as AutoCAD writes them; the other layouts keep theirs in their blocks
     for (i, h) in sheet_h.iter().enumerate() {
-        block(&mut o, &sheet_block(i), &h.blk, &h.end, &h.rec, &sheet_lines[i], pt(0.0, 0.0), "0");
+        let body: &[String] = if i == 0 { &[] } else { &sheet_lines[i] };
+        block(&mut o, &sheet_block(i), &h.blk, &h.end, &h.rec, body, pt(0.0, 0.0), "0");
     }
     for (b, body) in user_blocks.iter().zip(&block_outs) {
         let (r, blk, end) = &w.block_rec[&b.name];
@@ -1295,6 +1310,9 @@ pub fn write_dxf(doc: &Drawing) -> String {
     // ---------- ENTITIES
     o.s(0, "SECTION").s(2, "ENTITIES");
     o.lines.extend(model_out);
+    if let Some(first) = sheet_lines.first() {
+        o.lines.extend(first.iter().cloned());
+    }
     o.s(0, "ENDSEC");
 
     // ---------- OBJECTS (root dictionary, groups and the layout dictionary)
