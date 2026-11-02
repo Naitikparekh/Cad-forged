@@ -55,7 +55,8 @@ pub enum Info {
     Block { name: String },
     Layer { name: String, color: Col, frozen: bool, off: bool, locked: bool, plot: bool, lw: i16, lt: u64 },
     Ltype { name: String, desc: String, dashes: Vec<f64>, complex: bool, total: f64 },
-    Style { name: String, height: f64, width: f64, font: String, bigfont: String },
+    /// A text style; `oblique` in radians, `family` the TrueType family from the extended data.
+    Style { name: String, height: f64, width: f64, oblique: f64, font: String, bigfont: String, family: Option<String> },
     /// A dimension style: its name and arrowhead size (DIMASZ x DIMSCALE, when it could be read).
     DimStyle { name: String, arrow: Option<f64> },
     Layout { name: String, tab: i32, block: u64, paper_w: f64, paper_h: f64, units: i16, rot: i16, paper: String },
@@ -590,12 +591,13 @@ fn read_typed(o: &mut O, name: &'static str) -> R<Obj> {
             o.m.bit()?;
             let height = o.m.bd()?;
             let width = o.m.bd()?;
-            o.m.bd()?;
+            let oblique = o.m.bd()?;
             o.m.rc()?;
             o.m.bd()?;
             let font = o.tv()?;
             let bigfont = o.tv()?;
-            return Ok(Obj { ty: "STYLE", handle: o.handle, owner, ent: None, g, info: Info::Style { name: sname, height, width, font, bigfont } });
+            let family = o.eed.iter().flat_map(|(_, b)| eed_items(b, ver)).find_map(|(c, v)| if let (1000, EedV::S(s)) = (c, v) { Some(s).filter(|s| !s.trim().is_empty()) } else { None });
+            return Ok(Obj { ty: "STYLE", handle: o.handle, owner, ent: None, g, info: Info::Style { name: sname, height, width, oblique, font, bigfont, family } });
         }
         "DIMSTYLE" => {
             let owner = o.non_entity()?;

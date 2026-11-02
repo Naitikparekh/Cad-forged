@@ -28,7 +28,8 @@ pub enum Op {
     Fill { paths: Vec<Poly>, color: Rgb, alpha: f32, evenodd: bool },
     /// A line of text. `m` maps text-local coordinates (x along the baseline, y downwards, units of the em box) to
     /// device space; `(x, y)` is the start of the baseline in local coordinates and `em` the font size in local units.
-    Text { s: String, x: f64, y: f64, m: Mat, em: f64, color: Rgb, alpha: f32 },
+    /// `font` is the face key of the text's style (None: the default Sans); width factor and oblique angle are in `m`.
+    Text { s: String, x: f64, y: f64, m: Mat, em: f64, color: Rgb, alpha: f32, font: Option<std::sync::Arc<str>> },
     /// A raster picture. `m` maps pixel coordinates (origin at the top-left corner, y down) to device space; `clip` is
     /// the visible boundary in device space (empty = the whole picture); `adj` is brightness / contrast / fade, mixed
     /// toward `bg`; `smooth` selects bilinear sampling over nearest-neighbour.

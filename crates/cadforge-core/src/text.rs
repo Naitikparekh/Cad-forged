@@ -3,21 +3,52 @@ use crate::geom::*;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 
-pub type MeasureFn = fn(&str, f64) -> f64;
+/// Width in drawing units of a string at cap height `h` in the font `face` (a [`face_key`]; empty for the default).
+pub type MeasureFn = fn(&str, f64, &str) -> f64;
 
-fn default_measure(s: &str, h: f64) -> f64 {
+fn default_measure(s: &str, h: f64, _face: &str) -> f64 {
     s.chars().count() as f64 * h * 0.62
 }
 
 static MEASURE: RwLock<MeasureFn> = RwLock::new(default_measure);
 
-/// Install a glyph-metrics based width function (width in drawing units of `str` at text cap height `h`).
+/// Install a glyph-metrics based width function.
 pub fn set_measure(f: MeasureFn) {
     *MEASURE.write().unwrap() = f;
 }
 
+/// Width of `s` at cap height `h` in the default font.
 pub fn measure_text(s: &str, h: f64) -> f64 {
-    (*MEASURE.read().unwrap())(s, h)
+    measure_in(s, h, None)
+}
+
+/// Width of `s` at cap height `h` in `font` (with its width factor).
+pub fn measure_in(s: &str, h: f64, font: Option<&FontSpec>) -> f64 {
+    match font {
+        None => (*MEASURE.read().unwrap())(s, h, ""),
+        Some(f) => (*MEASURE.read().unwrap())(s, h, &f.face) * f.width,
+    }
+}
+
+/// The font a text is drawn in, from its text style: the face (a [`face_key`]), width factor and oblique angle (degrees).
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct FontSpec {
+    pub face: String,
+    pub width: f64,
+    pub oblique: f64,
+}
+
+/// A font name as styles and files give it (`Arial`, `arial.ttf`, `C:\\Fonts\\romans.shx`) reduced to a key:
+/// lower case, no folder, no extension.
+pub fn face_key(font: &str) -> String {
+    let base = font.rsplit(['/', '\\']).next().unwrap_or(font).trim();
+    let lower = base.to_lowercase();
+    for ext in [".ttf", ".otf", ".ttc", ".shx", ".pfb"] {
+        if let Some(s) = lower.strip_suffix(ext) {
+            return s.to_string();
+        }
+    }
+    lower
 }
 
 pub const CAP_RATIO: f64 = 0.72;
@@ -64,6 +95,12 @@ pub struct TextData {
     /// Attribute definition (ATTDEF) data when this text is a block attribute template.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub att: Option<AttDef>,
+    /// The text style (None: Standard).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
+    /// The style's font, copied from the drawing's style table (`Drawing::sync_text_styles`); not saved.
+    #[serde(skip)]
+    pub font: Option<FontSpec>,
 }
 
 /// Attribute definition: tag, prompt and mode flags (ATTDEF).
@@ -84,7 +121,7 @@ pub struct AttDef {
 
 impl TextData {
     pub fn new(p: Pt, h: f64, s: &str) -> TextData {
-        TextData { p, h, s: s.to_string(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false, att: None }
+        TextData { p, h, s: s.to_string(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false, att: None, style: None, font: None }
     }
     pub fn with_rot(mut self, rot: f64) -> TextData {
         self.rot = rot;
@@ -99,6 +136,11 @@ impl TextData {
 
 /// Break text to lines, honouring explicit newlines and (optionally) wrapping at width `w`.
 pub fn wrap_lines(s: &str, h: f64, w: f64) -> Vec<String> {
+    wrap_lines_in(s, h, w, None)
+}
+
+/// [`wrap_lines`] measured in `font`.
+pub fn wrap_lines_in(s: &str, h: f64, w: f64, font: Option<&FontSpec>) -> Vec<String> {
     let raw: Vec<String> = s.replace("\\P", "\n").split('\n').map(|x| x.to_string()).collect();
     if !(w > 0.0) {
         return raw;
@@ -108,7 +150,7 @@ pub fn wrap_lines(s: &str, h: f64, w: f64) -> Vec<String> {
         let mut cur = String::new();
         for word in line.split(' ') {
             let next = if cur.is_empty() { word.to_string() } else { format!("{} {}", cur, word) };
-            if !cur.is_empty() && measure_text(&next, h) > w {
+            if !cur.is_empty() && measure_in(&next, h, font) > w {
                 out.push(std::mem::take(&mut cur));
                 cur = word.to_string();
             } else {
@@ -159,8 +201,9 @@ pub fn text_layout(e: &TextData) -> Layout {
         return layout_formatted(e);
     }
     let h = e.h;
-    let lines = wrap_lines(&e.s, h, e.w.unwrap_or(0.0));
-    let widths: Vec<f64> = lines.iter().map(|l| measure_text(l, h)).collect();
+    let font = e.font.as_ref();
+    let lines = wrap_lines_in(&e.s, h, e.w.unwrap_or(0.0), font);
+    let widths: Vec<f64> = lines.iter().map(|l| measure_in(l, h, font)).collect();
     let max_w = widths.iter().cloned().fold(0.0, f64::max);
     let ew = e.w.unwrap_or(0.0);
     let box_w = if ew > 0.0 { ew.max(max_w) } else { max_w };
@@ -208,6 +251,7 @@ fn layout_formatted(e: &TextData) -> Layout {
         trim: f64,
     }
     let h = e.h;
+    let font = e.font.as_ref();
     let wrap = e.w.unwrap_or(0.0);
     let mut lines: Vec<Vec<Tok>> = vec![];
     for para in parse(&e.s, h, e.multi) {
@@ -228,11 +272,11 @@ fn layout_formatted(e: &TextData) -> Layout {
                     if !w.is_empty() {
                         words.push(w);
                     }
-                    words.into_iter().map(|w| Tok { style: run.style.clone(), w: measure_text(&w, hh), trim: measure_text(w.trim_end(), hh), text: w, stack: None }).collect()
+                    words.into_iter().map(|w| Tok { style: run.style.clone(), w: measure_in(&w, hh, font), trim: measure_in(w.trim_end(), hh, font), text: w, stack: None }).collect()
                 }
                 Piece::Stack { num, den, bar } => {
                     let sh = hh * 0.7;
-                    let w = measure_text(&num, sh).max(measure_text(&den, sh)) + 0.25 * sh;
+                    let w = measure_in(&num, sh, font).max(measure_in(&den, sh, font)) + 0.25 * sh;
                     vec![Tok { style: run.style.clone(), text: format!("{num}/{den}"), stack: Some((num, den, bar)), w, trim: w }]
                 }
             };
@@ -296,7 +340,7 @@ fn layout_formatted(e: &TextData) -> Layout {
                 Some((num, den, bar)) => {
                     let sh = hh * 0.7;
                     let bar_y = base + 0.4 * hh;
-                    let (nw, dw) = (measure_text(num, sh), measure_text(den, sh));
+                    let (nw, dw) = (measure_in(num, sh, font), measure_in(den, sh, font));
                     let (ny, dy) = (bar_y + 0.2 * sh, bar_y - 0.2 * sh - sh);
                     runs.push(RunLayout { s: num.clone(), x: cx + (t.w - nw) / 2.0, y: ny, w: nw, h: sh, style: t.style.clone() });
                     runs.push(RunLayout { s: den.clone(), x: cx + (t.w - dw) / 2.0, y: dy, w: dw, h: sh, style: t.style.clone() });

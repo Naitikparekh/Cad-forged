@@ -1,7 +1,7 @@
 //! PNG rasteriser for plots: draws renderer [`Op`]s with tiny-skia; text is drawn from glyph outlines of a supplied
 //! TrueType font (the plot uses a Helvetica-compatible face so it matches the PDF and SVG output).
 use crate::ops::Op;
-use ab_glyph::{Font, FontRef, OutlineCurve};
+use ab_glyph::{Font, OutlineCurve};
 use tiny_skia::{Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Stroke, StrokeDash, Transform};
 
 fn paint(rgb: [u8; 3], alpha: f32) -> Paint<'static> {
@@ -20,7 +20,7 @@ pub fn render_png(ops: &[Op], page: (f64, f64), unit_mm: f64, dpi: f64, font_byt
     }
     let mut pm = Pixmap::new(w, h).ok_or("Could not allocate the image.")?;
     pm.fill(Color::WHITE);
-    let font = FontRef::try_from_slice(font_bytes).ok();
+    let default_font = ab_glyph::FontArc::try_from_vec(font_bytes.to_vec()).ok();
     let sc = Transform::from_scale(k, k);
     for op in ops {
         match op {
@@ -102,7 +102,12 @@ pub fn render_png(ops: &[Op], page: (f64, f64), unit_mm: f64, dpi: f64, font_byt
                     pm.fill_path(&path, &pt, FillRule::Winding, sc, None);
                 }
             }
-            Op::Text { s, x, y, m, em, color, alpha } => {
+            Op::Text { s, x, y, m, em, color, alpha, font: face } => {
+                // the text style's font, or the page's default font
+                let font = match face {
+                    Some(f) => Some(crate::fonts::resolve(f).font()),
+                    None => default_font.clone(),
+                };
                 let Some(font) = &font else { continue };
                 let upm = font.units_per_em().unwrap_or(1000.0);
                 let scale = (*em as f32) / upm;

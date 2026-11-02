@@ -744,7 +744,7 @@ impl CadForgeApp {
                         "mleaderstyle" => ("mleader", st.map_or_else(String::new, |s| s.cur_mleader_style.clone())),
                         "tablestyle" => ("tablestyle", st.map_or_else(String::new, |s| s.cur_table_style.clone())),
                         "annoscale" => ("annotative", st.map_or_else(String::new, |s| s.cannoscale.clone())),
-                        _ => ("textstyle", "Standard".to_string()),
+                        _ => ("textstyle", st.map_or_else(String::new, |s| s.cur_text().name)),
                     }
                 };
                 let icon = if self.icons.has(icon) { icon } else { "mtext" };
@@ -775,7 +775,7 @@ impl CadForgeApp {
                         "dimstyle" => (st.cur_dim_style.clone(), st.dim_styles.keys().cloned().collect::<Vec<_>>()),
                         "mleaderstyle" => (st.cur_mleader_style.clone(), st.mleader_styles.keys().cloned().collect()),
                         "tablestyle" => (st.cur_table_style.clone(), st.table_styles.keys().cloned().collect()),
-                        _ => ("Standard".to_string(), vec!["Standard".to_string()]),
+                        _ => (st.cur_text().name, st.all_text_styles().into_iter().map(|s| s.name).collect()),
                     }
                 };
                 let mut names = names;
@@ -795,7 +795,7 @@ impl CadForgeApp {
                                     "dimstyle" => d.settings.cur_dim_style = n3.clone(),
                                     "mleaderstyle" => d.settings.cur_mleader_style = n3.clone(),
                                     "tablestyle" => d.settings.cur_table_style = n3.clone(),
-                                    _ => {}
+                                    _ => d.settings.text_style = n3.clone(),
                                 }
                                 d.touch();
                             });

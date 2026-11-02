@@ -9,6 +9,7 @@ license.workspace = true
 cadforge-core = { path = "../cadforge-core" }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd", "png-format"] }
 ab_glyph = "0.2"
+ttf-parser = "0.25"
 base64 = "0.22"
 miniz_oxide = "0.8"
 

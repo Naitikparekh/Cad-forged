@@ -64,7 +64,8 @@ macro_rules! pt_field {
     };
 }
 
-pub fn geom_fields(e: &Entity) -> Vec<Field> {
+/// The fields of an entity's Geometry section; `styles` are the drawing's text styles (for text).
+pub fn geom_fields(e: &Entity, styles: &[String]) -> Vec<Field> {
     match &e.kind {
         Kind::Line { .. } => vec![
             x("Start X", |e| if let Kind::Line { a, .. } = &e.kind { a.x } else { 0.0 }, |e, v| if let Kind::Line { a, .. } = &mut e.kind { a.x = v }),
@@ -113,6 +114,17 @@ pub fn geom_fields(e: &Entity) -> Vec<Field> {
         ],
         Kind::Text(_) => vec![
             textf("Contents", |e| if let Kind::Text(t) = &e.kind { t.s.clone() } else { String::new() }, |e, v| if let Kind::Text(t) = &mut e.kind { t.s = v }),
+            Field {
+                label: "Style",
+                unit: None,
+                kind: FKind::Select(styles.to_vec()),
+                get: Box::new(|e, _| Val::Text(if let Kind::Text(t) = &e.kind { t.style.clone().unwrap_or_else(|| "Standard".into()) } else { String::new() })),
+                set: Some(Box::new(|e, v| {
+                    if let (Kind::Text(t), Val::Text(s)) = (&mut e.kind, v) {
+                        t.style = (!s.eq_ignore_ascii_case("Standard")).then(|| s.clone());
+                    }
+                })),
+            },
             xmin("Height", 1e-9, |e| if let Kind::Text(t) = &e.kind { t.h } else { 0.0 }, |e, v| if let Kind::Text(t) = &mut e.kind { t.h = v }),
             ang("Rotation", |e| if let Kind::Text(t) = &e.kind { t.rot } else { 0.0 }, |e, v| if let Kind::Text(t) = &mut e.kind { t.rot = v }),
             x("Position X", |e| if let Kind::Text(t) = &e.kind { t.p.x } else { 0.0 }, |e, v| if let Kind::Text(t) = &mut e.kind { t.p.x = v }),
@@ -354,7 +366,8 @@ impl CadForgeApp {
             if !targets.is_empty() {
                 let one_type = targets.iter().all(|e| e.label() == targets[0].label());
                 if one_type {
-                    let fields = geom_fields(&targets[0]);
+                    let styles: Vec<String> = self.h.borrow().doc().map(|d| d.settings.all_text_styles().into_iter().map(|s| s.name).collect()).unwrap_or_default();
+                    let fields = geom_fields(&targets[0], &styles);
                     if !fields.is_empty() {
                         let ids2 = ids.clone();
                         let tg = targets.clone();
@@ -650,6 +663,8 @@ impl CadForgeApp {
                         set(e, &v);
                     }
                 }
+                // a changed text style changes the font
+                d.sync_text_styles();
                 d.touch();
             });
         }
@@ -841,7 +856,7 @@ impl CadForgeApp {
         if sel.len() == 1 {
             let a = self.h.borrow();
             if let Some(d) = a.doc() {
-                for f in geom_fields(e).into_iter().take(6) {
+                for f in geom_fields(e, &[]).into_iter().take(6) {
                     let v = (f.get)(e, d);
                     rows.push((crate::i18n::tr(f.label).to_string(), match v {
                         Val::Num(n) => fmt_num(n, prec, true),

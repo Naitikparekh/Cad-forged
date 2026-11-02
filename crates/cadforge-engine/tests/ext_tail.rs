@@ -22,7 +22,7 @@ fn saved_file(s: &Sim) -> Option<(String, String)> {
 }
 
 fn text(h: f64, s: &str) -> Entity {
-    Entity::new(Kind::Text(cadforge_core::text::TextData { p: p(0., 0.), h, s: s.into(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false, att: None }))
+    Entity::new(Kind::Text(cadforge_core::text::TextData { p: p(0., 0.), h, s: s.into(), rot: 0.0, jh: HJust::Left, jv: VJust::Baseline, w: None, multi: false, att: None, style: None, font: None }))
 }
 
 #[test]

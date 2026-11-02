@@ -419,6 +419,9 @@ pub struct DimStyle {
     pub blk: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<Color>,
+    /// DIMTXSTY: the text style of the dimension text (empty: Standard).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub txsty: String,
 }
 
 fn bool_or_int<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
@@ -449,7 +452,37 @@ fn ser_bool_as_int<S: Serializer>(v: &bool, s: S) -> Result<S::Ok, S::Error> {
 
 impl Default for DimStyle {
     fn default() -> DimStyle {
-        DimStyle { name: "Standard".into(), scale: 1.0, txt: 2.5, asz: 2.5, exo: 0.625, exe: 1.25, gap: 0.625, cen: 2.5, dec: 2, tad: true, tih: false, zin: 0, lfac: 1.0, pre: String::new(), suf: String::new(), blk: "closed".into(), color: None }
+        DimStyle { name: "Standard".into(), scale: 1.0, txt: 2.5, asz: 2.5, exo: 0.625, exe: 1.25, gap: 0.625, cen: 2.5, dec: 2, tad: true, tih: false, zin: 0, lfac: 1.0, pre: String::new(), suf: String::new(), blk: "closed".into(), color: None, txsty: String::new() }
+    }
+}
+
+/// A text style (STYLE): the font its text is drawn in (a TrueType font or an SHX font name such as `romans.shx`), a
+/// fixed height (0: each text has its own), the width factor and the oblique angle in degrees.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TextStyle {
+    pub name: String,
+    pub font: String,
+    pub height: f64,
+    pub width: f64,
+    pub oblique: f64,
+}
+
+impl Default for TextStyle {
+    fn default() -> TextStyle {
+        TextStyle { name: "Standard".into(), font: "arial.ttf".into(), height: 0.0, width: 1.0, oblique: 0.0 }
+    }
+}
+
+impl TextStyle {
+    /// What text in this style is drawn with; `None` for the built-in look (Arial, width 1, upright).
+    pub fn font_spec(&self) -> Option<crate::text::FontSpec> {
+        let face = crate::text::face_key(&self.font);
+        let plain = matches!(face.as_str(), "" | "arial" | "helvetica" | "liberationsans" | "liberation sans");
+        if plain && (self.width - 1.0).abs() < 1e-9 && self.oblique.abs() < 1e-9 {
+            return None;
+        }
+        Some(crate::text::FontSpec { face, width: if self.width > 0.0 { self.width } else { 1.0 }, oblique: self.oblique })
     }
 }
 
@@ -550,6 +583,9 @@ pub struct Settings {
     pub pdsize: f64,
     pub text_height: f64,
     pub text_style: String,
+    /// The text styles (STYLE); Standard is there even when this is empty.
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub text_styles: IndexMap<String, TextStyle>,
     pub dim_styles: IndexMap<String, DimStyle>,
     pub cur_dim_style: String,
     pub fillet_radius: f64,
@@ -616,6 +652,7 @@ impl Default for Settings {
             pdsize: 0.0,
             text_height: 2.5,
             text_style: "Standard".into(),
+            text_styles: IndexMap::new(),
             dim_styles,
             cur_dim_style: "Standard".into(),
             fillet_radius: 0.0,
@@ -640,6 +677,27 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// The text style named `name` (case ignored); the built-in Standard for an unknown name.
+    pub fn text_style_named(&self, name: &str) -> TextStyle {
+        self.text_styles.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.clone()).unwrap_or_else(|| TextStyle { name: if name.is_empty() { "Standard".into() } else { name.to_string() }, ..TextStyle::default() })
+    }
+
+    /// The current text style (TEXTSTYLE).
+    pub fn cur_text(&self) -> TextStyle {
+        self.text_style_named(&self.text_style)
+    }
+
+    /// Every text style: Standard first, then the others.
+    pub fn all_text_styles(&self) -> Vec<TextStyle> {
+        let std = self.text_style_named("Standard");
+        std::iter::once(TextStyle { name: "Standard".into(), ..std }).chain(self.text_styles.values().filter(|s| !s.name.eq_ignore_ascii_case("Standard")).cloned()).collect()
+    }
+
+    /// The font text of style `name` is drawn with.
+    pub fn font_for(&self, name: Option<&str>) -> Option<crate::text::FontSpec> {
+        self.text_style_named(name.unwrap_or("Standard")).font_spec()
+    }
+
     pub fn cur_dim(&self) -> &DimStyle {
         self.dim_styles.get(&self.cur_dim_style).or_else(|| self.dim_styles.values().next()).expect("a dimension style")
     }

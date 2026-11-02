@@ -13,6 +13,53 @@ pub fn cad_font(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name("cad".into()))
 }
 
+/// The egui font family of a bundled face (registered in `theme::install_fonts`).
+pub fn family_of(b: cadforge_render::fonts::Builtin) -> FontFamily {
+    use cadforge_render::fonts::Builtin;
+    FontFamily::Name(match b {
+        Builtin::Sans => "cad",
+        Builtin::Serif => "cad-serif",
+        Builtin::Mono => "cad-mono",
+    }
+    .into())
+}
+
+type GlyphMesh = std::rc::Rc<(Vec<[f32; 2]>, Vec<u32>)>;
+
+thread_local! {
+    /// Triangulated text outlines in em units (baseline start at the origin, y down), by face and string.
+    static OUTLINES: std::cell::RefCell<std::collections::HashMap<(String, String), GlyphMesh>> = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Text drawn from its glyph outlines: installed fonts, and text that is stretched or slanted (width factor, oblique,
+/// italics), which egui's text cannot show.
+fn outline_text(painter: &egui::Painter, face: &str, s: &str, x: f64, y: f64, m: &[f64; 6], em: f64, color: Color32, origin: Pos2) {
+    let key = (face.to_string(), s.to_string());
+    let tri = OUTLINES.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some(t) = c.get(&key) {
+            return t.clone();
+        }
+        if c.len() > 4000 {
+            c.clear();
+        }
+        let font = cadforge_render::fonts::resolve(face).font();
+        let loops = cadforge_render::fonts::text_outline(&font, s, 0.0, 0.0, &[1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 1.0);
+        let mesh = fill_mesh(&loops, Color32::WHITE, Pos2::ZERO);
+        let t: GlyphMesh = std::rc::Rc::new((mesh.vertices.iter().map(|v| [v.pos.x, v.pos.y]).collect(), mesh.indices));
+        c.insert(key, t.clone());
+        t
+    });
+    let mut mesh = Mesh::default();
+    for v in &tri.0 {
+        let (lx, ly) = (x + v[0] as f64 * em, y + v[1] as f64 * em);
+        let p = [m[0] * lx + m[2] * ly + m[4], m[1] * lx + m[3] * ly + m[5]];
+        mesh.vertices.push(Vertex { pos: pos(p, origin), uv: eframe::egui::epaint::WHITE_UV, color });
+    }
+    mesh.indices = tri.1.clone();
+    painter.add(Shape::mesh(mesh));
+}
+
 fn pos(p: [f64; 2], o: Pos2) -> Pos2 {
     Pos2::new(o.x + p[0] as f32, o.y + p[1] as f32)
 }
@@ -246,15 +293,26 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
                     painter.add(Shape::mesh(mesh));
                 }
             }
-            Op::Text { s, x, y, m, em, color, alpha } => {
+            Op::Text { s, x, y, m, em, color, alpha, font } => {
                 let sz = (m[0].hypot(m[1]) * *em) as f32;
                 if sz < 1.5 || s.is_empty() {
                     continue;
                 }
+                // a conformal map (rotation and uniform scale) and a bundled face: egui's text; otherwise outlines
+                let (a, b, c2, d) = (m[0], m[1], m[2], m[3]);
+                let n = a * a + b * b;
+                let conformal = (a * c2 + b * d).abs() <= 1e-6 * n && (n - (c2 * c2 + d * d)).abs() <= 1e-6 * n;
+                let res = font.as_deref().map(cadforge_render::fonts::resolve);
+                let builtin = res.as_ref().map_or(Some(cadforge_render::fonts::Builtin::Sans), |r| r.builtin());
+                if !conformal || builtin.is_none() {
+                    outline_text(painter, font.as_deref().unwrap_or(""), s, *x, *y, m, *em, col(*color, *alpha), origin);
+                    continue;
+                }
+                let family = family_of(builtin.unwrap_or(cadforge_render::fonts::Builtin::Sans));
                 let angle = m[1].atan2(m[0]) as f32;
                 let o = op.text_origin().unwrap_or([0.0, 0.0]);
                 let _ = (x, y);
-                let galley = painter.layout_no_wrap(s.clone(), cad_font(sz), col(*color, *alpha));
+                let galley = painter.layout_no_wrap(s.clone(), FontId::new(sz, family), col(*color, *alpha));
                 let base = galley.rows.first().map(|r| r.pos.y + r.row.glyphs.first().map_or(sz * 0.8, |g| g.pos.y)).unwrap_or(sz * 0.8);
                 // TextShape rotates about the galley's top-left corner: place it so the baseline start lands on `o`
                 let off = egui::vec2(base * angle.sin(), -base * angle.cos());

@@ -99,7 +99,7 @@ pub struct CadForgeApp {
 impl CadForgeApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> CadForgeApp {
         theme::install_fonts(&cc.egui_ctx);
-        cadforge_core::text::set_measure(cadforge_render::helvetica_width);
+        cadforge_core::text::set_measure(cadforge_render::fonts::measure);
         let t = theme::DARK;
         theme::apply(&cc.egui_ctx, &t);
         let registry = Rc::new(build_registry());

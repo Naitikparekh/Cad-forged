@@ -138,9 +138,26 @@ fn page_stream(ops: &[Op], pt: f64, h: f64) -> (String, Vec<(f64, String)>, Vec<
                 }
                 c.push(format!("{} cm /Im{} Do Q", cm.iter().map(|v| format!("{}", (v * 1e6).round() / 1e6)).collect::<Vec<_>>().join(" "), images.len()));
             }
-            Op::Text { s, x, y, m, em, color, .. } => {
+            Op::Text { s, x, y, m, em, color, font, .. } => {
+                // the bundled faces map to PDF's standard fonts (same metrics); an installed font is drawn as outlines
+                let res = font.as_deref().map(crate::fonts::resolve);
+                let fname = match res.as_ref().map(|r| r.builtin()) {
+                    None | Some(Some(crate::fonts::Builtin::Sans)) => "F1",
+                    Some(Some(crate::fonts::Builtin::Serif)) => "F2",
+                    Some(Some(crate::fonts::Builtin::Mono)) => "F3",
+                    Some(None) => {
+                        let loops = crate::fonts::text_outline(&res.as_ref().expect("resolved").font(), s, *x, *y, m, *em);
+                        if !loops.is_empty() {
+                            let polys: Vec<Poly> = loops.into_iter().map(|l| Poly { pts: l, closed: true }).collect();
+                            c.push(format!("{} rg", rgb(*color)));
+                            path_ops(&mut c, &polys);
+                            c.push("f".into());
+                        }
+                        continue;
+                    }
+                };
                 c.push(format!(
-                    "q {} cm 1 0 0 -1 0 0 cm BT /F1 {} Tf {} rg {} {} Td {} Tj ET Q",
+                    "q {} cm 1 0 0 -1 0 0 cm BT /{fname} {} Tf {} rg {} {} Td {} Tj ET Q",
                     m.iter().map(|v| f(*v)).collect::<Vec<_>>().join(" "),
                     f(*em),
                     rgb(*color),
@@ -170,6 +187,8 @@ pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> 
         String::new(), // the page tree, filled in once the pages are numbered
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
         format!("<< /Title {} /Producer (CadForge) /Creator (CadForge) >>", pdf_string(title)),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>".to_string(),
     ];
     let mut kids: Vec<usize> = vec![];
     for page in pages {
@@ -199,7 +218,7 @@ pub fn write_pdf_pages(pages: &[PdfPage], unit_mm: f64, title: &str) -> Vec<u8> 
         }
         let xobject_dict = if xobjects.is_empty() { String::new() } else { format!(" /XObject << {} >>", xobjects.join(" ")) };
         kids.push(page_num);
-        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents {} 0 R /Resources << /Font << /F1 3 0 R >> /ExtGState << {} >>{} >> >>", f(w), f(h), page_num + 1, gs_dict, xobject_dict));
+        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents {} 0 R /Resources << /Font << /F1 3 0 R /F2 5 0 R /F3 6 0 R >> /ExtGState << {} >>{} >> >>", f(w), f(h), page_num + 1, gs_dict, xobject_dict));
         objs.push(format!("<< /Length {} >>\nstream\n{}\nendstream", content.chars().count(), content));
         objs.extend(image_objs);
     }

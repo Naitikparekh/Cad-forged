@@ -14,6 +14,8 @@ pub struct Header {
     pub lunits: i16,
     pub luprec: i16,
     pub clayer: u64,
+    /// The current text style (TEXTSTYLE), by handle.
+    pub textstyle: u64,
     pub dimscale: f64,
     pub dimasz: f64,
     pub dimexo: f64,
@@ -29,7 +31,7 @@ pub struct Header {
 
 impl Default for Header {
     fn default() -> Self {
-        Header { ltscale: 1.0, textsize: 2.5, pdmode: 0, pdsize: 0.0, lunits: 2, luprec: 4, clayer: 0, dimscale: 1.0, dimasz: 2.5, dimexo: 0.625, dimexe: 1.25, dimtxt: 2.5, dimcen: 2.5, dimgap: 0.625, dimdec: None, insunits: None, insbase: [0.0; 3] }
+        Header { ltscale: 1.0, textsize: 2.5, pdmode: 0, pdsize: 0.0, lunits: 2, luprec: 4, clayer: 0, textstyle: 0, dimscale: 1.0, dimasz: 2.5, dimexo: 0.625, dimexe: 1.25, dimtxt: 2.5, dimcen: 2.5, dimgap: 0.625, dimdec: None, insunits: None, insbase: [0.0; 3] }
     }
 }
 
@@ -205,7 +207,7 @@ fn read_into(d: &[u8], ver: Ver, maint: u8, o: &mut Header) -> R<()> {
     r.cmc()?; // CECOLOR
     r.m.handle(0)?; // HANDSEED (main stream)
     o.clayer = r.h()?;
-    r.h()?; // TEXTSTYLE
+    o.textstyle = r.h()?;
     r.h()?; // CELTYPE
     if r2007 {
         r.h()?;

@@ -430,6 +430,19 @@ fn settings_drawing() -> Drawing {
     d.settings.cur_mleader_style = "Notes".into();
     d.settings.table_styles.insert("Schedule".into(), cadforge_core::style::TableStyle { name: "Schedule".into(), text_height: 3.0, title: true });
     d.settings.cur_table_style = "Schedule".into();
+    // text styles: a TrueType family (kept in extended data), an SHX font with an obliquing angle, text in each,
+    // the current one, and the dimension style's text style
+    d.settings.text_styles.insert("Notes".into(), cadforge_core::style::TextStyle { name: "Notes".into(), font: "Times New Roman".into(), height: 3.5, width: 0.8, oblique: 0.0 });
+    d.settings.text_styles.insert("Plan".into(), cadforge_core::style::TextStyle { name: "Plan".into(), font: "romans.shx".into(), height: 0.0, width: 1.0, oblique: 15.0 });
+    d.settings.text_style = "Notes".into();
+    d.settings.dim_styles.get_mut("ISO-25").unwrap().txsty = "Plan".into();
+    for (s, at, style) in [("TIMES", 80.0, "Notes"), ("ROMANS", 90.0, "Plan")] {
+        let mut e = Entity::text(pt(0.0, at), 3.5, s);
+        if let Kind::Text(t) = &mut e.kind {
+            t.style = Some(style.into());
+        }
+        d.add(e);
+    }
     let mut dim = cadforge_core::dim::DimData::new(cadforge_core::dim::DimType::Lin);
     (dim.p1, dim.p2, dim.dp, dim.ds) = (Some(pt(0.0, -10.0)), Some(pt(30.0, -10.0)), Some(pt(15.0, -20.0)), Some("ISO-25".into()));
     d.add(Entity::dim(dim));

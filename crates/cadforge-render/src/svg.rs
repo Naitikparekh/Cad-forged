@@ -78,15 +78,24 @@ pub fn write_svg(ops: &[Op], page: (f64, f64), unit_mm: f64, title: &str) -> Str
                     if *smooth { "" } else { " image-rendering=\"pixelated\"" },
                 ));
             }
-            Op::Text { s, x, y, m, em, color, alpha } => {
+            Op::Text { s, x, y, m, em, color, alpha, font } => {
                 if *alpha <= 0.0 {
                     continue;
                 }
+                // the style's font by name, then the stack of its look-alikes
+                let family = match font.as_deref() {
+                    None => crate::fonts::Builtin::Sans.css().to_string(),
+                    Some(face) => match crate::fonts::resolve(face).builtin() {
+                        Some(b) if matches!(face, "arial" | "helvetica" | "txt" | "simplex" | "romans") => b.css().to_string(),
+                        _ => format!("'{}', {}", esc(face).replace('\'', ""), crate::fonts::builtin_for(face).css()),
+                    },
+                };
                 out.push(format!(
-                    "<text transform=\"matrix({})\" x=\"{}\" y=\"{}\" font-family=\"Arial, Helvetica, sans-serif\" font-size=\"{}\" fill=\"{}\"{}>{}</text>",
+                    "<text transform=\"matrix({})\" x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\" fill=\"{}\"{}>{}</text>",
                     m.iter().map(|v| format!("{}", (v * 1e4).round() / 1e4)).collect::<Vec<_>>().join(" "),
                     f(*x),
                     f(*y),
+                    family,
                     f(*em),
                     col(*color),
                     if *alpha < 1.0 { format!(" fill-opacity=\"{}\"", f(*alpha as f64)) } else { String::new() },

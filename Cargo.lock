@@ -527,6 +527,7 @@ dependencies = [
  "image",
  "miniz_oxide 0.8.9",
  "tiny-skia",
+ "ttf-parser",
 ]
 
 [[package]]

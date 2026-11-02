@@ -843,6 +843,7 @@ fn convert_kind(r: &Rec, ctx: &mut Ctx) -> Vec<Entity> {
                     t.rot = rot;
                     t.jh = jh;
                     t.jv = jv;
+                    t.style = style_of(r);
                 }
                 push(e, false, &mut out);
             }
@@ -1217,7 +1218,15 @@ fn text_of_rec(r: &Rec) -> Option<TextData> {
             _ => VJust::Baseline,
         }
     };
-    Some(TextData::new(anchor, hh, &s).with_rot(rad(r.num(50, 0.0))).with_just(jh_of(jh), vj))
+    let mut t = TextData::new(anchor, hh, &s).with_rot(rad(r.num(50, 0.0))).with_just(jh_of(jh), vj);
+    t.style = style_of(r);
+    Some(t)
+}
+
+/// The text style an entity names in group 7 (None for Standard).
+fn style_of(r: &Rec) -> Option<String> {
+    let n = decode_text(r.first(7)?).trim().to_string();
+    (!n.is_empty() && !n.eq_ignore_ascii_case("Standard")).then_some(n)
 }
 
 /// Merge POLYLINE/VERTEX/SEQEND and INSERT/ATTRIB/SEQEND runs into single records.
@@ -1592,6 +1601,35 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
             }
         }
     }
+    // ---- the STYLE table: text styles with their fonts (a TrueType family in the ACAD extended data wins over the
+    // font file, as in AutoCAD); shape files (flag 1) and unnamed records are not text styles
+    let mut style_names: HashMap<String, String> = HashMap::new();
+    {
+        let empty: Vec<Rec> = vec![];
+        for r in secs.get("TABLES").unwrap_or(&empty).iter().filter(|x| x.ty == "STYLE") {
+            let name = decode_text(r.first(2).unwrap_or("")).trim().to_string();
+            if name.is_empty() || name.starts_with('*') || r.int(70, 0) & 1 != 0 {
+                continue;
+            }
+            let family = xdata_strings(r, "ACAD").into_iter().map(|v| decode_text(v).trim().to_string()).find(|v| !v.is_empty());
+            let file = decode_text(r.first(3).unwrap_or("")).trim().to_string();
+            let font = family.or_else(|| Some(file).filter(|f| !f.is_empty())).unwrap_or_else(|| "arial.ttf".into());
+            let width = Some(r.num(41, 1.0)).filter(|w| *w > 0.0 && w.is_finite()).unwrap_or(1.0);
+            // (a DWG keeps the angle in radians: round away the conversion's last bit)
+            let oblique = Some((r.num(50, 0.0) * 1e9).round() / 1e9).filter(|o| o.is_finite() && o.abs() <= 85.0).unwrap_or(0.0);
+            let height = Some(r.num(40, 0.0)).filter(|h| *h > 0.0 && h.is_finite()).unwrap_or(0.0);
+            let key = if name.eq_ignore_ascii_case("Standard") { "Standard".to_string() } else { name.clone() };
+            if let Some(h) = r.first(5) {
+                style_names.insert(h.trim().to_uppercase(), key.clone());
+            }
+            doc.settings.text_styles.insert(key.clone(), crate::style::TextStyle { name: key, font, height, width, oblique });
+        }
+        let cur = header.get("$TEXTSTYLE").and_then(|v| v.iter().find(|(c, _)| *c == 7)).map(|(_, v)| decode_text(v).trim().to_string()).unwrap_or_default();
+        if let Some(k) = doc.settings.text_styles.keys().find(|k| k.eq_ignore_ascii_case(&cur)).cloned() {
+            doc.settings.text_style = k;
+        }
+    }
+
     // ---- the DIMSTYLE table: the named dimension styles (the header variables above are those of the current style,
     // which is Standard unless $DIMSTYLE names another)
     {
@@ -1622,6 +1660,7 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
                 zin: r.int(78, b.zin as i64) as i32,
                 pre,
                 suf,
+                txsty: r.first(340).and_then(|h| style_names.get(&h.trim().to_uppercase())).cloned().unwrap_or_default(),
                 ..b
             };
             doc.settings.dim_styles.insert(key, ds);
@@ -1932,5 +1971,6 @@ pub fn read_dxf(text: &str, name: &str) -> Result<Drawing, String> {
     let _ = paper;
     doc.validate()?;
     doc.dirty = false;
+    doc.sync_text_styles();
     Ok(doc)
 }

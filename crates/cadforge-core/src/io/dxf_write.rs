@@ -359,6 +359,14 @@ impl<'a> W<'a> {
         self.handle_of.insert(id, format!("{:X}", self.handle - 1));
     }
 
+    /// The STYLE table name to write for a text's style: Standard unless the drawing defines the style.
+    fn style_name(&self, style: Option<&str>) -> String {
+        match style {
+            Some(n) if self.doc.settings.text_styles.keys().any(|k| k.eq_ignore_ascii_case(n)) => n.to_string(),
+            _ => "Standard".into(),
+        }
+    }
+
     fn common(&mut self, o: &mut EOut, ty: &str, p: &Props, sub: Option<&str>, layer: Option<&str>) {
         let hnd = self.h();
         o.out.s(0, ty).s(5, &hnd);
@@ -402,9 +410,13 @@ impl<'a> W<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn text(&mut self, o: &mut EOut, p: Pt, h: f64, s: &str, rot: f64, jh: HJust, jv: VJust, props: &Props, layer: Option<&str>) {
+    fn text(&mut self, o: &mut EOut, p: Pt, h: f64, s: &str, rot: f64, jh: HJust, jv: VJust, props: &Props, layer: Option<&str>, style: Option<&str>) {
         self.common(o, "TEXT", props, Some("AcDbText"), layer);
-        o.out.pt(p, 0).n(40, h).s(1, &clean(s)).n(50, deg(rot)).s(7, "Standard");
+        let sty = self.style_name(style);
+        o.out.pt(p, 0).n(40, h).s(1, &clean(s)).n(50, deg(rot)).s(7, &sty);
+        if let Some(st) = style.map(|n| self.doc.settings.text_style_named(n)).filter(|st| (st.width - 1.0).abs() > 1e-9 || st.oblique != 0.0) {
+            o.out.n(41, st.width).n(51, st.oblique);
+        }
         if jh_code(jh) != 0 || jv_code(jv) != 0 {
             o.out.i(72, jh_code(jh) as i64);
             o.out.pt(p, 1);
@@ -584,7 +596,8 @@ impl<'a> W<'a> {
             Kind::Text(t) if t.att.is_some() => {
                 let a = t.att.as_ref().expect("att");
                 self.common(o, "ATTDEF", &props, Some("AcDbText"), None);
-                o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, "Standard");
+                let sty = self.style_name(t.style.as_deref());
+                o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, &sty);
                 if jh_code(t.jh) != 0 || jv_code(t.jv) != 0 {
                     o.out.i(72, jh_code(t.jh) as i64);
                     o.out.pt(t.p, 1);
@@ -596,9 +609,9 @@ impl<'a> W<'a> {
                 if t.multi {
                     self.common(o, "MTEXT", &props, Some("AcDbMText"), None);
                     let body: Vec<String> = t.s.split('\n').map(clean).collect();
-                    o.out.pt(t.p, 0).n(40, t.h).n(41, t.w.unwrap_or(0.0)).i(71, attach(t.jh, t.jv) as i64).i(72, 1).s(1, &body.join("\\P")).s(7, "Standard").n(11, t.rot.cos()).n(21, t.rot.sin()).n(31, 0.0);
+                    o.out.pt(t.p, 0).n(40, t.h).n(41, t.w.unwrap_or(0.0)).i(71, attach(t.jh, t.jv) as i64).i(72, 1).s(1, &body.join("\\P")).s(7, &self.style_name(t.style.as_deref())).n(11, t.rot.cos()).n(21, t.rot.sin()).n(31, 0.0);
                 } else {
-                    self.text(o, t.p, t.h, &t.s, t.rot, t.jh, t.jv, &props, None);
+                    self.text(o, t.p, t.h, &t.s, t.rot, t.jh, t.jv, &props, None, t.style.as_deref());
                 }
             }
             Kind::Xline { p, d } => {
@@ -622,7 +635,8 @@ impl<'a> W<'a> {
                     for a in &ins.attribs {
                         self.common(o, "ATTRIB", &props, Some("AcDbText"), None);
                         let t = &a.t;
-                        o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, "Standard");
+                        let sty = self.style_name(t.style.as_deref());
+                        o.out.pt(t.p, 0).n(40, t.h).s(1, &clean(&t.s)).n(50, deg(t.rot)).s(7, &sty);
                         if jh_code(t.jh) != 0 || jv_code(t.jv) != 0 {
                             o.out.i(72, jh_code(t.jh) as i64);
                             o.out.pt(t.p, 1);
@@ -732,7 +746,7 @@ impl<'a> W<'a> {
                 }
             }
             let t = &geo.text;
-            w.text(o, t.p, t.h, &t.s, t.rot, t.jh, t.jv, &sub, None);
+            w.text(o, t.p, t.h, &t.s, t.rot, t.jh, t.jv, &sub, None, t.style.as_deref());
         };
         let rec = DimBlock { name: format!("*D{}", self.dim_blocks.len() + 1), rec: self.h(), blk: self.h(), end: self.h(), layer: layer.clone(), lines: vec![] };
         let mut inner = EOut { out: Out::default(), owner: rec.rec.clone(), block_name: o.block_name.clone() };
@@ -871,7 +885,7 @@ impl<'a> W<'a> {
                     }
                 }
                 for tx in texts {
-                    self.text(&mut inner, tx.p, tx.h, &tx.s, tx.rot, tx.jh, tx.jv, props, None);
+                    self.text(&mut inner, tx.p, tx.h, &tx.s, tx.rot, tx.jh, tx.jv, props, None, tx.style.as_deref());
                 }
             }
             Kind::Region(r) => {
@@ -1030,6 +1044,7 @@ pub fn write_dxf(doc: &Drawing) -> String {
     let ds = st.cur_dim();
     if st.dim_styles.contains_key(&st.cur_dim_style) {
         o.s(9, "$DIMSTYLE").s(2, &st.cur_dim_style);
+        o.s(9, "$TEXTSTYLE").s(7, &st.cur_text().name);
     }
     o.s(9, "$DIMSCALE").n(40, ds.scale).s(9, "$DIMTXT").n(40, ds.txt).s(9, "$DIMASZ").n(40, ds.asz).s(9, "$DIMEXO").n(40, ds.exo).s(9, "$DIMEXE").n(40, ds.exe).s(9, "$DIMGAP").n(40, ds.gap).s(9, "$DIMDEC").i(70, ds.dec as i64).s(9, "$DIMCEN").n(40, ds.cen);
     o.s(0, "ENDSEC");
@@ -1078,8 +1093,21 @@ pub fn write_dxf(doc: &Drawing) -> String {
     }
     o.s(0, "ENDTAB");
 
-    table_start(&mut o, "STYLE", &hs["style"], 1);
-    o.s(0, "STYLE").s(5, &hs["styleRec"]).s(330, &hs["style"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbTextStyleTableRecord").s(2, "Standard").i(70, 0).n(40, 0.0).n(41, 1.0).n(50, 0.0).i(71, 0).n(42, 2.5).s(3, "arial.ttf").s(4, "");
+    // every text style, Standard first (it has the reserved handle). A font file (romans.shx, arial.ttf) goes in
+    // group 3; a TrueType family name (Times New Roman) goes in the ACAD extended data, as AutoCAD writes it.
+    let text_styles = st.all_text_styles();
+    table_start(&mut o, "STYLE", &hs["style"], text_styles.len());
+    let mut style_handle: HashMap<String, String> = HashMap::new();
+    for ts in &text_styles {
+        let hnd = if ts.name.eq_ignore_ascii_case("Standard") { hs["styleRec"].clone() } else { w.h() };
+        let is_file = std::path::Path::new(&ts.font).extension().is_some();
+        let file = if is_file { ts.font.clone() } else { String::new() };
+        o.s(0, "STYLE").s(5, &hnd).s(330, &hs["style"]).s(100, "AcDbSymbolTableRecord").s(100, "AcDbTextStyleTableRecord").s(2, &ts.name).i(70, 0).n(40, ts.height).n(41, ts.width).n(50, ts.oblique).i(71, 0).n(42, if ts.height > 0.0 { ts.height } else { 2.5 }).s(3, &file).s(4, "");
+        if !is_file {
+            o.s(1001, "ACAD").s(1000, &ts.font).i(1071, 34);
+        }
+        style_handle.insert(ts.name.to_lowercase(), hnd);
+    }
     o.s(0, "ENDTAB");
     table_start(&mut o, "VIEW", &hs["view"], 0);
     o.s(0, "ENDTAB");
@@ -1101,6 +1129,9 @@ pub fn write_dxf(doc: &Drawing) -> String {
             o.s(3, &format!("{}<>{}", clean(&d.pre), clean(&d.suf)));
         }
         o.n(40, d.scale).n(41, d.asz).n(42, d.exo).n(43, 3.75).n(44, d.exe).n(140, d.txt).n(141, d.cen).n(144, d.lfac).n(147, d.gap).i(271, d.dec as i64).i(77, d.tad as i64).i(78, d.zin as i64);
+        if let Some(h) = style_handle.get(&d.txsty.to_lowercase()) {
+            o.s(340, h);
+        }
     };
     dimstyle_rec(&mut o, &hs["dimstyleRec"], "Standard", std_ds);
     for (name, d) in others {

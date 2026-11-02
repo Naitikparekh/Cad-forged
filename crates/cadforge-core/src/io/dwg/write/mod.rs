@@ -89,10 +89,6 @@ struct O {
 }
 
 impl O {
-    fn new(ty: u16, handle: u64) -> O {
-        O::with_eed(ty, handle, &[])
-    }
-
     /// With extended data: (APPID handle, encoded items) for each application.
     fn with_eed(ty: u16, handle: u64, eed: &[(u64, Vec<u8>)]) -> O {
         let mut m = BitW::new();
@@ -335,7 +331,12 @@ impl<'a> Writer<'a> {
     }
 
     fn nonent(&self, ty: u16, handle: u64, owner: u64, reactors: &[u64]) -> O {
-        let mut o = O::new(ty, handle);
+        self.nonent_eed(ty, handle, owner, reactors, &[])
+    }
+
+    /// A non-graphical object with extended data (a text style's TrueType family).
+    fn nonent_eed(&self, ty: u16, handle: u64, owner: u64, reactors: &[u64], eed: &[(u64, Vec<u8>)]) -> O {
+        let mut o = O::with_eed(ty, handle, eed);
         o.h.h(4, owner);
         o.m.bl(reactors.len() as i32);
         for r in reactors {
@@ -519,10 +520,12 @@ impl<'a> Writer<'a> {
         for r in &layers {
             self.layer_rec(r);
         }
+        // text styles carry extended data (a TrueType family), so the applications must be known first
+        self.appids = self.entries("APPID").iter().map(|r| (r.s(2).to_lowercase(), r.handle())).collect();
         let styles = self.entries("STYLE");
         self.control("STYLE", 52, &styles.iter().map(|r| r.handle()).collect::<Vec<_>>(), &[]);
         for r in &styles {
-            let mut o = self.nonent(53, r.handle(), self.controls["STYLE"], &[]);
+            let mut o = self.nonent_eed(53, r.handle(), self.controls["STYLE"], &[], &self.eed(r));
             o.m.tv(r.s(2));
             o.xref();
             let flags = r.i(70, 0);
@@ -718,7 +721,9 @@ impl<'a> Writer<'a> {
         o.m.bs(r.i(372, -2) as i16); // DIMLWE
         o.m.bit(false);
         o.h.h(5, 0); // xref block
-        o.h.h(5, self.std_style); // DIMTXSTY
+        // DIMTXSTY: the style DIMSTYLE group 340 names (the DXF writer's handles are kept)
+        let txsty = Some(hex(r.s(340))).filter(|h| *h != 0 && self.styles.values().any(|v| v == h)).unwrap_or(self.std_style);
+        o.h.h(5, txsty);
         for _ in 0..4 {
             o.h.h(5, 0); // DIMLDRBLK DIMBLK DIMBLK1 DIMBLK2
         }
@@ -1743,7 +1748,7 @@ impl<'a> Writer<'a> {
         let refs = header::Refs {
             handseed: self.next,
             clayer: self.layer(self.d.header.get("$CLAYER").map_or("0", |r| r.s(8))),
-            textstyle: self.std_style,
+            textstyle: self.style(self.d.header.get("$TEXTSTYLE").map_or("Standard", |r| r.s(7))),
             celtype: self.ltypes["bylayer"],
             dimstyle: self.std_dimstyle,
             cmlstyle: self.mline_std,

@@ -109,7 +109,7 @@ fn pdf_is_well_formed() {
         entries += 1;
         at = i + 1;
     }
-    assert_eq!(entries, 6);
+    assert_eq!(entries, 8, "catalog, pages, three fonts (Helvetica, Times, Courier), info, page and contents");
     let s: String = d.iter().map(|&b| b as char).collect();
     assert!(s.contains("MediaBox [0 0 841.89"));
     assert!(s.contains("(L-BRACKET)"));
@@ -178,4 +178,57 @@ fn png_raster_has_ink_and_expected_size() {
     std::fs::write(out_dir().join("sample.png"), &png).unwrap();
     // an enormous resolution is rejected rather than allocating
     assert!(raster::render_png(&ops, (layout.w, layout.h), UNIT_MM, 20000.0, font).is_err());
+}
+
+/// A drawing with text in a serif style (narrow, slanted) and in a monospace style.
+fn styled_text_drawing() -> cadforge_core::drawing::Drawing {
+    use cadforge_core::entities::{Entity, Kind};
+    use cadforge_core::style::TextStyle;
+    let mut d = cadforge_core::drawing::Drawing::new("styles");
+    d.settings.text_styles.insert("Serif".into(), TextStyle { name: "Serif".into(), font: "Times New Roman".into(), height: 0.0, width: 0.5, oblique: 20.0 });
+    d.settings.text_styles.insert("Mono".into(), TextStyle { name: "Mono".into(), font: "Courier New".into(), height: 0.0, width: 1.0, oblique: 0.0 });
+    for (s, y, style) in [("SERIFTEXT", 0.0, Some("Serif")), ("MONOTEXT", 10.0, Some("Mono")), ("PLAINTEXT", 20.0, None)] {
+        let mut e = Entity::text(cadforge_core::geom::pt(0.0, y), 5.0, s);
+        if let Kind::Text(t) = &mut e.kind {
+            t.style = style.map(String::from);
+        }
+        d.add(e);
+    }
+    d
+}
+
+#[test]
+fn text_styles_reach_the_scene_with_their_font_width_and_slant() {
+    let doc = styled_text_drawing();
+    let mut view = View::new();
+    (view.w, view.h) = (800.0, 600.0);
+    let b = doc.model.entities.iter().fold(None, |a, e| cadforge_core::geom::Bounds::union_opt(a, cadforge_core::entities::bounds_of(e, &doc)));
+    view.fit(b, 0.1);
+    let ops = render_scene(&doc, &view, 800.0, 600.0, Theme::DARK, Prefs::default(), &Highlight::default(), None);
+    let find = |s: &str| ops.iter().find_map(|o| if let Op::Text { s: t, m, font, .. } = o { (t == s).then(|| (*m, font.clone())) } else { None }).unwrap_or_else(|| panic!("{s} not drawn"));
+    let (ms, fs) = find("SERIFTEXT");
+    let (mp, fp) = find("PLAINTEXT");
+    assert_eq!(fs.as_deref(), Some("times new roman"));
+    assert_eq!(find("MONOTEXT").1.as_deref(), Some("courier new"));
+    assert!(fp.is_none(), "Standard text keeps the default font");
+    // half as wide along the baseline, the same height, and the up direction leans over
+    let (wx, hy) = (ms[0].hypot(ms[1]) / mp[0].hypot(mp[1]), ms[2].hypot(ms[3]) / mp[2].hypot(mp[3]));
+    assert!((wx - 0.5).abs() < 1e-6, "width factor {wx}");
+    assert!(hy > 1.0 && (ms[2].abs() / ms[3].abs() - 20f64.to_radians().tan()).abs() < 1e-6, "oblique {ms:?}");
+    assert!(mp[2].abs() < 1e-9, "plain text is upright");
+}
+
+#[test]
+fn styled_text_plots_in_matching_pdf_and_svg_fonts() {
+    let doc = styled_text_drawing();
+    let mut o = default_plot_options(&doc);
+    let pdf = String::from_utf8_lossy(&export_vector(&doc, &o, None).unwrap().data).to_string();
+    assert!(pdf.contains("/Times-Roman") && pdf.contains("/Courier"), "the base-14 serif and monospace faces are declared");
+    // (an installed Times New Roman or Courier New is drawn as outlines instead)
+    let installed = |f: &str| matches!(cadforge_render::fonts::resolve(f), cadforge_render::fonts::Resolved::System(..));
+    assert!(installed("times new roman") || pdf.contains("/F2 "), "the serif face is used");
+    assert!(installed("courier new") || pdf.contains("/F3 "), "the monospace face is used");
+    o.format = PlotFormat::Svg;
+    let svg = String::from_utf8(export_vector(&doc, &o, None).unwrap().data).unwrap();
+    assert!(svg.contains("serif") && svg.contains("monospace"), "{}", &svg[..svg.len().min(1500)]);
 }

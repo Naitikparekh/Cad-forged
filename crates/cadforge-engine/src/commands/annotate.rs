@@ -79,15 +79,34 @@ async fn text(c: Ctx, _a: Args) -> CmdResult<()> {
                 continue;
             }
             Some("Style") => {
-                c.log("Text style: Standard");
+                let cur = c.doc(|d| d.settings.cur_text().name);
+                let names: Vec<String> = c.doc(|d| d.settings.all_text_styles().into_iter().map(|s| s.name).collect());
+                let want = c.string(ps(&format!("Enter style name ({})", names.join(", "))).default_str(&cur)).await?.text;
+                let want = want.trim();
+                match names.iter().find(|n| n.eq_ignore_ascii_case(want)) {
+                    Some(n) => {
+                        let n = n.clone();
+                        c.doc_mut(|d| d.change(|d| d.settings.text_style = n.clone()));
+                        c.log(&format!("Text style: {n}"));
+                    }
+                    None if want.is_empty() => {}
+                    None => c.log_error(&format!("Text style \"{want}\" does not exist.")),
+                }
                 continue;
             }
             _ => break r,
         }
     };
     let Some(mut p) = r.pt() else { return Ok(()) };
-    let hh = c.distance(ps("Specify height").base(p).default_num(mem_h).min(0.0).nonzero()).await?;
-    let Some(h) = hh.value() else { return Ok(()) };
+    // a style with a fixed height does not ask for one
+    let (style, fixed) = crate::commands::ext_annotate::textstyles::current_style(&c);
+    let h = if fixed > 0.0 {
+        fixed
+    } else {
+        let hh = c.distance(ps("Specify height").base(p).default_num(mem_h).min(0.0).nonzero()).await?;
+        let Some(h) = hh.value() else { return Ok(()) };
+        h
+    };
     c.app(|a| a.mem.text_height = h);
     c.doc_mut(|d| d.settings.text_height = h);
     let rr = c.angle(ps("Specify rotation angle of text").base(p).default_num(0.0)).await?;
@@ -97,7 +116,11 @@ async fn text(c: Ctx, _a: Args) -> CmdResult<()> {
         if s.is_empty() {
             break;
         }
-        c.add(text_entity(p, h, &s, rot, jh, jv));
+        let mut e = text_entity(p, h, &s, rot, jh, jv);
+        if let Kind::Text(t) = &mut e.kind {
+            t.style = style.clone();
+        }
+        c.add(e);
         p = p + polar(pt(0.0, 0.0), rot - PI / 2.0, h * 1.5);
         if c.app(|a| a.ui.dialogs) {
             break; // the in-place editor handles one line at a time
@@ -153,10 +176,15 @@ async fn mtext(c: Ctx, args: Args) -> CmdResult<()> {
         return Ok(());
     }
     let mut e = Entity::mtext(p, h, &s, width);
+    let (style, fixed) = crate::commands::ext_annotate::textstyles::current_style(&c);
     if let Kind::Text(t) = &mut e.kind {
         t.rot = rot;
         t.jh = jh;
         t.jv = jv;
+        t.style = style;
+        if fixed > 0.0 {
+            t.h = fixed;
+        }
     }
     c.add(e);
     Ok(())

@@ -2,7 +2,7 @@
 //! geometry (extension lines, dimension line, arrowheads, text) is derived from the dimension style.
 use crate::geom::*;
 use crate::style::{fmt_num, DimStyle, Settings};
-use crate::text::{measure_text, text_corners, HJust, TextData, VJust};
+use crate::text::{text_corners, HJust, TextData, VJust};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -228,7 +228,13 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             arrows.push(Arrow { tip: $tip, dir: $dir, size: asz, style: st.blk.clone() })
         };
     }
+    // the dimension text is drawn in the text style of the dimension style (DIMTXSTY)
+    let dfont = settings.font_for(Some(st.txsty.as_str()).filter(|s| !s.is_empty()));
     let mk = |mut segs: Vec<Seg>, arrows: Vec<Arrow>, mut text: TextData, measured: f64, dim_line: Option<DimLine>, arc: Option<usize>| {
+        text.font = dfont.clone();
+        if !st.txsty.is_empty() {
+            text.style = Some(st.txsty.clone());
+        }
         if let Some(r) = e.tr {
             text.rot = norm_angle(text.rot + r);
         }
@@ -259,7 +265,7 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             let (a, b) = (foot(p1), foot(p2));
             let measured = dot(p2 - p1, d).abs();
             let label = label_for(e, &st, measured, e.kind);
-            let tw = measure_text(&label, h);
+            let tw = crate::text::measure_in(&label, h, dfont.as_ref());
             for (p, f) in [(p1, a), (p2, b)] {
                 let dir = ev * side;
                 let far = f + dir * exe;
@@ -520,6 +526,7 @@ pub fn arrow_lines(a: &Arrow) -> Vec<(Pt, Pt)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::measure_text;
 
     fn lin(p1: Pt, p2: Pt, dp: Pt, ang: f64) -> DimData {
         let mut d = DimData::new(DimType::Lin);

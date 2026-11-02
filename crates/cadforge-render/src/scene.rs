@@ -319,7 +319,7 @@ impl<'a> Renderer<'a> {
             let diag = vec![Poly { pts: vec![quad[0], quad[2]], closed: false }, Poly { pts: vec![quad[1], quad[3]], closed: false }];
             self.stroke(diag, style, false, false, 1.0);
             let c = [(quad[0][0] + quad[2][0]) / 2.0, (quad[0][1] + quad[2][1]) / 2.0];
-            self.ops.push(Op::Text { s: format!("Missing image: {}", def.path), x: 0.0, y: 0.0, m: [1.0, 0.0, 0.0, 1.0, c[0], c[1]], em: 11.0, color: style.color, alpha: style.alpha });
+            self.ops.push(Op::Text { s: format!("Missing image: {}", def.path), x: 0.0, y: 0.0, m: [1.0, 0.0, 0.0, 1.0, c[0], c[1]], em: 11.0, color: style.color, alpha: style.alpha, font: None });
         }
         if frame || o.selected || o.hover {
             self.stroke(vec![Poly { pts: boundary, closed: true }], style, o.selected, o.hover, 0.0);
@@ -526,6 +526,11 @@ impl<'a> Renderer<'a> {
         }
         let flipped = [m[0], m[1], -m[2], -m[3], m[4], m[5]];
         let col = if hover { self.theme.hover } else { color };
+        // the text style: its font, and width factor and oblique angle applied to the glyphs (the layout already
+        // spaced the text with the width factor, so positions are divided by it)
+        let face: Option<std::sync::Arc<str>> = t.font.as_ref().filter(|f| !f.face.is_empty()).map(|f| std::sync::Arc::from(f.face.as_str()));
+        let (wf, lean) = t.font.as_ref().map_or((1.0, 0.0), |f| (if f.width > 0.0 { f.width } else { 1.0 }, f.oblique.to_radians().tan()));
+        let styled = |base: Mat, yb: f64| -> Mat { if (wf - 1.0).abs() < 1e-12 && lean == 0.0 { base } else { mat::mul(&base, &[wf, 0.0, -lean, 1.0, lean * yb, 0.0]) } };
         if self.prefs.qtext {
             // QTEXT: one box per line of text instead of the glyphs
             let paths: Vec<Poly> = lay
@@ -558,10 +563,11 @@ impl<'a> Renderer<'a> {
                         let yb = -r.y;
                         mm = [flipped[0], flipped[1], flipped[2] - LEAN * flipped[0], flipped[3] - LEAN * flipped[1], flipped[4] + LEAN * yb * flipped[0], flipped[5] + LEAN * yb * flipped[1]];
                     }
-                    self.ops.push(Op::Text { s: r.s.clone(), x: r.x, y: -r.y, m: mm, em, color: rc, alpha });
+                    let sm = styled(mm, -r.y);
+                    self.ops.push(Op::Text { s: r.s.clone(), x: r.x / wf, y: -r.y, m: sm, em, color: rc, alpha, font: face.clone() });
                     if r.style.bold {
                         // bold: the same glyphs again, a hair to the right
-                        self.ops.push(Op::Text { s: r.s.clone(), x: r.x + 0.035 * em, y: -r.y, m: mm, em, color: rc, alpha });
+                        self.ops.push(Op::Text { s: r.s.clone(), x: (r.x + 0.035 * em) / wf, y: -r.y, m: sm, em, color: rc, alpha, font: face.clone() });
                     }
                 }
                 let mut deco = vec![];
@@ -601,7 +607,7 @@ impl<'a> Renderer<'a> {
                 if l.s.is_empty() {
                     continue;
                 }
-                self.ops.push(Op::Text { s: l.s.clone(), x: l.x, y: -l.y, m: flipped, em: lay.em, color: col, alpha });
+                self.ops.push(Op::Text { s: l.s.clone(), x: l.x / wf, y: -l.y, m: styled(flipped, -l.y), em: lay.em, color: col, alpha, font: face.clone() });
             }
         }
         if selected || hover {
@@ -919,7 +925,7 @@ impl<'a> Renderer<'a> {
             me.ops.push(Op::Fill { paths: vec![Poly { pts: head, closed: true }], color, alpha: 1.0, evenodd: false });
             let lx = tip[0] + if p[0] >= 0.0 { 6.0 } else { -14.0 } + if p[0].abs() < 4.0 { -3.0 } else { 0.0 };
             let ly = tip[1] + if p[1] <= 0.0 { -4.0 } else { 12.0 } + if p[1].abs() < 4.0 { 4.0 } else { 0.0 };
-            me.ops.push(Op::Text { s: label.into(), x: lx, y: ly, m: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], em: 11.0, color, alpha: 1.0 });
+            me.ops.push(Op::Text { s: label.into(), x: lx, y: ly, m: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], em: 11.0, color, alpha: 1.0, font: None });
         };
         if view.is_plan() {
             axis(self, (1.0, 0.0, 0.0), [0xff, 0x6b, 0x5e], "X");

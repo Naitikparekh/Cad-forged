@@ -104,12 +104,17 @@ pub fn install_fonts(ctx: &egui::Context) {
     add(&mut fonts, "liberation", include_bytes!("../assets/fonts/LiberationSans-Regular.ttf"));
     add(&mut fonts, "liberation-bold", include_bytes!("../assets/fonts/LiberationSans-Bold.ttf"));
     add(&mut fonts, "dejavu", include_bytes!("../assets/fonts/DejaVuSans.ttf"));
+    add(&mut fonts, "liberation-serif", cadforge_render::fonts::SERIF);
+    add(&mut fonts, "liberation-mono", cadforge_render::fonts::MONO);
     let prop = fonts.families.entry(FontFamily::Proportional).or_default();
     prop.insert(0, "inter".to_owned());
     prop.push("dejavu".to_owned());
     fonts.families.insert(FontFamily::Name("bold".into()), vec!["inter-semibold".into(), "dejavu".into()]);
     fonts.families.insert(FontFamily::Name("cad".into()), vec!["liberation".into(), "dejavu".into()]);
     fonts.families.insert(FontFamily::Name("cadbold".into()), vec!["liberation-bold".into(), "dejavu".into()]);
+    // text styles in Times- or Courier-like fonts (see cadforge_render::fonts)
+    fonts.families.insert(FontFamily::Name("cad-serif".into()), vec!["liberation-serif".into(), "dejavu".into()]);
+    fonts.families.insert(FontFamily::Name("cad-mono".into()), vec!["liberation-mono".into(), "dejavu".into()]);
     fonts.families.entry(FontFamily::Monospace).or_default().push("dejavu".to_owned());
     ctx.set_fonts(fonts);
 }

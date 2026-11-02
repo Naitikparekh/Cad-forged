@@ -207,6 +207,16 @@ impl CadForgeApp {
                 ui.end_row();
             }
             2 => {
+                ui.label("Text style");
+                let styles: Vec<String> = self.h.borrow().doc().map(|d| d.settings.all_text_styles().into_iter().map(|s| s.name).collect()).unwrap_or_default();
+                let shown = if s.s.txsty.is_empty() { "Standard".to_string() } else { s.s.txsty.clone() };
+                egui::ComboBox::from_id_salt("dse-txsty").selected_text(shown).show_ui(ui, |ui| {
+                    for n in styles {
+                        let v = if n.eq_ignore_ascii_case("Standard") { String::new() } else { n.clone() };
+                        ui.selectable_value(&mut s.s.txsty, v, n);
+                    }
+                });
+                ui.end_row();
                 ui.label("Text height");
                 self.num_edit(ui, &mut s.txt, 90.0);
                 ui.end_row();

@@ -144,6 +144,7 @@ const DRAWING_VARS: &[(&str, VarType)] = &[
     ("DIMASSOC", VarType::Int),
     ("CANNOSCALE", VarType::Str),
     ("TEXTSIZE", VarType::Real),
+    ("TEXTSTYLE", VarType::Str),
     ("FILLETRAD", VarType::Real),
     ("CHAMFERA", VarType::Real),
     ("CHAMFERB", VarType::Real),
@@ -251,6 +252,7 @@ fn drawing_get(name: &str, d: &Drawing) -> Option<Value> {
         "CANNOSCALE" => Value::Str(st.cannoscale.clone()),
         "PDSIZE" => n(st.pdsize),
         "TEXTSIZE" => n(st.text_height),
+        "TEXTSTYLE" => Value::Str(st.cur_text().name),
         "FILLETRAD" => n(st.fillet_radius),
         "CHAMFERA" => n(st.chamfer_d1),
         "CHAMFERB" => n(st.chamfer_d2),
@@ -294,6 +296,11 @@ fn drawing_set(name: &str, d: &mut Drawing, v: &Value) -> Result<(), String> {
         }
         "PDSIZE" => d.settings.pdsize = num()?,
         "TEXTSIZE" => d.settings.text_height = pos(num()?)?,
+        "TEXTSTYLE" => {
+            let want = v.text();
+            let name = d.settings.all_text_styles().into_iter().find(|s| s.name.eq_ignore_ascii_case(want.trim())).map(|s| s.name).ok_or_else(|| format!("Text style \"{}\" does not exist.", want.trim()))?;
+            d.settings.text_style = name;
+        }
         "FILLETRAD" => d.settings.fillet_radius = num()?.max(0.0),
         "CHAMFERA" => d.settings.chamfer_d1 = num()?.max(0.0),
         "CHAMFERB" => d.settings.chamfer_d2 = num()?.max(0.0),

@@ -404,7 +404,7 @@ fn make_entity(gs: &[(i64, Value)]) -> Option<Entity> {
         "ELLIPSE" => Kind::Ellipse(EllipseData { c: point(10)?, m: point(11)?, ratio: first(40).and_then(gnum).filter(|r| *r > 0.0 && *r <= 1.0)?, t0: first(41).and_then(gnum).unwrap_or(0.0), t1: first(42).and_then(gnum).unwrap_or(std::f64::consts::TAU) }),
         "TEXT" | "MTEXT" => {
             let s = first(1)?.as_str()?.to_string();
-            Kind::Text(TextData { p: point(10)?, h: first(40).and_then(gnum).filter(|h| *h > 0.0).unwrap_or(2.5), s, rot: first(50).and_then(gnum).unwrap_or(0.0), jh: HJust::Left, jv: VJust::Baseline, w: first(41).and_then(gnum), multi: ty == "MTEXT", att: None })
+            Kind::Text(TextData { p: point(10)?, h: first(40).and_then(gnum).filter(|h| *h > 0.0).unwrap_or(2.5), s, rot: first(50).and_then(gnum).unwrap_or(0.0), jh: HJust::Left, jv: VJust::Baseline, w: first(41).and_then(gnum), multi: ty == "MTEXT", att: None, style: first(7).and_then(|v| v.as_str()).map(|s| s.to_string()).filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("Standard")), font: None })
         }
         "INSERT" => Kind::Insert(InsertData { name: first(2)?.as_str()?.to_string(), p: point(10)?, sx: first(41).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), sy: first(42).and_then(gnum).filter(|x| *x != 0.0).unwrap_or(1.0), rot: first(50).and_then(gnum).unwrap_or(0.0), attribs: vec![], clip: vec![], clip_off: false }),
         "LWPOLYLINE" => {
@@ -608,7 +608,10 @@ fn table_entry(d: &cadforge_core::drawing::Drawing, table: &str, name: &str) -> 
             let k = cadforge_core::style::ltype_key(name)?;
             Some(Value::list(vec![pair(0, Value::str("LTYPE")), pair(2, Value::str(k)), pair(70, Value::Int(0))]))
         }
-        "STYLE" => (d.settings.text_style.eq_ignore_ascii_case(name)).then(|| Value::list(vec![pair(0, Value::str("STYLE")), pair(2, Value::str(&d.settings.text_style)), pair(70, Value::Int(0))])),
+        "STYLE" => {
+            let st = d.settings.all_text_styles().into_iter().find(|s| s.name.eq_ignore_ascii_case(name))?;
+            Some(Value::list(vec![pair(0, Value::str("STYLE")), pair(2, Value::str(&st.name)), pair(70, Value::Int(0)), pair(40, Value::Real(st.height)), pair(41, Value::Real(st.width)), pair(50, Value::Real(st.oblique.to_radians())), pair(3, Value::str(&st.font))]))
+        }
         _ => None,
     }
 }

@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 359 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 360 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -60,6 +60,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `-STYLE` | `-ST` | Creates or changes a text style from the command line: font, height, width factor and obliquing angle. |
 | `AIMLEADEREDITADD` |  | Adds a leader line to a multileader. |
 | `AIMLEADEREDITREMOVE` |  | Removes a leader line from a multileader. |
 | `ANNORESET` |  | Resets annotative objects to their size at the current annotation scale. |

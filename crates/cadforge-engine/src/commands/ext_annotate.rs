@@ -8,6 +8,7 @@ use cadforge_core::entities::{Entity, Kind};
 
 mod annoscale;
 mod centers;
+pub mod textstyles;
 mod dimassoc;
 mod dims;
 mod leaders;
@@ -22,6 +23,7 @@ pub fn register(r: &mut Registry) {
     annoscale::register(r);
     leaders::register(r);
     centers::register(r);
+    textstyles::register(r);
     tables::register(r);
     textcmds::register(r);
     tolerance::register(r);

@@ -93,6 +93,10 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
         w.g(9, "$CLAYER");
         w.text(8, n, false);
     }
+    if let Some(n) = names.get(&hdr.textstyle) {
+        w.g(9, "$TEXTSTYLE");
+        w.text(7, n, false);
+    }
     if hdr.insbase.iter().all(|v| v.is_finite()) && hdr.insbase != [0.0; 3] {
         w.g(9, "$INSBASE");
         w.g(10, hdr.insbase[0]);
@@ -153,15 +157,20 @@ pub fn emit(objs: &[Obj], hdr: &Header) -> String {
     w.g(0, "TABLE");
     w.g(2, "STYLE");
     for o in objs {
-        if let Info::Style { name, height, width, font, bigfont } = &o.info {
+        if let Info::Style { name, height, width, oblique, font, bigfont, family } = &o.info {
             w.g(0, "STYLE");
             w.g(5, hex(o.handle));
             w.text(2, name, false);
             w.g(70, 0);
             w.g(40, height);
             w.g(41, width);
+            w.g(50, oblique.to_degrees());
             w.text(3, font, false);
             w.text(4, bigfont, false);
+            if let Some(f) = family {
+                w.g(1001, "ACAD");
+                w.text(1000, f, false);
+            }
         }
     }
     w.g(0, "ENDTAB");

@@ -671,6 +671,7 @@ impl Drawing {
     /// Add an entity to `space`, filling in id and the current layer/colour/linetype/lineweight.
     pub fn add_to(&mut self, mut e: Entity, space: &str) -> u64 {
         self.will_change();
+        apply_fonts(&self.settings, &mut e);
         if e.id == 0 {
             e.id = self.next_id;
             self.next_id += 1;
@@ -795,6 +796,7 @@ impl Drawing {
     /// Overwrite an entity (any space) keeping its id. Returns false if it does not exist.
     pub fn set_entity(&mut self, id: u64, mut e: Entity) -> bool {
         self.will_change();
+        apply_fonts(&self.settings, &mut e);
         let found = match self.by_id_mut(id) {
             Some(slot) => {
                 e.id = id;
@@ -805,6 +807,15 @@ impl Drawing {
         };
         self.touch();
         found
+    }
+
+    /// Give every text the font of its text style (after loading, or when a style changed).
+    pub fn sync_text_styles(&mut self) {
+        let settings = std::mem::take(&mut self.settings);
+        for e in self.all_entities_mut() {
+            apply_fonts(&settings, e);
+        }
+        self.settings = settings;
     }
 
     /// Move the given entities to the front (end of the list) or back (start) of the active space's draw order.
@@ -828,13 +839,16 @@ impl Drawing {
     /// Mutate one entity by id (any space) inside a change notification.
     pub fn modify(&mut self, id: u64, f: impl FnOnce(&mut Entity)) -> bool {
         self.will_change();
+        let settings = std::mem::take(&mut self.settings);
         let found = match self.by_id_mut(id) {
             Some(e) => {
                 f(e);
+                apply_fonts(&settings, e);
                 true
             }
             None => false,
         };
+        self.settings = settings;
         self.touch();
         found
     }
@@ -1218,6 +1232,8 @@ impl Drawing {
         if self.space != MODEL && !self.layouts.iter().any(|l| l.name == self.space) {
             self.space = MODEL.into();
         }
+        // the fonts are not in the snapshot: they come from the text styles
+        self.sync_text_styles();
         self.touch();
     }
 
@@ -1376,6 +1392,7 @@ impl Drawing {
             d.next_id = max_id + 1;
         }
         d.validate()?;
+        d.sync_text_styles();
         d.dirty = false;
         Ok(d)
     }
@@ -1690,5 +1707,18 @@ mod tests {
         d.touch();
         let c = crate::entities::segs_of(&e, &d);
         assert!(!Rc::ptr_eq(&a, &c));
+    }
+}
+
+/// Set the font of the text in `e` (texts and block attributes) from its text style.
+pub fn apply_fonts(settings: &crate::style::Settings, e: &mut Entity) {
+    match &mut e.kind {
+        Kind::Text(t) => t.font = settings.font_for(t.style.as_deref()),
+        Kind::Insert(i) => {
+            for a in &mut i.attribs {
+                a.t.font = settings.font_for(a.t.style.as_deref());
+            }
+        }
+        _ => {}
     }
 }

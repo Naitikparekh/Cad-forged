@@ -27,7 +27,7 @@ product.
   ViewCube, navigation bar, dynamic input, docked command line with clickable options and autocomplete, status bar
   (Grid, Snap, Dynamic Input, Ortho, Polar, Object Snap, Object Snap Tracking, Lineweight, Quick Properties),
   Properties palette, Layer Properties Manager, Tool Palettes, F2 text window, dark and light themes.
-* **359 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
+* **360 commands** with AutoCAD names, aliases (`L`, `C`, `TR`, `O`, `M`, `CO`...) and prompts — see
   [docs/COMMANDS.md](docs/COMMANDS.md). Object snaps (END MID CEN NOD QUA INT INS PER TAN NEA) with tracking, polar
   and ortho, FROM / M2P, direct distance entry, pick-first selection, window/crossing/fence/polygon selection, grips,
   transparent commands, command aliases you can edit (`ALIASEDIT`), scripts (`SCRIPT`).
@@ -184,7 +184,7 @@ keeps; other programs see pictures as references to their files and 3D solids as
 display-only and are not written. See `HANDOFF.md` and `docs/BENCHMARK.md` for the full
 list.
 
-The egui build draws text with Liberation Sans (SIL OFL) and Inter, shipped in `crates/cadforge-app/assets/fonts`.
+The egui build draws its interface with Inter and drawing text with Liberation Sans, Serif and Mono (SIL OFL, `LICENSE-Liberation.txt`), shipped in `crates/cadforge-app/assets/fonts`. Text styles (STYLE) can name any installed TrueType or OpenType font, which is then used on screen and in plots; a font that is not installed, and AutoCAD's SHX fonts, are drawn with the closest of the three Liberation faces.
 
 Third-party: `csg.js` by Evan Wallace (MIT, `CSG-LICENSE.txt`), vendored in `src/solid/vendor` and ported to Rust in
 `cadforge-core`. Ear-clipping triangulation follows Mapbox's earcut (ISC); the Rust UI uses the `earcutr` crate.

@@ -1,4 +1,5 @@
 //! CadForge renderer: drawing → backend-independent draw operations, plot layout, PDF and SVG writers.
+pub mod fonts;
 pub mod ops;
 pub mod pdf;
 pub mod plot;
