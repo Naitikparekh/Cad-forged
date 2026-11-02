@@ -137,7 +137,11 @@ await test('HATCH: pick a point, Close Hatch Creation commits the hatch', async 
 
 await test('MTEXT editor dialog places the typed text', async () => {
   await t.cmd('MTEXT'); await t.cmd('10,10'); await t.cmd('60,25'); await t.frame(4);
-  await page.mouse.click(720, 450); await t.type('HELLO CAD'); await page.mouse.click(810, 543); await t.frame(4);   // OK
+  // the editor has the focus when it opens; Ctrl+Enter places the text (the dialog's size depends on its toolbar)
+  await t.type('HELLO CAD'); await page.keyboard.press('Enter'); await t.type('Green light = Motor starter is on'); await t.frame(2);
+  await page.mouse.click(778, 335); await t.frame(3);   // the Bullets button: both lines become list items
+  await t.shot(path.join(root, 'target', 'tmp', 'web-mtext-editor.png'));
+  await page.keyboard.press('Control+Enter'); await t.frame(4);
   const s = await t.state();
   assert.ok(s.types.includes('text') || s.types.includes('mtext'), JSON.stringify(s.types)); assert.equal(s.busy, false);
 });

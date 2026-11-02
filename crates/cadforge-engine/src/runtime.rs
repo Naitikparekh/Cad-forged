@@ -361,6 +361,8 @@ pub struct TextEditSpec {
 pub enum DialogReply {
     Cancelled,
     Text(String),
+    /// Multiline text from the editor and the width it was given (0: no wrapping).
+    MText(String, f64),
     Color(Option<cadforge_core::style::Color>),
     Done,
 }

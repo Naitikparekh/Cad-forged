@@ -1515,6 +1515,8 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
         Kind::Spline { fit, nurbs: Some(n), .. } if fit.is_empty() => n.cv.iter().enumerate().map(|(i, p)| grip(&format!("v{}", i), *p, Stretch)).collect(),
         Kind::Spline { fit, .. } => fit.iter().enumerate().map(|(i, p)| grip(&format!("f{}", i), *p, Stretch)).collect(),
         Kind::Point { p } | Kind::Xline { p, .. } | Kind::Ray { p, .. } => vec![grip("p", *p, Move)],
+        // multiline text: a width grip on the box edge away from the attachment (dragging it sets the wrap width)
+        Kind::Text(t) if t.multi && t.att.is_none() => vec![grip("p", t.p, Move), grip("w", mtext_width_grip(t), Stretch)],
         Kind::Text(t) => vec![grip("p", t.p, Move)],
         Kind::Insert(i) => vec![grip("p", i.p, Move)],
         Kind::Leader { pts, .. } => pts.iter().enumerate().map(|(i, p)| grip(&format!("l{}", i), *p, Stretch)).collect(),
@@ -1572,6 +1574,29 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
 }
 
 /// Modified clone of `orig` with grip `id` dragged to `to`.
+/// Where the width grip of multiline text sits: the middle of the box edge on the right (on the left for right-attached
+/// text).
+fn mtext_width_grip(t: &crate::text::TextData) -> Pt {
+    let c = crate::text::text_corners(t);
+    if t.jh == crate::text::HJust::Right {
+        mid(c[0], c[3])
+    } else {
+        mid(c[1], c[2])
+    }
+}
+
+/// The width multiline text gets when its width grip is dragged to `to`: measured along the text from its insertion
+/// point (twice that for centred text), at least one text height.
+fn mtext_width_from(t: &crate::text::TextData, to: Pt) -> f64 {
+    let along = (to.x - t.p.x) * t.rot.cos() + (to.y - t.p.y) * t.rot.sin();
+    let w = match t.jh {
+        crate::text::HJust::Left => along,
+        crate::text::HJust::Center => 2.0 * along.abs(),
+        crate::text::HJust::Right => -along,
+    };
+    w.max(t.h)
+}
+
 pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
     let mut e = orig.clone();
     let g = match grips_of(orig, doc).into_iter().find(|q| q.id == id) {
@@ -1675,6 +1700,7 @@ pub fn grip_edit(orig: &Entity, id: &str, to: Pt, doc: &Drawing) -> Entity {
                 *q = anchor + (*oq - anchor) * k;
             }
         }
+        (Kind::Text(t), _) if id == "w" => t.w = Some(mtext_width_from(t, to)),
         (Kind::Leader { pts, .. }, _) => pts[idx(id)] = to,
         (Kind::Dim(d), _) => {
             if id == "tp" {

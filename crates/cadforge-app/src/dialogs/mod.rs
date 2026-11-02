@@ -458,7 +458,7 @@ impl CadForgeApp {
                 }
             }
             Kind::EditText(s) => {
-                reply = Some(if ok { DialogReply::Text(s.text) } else { DialogReply::Cancelled });
+                reply = Some(if ok { s.reply() } else { DialogReply::Cancelled });
             }
             Kind::FileBrowser(s) => {
                 if ok {

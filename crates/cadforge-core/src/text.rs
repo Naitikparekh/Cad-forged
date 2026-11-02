@@ -239,10 +239,12 @@ pub fn text_layout(e: &TextData) -> Layout {
     Layout { lines: out, bx: (ox, bottom, ox + box_w, top), em: em_size(h), runs: vec![], bars: vec![] }
 }
 
-/// Layout of text with inline formatting: words of every run are flowed into lines (wrapping at the text width), each
-/// line's height follows its largest run, stacked fractions take the space of one word.
+/// Layout of text with inline formatting: words of every run are flowed into lines (wrapping at the text width less
+/// the paragraph's indent), each line's height follows its largest run, stacked fractions take the space of one word,
+/// a tab moves to the next tab stop, and each paragraph's alignment places its lines (justified lines spread their
+/// spaces, except a paragraph's last line).
 fn layout_formatted(e: &TextData) -> Layout {
-    use crate::mtext::{parse, Piece, Style};
+    use crate::mtext::{parse_paras, Align, Piece, Style};
     struct Tok {
         style: Style,
         text: String,
@@ -250,20 +252,36 @@ fn layout_formatted(e: &TextData) -> Layout {
         w: f64,
         trim: f64,
     }
+    struct Line {
+        toks: Vec<Tok>,
+        indent: f64,
+        align: Option<Align>,
+        last: bool,
+    }
     let h = e.h;
     let font = e.font.as_ref();
     let wrap = e.w.unwrap_or(0.0);
-    let mut lines: Vec<Vec<Tok>> = vec![];
-    for para in parse(&e.s, h, e.multi) {
-        let (mut cur, mut cur_w): (Vec<Tok>, f64) = (vec![], 0.0);
-        for run in para {
+    let mut lines: Vec<Line> = vec![];
+    for (para, runs) in parse_paras(&e.s, h, e.multi) {
+        let left = para.left.max(0.0) * h;
+        let first = (para.left + para.first).max(0.0) * h;
+        let stops: Vec<f64> = para.tabs.iter().map(|t| t * h).filter(|t| *t > 0.0).collect();
+        let (mut cur, mut cur_w, mut indent): (Vec<Tok>, f64, f64) = (vec![], 0.0, first);
+        for run in runs {
             let hh = h * run.style.scale;
             let toks: Vec<Tok> = match run.piece {
                 Piece::Text(t) => {
-                    // words keep the spaces that follow them
+                    // words keep the spaces that follow them; a tab is a word of its own
                     let mut words: Vec<String> = vec![];
                     let mut w = String::new();
                     for ch in t.chars() {
+                        if ch == '\t' {
+                            if !w.is_empty() {
+                                words.push(std::mem::take(&mut w));
+                            }
+                            words.push("\t".into());
+                            continue;
+                        }
                         w.push(ch);
                         if ch == ' ' {
                             words.push(std::mem::take(&mut w));
@@ -280,20 +298,27 @@ fn layout_formatted(e: &TextData) -> Layout {
                     vec![Tok { style: run.style.clone(), text: format!("{num}/{den}"), stack: Some((num, den, bar)), w, trim: w }]
                 }
             };
-            for t in toks {
-                if wrap > 0.0 && !cur.is_empty() && cur_w + t.trim > wrap {
-                    lines.push(std::mem::take(&mut cur));
+            for mut t in toks {
+                if t.text == "\t" {
+                    // to the next tab stop: the paragraph's, else its left indent, else every 4 text heights
+                    let pos = indent + cur_w;
+                    let stop = stops.iter().copied().find(|x| *x > pos + 1e-9).or((left > pos + 1e-9).then_some(left)).unwrap_or_else(|| ((pos / (4.0 * h)).floor() + 1.0) * 4.0 * h);
+                    (t.w, t.trim) = (stop - pos, stop - pos);
+                }
+                if wrap > 0.0 && !cur.is_empty() && indent + cur_w + t.trim > wrap {
+                    lines.push(Line { toks: std::mem::take(&mut cur), indent, align: para.align, last: false });
                     cur_w = 0.0;
+                    indent = left;
                 }
                 cur_w += t.w;
                 cur.push(t);
             }
         }
-        lines.push(cur);
+        lines.push(Line { toks: cur, indent, align: para.align, last: true });
     }
-    let line_w: Vec<f64> = lines.iter().map(|l| l.iter().map(|t| t.w).sum::<f64>() - l.last().map_or(0.0, |t| t.w - t.trim)).collect();
+    let line_w: Vec<f64> = lines.iter().map(|l| l.toks.iter().map(|t| t.w).sum::<f64>() - l.toks.last().map_or(0.0, |t| t.w - t.trim)).collect();
     // a line is as tall as its largest run (a stacked fraction needs about 1.3 times its height)
-    let line_scale: Vec<f64> = lines.iter().map(|l| if l.is_empty() { 1.0 } else { l.iter().map(|t| t.style.scale * if t.stack.is_some() { 1.3 } else { 1.0 }).fold(0.0, f64::max) }).collect();
+    let line_scale: Vec<f64> = lines.iter().map(|l| if l.toks.is_empty() { 1.0 } else { l.toks.iter().map(|t| t.style.scale * if t.stack.is_some() { 1.3 } else { 1.0 }).fold(0.0, f64::max) }).collect();
     let n = lines.len();
     let pitches: Vec<f64> = (0..n.saturating_sub(1)).map(|i| h * LINE_PITCH * line_scale[i].max(line_scale[i + 1])).collect();
     let span: f64 = pitches.iter().sum();
@@ -305,7 +330,7 @@ fn layout_formatted(e: &TextData) -> Layout {
         VJust::Bottom => span,
         VJust::Baseline => 0.0,
     };
-    let max_w = line_w.iter().cloned().fold(0.0, f64::max);
+    let max_w = lines.iter().zip(&line_w).map(|(l, w)| l.indent + w).fold(0.0, f64::max);
     let ew = e.w.unwrap_or(0.0);
     let box_w = if ew > 0.0 { ew.max(max_w) } else { max_w };
     let ox = match e.jh {
@@ -320,16 +345,31 @@ fn layout_formatted(e: &TextData) -> Layout {
         if i > 0 {
             base -= pitches[i - 1];
         }
-        let x = match e.jh {
-            HJust::Center => ox + (box_w - line_w[i]) / 2.0,
-            HJust::Right => ox + box_w - line_w[i],
-            HJust::Left => ox,
-        };
+        let free = (box_w - line.indent - line_w[i]).max(0.0);
+        let align = line.align.unwrap_or(match e.jh {
+            HJust::Center => Align::Center,
+            HJust::Right => Align::Right,
+            HJust::Left => Align::Left,
+        });
+        let x = ox + line.indent
+            + match align {
+                Align::Center => free / 2.0,
+                Align::Right => free,
+                Align::Left | Align::Justify => 0.0,
+            };
+        // justified: the free space goes into the gaps between words (not on a paragraph's last line)
+        let gaps = line.toks.iter().take(line.toks.len().saturating_sub(1)).filter(|t| t.text.ends_with(' ')).count();
+        let spread = if align == Align::Justify && !line.last && wrap > 0.0 && gaps > 0 { free / gaps as f64 } else { 0.0 };
         let mut cx = x;
         let mut plain = String::new();
         bottom = bottom.min(base - h * line_scale[i] * 0.3);
-        for t in line {
+        for (k, t) in line.toks.iter().enumerate() {
             let hh = h * t.style.scale;
+            if t.text == "\t" {
+                plain.push(' ');
+                cx += t.w;
+                continue;
+            }
             plain.push_str(&t.text);
             match &t.stack {
                 None => {
@@ -352,6 +392,9 @@ fn layout_formatted(e: &TextData) -> Layout {
                 }
             }
             cx += t.w;
+            if spread > 0.0 && k + 1 < line.toks.len() && t.text.ends_with(' ') {
+                cx += spread;
+            }
         }
         out_lines.push(LineLayout { s: plain.trim_end().to_string(), x, y: base, w: line_w[i] });
     }

@@ -144,7 +144,21 @@ pub fn geom_fields(e: &Entity, styles: &[String]) -> Vec<Field> {
                     }
                 })),
             },
-        ],
+        ]
+        .into_iter()
+        .chain(matches!(&e.kind, Kind::Text(t) if t.multi).then(|| Field {
+            // multiline text wraps at its width; 0 keeps each paragraph on one line
+            label: "Width",
+            unit: None,
+            kind: FKind::Num { min: Some(0.0), max: None },
+            get: Box::new(|e, _| Val::Num(if let Kind::Text(t) = &e.kind { t.w.unwrap_or(0.0) } else { 0.0 })),
+            set: Some(Box::new(|e, v| {
+                if let (Kind::Text(t), Val::Num(n)) = (&mut e.kind, v) {
+                    t.w = Some(n.max(0.0));
+                }
+            })),
+        }))
+        .collect(),
         Kind::Dim(_) => vec![
             ro("Measurement", |e, d| if let Kind::Dim(dd) = &e.kind { Val::Num(cadforge_core::dim::dim_geometry(dd, &d.settings).measured) } else { Val::Text(String::new()) }),
             textf("Text override", |e| if let Kind::Dim(dd) = &e.kind { dd.txt.clone().unwrap_or_default() } else { String::new() }, |e, v| if let Kind::Dim(dd) = &mut e.kind { dd.txt = if v.is_empty() { None } else { Some(v) } }),

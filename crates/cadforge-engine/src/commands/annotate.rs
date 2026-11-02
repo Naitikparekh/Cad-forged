@@ -28,10 +28,17 @@ fn da(name: &str, f: crate::registry::RunFn) -> CommandDef {
 
 /// In-place text editor when the UI provides one, otherwise a command-line prompt.
 pub async fn text_input(c: &Ctx, spec: TextEditSpec) -> CmdResult<String> {
+    Ok(mtext_input(c, spec).await?.0)
+}
+
+/// [`text_input`] for multiline text: the text and the width the editor gave it (None: unchanged; Some(0): no
+/// wrapping).
+pub async fn mtext_input(c: &Ctx, spec: TextEditSpec) -> CmdResult<(String, Option<f64>)> {
     match c.dialog(DialogReq::EditText(spec.clone())).await? {
-        Some(DialogReply::Text(s)) => Ok(s),
+        Some(DialogReply::MText(s, w)) => Ok((s, Some(w))),
+        Some(DialogReply::Text(s)) => Ok((s, None)),
         Some(_) => Err(CmdError::Cancel),
-        None => Ok(c.string(ps(if spec.prompt.is_empty() { "Enter text" } else { &spec.prompt }).raw()).await?.text),
+        None => Ok((c.string(ps(if spec.prompt.is_empty() { "Enter text" } else { &spec.prompt }).raw()).await?.text, None)),
     }
 }
 
@@ -171,11 +178,11 @@ async fn mtext(c: Ctx, args: Args) -> CmdResult<()> {
     let p = pt(a.x.min(bp.x), a.y.max(bp.y));
     let mut spec = edit_spec("MText", p, h, rot, jh, jv, true, Some(width));
     spec.initial = args.str("initial").map(str::to_string);
-    let s = text_input(&c, spec).await?;
+    let (s, w) = mtext_input(&c, spec).await?;
     if s.is_empty() {
         return Ok(());
     }
-    let mut e = Entity::mtext(p, h, &s, width);
+    let mut e = Entity::mtext(p, h, &s, w.unwrap_or(width));
     let (style, fixed) = crate::commands::ext_annotate::textstyles::current_style(&c);
     if let Kind::Text(t) = &mut e.kind {
         t.rot = rot;
@@ -207,15 +214,20 @@ async fn textedit(c: Ctx, args: Args) -> CmdResult<()> {
     let mut spec = edit_spec("Enter new text", p, h, rot, HJust::Left, VJust::Baseline, multi, w);
     spec.initial = Some(initial);
     spec.editing = Some(id);
-    let s = text_input(&c, spec).await;
+    let s = mtext_input(&c, spec).await;
     c.ed(|ed| ed.temp_sel.clear());
-    let s = s?;
+    let (s, new_w) = s?;
     c.doc_mut(|d| {
         d.change(|d| {
             if let Some(ent) = d.by_id_mut(id) {
                 match &mut ent.kind {
                     Kind::Dim(dd) => dd.txt = if s == "<>" { Some(String::new()) } else { Some(s.clone()) },
-                    Kind::Text(t) => t.s = s.clone(),
+                    Kind::Text(t) => {
+                        t.s = s.clone();
+                        if let (true, Some(w)) = (t.multi, new_w) {
+                            t.w = Some(w.max(0.0));
+                        }
+                    }
                     Kind::Leader { s: ls, .. } => *ls = s.clone(),
                     _ => {}
                 }

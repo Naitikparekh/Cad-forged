@@ -142,7 +142,8 @@ fn check(name: &str) {
             close(s.pt.y, js[2].as_f64().unwrap(), &format!("{tag} snap y"));
         }
         // grips
-        let grips = grips_of(e, &d);
+        // (multiline text's width grip "w" is newer than the web app; the other grips must match)
+        let grips: Vec<_> = grips_of(e, &d).into_iter().filter(|g| !(g.id == "w" && matches!(&e.kind, Kind::Text(t) if t.multi))).collect();
         let og = o["grips"].as_array().unwrap();
         assert_eq!(grips.len(), og.len(), "{tag}: grip count");
         for (g, js) in grips.iter().zip(og) {

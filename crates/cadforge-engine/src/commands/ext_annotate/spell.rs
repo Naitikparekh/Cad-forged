@@ -14,7 +14,7 @@ fn strip_codes(s: &str) -> String {
     while let Some(ch) = chars.next() {
         match ch {
             '\\' => match chars.next() {
-                Some('P' | 'p' | 'N') => out.push(' '),
+                Some('P' | 'N') => out.push(' '),
                 Some('\\') => out.push('\\'),
                 Some(_) => {
                     while chars.next_if(|c| *c != ';' && !c.is_whitespace()).is_some() {}

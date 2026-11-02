@@ -1,6 +1,8 @@
 //! Inline formatting of multiline text (the codes AutoCAD stores inside MTEXT): bold and italic from `\F`, underline /
 //! overline / strike-through (`\L \O \K`), colour (`\C` index, `\c` true colour), height (`\H`), stacked fractions (`\S`),
-//! `{ }` groups, `\P` paragraphs, the `%%u %%o %%d %%p %%c` shortcuts, and the escapes `\\ \{ \} \~ \U+XXXX`.
+//! `{ }` groups, `\P` paragraphs, paragraph properties (`\p...;`: alignment, first-line and left indents, tab stops;
+//! they carry on to the next paragraphs until changed, as in AutoCAD), the `%%u %%o %%d %%p %%c` shortcuts, and the
+//! escapes `\\ \{ \} \~ \U+XXXX`. A tab character moves to the next tab stop.
 //!
 //! Not applied (the codes are read and dropped): font names (everything is drawn in the one built-in font), width factor
 //! `\W`, tracking `\T`, oblique angle `\Q`, alignment `\A`, columns.
@@ -24,6 +26,73 @@ impl Default for Style {
     }
 }
 
+/// How the lines of a paragraph sit in the text's width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Align {
+    #[default]
+    Left,
+    Center,
+    Right,
+    /// Both edges straight (the last line of the paragraph stays left).
+    Justify,
+}
+
+/// Paragraph properties (`\p...;`). Indents and tab stops are in multiples of the text height; `align` None follows
+/// the text's attachment.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Para {
+    pub align: Option<Align>,
+    /// Indent of the first line, from the left indent (negative for a hanging indent: bullets and numbers).
+    pub first: f64,
+    pub left: f64,
+    pub tabs: Vec<f64>,
+}
+
+impl Para {
+    /// Apply the argument of a `\p` code: `xi-3,l3,t3,qc` and the like.
+    fn apply(&mut self, a: &str) {
+        let a = a.trim().strip_prefix('x').unwrap_or(a.trim());
+        let mut in_tabs = false;
+        for item in a.split(',').map(str::trim).filter(|x| !x.is_empty()) {
+            let (k, v) = item.split_at(1);
+            let num = |v: &str| v.trim().parse::<f64>().ok().filter(|x| x.is_finite());
+            match k {
+                "i" => {
+                    in_tabs = false;
+                    if let Some(x) = num(v) {
+                        self.first = x;
+                    }
+                }
+                "l" => {
+                    in_tabs = false;
+                    if let Some(x) = num(v) {
+                        self.left = x;
+                    }
+                }
+                "r" => in_tabs = false,
+                "q" => {
+                    in_tabs = false;
+                    self.align = match v.trim() {
+                        "l" => Some(Align::Left),
+                        "c" => Some(Align::Center),
+                        "r" => Some(Align::Right),
+                        "j" | "d" => Some(Align::Justify),
+                        _ => self.align,
+                    };
+                }
+                "t" => {
+                    in_tabs = true;
+                    self.tabs.clear();
+                    self.tabs.extend(num(v));
+                }
+                // more tab stops: "t3,6,9"
+                _ if in_tabs => self.tabs.extend(num(item)),
+                _ => {}
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Piece {
     Text(String),
@@ -40,17 +109,23 @@ pub struct Run {
 /// Whether `s` holds anything [`parse`] would treat specially. `mtext` turns on the backslash and brace codes (multiline
 /// text); the `%%` shortcuts apply to every text.
 pub fn has_formatting(s: &str, mtext: bool) -> bool {
-    s.contains("%%") || (mtext && (s.contains('\\') || s.contains('{') || s.contains('}')))
+    s.contains("%%") || s.contains('\t') || (mtext && (s.contains('\\') || s.contains('{') || s.contains('}')))
 }
 
 /// Split `s` into paragraphs of runs. `base_h` is the text height, the reference for absolute `\H` heights.
 pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
+    parse_paras(s, base_h, mtext).into_iter().map(|(_, runs)| runs).collect()
+}
+
+/// [`parse`] with each paragraph's properties.
+pub fn parse_paras(s: &str, base_h: f64, mtext: bool) -> Vec<(Para, Vec<Run>)> {
     let chars: Vec<char> = s.chars().collect();
     let mut st = Style::default();
     let mut groups: Vec<Style> = vec![];
     let mut cur = String::new();
     let mut runs: Vec<Run> = vec![];
-    let mut paras: Vec<Vec<Run>> = vec![];
+    let mut para = Para::default();
+    let mut paras: Vec<(Para, Vec<Run>)> = vec![];
     let flush = |cur: &mut String, st: &Style, runs: &mut Vec<Run>| {
         if !cur.is_empty() {
             runs.push(Run { style: st.clone(), piece: Piece::Text(std::mem::take(cur)) });
@@ -71,9 +146,15 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
                 let n = chars[i + 1];
                 i += 2;
                 match n {
-                    'P' | 'p' => {
+                    'P' => {
                         flush(&mut cur, &st, &mut runs);
-                        paras.push(std::mem::take(&mut runs));
+                        paras.push((para.clone(), std::mem::take(&mut runs)));
+                    }
+                    // paragraph properties (not a break): they apply to this paragraph and the ones after it
+                    'p' => {
+                        let (a, next) = arg(i);
+                        i = next;
+                        para.apply(&a);
                     }
                     '\\' | '{' | '}' => cur.push(n),
                     '~' => cur.push(' '),
@@ -199,7 +280,7 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
             }
             '\n' => {
                 flush(&mut cur, &st, &mut runs);
-                paras.push(std::mem::take(&mut runs));
+                paras.push((para.clone(), std::mem::take(&mut runs)));
             }
             '%' if chars.get(i + 1) == Some(&'%') && i + 2 < chars.len() => {
                 let code = chars[i + 2];
@@ -230,8 +311,127 @@ pub fn parse(s: &str, base_h: f64, mtext: bool) -> Vec<Vec<Run>> {
         i += 1;
     }
     flush(&mut cur, &st, &mut runs);
-    paras.push(runs);
+    paras.push((para, runs));
     paras
+}
+
+/// A paragraph's list marker, for the text editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum List {
+    #[default]
+    None,
+    /// "•" and a tab, with a hanging indent.
+    Bullet,
+    /// "1." "2." ... and a tab, with a hanging indent.
+    Number,
+}
+
+/// A paragraph's format as the text editor shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct ParaFmt {
+    pub align: Align,
+    pub list: List,
+}
+
+/// The hanging indent of list items, in text heights.
+pub const LIST_INDENT: f64 = 1.5;
+
+/// MTEXT contents as paragraphs for editing: each paragraph's format and its text, without the paragraph codes and
+/// list markers (other inline codes stay). Properties carry on from paragraph to paragraph, as AutoCAD reads them.
+pub fn split_paragraphs(s: &str) -> Vec<(ParaFmt, String)> {
+    let mut out = vec![];
+    let mut cur = Para::default();
+    for raw in split_breaks(s) {
+        let mut t = raw.as_str();
+        // the paragraph codes at its start
+        while let Some(rest) = t.strip_prefix("\\p") {
+            let Some(end) = rest.find(';') else { break };
+            cur.apply(&rest[..end]);
+            t = &rest[end + 1..];
+        }
+        let mut list = List::None;
+        let mut text = t.to_string();
+        if cur.left > 0.0 && cur.first < 0.0 {
+            if let Some(r) = t.strip_prefix("•\t").or_else(|| t.strip_prefix("• ")) {
+                list = List::Bullet;
+                text = r.to_string();
+            } else {
+                let digits = t.chars().take_while(|c| c.is_ascii_digit()).count();
+                if digits > 0 {
+                    let rest = &t[digits..];
+                    if let Some(r) = rest.strip_prefix(".\t").or_else(|| rest.strip_prefix(")\t")).or_else(|| rest.strip_prefix(". ")) {
+                        list = List::Number;
+                        text = r.to_string();
+                    }
+                }
+            }
+        }
+        out.push((ParaFmt { align: cur.align.unwrap_or_default(), list }, text));
+    }
+    out
+}
+
+/// Paragraphs back to MTEXT contents (paragraphs separated by `\n`): plain text when no paragraph has a format, else
+/// a `\p` code at the start of every paragraph and the list markers.
+pub fn join_paragraphs(paras: &[(ParaFmt, String)]) -> String {
+    if paras.iter().all(|(f, _)| *f == ParaFmt::default()) {
+        return paras.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>().join("\n");
+    }
+    let mut n = 0;
+    let mut out = vec![];
+    for (f, t) in paras {
+        let q = match f.align {
+            Align::Left => "l",
+            Align::Center => "c",
+            Align::Right => "r",
+            Align::Justify => "j",
+        };
+        let (code, marker) = match f.list {
+            List::None => {
+                n = 0;
+                (format!("\\pxi0,l0,q{q};"), String::new())
+            }
+            List::Bullet => {
+                n = 0;
+                (format!("\\pxi-{LIST_INDENT},l{LIST_INDENT},q{q},t{LIST_INDENT};"), "•\t".to_string())
+            }
+            List::Number => {
+                n += 1;
+                (format!("\\pxi-{LIST_INDENT},l{LIST_INDENT},q{q},t{LIST_INDENT};"), format!("{n}.\t"))
+            }
+        };
+        out.push(format!("{code}{marker}{t}"));
+    }
+    out.join("\n")
+}
+
+/// Paragraphs of MTEXT contents: split at `\n` and at `\P` (not at an escaped `\\P`).
+fn split_breaks(s: &str) -> Vec<String> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = vec![String::new()];
+    let mut i = 0;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' if i + 1 < chars.len() && chars[i + 1] == 'P' => {
+                out.push(String::new());
+                i += 2;
+            }
+            '\\' if i + 1 < chars.len() => {
+                out.last_mut().unwrap().push('\\');
+                out.last_mut().unwrap().push(chars[i + 1]);
+                i += 2;
+            }
+            '\n' => {
+                out.push(String::new());
+                i += 1;
+            }
+            c => {
+                out.last_mut().unwrap().push(c);
+                i += 1;
+            }
+        }
+    }
+    out
 }
 
 /// The text without any formatting codes: paragraphs joined by `\n`, fractions as `a/b`.

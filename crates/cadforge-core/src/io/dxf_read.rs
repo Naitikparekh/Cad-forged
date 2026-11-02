@@ -31,7 +31,7 @@ fn uncaret(s: &str) -> std::borrow::Cow<'_, str> {
                     it.next();
                 }
                 Some('I') => {
-                    out.push(' ');
+                    out.push('\t');
                     it.next();
                 }
                 Some(n) if ('@'..='_').contains(&n) => {
@@ -108,7 +108,8 @@ pub fn keep_mtext(src: &str) -> String {
     while i < s.len() {
         if s[i] == '\\' && i + 1 < s.len() {
             match s[i + 1] {
-                'P' | 'p' => out.push('\n'),
+                // \P breaks a paragraph; \p...; is a paragraph property code, kept as it is
+                'P' => out.push('\n'),
                 other => {
                     out.push('\\');
                     out.push(other);
@@ -134,7 +135,7 @@ pub fn decode_mtext(src: &str) -> String {
         if c == '\\' {
             let n = s.get(i + 1).copied();
             match n {
-                Some('P') | Some('p') => {
+                Some('P') => {
                     out.push('\n');
                     i += 1;
                 }
@@ -167,7 +168,7 @@ pub fn decode_mtext(src: &str) -> String {
                         out.push(c);
                     }
                 }
-                Some('f' | 'F' | 'C' | 'c' | 'H' | 'h' | 'W' | 'w' | 'Q' | 'q' | 'T' | 't' | 'A' | 'a' | 'X' | 'x') => match s[i..].iter().position(|&ch| ch == ';') {
+                Some('f' | 'F' | 'C' | 'c' | 'H' | 'h' | 'W' | 'w' | 'Q' | 'q' | 'T' | 't' | 'A' | 'a' | 'X' | 'x' | 'p') => match s[i..].iter().position(|&ch| ch == ';') {
                     Some(j) => i += j,
                     None => i = s.len(),
                 },
