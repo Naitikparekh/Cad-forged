@@ -99,7 +99,7 @@ cargo run -q -p cadforge-engine --example commands_doc > docs/COMMANDS.md   # re
 cargo run -q -p cadforge-engine --example parity     # command coverage vs. the AutoCAD inventories (-- --missing, --json)
 python3 tools/benchmark/score.py --check             # verify every benchmark credit still points at real code / a test
 python3 tools/benchmark/score.py --write             # regenerate docs/BENCHMARK.md
-tools/package.sh                                     # release build -> dist/ (tar.gz, and a .deb on Debian-like systems; zip on Windows)
+tools/package.sh                                     # release build -> dist/ (tar.gz + .deb on Linux, zip on Windows, CadForge.app in .dmg + .zip on macOS)
 tests/package/check.sh                               # check what tools/package.sh produced
 tools/build-web.sh                                   # WebAssembly build -> dist-web/ (serve it over http)
 tools/build-web.sh dev                               # faster, less optimised wasm build
@@ -109,9 +109,11 @@ node tools/gen-app-data.mjs                          # regenerate crates/cadforg
 ```
 
 Portable packages need nothing installed beyond what a desktop normally has: unpack and run `cadforge` (`cadforge.exe` on
-Windows). On Linux that means OpenGL and the xkbcommon libraries (`libgl1 libxkbcommon0 libxkbcommon-x11-0` on
+Windows). On macOS, open the .dmg and drag CadForge to Applications (or unzip CadForge.app): one app for Apple Silicon
+and Intel Macs, macOS 11 or later. On Linux that means OpenGL and the xkbcommon libraries (`libgl1 libxkbcommon0 libxkbcommon-x11-0` on
 Debian / Ubuntu, which the .deb declares). The packages are not signed: Windows SmartScreen asks for "More info > Run
-anyway", and macOS needs right-click > Open (or `xattr -d com.apple.quarantine cadforge`) the first time.
+anyway", and macOS needs right-click > Open on CadForge.app (or `xattr -dr com.apple.quarantine /Applications/CadForge.app`) the
+first time: the app is signed ad hoc, not with an Apple Developer ID.
 
 CI (`.github/workflows/ci.yml`) runs the tests, clippy, the benchmark evidence check and the wasm build on Linux and builds
 the packages on Linux, macOS and Windows; pushing a `v*` tag runs `release.yml`, which attaches the packages to a GitHub

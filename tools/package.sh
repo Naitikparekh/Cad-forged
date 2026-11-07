@@ -4,7 +4,8 @@
 #   tools/package.sh --no-build      package the existing target/release binary
 #
 # Linux:   dist/cadforge-<version>-linux-<arch>.tar.gz and dist/cadforge_<version>_<debarch>.deb (when dpkg-deb exists)
-# macOS:   dist/cadforge-<version>-macos-<arch>.tar.gz
+# macOS:   dist/CadForge-<version>-macos.dmg and dist/cadforge-<version>-macos-universal.zip: CadForge.app, one program
+#          for Apple Silicon and Intel Macs, with the logo as its icon, signed ad hoc (not notarized)
 # Windows: dist/cadforge-<version>-windows-<arch>.zip   (run from Git Bash / MSYS)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,6 +20,54 @@ case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) os=windows; exe=cadforge.exe ;;
   *) echo "unsupported platform $(uname -s)" >&2; exit 1 ;;
 esac
+
+if [ "$os" = macos ]; then
+  # ---- macOS: a universal CadForge.app in a .dmg and a .zip
+  if [ "${1:-}" != "--no-build" ]; then
+    rustup target add aarch64-apple-darwin x86_64-apple-darwin
+    for t in aarch64-apple-darwin x86_64-apple-darwin; do
+      MACOSX_DEPLOYMENT_TARGET=11.0 cargo build --release -p cadforge-app --bin cadforge --target "$t"
+    done
+  fi
+  rm -rf dist && mkdir -p dist
+  app="dist/CadForge.app"
+  mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+  lipo -create -output "$app/Contents/MacOS/cadforge" target/aarch64-apple-darwin/release/cadforge target/x86_64-apple-darwin/release/cadforge
+  cp crates/cadforge-app/assets/logo/cadforge.icns "$app/Contents/Resources/cadforge.icns"
+  cp README.md CSG-LICENSE.txt crates/cadforge-app/assets/fonts/LICENSE-Liberation.txt "$app/Contents/Resources/"
+  cat > "$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>CadForge</string>
+  <key>CFBundleDisplayName</key><string>CadForge</string>
+  <key>CFBundleIdentifier</key><string>org.cadforge.CadForge</string>
+  <key>CFBundleExecutable</key><string>cadforge</string>
+  <key>CFBundleIconFile</key><string>cadforge</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$version</string>
+  <key>CFBundleVersion</key><string>$version</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.graphics-design</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+</dict>
+</plist>
+PLIST
+  plutil -lint "$app/Contents/Info.plist"
+  # ad hoc signature: Apple Silicon refuses to run unsigned code (this is not a Developer ID: Gatekeeper still asks)
+  codesign --force --deep --sign - "$app"
+  codesign --verify --deep --strict "$app"
+  (cd dist && ditto -c -k --keepParent CadForge.app "cadforge-$version-macos-universal.zip")
+  stage="dist/dmg"
+  mkdir -p "$stage" && cp -R "$app" "$stage/" && ln -s /Applications "$stage/Applications"
+  hdiutil create -volname CadForge -srcfolder "$stage" -ov -format UDZO "dist/CadForge-$version-macos.dmg"
+  rm -rf "$stage" "$app"
+  ls -la dist
+  exit 0
+fi
 
 if [ "${1:-}" != "--no-build" ]; then
   cargo build --release -p cadforge-app --bin cadforge

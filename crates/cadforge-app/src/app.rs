@@ -159,7 +159,7 @@ impl CadForgeApp {
             ret_text: None,
             ret_lw: None,
             inbox: Default::default(),
-            save_dir: std::env::current_dir().unwrap_or_default(),
+            save_dir: crate::logo::default_save_dir(),
             context_menu_pending: None,
             shift_prev: false,
             cui_saved: 0,

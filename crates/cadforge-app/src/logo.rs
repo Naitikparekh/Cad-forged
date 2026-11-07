@@ -130,6 +130,38 @@ pub fn ico(sizes: &[u32]) -> Vec<u8> {
     out
 }
 
+/// A macOS .icns (the app bundle's icon) holding PNG images: every size Finder and the Dock ask for, 16 to 1024 pixels.
+pub fn icns() -> Vec<u8> {
+    // (type, pixels): the 1x and 2x ("@2x" = the next size up) images of 16, 32, 128, 256 and 512 points
+    const KINDS: [(&[u8; 4], u32); 10] = [(b"icp4", 16), (b"ic11", 32), (b"icp5", 32), (b"ic12", 64), (b"ic07", 128), (b"ic13", 256), (b"ic08", 256), (b"ic14", 512), (b"ic09", 512), (b"ic10", 1024)];
+    let mut body = vec![];
+    for (kind, px) in KINDS {
+        let png = render(px, true).encode_png().expect("png");
+        body.extend_from_slice(kind);
+        body.extend((png.len() as u32 + 8).to_be_bytes());
+        body.extend(png);
+    }
+    let mut out = b"icns".to_vec();
+    out.extend((body.len() as u32 + 8).to_be_bytes());
+    out.extend(body);
+    out
+}
+
+/// The default folder for new drawings: the working directory when it can be written to, else the user's Documents
+/// folder (a macOS app opened from Finder starts in "/").
+pub fn default_save_dir() -> std::path::PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let writable = |d: &std::path::Path| d.as_os_str().len() > 1 && std::fs::metadata(d).is_ok_and(|m| !m.permissions().readonly());
+    if writable(&cwd) {
+        return cwd;
+    }
+    match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(std::path::PathBuf::from) {
+        Some(home) if home.join("Documents").is_dir() => home.join("Documents"),
+        Some(home) => home,
+        None => cwd,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,7 +171,7 @@ mod tests {
     #[test]
     fn logo_files_are_current() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/logo");
-        let files: Vec<(String, Vec<u8>)> = [16u32, 32, 48, 64, 128, 256, 512].iter().map(|s| (format!("cadforge-{s}.png"), render(*s, true).encode_png().unwrap())).chain([("cadforge.ico".to_string(), ico(&[16, 24, 32, 48, 64, 128, 256]))]).collect();
+        let files: Vec<(String, Vec<u8>)> = [16u32, 32, 48, 64, 128, 256, 512].iter().map(|s| (format!("cadforge-{s}.png"), render(*s, true).encode_png().unwrap())).chain([("cadforge.ico".to_string(), ico(&[16, 24, 32, 48, 64, 128, 256])), ("cadforge.icns".to_string(), icns())]).collect();
         if let Ok(out) = std::env::var("LOGO_OUT") {
             std::fs::create_dir_all(&out).unwrap();
             for (n, b) in &files {

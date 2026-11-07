@@ -4,6 +4,29 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 shopt -s nullglob
+if [ "$(uname -s)" = Darwin ]; then
+  # macOS: the .zip holds CadForge.app with a universal program, its icon and Info.plist; the .dmg mounts with the app
+  zips=(dist/cadforge-*-macos-universal.zip); dmgs=(dist/CadForge-*-macos.dmg)
+  [ ${#zips[@]} -eq 1 ] && [ ${#dmgs[@]} -eq 1 ] || { echo "expected one .zip and one .dmg in dist/" >&2; exit 1; }
+  tmp=$(mktemp -d)
+  ditto -x -k "${zips[0]}" "$tmp"
+  app="$tmp/CadForge.app"
+  for f in Contents/MacOS/cadforge Contents/Info.plist Contents/Resources/cadforge.icns Contents/Resources/README.md; do
+    [ -e "$app/$f" ] || { echo "the app lacks $f" >&2; exit 1; }
+  done
+  archs=$(lipo -archs "$app/Contents/MacOS/cadforge")
+  case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "not universal: $archs" >&2; exit 1 ;; esac
+  plutil -lint "$app/Contents/Info.plist"
+  codesign --verify --deep --strict "$app"
+  hdiutil verify "${dmgs[0]}"
+  mnt=$(mktemp -d)
+  hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "${dmgs[0]}" >/dev/null
+  ok=0; [ -x "$mnt/CadForge.app/Contents/MacOS/cadforge" ] && [ -L "$mnt/Applications" ] && ok=1
+  hdiutil detach "$mnt" >/dev/null
+  [ $ok -eq 1 ] || { echo "the .dmg lacks CadForge.app or the Applications link" >&2; exit 1; }
+  echo "macOS app ok ($archs): ${zips[0]}, ${dmgs[0]}"
+  exit 0
+fi
 archives=(dist/cadforge-*.tar.gz dist/cadforge-*.zip)
 [ ${#archives[@]} -eq 1 ] || { echo "expected one archive in dist/, found ${#archives[@]}" >&2; exit 1; }
 py=$(command -v python3 || command -v python || true)
