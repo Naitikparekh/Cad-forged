@@ -254,9 +254,14 @@ fn cur_dim_style(c: &Ctx) -> String {
     c.doc(|d| d.settings.cur_dim_style.clone())
 }
 
+/// Horizontal (0) or vertical (π/2) for a linear dimension between `p1` and `p2` with its dimension line through
+/// `dp`, as AutoCAD chooses: above or below the box of the two points gives a horizontal dimension, to its left or right
+/// a vertical one; off a corner, the side `dp` is further out on wins.
 fn h_or_v(p1: Pt, p2: Pt, dp: Pt) -> f64 {
-    let m = mid(p1, p2);
-    if (dp.y - m.y).abs() >= (dp.x - m.x).abs() {
+    let (x0, x1, y0, y1) = (p1.x.min(p2.x), p1.x.max(p2.x), p1.y.min(p2.y), p1.y.max(p2.y));
+    let out_x = (x0 - dp.x).max(dp.x - x1).max(0.0);
+    let out_y = (y0 - dp.y).max(dp.y - y1).max(0.0);
+    if out_y >= out_x {
         0.0
     } else {
         PI / 2.0
@@ -298,12 +303,19 @@ async fn linear_like(c: Ctx, kind: DimType, rotated: bool) -> CmdResult<()> {
     } else {
         return Ok(());
     }
-    let ds = cur_dim_style(&c);
     let mut fixed: Option<f64> = None;
     if rotated {
         let Some(a) = c.angle(ps("Specify angle of dimension line").default_num(0.0)).await?.value() else { return Ok(()) };
         fixed = Some(a);
     }
+    linear_place(&c, kind, p1, p2, fixed).await?;
+    Ok(())
+}
+
+/// The last step of a linear or aligned dimension between `p1` and `p2`: where its dimension line goes (with the
+/// Text / Horizontal / Vertical / Rotated options), previewed as the cursor moves. The new dimension's id.
+async fn linear_place(c: &Ctx, kind: DimType, p1: Pt, p2: Pt, mut fixed: Option<f64>) -> CmdResult<Option<u64>> {
+    let ds = cur_dim_style(c);
     let mut override_: Option<String> = None;
     loop {
         let (ds2, ov, fx) = (ds.clone(), override_.clone(), fixed);
@@ -352,10 +364,10 @@ async fn linear_like(c: Ctx, kind: DimType, rotated: bool) -> CmdResult<()> {
             }
             _ => {}
         }
-        let Some(p) = r.pt() else { return Ok(()) };
+        let Some(p) = r.pt() else { return Ok(None) };
         let id = c.add(make(p));
         c.app(|a| a.mem.last_dim = Some(id));
-        return Ok(());
+        return Ok(Some(id));
     }
 }
 
@@ -530,74 +542,145 @@ async fn dimbaseline(c: Ctx, _a: Args) -> CmdResult<()> {
     }
 }
 
-async fn dim(c: Ctx, _a: Args) -> CmdResult<()> {
-    let o = c
-        .entity(
-            ps("Select object or specify first extension line origin or")
-                .options(&["Angular", "Baseline", "Continue", "aLign"])
-                .allow_enter()
-                .filter(|e| matches!(e.kind, Kind::Line { .. } | Kind::Arc { .. } | Kind::Circle { .. } | Kind::Pline { .. })),
-        )
-        .await?;
-    match o.kw() {
-        Some("Angular") => return Ok(c.sub_forced("DIMANGULAR", Args::none()).await),
-        Some("Baseline") => return Ok(c.sub_forced("DIMBASELINE", Args::none()).await),
-        Some("Continue") => return Ok(c.sub_forced("DIMCONTINUE", Args::none()).await),
-        Some("aLign") => return linear_like(c, DimType::Ali, false).await,
-        _ => {}
-    }
-    let EntR::Entity { id, pt: op, .. } = o else { return Ok(()) };
-    let Some(e0) = c.entity_by_id(id) else { return Ok(()) };
-    let ds = cur_dim_style(&c);
-    if let Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. } = e0.kind {
+/// What DIM dimensions: lines, polyline segments, arcs and circles.
+fn dimmable(e: &Entity) -> bool {
+    matches!(e.kind, Kind::Line { .. } | Kind::Arc { .. } | Kind::Circle { .. } | Kind::Pline { .. })
+}
+
+/// The dimension DIM gives the object picked at `op`, its dimension line through `dp`: a radius for an arc or a
+/// circle, else a linear dimension of the segment picked (horizontal or vertical when the segment is) or an aligned
+/// one. None for anything else.
+fn dim_of_object(e: &Entity, doc: &Drawing, op: Pt, dp: Pt, ds: &str) -> Option<Entity> {
+    if let Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. } = e.kind {
         let on = ctr + unit(op - ctr) * r;
-        let ds2 = ds.clone();
-        let make = move |dp: Pt| dim_ent(DimType::Rad, &ds2, |d| {
+        return Some(dim_ent(DimType::Rad, ds, |d| {
             d.c = Some(ctr);
             d.pt = Some(on);
             d.dp = Some(dp);
-        });
-        let m2 = make.clone();
-        let r_ = c
-            .point(ps("Specify dimension line location or [Mtext/Text/Angle/Diameter/Radius]").options(&["Diameter", "Radius"]).base(ctr).no_ortho().preview(move |_, p| vec![pv(m2(p))]))
-            .await?;
-        if r_.kw() == Some("Diameter") {
-            if let Some(p) = c.point(ps("Specify dimension line location").base(ctr).no_ortho()).await?.pt() {
-                c.add(dim_ent(DimType::Dia, &ds, |d| {
-                    d.c = Some(ctr);
-                    d.pt = Some(on);
-                    d.dp = Some(p);
-                }));
-            }
-            return Ok(());
-        }
-        if let Some(p) = r_.pt() {
-            c.add(make(p));
-        }
-        return Ok(());
+        }));
     }
-    let segs = c.doc(|d| segs_of(&e0, d).to_vec());
-    let Some(s) = nearest_seg(&segs, op) else { return Ok(()) };
+    let segs = segs_of(e, doc);
+    let s = nearest_seg(&segs, op)?;
     let (p1, p2) = (s.start(), s.end());
-    let kind = if (p1.x - p2.x).abs() < 1e-9 || (p1.y - p2.y).abs() < 1e-9 { DimType::Lin } else { DimType::Ali };
-    let ds2 = ds.clone();
-    let make = move |dp: Pt| {
-        dim_ent(kind, &ds2, |d| {
-            d.p1 = Some(p1);
-            d.p2 = Some(p2);
-            d.dp = Some(dp);
-            if kind == DimType::Lin {
-                d.ang = Some(h_or_v(p1, p2, dp));
-            }
-        })
-    };
-    let m2 = make.clone();
-    let r_ = c.point(ps("Specify dimension line location").base(mid(p1, p2)).no_ortho().preview(move |_, p| vec![pv(m2(p))])).await?;
-    if let Some(p) = r_.pt() {
-        let id = c.add(make(p));
-        c.app(|a| a.mem.last_dim = Some(id));
+    let straight = (p1.x - p2.x).abs() < 1e-9 || (p1.y - p2.y).abs() < 1e-9;
+    let kind = if straight { DimType::Lin } else { DimType::Ali };
+    Some(dim_ent(kind, ds, |d| {
+        d.p1 = Some(p1);
+        d.p2 = Some(p2);
+        d.dp = Some(dp);
+        if kind == DimType::Lin {
+            d.ang = Some(h_or_v(p1, p2, dp));
+        }
+    }))
+}
+
+/// Where DIM's hover preview puts the dimension line of the object under the cursor: a little outside it, on the
+/// cursor's side.
+fn hover_dim_point(e: &Entity, doc: &Drawing, p: Pt, gap: f64) -> Pt {
+    if let Kind::Circle { c: ctr, r } | Kind::Arc { c: ctr, r, .. } = e.kind {
+        let dir = if dist(p, ctr) > 1e-9 { unit(p - ctr) } else { pt(1.0, 0.0) };
+        return ctr + dir * (r + gap);
     }
-    Ok(())
+    let segs = segs_of(e, doc);
+    let Some(s) = nearest_seg(&segs, p) else { return p };
+    let (a, b) = (s.start(), s.end());
+    let n = unit(pt(a.y - b.y, b.x - a.x));
+    let side = if (p.x - a.x) * n.x + (p.y - a.y) * n.y >= 0.0 { 1.0 } else { -1.0 };
+    mid(a, b) + n * (gap * side)
+}
+
+/// DIM: one command for most dimensions, as in AutoCAD. Hovering a line, a polyline segment, an arc or a circle
+/// previews the dimension it gets; a click on it places that dimension (a click elsewhere places its dimension line),
+/// a click on empty space starts a dimension between two points. It stays active for the next dimension until Enter
+/// or Esc.
+async fn dim(c: Ctx, _a: Args) -> CmdResult<()> {
+    loop {
+        let ds = cur_dim_style(&c);
+        let (ap, gap) = c.app(|a| {
+            let ap = a.aperture_world(Some(a.sysvars.real("PICKBOX") + 4.0));
+            let txt = a.editor().map_or(2.5, |ed| ed.doc.settings.cur_dim().txt * ed.doc.settings.cur_dim().scale);
+            (ap, txt * 3.0)
+        });
+        let ds2 = ds.clone();
+        let r = c
+            .point(
+                ps("Select object or specify first extension line origin or")
+                    .options(&["Angular", "Baseline", "Continue", "aLign"])
+                    .allow_enter()
+                    .no_ortho()
+                    .preview(move |doc, p| {
+                        let Some(e) = crate::select::pick_at(doc, p, ap, Some(&dimmable), None).and_then(|id| doc.by_id(id).cloned()) else { return vec![] };
+                        let dp = hover_dim_point(&e, doc, p, gap);
+                        // the object picked out, and the dimension it would get
+                        let mut v = vec![pv(e.clone())];
+                        v.extend(dim_of_object(&e, doc, p, dp, &ds2).map(pv));
+                        v
+                    }),
+            )
+            .await?;
+        match r.kw() {
+            Some("Angular") => {
+                c.sub_forced("DIMANGULAR", Args::none()).await;
+                continue;
+            }
+            Some("Baseline") => {
+                c.sub_forced("DIMBASELINE", Args::none()).await;
+                continue;
+            }
+            Some("Continue") => {
+                c.sub_forced("DIMCONTINUE", Args::none()).await;
+                continue;
+            }
+            Some("aLign") => {
+                linear_like(c.clone(), DimType::Ali, false).await?;
+                continue;
+            }
+            _ => {}
+        }
+        let Some(op) = r.pt() else { return Ok(()) };
+        let hit = c.doc(|d| crate::select::pick_at(d, op, ap, Some(&dimmable), None).and_then(|id| d.by_id(id).cloned()));
+        match hit {
+            Some(e0) => {
+                if let Kind::Circle { c: ctr, .. } | Kind::Arc { c: ctr, .. } = e0.kind {
+                    // a radius, or a diameter with the option
+                    let (e1, ds3) = (e0.clone(), ds.clone());
+                    let r_ = c
+                        .point(ps("Specify dimension line location or [Diameter/Radius]").options(&["Diameter", "Radius"]).base(ctr).no_ortho().preview(move |doc, p| dim_of_object(&e1, doc, op, p, &ds3).map(pv).into_iter().collect()))
+                        .await?;
+                    if r_.kw() == Some("Diameter") {
+                        let rr = if let Kind::Circle { r, .. } | Kind::Arc { r, .. } = e0.kind { r } else { 0.0 };
+                        let (on, ds4) = (ctr + unit(op - ctr) * rr, ds.clone());
+                        let dia = move |p: Pt| {
+                            dim_ent(DimType::Dia, &ds4, |d| {
+                                d.c = Some(ctr);
+                                d.pt = Some(on);
+                                d.dp = Some(p);
+                            })
+                        };
+                        let d2 = dia.clone();
+                        if let Some(p) = c.point(ps("Specify dimension line location").base(ctr).no_ortho().preview(move |_, p| vec![pv(d2(p))])).await?.pt() {
+                            c.add(dia(p));
+                        }
+                    } else if let Some(p) = r_.pt() {
+                        if let Some(d) = c.doc(|doc| dim_of_object(&e0, doc, op, p, &ds)) {
+                            c.add(d);
+                        }
+                    }
+                } else {
+                    let segs = c.doc(|d| segs_of(&e0, d).to_vec());
+                    let Some(s) = nearest_seg(&segs, op) else { continue };
+                    let (p1, p2) = (s.start(), s.end());
+                    let straight = (p1.x - p2.x).abs() < 1e-9 || (p1.y - p2.y).abs() < 1e-9;
+                    linear_place(&c, if straight { DimType::Lin } else { DimType::Ali }, p1, p2, None).await?;
+                }
+            }
+            None => {
+                // two points: a linear dimension between them
+                let Some(p2) = c.point(ps("Specify second extension line origin").base(op)).await?.pt() else { continue };
+                linear_place(&c, DimType::Lin, op, p2, None).await?;
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------- LEADER

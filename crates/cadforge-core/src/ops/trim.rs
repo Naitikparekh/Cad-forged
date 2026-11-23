@@ -68,6 +68,34 @@ pub fn trim(target: &Entity, pick: Pt, cutters: &[&Entity], doc: &Drawing, exten
     Ok(mk(merge_segs(&rest)).into_iter().collect())
 }
 
+/// The piece [`trim`] removes for the same arguments, as segments (for a preview of the trim before it is done); None
+/// when the object would not be trimmed.
+pub fn trim_removed(target: &Entity, pick: Pt, cutters: &[&Entity], doc: &Drawing, extend_cutters: bool) -> Option<Vec<Seg>> {
+    let path = path_of(target, doc)?;
+    let cut_segs: Vec<Seg> = cutters.iter().filter(|c| c.id != target.id || target.id == 0).flat_map(|c| edge_segs(c, doc)).collect();
+    let cuts = cut_params(&path, &cut_segs, extend_cutters);
+    let n = path.segs.len() as f64;
+    let up = path_nearest(&path, pick).u;
+    if cuts.is_empty() {
+        return None;
+    }
+    if !path.closed {
+        let prev = cuts.iter().rev().find(|&&u| u < up - EPS).copied();
+        let next = cuts.iter().find(|&&u| u > up + EPS).copied();
+        let inner = cuts.iter().any(|&u| u > 1e-7 && u < n - 1e-7);
+        if !inner && !(prev.is_some() && next.is_some()) {
+            return None;
+        }
+        return Some(slice_linear(&path.segs, prev.unwrap_or(0.0), next.unwrap_or(n)));
+    }
+    if cuts.len() < 2 {
+        return None;
+    }
+    let prev = cuts.iter().rev().find(|&&u| u < up - EPS).copied().unwrap_or(*cuts.last().expect("cuts"));
+    let next = cuts.iter().find(|&&u| u > up + EPS).copied().unwrap_or(cuts[0]);
+    Some(merge_segs(&path_slice(&path, prev, next)))
+}
+
 /// Extension of the last segment in its direction: candidate param t > 1 along the carrier.
 fn extension_hits(seg: &Seg, bounds: &[Seg], extend_bounds: bool) -> Vec<(f64, Pt)> {
     let full = match seg {

@@ -78,6 +78,8 @@ pub fn pref_defaults() -> IndexMap<String, Value> {
         ("PICKFIRST", 1.0),
         ("PICKADD", 2.0),
         ("PICKAUTO", 1.0),
+        // TRIM and EXTEND: 1 Quick (every object is an edge, as AutoCAD 2021+), 0 Standard (pick the edges first)
+        ("TRIMEXTENDMODE", 1.0),
         ("PICKDRAG", 0.0),
         ("CURSORSIZE", 5.0),
         ("DYNMODE", 3.0),

@@ -277,6 +277,15 @@ pub fn paint_ops(painter: &Painter, origin: Pos2, ops: &[Op], clip_arg: Rect) {
                 }
             }
             Op::Fill { paths, color, alpha, .. } => {
+                // a small convex shape (an arrowhead, a solid, a dot): egui's convex polygon, which is anti-aliased; a
+                // plain mesh leaves a few pixels wide triangle ragged and thin
+                if let [p] = paths.as_slice() {
+                    if p.pts.len() >= 3 && p.pts.len() <= 8 && convex(&p.pts) {
+                        let pts: Vec<Pos2> = p.pts.iter().map(|q| pos(*q, origin)).collect();
+                        painter.add(Shape::convex_polygon(pts, col(*color, *alpha), Stroke::NONE));
+                        continue;
+                    }
+                }
                 let loops: Vec<Vec<[f64; 2]>> = paths.iter().map(|p: &Poly| p.pts.clone()).collect();
                 let m = fill_mesh(&loops, col(*color, *alpha), origin);
                 if !m.is_empty() {
@@ -333,4 +342,23 @@ fn visible(pts: &[Pos2], clip: Rect) -> bool {
 /// Small helper for centred text.
 pub fn text_center(painter: &Painter, c: Pos2, s: &str, font: FontId, color: Color32) {
     painter.text(c, Align2::CENTER_CENTER, s, font, color);
+}
+
+/// Whether a polygon is convex (all turns the same way; collinear points allowed).
+fn convex(pts: &[[f64; 2]]) -> bool {
+    let n = pts.len();
+    let mut sign = 0.0f64;
+    for i in 0..n {
+        let (a, b, c) = (pts[i], pts[(i + 1) % n], pts[(i + 2) % n]);
+        let cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+        if cross.abs() < 1e-12 {
+            continue;
+        }
+        if sign == 0.0 {
+            sign = cross.signum();
+        } else if cross.signum() != sign {
+            return false;
+        }
+    }
+    sign != 0.0
 }

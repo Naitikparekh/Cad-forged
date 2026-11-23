@@ -657,6 +657,10 @@ impl<'a> Renderer<'a> {
             for (p, q) in arrow_lines(a) {
                 paths.push(Poly { pts: vec![self.dev(p), self.dev(q)], closed: false });
             }
+            // a filled arrowhead is outlined as well, so a small one still reads as a solid triangle
+            if let Some(poly) = arrow_polygon(a) {
+                paths.push(Poly { pts: poly.iter().map(|p| self.dev(*p)).collect(), closed: true });
+            }
         }
         self.stroke(paths, style, selected, hover, 0.0);
         for a in &geo.arrows {

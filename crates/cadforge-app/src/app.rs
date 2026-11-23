@@ -22,6 +22,11 @@ pub struct CmdLine {
     pub caret: usize,
     /// Typed through the dynamic-input route (shown at the cursor).
     pub dynamic: bool,
+    /// A Tab press taken from egui's input (egui would move the keyboard focus to a widget with it), for
+    /// [`CadForgeApp::handle_keys`]: it moves between the fields of dynamic input or completes a command name.
+    pub tab: bool,
+    /// History rows and panel lines last shown, to scroll the history to its end when either changes.
+    pub hist_seen: (usize, usize),
     pub recall: Option<usize>,
     pub past: Vec<String>,
     pub sugs: Vec<String>,
@@ -334,6 +339,23 @@ impl CadForgeApp {
 }
 
 impl eframe::App for CadForgeApp {
+    /// Tab belongs to the drawing while no text box has the keyboard: egui would use it to move the focus to the next
+    /// widget, and every key after it would go there instead of to the command line.
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        if ctx.egui_wants_keyboard_input() || self.dialog.is_some() {
+            return;
+        }
+        raw_input.events.retain(|e| match e {
+            egui::Event::Key { key: egui::Key::Tab, pressed, .. } => {
+                if *pressed {
+                    self.ui.cmd.tab = true;
+                }
+                false
+            }
+            _ => true,
+        });
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.time = ctx.input(|i| i.time);
@@ -345,6 +367,9 @@ impl eframe::App for CadForgeApp {
         self.store_customization();
         let locale = self.h.borrow().sysvars.string("LOCALE");
         crate::i18n::set_lang(crate::i18n::from_code(&locale).unwrap_or(crate::i18n::Lang::En));
+        if std::mem::take(&mut self.ui.cmd.tab) {
+            self.tab_key();
+        }
         self.handle_keys(&ctx);
         self.process_events(&ctx);
         self.layout(ui, &ctx);

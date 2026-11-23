@@ -97,6 +97,8 @@ fn trim_and_extend_with_cutting_edges() {
     add_line(&s, p(0., 0.), p(10., 0.));
     add_line(&s, p(4., -3.), p(4., 3.));
     add_line(&s, p(8., -3.), p(8., 3.));
+    // Standard mode: the edges are picked first (Quick mode is in trim_quick.rs)
+    s.h.borrow_mut().sysvars.set("TRIMEXTENDMODE", 0.0, None).unwrap();
     s.cmd("TR").enter(); // all objects are cutting edges
     s.click(6., 0.).enter();
     assert!(!s.busy());

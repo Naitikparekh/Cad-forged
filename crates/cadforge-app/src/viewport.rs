@@ -696,13 +696,26 @@ impl CadForgeApp {
             }
         }
 
+        // rubber band: a dashed line from the prompt's base point to the cursor (MOVE's base point, a circle's centre...)
+        if let Some(p) = pending {
+            if matches!(p.kind, PromptKind::Point | PromptKind::Distance | PromptKind::Angle) && self.vp.realtime.is_none() {
+                if let Some(b) = p.base() {
+                    let (sb, sc) = (to_s(b), to_s(rt.cursor.pt));
+                    if sb.distance(sc) > 2.0 {
+                        painter.add(Shape::dashed_line(&[sb, sc], Stroke::new(1.0, col(theme.cross, 0.75)), 6.0, 4.0));
+                    }
+                }
+            }
+        }
+
         // snap marker + tooltips
         let mouse_abs = self.vp.mouse.map(|m| Pos2::new(origin.x + m.x, origin.y + m.y));
         if let Some(snap) = &rt.cursor.snap {
             let s = to_s(snap.pt);
             draw_marker(painter, snap.kind, s);
             if sv_int(&a, "AUTOSNAP") & 2 != 0 {
-                tip_box(painter, snap.kind.name(), s + vec2(14.0, 12.0));
+                // above the marker: the dynamic-input tooltip sits below and to the right of the cursor
+                tip_box(painter, snap.kind.name(), s + vec2(12.0, -32.0));
             }
         } else if let (Some(tr), Some(m)) = (track, mouse_abs) {
             if !tr.label.is_empty() && sv_int(&a, "AUTOSNAP") & 32 != 0 {
@@ -745,7 +758,11 @@ impl CadForgeApp {
                 let cur = rt.cursor.pt;
                 let ucs = doc.ucs;
                 let field = if !typed.is_empty() {
-                    Some(format!("{typed}|"))
+                    // the fields typed so far: a length and an angle (30<45), or X and Y (10,20)
+                    Some(match typed.split_once('<') {
+                        Some((l, an)) if !typed.contains(',') => format!("L {}   ∠ {}|", l.trim().trim_start_matches('@'), an.trim()),
+                        _ => format!("{typed}|"),
+                    })
                 } else if matches!(p.kind, PromptKind::Point | PromptKind::Distance | PromptKind::Angle) && a.sysvars.pointer_input() {
                     let base = p.base();
                     if let (Some(b), true) = (base, a.sysvars.dimension_input()) {

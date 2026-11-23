@@ -801,7 +801,15 @@ impl CadForgeApp {
         };
         let mut hui = ui.new_child(egui::UiBuilder::new().max_rect(hist_rect).layout(egui::Layout::top_down(egui::Align::Min)));
         hui.set_clip_rect(hist_rect);
-        egui::ScrollArea::vertical().id_salt("cl-history").max_height(hist_rect.height()).auto_shrink([false, false]).stick_to_bottom(true).show(&mut hui, |ui| {
+        // when lines are added (or the panel resized) show the newest whole lines at once: sticking to the bottom
+        // catches up a frame late, leaving the newest line cut in half until something else repaints
+        let rows: usize = history.iter().map(|(t, _)| t.split('\n').count()).sum();
+        let mut area = egui::ScrollArea::vertical().id_salt("cl-history").max_height(hist_rect.height()).auto_shrink([false, false]).stick_to_bottom(true);
+        if (rows, lines) != self.ui.cmd.hist_seen {
+            self.ui.cmd.hist_seen = (rows, lines);
+            area = area.vertical_scroll_offset((rows as f32 * 17.0 - hist_rect.height()).max(0.0));
+        }
+        area.show(&mut hui, |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             for (text, kind) in &history {
                 use cadforge_engine::app::LogKind;

@@ -135,6 +135,17 @@ await test('HATCH: pick a point, Close Hatch Creation commits the hatch', async 
   assert.ok(s.types.includes('hatch'), JSON.stringify(s.types)); assert.equal(s.busy, false);
 });
 
+await test('direct distance entry: a length, Tab, an angle draws the segment (Tab does not leave the drawing)', async () => {
+  await fresh();
+  const n0 = (await t.state()).entities;
+  await t.cmd('LINE'); await t.click(10, 10); await t.move(40, 10);
+  await t.type('30'); await page.keyboard.press('Tab'); await t.frame(2); await t.type('90'); await page.keyboard.press('Enter'); await t.frame(3);
+  await page.keyboard.press('Enter'); await t.frame(3);
+  const s = await t.state();
+  assert.equal(s.entities, n0 + 1, JSON.stringify(s.history.slice(-5)));
+  assert.ok(s.history.some(h => /30<90/.test(h.text || h)), JSON.stringify(s.history.slice(-5)));
+});
+
 await test('MTEXT editor dialog places the typed text', async () => {
   await t.cmd('MTEXT'); await t.cmd('10,10'); await t.cmd('60,25'); await t.frame(4);
   // the editor has the focus when it opens; Ctrl+Enter places the text (the dialog's size depends on its toolbar)

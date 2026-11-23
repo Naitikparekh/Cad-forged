@@ -522,7 +522,7 @@ fn trimmable(e: &Entity) -> bool {
 }
 
 /// Apply a trim/extend to `target_id`; returns whether it changed the drawing.
-fn trim_apply(c: &Ctx, cutters: &[Entity], history: &mut Vec<Hist>, target_id: u64, pick: Pt, shift: bool, is_trim: bool) -> bool {
+fn trim_apply(c: &Ctx, cutters: &[Entity], history: &mut Vec<Hist>, target_id: u64, pick: Pt, shift: bool, is_trim: bool, quiet: bool) -> bool {
     let edge_extend = c.app(|a| a.mem.edge_extend);
     let do_trim = is_trim != shift;
     let Some(target) = c.entity_by_id(target_id) else { return false };
@@ -530,7 +530,9 @@ fn trim_apply(c: &Ctx, cutters: &[Entity], history: &mut Vec<Hist>, target_id: u
     let res = c.doc(|d| if do_trim { trim(&target, pick, &refs, d, edge_extend) } else { extend(&target, pick, &refs, d, edge_extend) });
     match res {
         Err(m) => {
-            c.log_error(&m);
+            if !quiet {
+                c.log_error(&m);
+            }
             false
         }
         Ok(news) => {
@@ -574,7 +576,7 @@ async fn fence_or_crossing(c: &Ctx, mode: &str, cutters: &[Entity], history: &mu
             'segs: for s in segs {
                 for q in &edges {
                     if let Some(hit) = seg_intersect(&s, q, false, false).first() {
-                        trim_apply(c, cutters, history, e.id, hit.pt, false, is_trim);
+                        trim_apply(c, cutters, history, e.id, hit.pt, false, is_trim, false);
                         break 'segs;
                     }
                 }
@@ -592,32 +594,81 @@ async fn fence_or_crossing(c: &Ctx, mode: &str, cutters: &[Entity], history: &mu
                 continue;
             }
             let Some(n) = c.doc(|d| path_of(&e, d).map(|p| path_nearest(&p, centre))) else { continue };
-            trim_apply(c, cutters, history, id, n.pt, false, is_trim);
+            trim_apply(c, cutters, history, id, n.pt, false, is_trim, false);
         }
     }
     Ok(())
 }
 
+/// What a trim or an extension would change for the object under the cursor: the piece TRIM cuts away (drawn in grey)
+/// or the extended object, for the hover preview.
+fn trim_preview(doc: &Drawing, p: Pt, ap: f64, cutters: Option<&[Entity]>, edge_extend: bool, do_trim: bool) -> Vec<PreviewItem> {
+    let Some(target) = crate::select::pick_at(doc, p, ap, Some(&trimmable), None).and_then(|id| doc.by_id(id).cloned()) else { return vec![] };
+    let all: Vec<Entity>;
+    let cut: Vec<&Entity> = match cutters {
+        Some(cs) => cs.iter().collect(),
+        None => {
+            all = implicit_edges(doc);
+            all.iter().collect()
+        }
+    };
+    if do_trim {
+        match cadforge_core::ops::trim::trim_removed(&target, p, &cut, doc, edge_extend) {
+            Some(segs) => cadforge_core::ops::path::entity_from_segs(&segs, &target, false)
+                .map(|mut e| {
+                    // red over the hover highlight: the piece that goes
+                    e.color = Some(cadforge_core::style::Color::Aci(1));
+                    e.lw = Some(70);
+                    vec![pv(e)]
+                })
+                .unwrap_or_default(),
+            // Quick mode erases an object that crosses no edge: grey it all
+            None if cutters.is_none() => {
+                let mut e = target.clone();
+                e.color = Some(cadforge_core::style::Color::Aci(1));
+                vec![pv(e)]
+            }
+            None => vec![],
+        }
+    } else {
+        extend(&target, p, &cut, doc, edge_extend).map(pvs).unwrap_or_default()
+    }
+}
+
+/// Quick mode's edges: every visible object that is drawing geometry (dimensions, text, leaders, hatches, tables and
+/// pictures are left out: trimming a line back to a dimension's extension line is never wanted).
+fn implicit_edges(doc: &Drawing) -> Vec<Entity> {
+    doc.entities().iter().filter(|e| doc.is_visible(e) && !matches!(e.kind, Kind::Dim(_) | Kind::Text(_) | Kind::Leader { .. } | Kind::Hatch(_) | Kind::Table(_) | Kind::Image(_) | Kind::Wipeout(_))).cloned().collect()
+}
+
 async fn trim_extend(c: Ctx, is_trim: bool) -> CmdResult<()> {
+    let mut quick = c.app(|a| a.sysvars.int("TRIMEXTENDMODE")) != 0;
     let edge = c.app(|a| a.mem.edge_extend);
-    c.log(&format!("Current settings: Projection=UCS, Edge={}", if edge { "Extend" } else { "None" }));
-    let edges = c
-        .select(ps(if is_trim { "Select cutting edges... Select objects or <select all>" } else { "Select boundary edges... Select objects or <select all>" }).pickfirst(false))
-        .await?;
-    let cutters: Vec<Entity> = if edges.ents.is_empty() { c.doc(|d| d.entities().iter().filter(|e| d.is_visible(e)).cloned().collect()) } else { c.entities(&edges.ents) };
+    c.log(&format!("Current settings: Projection=UCS, Edge={}, Mode={}", if edge { "Extend" } else { "None" }, if quick { "Quick" } else { "Standard" }));
+    // Standard mode: the edges are picked first; Quick mode: every visible object is an edge, looked up at each pick
+    let pick_edges = |c: Ctx| async move {
+        let edges = c
+            .select(ps(if is_trim { "Select cutting edges... Select objects or <select all>" } else { "Select boundary edges... Select objects or <select all>" }).pickfirst(false))
+            .await?;
+        Ok::<Option<Vec<Entity>>, CmdError>(if edges.ents.is_empty() { None } else { Some(c.entities(&edges.ents)) })
+    };
+    let mut cutters: Option<Vec<Entity>> = if quick { None } else { pick_edges(c.clone()).await? };
     let mut history: Vec<Hist> = vec![];
     loop {
-        let mut opts = vec!["Fence", "Crossing", "Project", "Edge"];
+        let mut opts = vec!["cutting Edges", "Fence", "Crossing", "mOde", "Project", "Edge"];
         if is_trim {
             opts.push("eRase");
         }
         opts.push("Undo");
+        let (ap, ext) = c.app(|a| (a.aperture_world(Some(a.sysvars.real("PICKBOX") + 4.0)), a.mem.edge_extend));
+        let cs = cutters.clone();
         let r = c
             .entity(
                 ps(if is_trim { "Select object to trim or shift-select to extend or" } else { "Select object to extend or shift-select to trim or" })
                     .options(&opts)
                     .allow_enter()
-                    .filter(trimmable),
+                    .filter(trimmable)
+                    .preview(move |doc, p| trim_preview(doc, p, ap, cs.as_deref(), ext, is_trim)),
             )
             .await?;
         match r.kw() {
@@ -636,6 +687,17 @@ async fn trim_extend(c: Ctx, is_trim: bool) -> CmdResult<()> {
                 });
                 continue;
             }
+            Some("cutting Edges") => {
+                cutters = pick_edges(c.clone()).await?;
+                continue;
+            }
+            Some("mOde") => {
+                let k = c.keyword(ps("Enter a trim mode option [Quick/Standard]").options(&["Quick", "Standard"]).default_str(if quick { "Quick" } else { "Standard" })).await?;
+                quick = k.kw() != Some("Standard");
+                c.app(|a| a.sysvars.set("TRIMEXTENDMODE", if quick { 1.0 } else { 0.0 }, None).ok());
+                cutters = if quick { None } else { pick_edges(c.clone()).await? };
+                continue;
+            }
             Some("Edge") => {
                 let cur = c.app(|a| a.mem.edge_extend);
                 let k = c.keyword(ps("Enter an implied edge extension mode [Extend/No extend]").options(&["Extend", "No extend"]).default_str(if cur { "Extend" } else { "No extend" })).await?;
@@ -651,18 +713,23 @@ async fn trim_extend(c: Ctx, is_trim: bool) -> CmdResult<()> {
                 c.doc_mut(|d| d.remove_all(&sel.ents));
                 continue;
             }
-            Some("Fence") => {
-                fence_or_crossing(&c, "fence", &cutters, &mut history, is_trim).await?;
-                continue;
-            }
-            Some("Crossing") => {
-                fence_or_crossing(&c, "crossing", &cutters, &mut history, is_trim).await?;
+            Some(k @ ("Fence" | "Crossing")) => {
+                let edges = cutters.clone().unwrap_or_else(|| c.doc(implicit_edges));
+                fence_or_crossing(&c, if k == "Fence" { "fence" } else { "crossing" }, &edges, &mut history, is_trim).await?;
                 continue;
             }
             _ => {}
         }
         let EntR::Entity { id, pt: p, shift } = r else { break };
-        trim_apply(&c, &cutters, &mut history, id, p, shift, is_trim);
+        let edges = cutters.clone().unwrap_or_else(|| c.doc(implicit_edges));
+        let quiet = quick && is_trim != shift;
+        if !trim_apply(&c, &edges, &mut history, id, p, shift, is_trim, quiet) && quiet {
+            // Quick mode: an object that crosses no edge is erased
+            if let (Some(idx), Some(old)) = (c.doc(|d| d.index_of(id)), c.entity_by_id(id)) {
+                let ids = c.doc_mut(|d| d.change(|d| d.splice(idx, 1, vec![])));
+                history.push(Hist { idx, old, news: ids });
+            }
+        }
     }
     Ok(())
 }

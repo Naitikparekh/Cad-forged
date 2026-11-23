@@ -475,6 +475,8 @@ pub struct Runtime {
     pub hot_grip: Option<GripRef>,
     /// Typed text originated from the dynamic-input tooltip.
     pub dynamic_typing: bool,
+    /// What was typed at an empty command line, until the command it starts writes its history line.
+    pub typed_command: Option<String>,
     pub shift_ortho: bool,
     pub usage: HashMap<String, u32>,
     pub previous_selection: Vec<u64>,
@@ -500,6 +502,7 @@ impl Default for Runtime {
             last_point: None,
             hot_grip: None,
             dynamic_typing: false,
+            typed_command: None,
             shift_ortho: false,
             usage: HashMap::new(),
             previous_selection: vec![],
@@ -720,7 +723,13 @@ impl App {
             }
         }
         if !def.silent {
-            self.log(&format!("Command: {}", def.name), "cmd");
+            // typed at the command line, it is in the history already ("Command: L"): only an alias or another
+            // spelling gets the command's name on a line of its own, as AutoCAD shows it
+            match self.rt.typed_command.take().filter(|_| is_top) {
+                Some(t) if t.trim_start_matches(['\'', '_', '.']).eq_ignore_ascii_case(&def.name) => {}
+                Some(_) => self.log(&def.name, "cmd"),
+                None => self.log(&format!("Command: {}", def.name), "cmd"),
+            }
         }
         *self.rt.usage.entry(def.name.clone()).or_insert(0) += 1;
         id
@@ -1681,8 +1690,10 @@ impl App {
             return;
         }
         self.log(&format!("Command: {t}"), "input");
+        self.rt.typed_command = Some(t.to_string());
         // a Lisp expression typed at the command line: `(+ 1 2)`, or `!var` to show a variable
         if t.starts_with('(') || (t.starts_with('!') && t.len() > 1) {
+            self.rt.typed_command = Some("_LISP".into());
             self.run("_LISP", Args::none().with("source", ArgVal::Str(t.to_string())), false);
             return;
         }
@@ -1692,9 +1703,11 @@ impl App {
             return;
         }
         if self.sysvars.has(name) {
+            self.rt.typed_command = Some("SETVAR".into());
             self.run("SETVAR", Args::none().with("name", ArgVal::Str(name.to_uppercase())), false);
             return;
         }
+        self.rt.typed_command = None;
         self.log(&format!("Unknown command \"{t}\".  Press F1 for help."), "error");
         self.emit(Event::Change);
     }

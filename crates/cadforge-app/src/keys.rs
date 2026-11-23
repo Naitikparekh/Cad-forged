@@ -254,23 +254,40 @@ impl CadForgeApp {
                 c.text = if next >= 0 { src[next as usize].clone() } else { String::new() };
                 c.caret = c.text.chars().count();
             }
-            Key::Tab => {
-                if !self.ui.cmd.sugs.is_empty() {
-                    let i = self.ui.cmd.sug_idx.unwrap_or(0);
-                    if let Some(s) = self.ui.cmd.sugs.get(i).cloned() {
-                        self.ui.cmd.caret = s.chars().count();
-                        self.ui.cmd.text = s;
-                        self.ui.cmd.sugs.clear();
-                        self.ui.cmd.sug_idx = None;
-                    }
-                }
-            }
+            Key::Tab => self.tab_key(),
             _ => {}
         }
         if matches!(key, Key::Delete) && !busy {
             // Delete with an empty command line erases the selection (handled above)
         }
         self.h.borrow_mut().emit(cadforge_engine::app::Event::Overlay);
+    }
+
+    /// Tab: completes a command name being typed; in dynamic input, moves to the next field: after a length, the angle
+    /// (`30<`: polar, relative to the last point), after an X, the Y (`10,`).
+    pub fn tab_key(&mut self) {
+        let c = &mut self.ui.cmd;
+        if !c.sugs.is_empty() {
+            let i = c.sug_idx.unwrap_or(0);
+            if let Some(s) = c.sugs.get(i).cloned() {
+                c.caret = s.chars().count();
+                c.text = s;
+                c.sugs.clear();
+                c.sug_idx = None;
+            }
+            return;
+        }
+        let (point, has_base) = {
+            let a = self.h.borrow();
+            a.pending().map_or((false, false), |p| (p.kind == PromptKind::Point, p.base().is_some()))
+        };
+        let t = c.text.trim();
+        if point && !t.is_empty() && !t.contains(['<', ',']) && t.parse::<f64>().is_ok() {
+            c.text.push(if has_base { '<' } else { ',' });
+            c.caret = c.text.chars().count();
+            c.dynamic = true;
+            self.h.borrow_mut().emit(cadforge_engine::app::Event::Overlay);
+        }
     }
 
     fn option_menu(&mut self, ctx: &egui::Context) {
