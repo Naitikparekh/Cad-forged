@@ -43,6 +43,9 @@ pub struct XrefInfo {
 pub struct Space {
     #[serde(default)]
     pub entities: Vec<Entity>,
+    /// Parametric constraints on the objects of this space (model space only).
+    #[serde(default, skip_serializing_if = "crate::constraints::Constraints::is_empty")]
+    pub constraints: crate::constraints::Constraints,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -307,6 +310,12 @@ pub struct Drawing {
     cmd_rev: u64,
     /// `next_id` when the command began: entities from here on were made in it.
     cmd_next_id: u64,
+    /// The objects as they were when the command first changed the drawing (only while it has constraints).
+    cons_pre: Option<HashMap<u64, Kind>>,
+    /// A command changed the constraints themselves: solve them at its end even if no object moved.
+    pub constraints_changed: bool,
+    /// Why the constraints could not all be satisfied after the last command (taken by the editor to report).
+    pub constraint_message: Option<String>,
     caches: RefCell<Caches>,
 }
 
@@ -392,6 +401,9 @@ impl Drawing {
             cmd_active: false,
             cmd_rev: 0,
             cmd_next_id: 0,
+            cons_pre: None,
+            constraints_changed: false,
+            constraint_message: None,
             caches: RefCell::new(Caches::default()),
         }
     }
@@ -1083,6 +1095,27 @@ impl Drawing {
     pub fn will_change(&mut self) {
         if self.cmd_active && self.pre.is_none() {
             self.pre = Some(self.snapshot());
+            if !self.model.constraints.list.is_empty() {
+                self.cons_pre = Some(self.model.entities.iter().map(|e| (e.id, e.kind.clone())).collect());
+            }
+        }
+    }
+
+    /// After a command changed constrained objects: solve the constraints, keeping what the command changed. The
+    /// message says why they could not all be satisfied (the geometry is then left as the command made it).
+    fn solve_constraints(&mut self) {
+        let Some(pre) = self.cons_pre.take() else { return };
+        if self.model.constraints.list.is_empty() {
+            return;
+        }
+        let keep: std::collections::HashSet<u64> = self.model.entities.iter().filter(|e| pre.get(&e.id) != Some(&e.kind)).map(|e| e.id).collect();
+        let touched = self.model.constraints.list.iter().any(|c| c.refs.iter().any(|r| keep.contains(&r.ent) || !pre.contains_key(&r.ent)));
+        if !touched && !self.constraints_changed {
+            return;
+        }
+        let r = crate::constraints::solve(self, &keep);
+        if !r.ok {
+            self.constraint_message = Some(r.message);
         }
     }
 
@@ -1097,8 +1130,11 @@ impl Drawing {
     /// undo step.
     pub fn end_command(&mut self, label: &str) {
         if self.cmd_active && self.rev != self.cmd_rev {
+            self.solve_constraints();
             self.update_dim_associations(self.cmd_next_id);
         }
+        self.cons_pre = None;
+        self.constraints_changed = false;
         if self.cmd_active && self.rev != self.cmd_rev && self.undo_control != UndoControl::None {
             if let Some(snap) = self.pre.take() {
                 self.undo_stack.push(UndoStep { snap, label: label.into() });

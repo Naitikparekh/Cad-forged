@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 371 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 396 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -344,6 +344,36 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `PLOTSTYLE` |  | Loads, lists or removes the plot style table (.ctb) that decides colours, lineweights and screening when plotting. |
 | `PREVIEW` | `PRE` | Displays the drawing as it will be plotted. |
 | `PUBLISH` |  | Publishes drawings to PDF or plotters. |
+
+## Parametric
+
+| Command | Aliases | Description |
+|---|---|---|
+| `AUTOCONSTRAIN` |  | Applies the geometric constraints the selected objects already meet (coincident, horizontal, vertical, parallel, perpendicular, collinear, concentric, tangent). |
+| `CONSTRAINTBAR` | `CBAR` | Shows or hides the geometric constraint symbols. |
+| `DCALIGNED` |  | Applies a aligned dimensional constraint. |
+| `DCANGULAR` |  | Applies a angular dimensional constraint. |
+| `DCDIAMETER` |  | Applies a diameter dimensional constraint. |
+| `DCDISPLAY` |  | Shows or hides the dimensional constraints. |
+| `DCHORIZONTAL` |  | Applies a horizontal dimensional constraint. |
+| `DCLINEAR` |  | Applies a linear dimensional constraint. |
+| `DCRADIUS` |  | Applies a radius dimensional constraint. |
+| `DCVERTICAL` |  | Applies a vertical dimensional constraint. |
+| `DELCONSTRAINT` |  | Removes every constraint from the selected objects. |
+| `DIMCONSTRAINT` | `DCON` | Applies a dimensional constraint (a distance, angle, radius or diameter with a name and an expression). |
+| `GCCOINCIDENT` |  | Applies a coincident constraint. |
+| `GCCOLLINEAR` |  | Applies a collinear constraint. |
+| `GCCONCENTRIC` |  | Applies a concentric constraint. |
+| `GCEQUAL` |  | Applies a equal constraint. |
+| `GCFIX` |  | Applies a fix constraint. |
+| `GCHORIZONTAL` |  | Applies a horizontal constraint. |
+| `GCPARALLEL` |  | Applies a parallel constraint. |
+| `GCPERPENDICULAR` |  | Applies a perpendicular constraint. |
+| `GCSYMMETRIC` |  | Applies a symmetric constraint. |
+| `GCTANGENT` |  | Applies a tangent constraint. |
+| `GCVERTICAL` |  | Applies a vertical constraint. |
+| `GEOMCONSTRAINT` | `GCON` | Applies a geometric constraint: horizontal, vertical, parallel, perpendicular, tangent, coincident, concentric, collinear, symmetric, equal or fix. |
+| `PARAMETERS` | `-PARAMETERS` `PAR` | Lists, edits, renames and deletes dimensional constraint parameters and user parameters. |
 
 ## Properties
 

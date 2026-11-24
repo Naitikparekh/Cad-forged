@@ -29,6 +29,9 @@ pub fn not_kept_in_dxf(d: &crate::drawing::Drawing, r2000: bool) -> Vec<String> 
     let ids: std::collections::HashSet<u64> = ents.iter().map(|e| e.id).collect();
     let orphaned = d.solids.iter().filter(|s| s.program.as_ref().is_some_and(|p| p.features.iter().flat_map(|f| &f.profile).any(|i| !ids.contains(i)))).count();
     count(orphaned, "3D solid loses its extrusion history (an outline it was made from is deleted)", "3D solids lose their extrusion history (an outline they were made from is deleted)", "");
+    let cons = &d.model.constraints;
+    count(cons.list.len(), "parametric constraint is", "parametric constraints are", "not kept (the geometry is saved as it is now)");
+    count(cons.params.len(), "user parameter is", "user parameters are", "not kept");
     if r2000 {
         let rgb = ents.iter().filter(|e| matches!(e.color, Some(crate::style::Color::Rgb(..)))).count() + d.layers.iter().filter(|l| matches!(l.color, crate::style::Color::Rgb(..))).count();
         count(rgb, "true colour is", "true colours are", "saved as the nearest of the 255 colours (AutoCAD 2000 has no true colours)");

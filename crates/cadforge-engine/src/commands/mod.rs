@@ -8,6 +8,7 @@ use std::rc::Rc;
 pub mod aliases;
 pub mod annotate;
 pub mod blocks;
+pub mod constraints;
 pub mod draw;
 pub mod ext_annotate;
 pub mod ext_blocks;
@@ -61,6 +62,7 @@ pub fn build_registry() -> Registry {
     ext_tail::register(&mut r);
     ext_system::register(&mut r);
     ext_parity::register(&mut r);
+    constraints::register(&mut r);
     aliases::install(&mut r);
     r
 }

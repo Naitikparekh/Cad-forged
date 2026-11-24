@@ -748,10 +748,15 @@ impl App {
         self.rt.override_ = None;
         self.rt.idle_window = None;
         if !t.transparent && t.is_top {
+            let mut warn = None;
             if let Some(ed) = self.editor_mut() {
                 ed.doc.end_command(&t.def.name);
+                warn = ed.doc.constraint_message.take();
                 ed.temp_sel.clear();
                 ed.prune();
+            }
+            if let Some(w) = warn {
+                self.log(&w, "error");
             }
             self.rt.snapper.reset();
             let name = &t.def.name;

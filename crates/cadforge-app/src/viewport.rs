@@ -597,6 +597,12 @@ impl CadForgeApp {
         let mut ops: Vec<Op> = vec![];
         {
             let mut rc = Renderer::new(doc, view, view.w, view.h, theme, prefs);
+            // parametric constraints: their dimensions and symbols, sized for the screen
+            if doc.space == "model" && !doc.model.constraints.list.is_empty() {
+                for e in cadforge_core::constraints::display(doc, 1.0 / view.scale.max(1e-12)) {
+                    rc.draw_entity(&e, DrawOpts::default());
+                }
+            }
             if let Some(id) = self.vp.hover {
                 if let Some(e) = ed.entity_by_id(id) {
                     rc.draw_entity(e, DrawOpts { hover: true, ..DrawOpts::default() });
