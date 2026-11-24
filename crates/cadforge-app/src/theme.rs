@@ -1,4 +1,6 @@
-//! Design tokens (AutoCAD-style dark theme and a light theme) and egui visuals / fonts.
+//! Design tokens and egui visuals / fonts. Four colour schemes: Dark (slate chrome around a near-black drawing area,
+//! the default), Light, Classic (the earlier near-black chrome) and System, which follows the operating system's (or
+//! browser's) light or dark appearance as it changes.
 use eframe::egui::{self, Color32, FontData, FontDefinitions, FontFamily};
 use std::sync::Arc;
 
@@ -36,7 +38,7 @@ pub struct Tokens {
     pub ic_g: Color32,
 }
 
-pub const DARK: Tokens = Tokens {
+pub const CLASSIC: Tokens = Tokens {
     dark: true,
     canvas: c(0x212830),
     chrome: c(0x1b1f24),
@@ -64,6 +66,86 @@ pub const DARK: Tokens = Tokens {
     ic_o: c(0xffae42),
     ic_g: c(0x7bd88f),
 };
+
+/// The default: slate-blue chrome, roomier controls, a drawing area near black.
+pub const DARK: Tokens = Tokens {
+    dark: true,
+    canvas: c(0x212830),
+    chrome: c(0x3a4352),
+    chrome2: c(0x333b48),
+    ribbon: c(0x3c4452),
+    ribbon_title: c(0x353d4a),
+    raised: c(0x4f596b),
+    sep: c(0x566072),
+    border: c(0x4a5365),
+    text: c(0xe8ecf1),
+    text2: c(0xb7bfca),
+    text3: c(0x8c96a3),
+    accent: c(0x3b8fe6),
+    accent2: c(0x67bcff),
+    accent_soft: c(0x2f5479),
+    hover: c(0x586377),
+    press: c(0x2f6299),
+    input: c(0x2b323e),
+    warn: c(0xffb454),
+    err: c(0xff8a80),
+    ok: c(0x7ddc92),
+    ic_l: c(0xdde3ea),
+    ic_k: c(0x8995a3),
+    ic_a: c(0x5cb9ff),
+    ic_o: c(0xffae42),
+    ic_g: c(0x7bd88f),
+};
+
+/// The colour scheme the user chose (the THEME setting).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ThemePref {
+    /// Follow the operating system's light / dark appearance, live.
+    System,
+    Light,
+    #[default]
+    Dark,
+    Classic,
+}
+
+impl ThemePref {
+    pub const ALL: [ThemePref; 4] = [ThemePref::System, ThemePref::Dark, ThemePref::Light, ThemePref::Classic];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ThemePref::System => "system",
+            ThemePref::Light => "light",
+            ThemePref::Dark => "dark",
+            ThemePref::Classic => "classic",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ThemePref::System => "System",
+            ThemePref::Light => "Light",
+            ThemePref::Dark => "Dark",
+            ThemePref::Classic => "Classic",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<ThemePref> {
+        ThemePref::ALL.into_iter().find(|t| t.as_str().eq_ignore_ascii_case(s.trim()))
+    }
+
+    /// The colours to show, given the appearance the system reports (dark when it reports none).
+    pub fn tokens(self, system: Option<egui::Theme>) -> Tokens {
+        match self {
+            ThemePref::Light => LIGHT,
+            ThemePref::Dark => DARK,
+            ThemePref::Classic => CLASSIC,
+            ThemePref::System => match system {
+                Some(egui::Theme::Light) => LIGHT,
+                _ => DARK,
+            },
+        }
+    }
+}
 
 pub const LIGHT: Tokens = Tokens {
     dark: false,
@@ -130,7 +212,7 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     v.selection.bg_fill = t.accent_soft;
     v.selection.stroke = egui::Stroke::new(1.0, t.accent2);
     v.hyperlink_color = t.accent2;
-    let r = egui::CornerRadius::same(2);
+    let r = egui::CornerRadius::same(4);
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
         w.corner_radius = r;
     }
@@ -154,9 +236,9 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     ctx.set_visuals_of(if t.dark { egui::Theme::Dark } else { egui::Theme::Light }, v);
     ctx.set_theme(if t.dark { egui::Theme::Dark } else { egui::Theme::Light });
     ctx.all_styles_mut(|s| {
-        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        s.spacing.button_padding = egui::vec2(8.0, 3.0);
-        s.spacing.interact_size.y = 20.0;
+        s.spacing.item_spacing = egui::vec2(6.0, 5.0);
+        s.spacing.button_padding = egui::vec2(8.0, 4.0);
+        s.spacing.interact_size.y = 22.0;
         s.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(12.5));
         s.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(12.5));
         s.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(11.0));

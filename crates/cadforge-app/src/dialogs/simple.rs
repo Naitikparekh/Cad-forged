@@ -50,7 +50,7 @@ impl CadForgeApp {
             };
             let _ = aliases;
             ui.label(RichText::new(format!("{cmds} commands · written in Rust · runs natively and in the browser.")).small().color(t.text3));
-            ui.label(RichText::new(format!("Theme: {}", if t.dark { "Dark" } else { "Light" })).small().color(t.text3));
+            ui.label(RichText::new(format!("Theme: {}", self.ui.theme.label())).small().color(t.text3));
         });
         self.ok_cancel(ui, None, Some("Close"), &[])
     }

@@ -204,7 +204,7 @@ impl CadForgeApp {
 
 pub struct OptionsState {
     pub tab: usize,
-    pub dark: bool,
+    pub theme: crate::theme::ThemePref,
     pub cursor: String,
     pub lw: bool,
     pub cube: bool,
@@ -232,7 +232,7 @@ impl OptionsState {
         let sc = sv.int("SHORTCUTMENU");
         OptionsState {
             tab: 0,
-            dark: app.ui.dark,
+            theme: app.ui.theme,
             cursor: fnum(sv.real("CURSORSIZE")),
             lw: sv.int("LWDISPLAY") != 0,
             cube: sv.int("NAVVCUBE") != 0,
@@ -254,7 +254,7 @@ impl OptionsState {
     }
     pub fn apply(&self, app: &mut CadForgeApp) {
         let n = |s: &str, lo: f64, hi: f64| s.trim().parse::<f64>().map_or(lo, |v| v.round().clamp(lo, hi));
-        app.pending_theme = Some(self.dark);
+        app.pending_theme = Some(self.theme);
         app.set_sv("CURSORSIZE", n(&self.cursor, 1.0, 100.0));
         app.set_sv("LWDISPLAY", self.lw as i64 as f64);
         app.set_sv("NAVVCUBE", self.cube as i64 as f64);
@@ -282,8 +282,9 @@ impl CadForgeApp {
                 self.group(ui, "Colour scheme", |ui| {
                     ui.horizontal(|ui| {
                         ui.label("Theme");
-                        ui.selectable_value(&mut s.dark, true, "Dark");
-                        ui.selectable_value(&mut s.dark, false, "Light");
+                        for pref in crate::theme::ThemePref::ALL {
+                            ui.selectable_value(&mut s.theme, pref, pref.label());
+                        }
                     });
                 });
                 self.group(ui, "Language", |ui| {

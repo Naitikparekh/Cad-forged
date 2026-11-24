@@ -41,6 +41,8 @@ pub struct UiState {
     pub ribbon_hidden: HashSet<String>,
     pub flyout: Option<String>,
     pub dark: bool,
+    /// The colour scheme chosen (THEME); `dark` follows what it shows.
+    pub theme: crate::theme::ThemePref,
     pub workspace: String,
     pub cmd: CmdLine,
     pub show_props: bool,
@@ -91,7 +93,7 @@ pub struct CadForgeApp {
     pub cui_saved: u64,
     pub last_cmd_row: Option<egui::Rect>,
     pub pal: PalState,
-    pub pending_theme: Option<bool>,
+    pub pending_theme: Option<crate::theme::ThemePref>,
     pub save_as_focused: bool,
     /// The linked data file DATALINKUPDATE asked for (a file chosen for it is read as this one).
     pub datalink_file: Option<String>,
@@ -130,6 +132,7 @@ impl CadForgeApp {
                 ribbon_hidden: HashSet::new(),
                 flyout: None,
                 dark: true,
+                theme: theme::ThemePref::default(),
                 workspace: "Drafting & Annotation".into(),
                 cmd: CmdLine { lines: 3, lines_f: 3.0, ..Default::default() },
                 show_props: false,
@@ -179,6 +182,11 @@ impl CadForgeApp {
         #[cfg(target_arch = "wasm32")]
         crate::install_hook(app.h.clone(), app.rect_hook.clone());
         app.load_user_aliases();
+        if let Some(pref) = crate::platform::store_get("theme").and_then(|s| theme::ThemePref::parse(&s)) {
+            app.ui.theme = pref;
+            let _ = app.h.borrow_mut().setvar("THEME", pref.as_str());
+        }
+        app.show_theme(&cc.egui_ctx);
         app.load_customization();
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -247,11 +255,20 @@ impl CadForgeApp {
         self.ui.toast = Some((msg.to_string(), self.time + 3.2));
     }
 
-    pub fn set_dark(&mut self, ctx: &egui::Context, dark: bool) {
-        self.ui.dark = dark;
-        self.t = if dark { theme::DARK } else { theme::LIGHT };
+    /// Switch to colour scheme `pref` and remember it for the next start.
+    pub fn set_theme(&mut self, ctx: &egui::Context, pref: theme::ThemePref) {
+        self.ui.theme = pref;
+        self.show_theme(ctx);
+        crate::platform::store_set("theme", pref.as_str());
+        let _ = self.h.borrow_mut().setvar("THEME", pref.as_str());
+    }
+
+    /// Apply the colours of the chosen scheme (for System, of the appearance the system reports now).
+    fn show_theme(&mut self, ctx: &egui::Context) {
+        let t = self.ui.theme.tokens(ctx.system_theme());
+        self.ui.dark = t.dark;
+        self.t = t;
         theme::apply(ctx, &self.t);
-        let _ = self.h.borrow_mut().setvar("THEME", if dark { "dark" } else { "light" });
     }
 
     /// Start a command from the UI (ribbon, menu, QAT): cancels whatever is running.
@@ -361,8 +378,17 @@ impl eframe::App for CadForgeApp {
         self.time = ctx.input(|i| i.time);
         self.h.borrow_mut().now = self.time * 1000.0;
         self.autosave(&ctx);
-        if let Some(dark) = self.pending_theme.take() {
-            self.set_dark(&ctx, dark);
+        if let Some(pref) = self.pending_theme.take() {
+            self.set_theme(&ctx, pref);
+        }
+        // THEME typed at the command line (SETVAR / THEME) switches the scheme too
+        let typed = self.h.borrow().sysvars.string("THEME");
+        if let Some(pref) = theme::ThemePref::parse(&typed).filter(|p| *p != self.ui.theme) {
+            self.set_theme(&ctx, pref);
+        }
+        // System follows the operating system's appearance as it changes
+        if self.ui.theme == theme::ThemePref::System && self.ui.theme.tokens(ctx.system_theme()).canvas != self.t.canvas {
+            self.show_theme(&ctx);
         }
         self.store_customization();
         let locale = self.h.borrow().sysvars.string("LOCALE");
