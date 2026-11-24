@@ -490,6 +490,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cadforge-cli"
+version = "2.0.0"
+dependencies = [
+ "cadforge-core",
+ "cadforge-engine",
+ "cadforge-render",
+ "serde_json",
+]
+
+[[package]]
 name = "cadforge-core"
 version = "2.0.0"
 dependencies = [

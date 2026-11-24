@@ -40,11 +40,12 @@ list_archive() {
 list=$(list_archive "${archives[0]}")
 for f in README.md CSG-LICENSE.txt; do echo "$list" | grep -q "/$f$" || { echo "archive lacks $f" >&2; exit 1; }; done
 echo "$list" | grep -Eq "/cadforge(\.exe)?$" || { echo "archive lacks the program" >&2; exit 1; }
+echo "$list" | grep -Eq "/cadforge-cli(\.exe)?$" || { echo "archive lacks cadforge-cli" >&2; exit 1; }
 echo "archive ok: ${archives[0]}"
 debs=(dist/*.deb)
 if [ ${#debs[@]} -gt 0 ]; then
   contents=$(dpkg-deb --contents "${debs[0]}")
-  for f in ./usr/bin/cadforge ./usr/share/applications/cadforge.desktop ./usr/share/doc/cadforge/README.md; do
+  for f in ./usr/bin/cadforge ./usr/bin/cadforge-cli ./usr/share/applications/cadforge.desktop ./usr/share/doc/cadforge/README.md; do
     echo "$contents" | grep -q " $f$" || { echo "deb lacks $f" >&2; exit 1; }
   done
   info=$(dpkg-deb --info "${debs[0]}")

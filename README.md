@@ -89,6 +89,11 @@ product.
   patterns are kept), and a save reports anything
   the format cannot hold.
 
+## Command-line tool and MCP server
+
+`cadforge-cli` reports on, converts and scripts drawings without the window, and `cadforge-cli mcp` lets AI agents
+(any MCP client) draw with CadForge. See [docs/CLI.md](docs/CLI.md).
+
 ## Rust app: build, run, test
 
 ```sh

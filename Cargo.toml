@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/cadforge-core", "crates/cadforge-render", "crates/cadforge-engine", "crates/cadforge-app"]
+members = ["crates/cadforge-core", "crates/cadforge-render", "crates/cadforge-engine", "crates/cadforge-app", "crates/cadforge-cli"]
 
 [workspace.package]
 version = "2.0.0"

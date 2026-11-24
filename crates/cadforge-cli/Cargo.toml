@@ -1,0 +1,16 @@
+[package]
+name = "cadforge-cli"
+description = "CadForge from the command line and for AI agents: drawing reports, file conversion, command scripts and an MCP server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "cadforge-cli"
+path = "src/main.rs"
+
+[dependencies]
+cadforge-core = { path = "../cadforge-core" }
+cadforge-render = { path = "../cadforge-render" }
+cadforge-engine = { path = "../cadforge-engine" }
+serde_json = { version = "1", features = ["preserve_order"] }

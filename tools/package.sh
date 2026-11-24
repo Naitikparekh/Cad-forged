@@ -3,6 +3,7 @@
 #   tools/package.sh                 release build, then the packages for this platform
 #   tools/package.sh --no-build      package the existing target/release binary
 #
+# The archives and the .deb also hold cadforge-cli (reports, conversion, scripts and the MCP server).
 # Linux:   dist/cadforge-<version>-linux-<arch>.tar.gz and dist/cadforge_<version>_<debarch>.deb (when dpkg-deb exists)
 # macOS:   dist/CadForge-<version>-macos.dmg and dist/cadforge-<version>-macos-universal.zip: CadForge.app, one program
 #          for Apple Silicon and Intel Macs, with the logo as its icon, signed ad hoc (not notarized)
@@ -70,14 +71,16 @@ PLIST
 fi
 
 if [ "${1:-}" != "--no-build" ]; then
-  cargo build --release -p cadforge-app --bin cadforge
+  cargo build --release -p cadforge-app --bin cadforge -p cadforge-cli --bin cadforge-cli
 fi
 bin="target/release/$exe"
+cli="target/release/${exe/cadforge/cadforge-cli}"
 [ -f "$bin" ] || { echo "$bin not found; build first" >&2; exit 1; }
+[ -f "$cli" ] || { echo "$cli not found; build first" >&2; exit 1; }
 
 name="cadforge-$version-$os-$arch"
 rm -rf dist && mkdir -p "dist/$name"
-cp "$bin" README.md CSG-LICENSE.txt "dist/$name/"
+cp "$bin" "$cli" README.md CSG-LICENSE.txt "dist/$name/"
 (cd dist
  if [ "$os" = windows ]; then
    # Git Bash has no zip: Python's zipfile writes forward-slash paths everywhere
@@ -92,6 +95,7 @@ if [ "$os" = linux ] && command -v dpkg-deb >/dev/null; then
   case "$arch" in x86_64) debarch=amd64 ;; aarch64) debarch=arm64 ;; *) debarch=$arch ;; esac
   root="dist/deb-root"
   install -Dm755 "$bin" "$root/usr/bin/cadforge"
+  install -Dm755 "$cli" "$root/usr/bin/cadforge-cli"
   install -Dm644 tools/package/cadforge.desktop "$root/usr/share/applications/cadforge.desktop"
   install -Dm644 README.md "$root/usr/share/doc/cadforge/README.md"
   install -Dm644 CSG-LICENSE.txt "$root/usr/share/doc/cadforge/CSG-LICENSE.txt"
