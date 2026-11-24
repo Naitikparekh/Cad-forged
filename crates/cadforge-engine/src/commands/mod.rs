@@ -12,6 +12,7 @@ pub mod draw;
 pub mod ext_annotate;
 pub mod ext_blocks;
 pub mod ext_modify;
+pub mod ext_parity;
 pub mod ext_solids;
 pub mod ext_system;
 pub mod ext_tail;
@@ -59,6 +60,7 @@ pub fn build_registry() -> Registry {
     ext_blocks::register(&mut r);
     ext_tail::register(&mut r);
     ext_system::register(&mut r);
+    ext_parity::register(&mut r);
     aliases::install(&mut r);
     r
 }

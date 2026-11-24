@@ -450,6 +450,91 @@ fn ser_bool_as_int<S: Serializer>(v: &bool, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_u8(*v as u8)
 }
 
+/// The dimension variables a dimension style holds, by their AutoCAD names (DIMOVERRIDE and DIMSTYLE list them).
+pub const DIM_VARS: &[&str] = &["DIMSCALE", "DIMTXT", "DIMASZ", "DIMEXO", "DIMEXE", "DIMGAP", "DIMCEN", "DIMDEC", "DIMTAD", "DIMTIH", "DIMZIN", "DIMLFAC", "DIMPOST", "DIMBLK", "DIMCLRD", "DIMTXSTY"];
+
+impl DimStyle {
+    /// The value of dimension variable `name` (`DIMTXT`...) in this style, as text; `None` for a name it does not hold.
+    pub fn get_var(&self, name: &str) -> Option<String> {
+        let num = |v: f64| {
+            let s = format!("{v:.6}");
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        };
+        Some(match name.to_ascii_uppercase().as_str() {
+            "DIMSCALE" => num(self.scale),
+            "DIMTXT" => num(self.txt),
+            "DIMASZ" => num(self.asz),
+            "DIMEXO" => num(self.exo),
+            "DIMEXE" => num(self.exe),
+            "DIMGAP" => num(self.gap),
+            "DIMCEN" => num(self.cen),
+            "DIMDEC" => self.dec.to_string(),
+            "DIMTAD" => (self.tad as i32).to_string(),
+            "DIMTIH" => (self.tih as i32).to_string(),
+            "DIMZIN" => self.zin.to_string(),
+            "DIMLFAC" => num(self.lfac),
+            "DIMPOST" => if self.pre.is_empty() && self.suf.is_empty() { String::new() } else { format!("{}<>{}", self.pre, self.suf) },
+            "DIMBLK" => self.blk.clone(),
+            "DIMCLRD" => match self.color {
+                None | Some(Color::ByLayer) => "BYLAYER".into(),
+                Some(Color::ByBlock) => "BYBLOCK".into(),
+                Some(Color::Aci(i)) => i.to_string(),
+                Some(c) => c.rgb_hex().unwrap_or_default(),
+            },
+            "DIMTXSTY" => if self.txsty.is_empty() { "Standard".into() } else { self.txsty.clone() },
+            _ => return None,
+        })
+    }
+
+    /// Set dimension variable `name` to `value` (text as typed); an error names what is wrong.
+    pub fn set_var(&mut self, name: &str, value: &str) -> Result<(), String> {
+        let v = value.trim();
+        let bad = || format!("Requires a valid value; {v} is not allowed.");
+        let num = || v.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(bad);
+        let pos = || num().and_then(|x| if x > 0.0 { Ok(x) } else { Err(bad()) });
+        let nonneg = || num().and_then(|x| if x >= 0.0 { Ok(x) } else { Err(bad()) });
+        let int = |lo: f64, hi: f64| num().and_then(|x| if x.fract() == 0.0 && (lo..=hi).contains(&x) { Ok(x as i32) } else { Err(bad()) });
+        match name.to_ascii_uppercase().as_str() {
+            "DIMSCALE" => self.scale = pos()?,
+            "DIMTXT" => self.txt = pos()?,
+            "DIMASZ" => self.asz = nonneg()?,
+            "DIMEXO" => self.exo = nonneg()?,
+            "DIMEXE" => self.exe = nonneg()?,
+            "DIMGAP" => self.gap = nonneg()?,
+            "DIMCEN" => self.cen = num()?,
+            "DIMDEC" => self.dec = int(0.0, 8.0)?,
+            "DIMTAD" => self.tad = int(0.0, 4.0)? != 0,
+            "DIMTIH" => self.tih = int(0.0, 1.0)? != 0,
+            "DIMZIN" => self.zin = int(0.0, 15.0)?,
+            "DIMLFAC" => self.lfac = num().and_then(|x| if x != 0.0 { Ok(x) } else { Err(bad()) })?,
+            "DIMPOST" => match v.split_once("<>") {
+                Some((a, b)) => {
+                    self.pre = a.to_string();
+                    self.suf = b.to_string();
+                }
+                None => {
+                    self.pre.clear();
+                    self.suf = if v == "." { String::new() } else { v.to_string() };
+                }
+            },
+            "DIMBLK" => self.blk = if v.is_empty() || v == "." { "closed".into() } else { v.to_ascii_lowercase() },
+            "DIMCLRD" => {
+                self.color = match v.to_ascii_uppercase().as_str() {
+                    "BYLAYER" | "256" => None,
+                    "BYBLOCK" | "0" => Some(Color::ByBlock),
+                    t => match t.parse::<u8>() {
+                        Ok(i) if i >= 1 => Some(Color::Aci(i)),
+                        _ => Some(Color::from_hex(&v.to_ascii_lowercase()).ok_or_else(bad)?),
+                    },
+                }
+            }
+            "DIMTXSTY" => self.txsty = if v.eq_ignore_ascii_case("standard") { String::new() } else { v.to_string() },
+            _ => return Err(format!("{} is not a dimension variable.", name.to_ascii_uppercase())),
+        }
+        Ok(())
+    }
+}
+
 impl Default for DimStyle {
     fn default() -> DimStyle {
         DimStyle { name: "Standard".into(), scale: 1.0, txt: 2.5, asz: 2.5, exo: 0.625, exe: 1.25, gap: 0.625, cen: 2.5, dec: 2, tad: true, tih: false, zin: 0, lfac: 1.0, pre: String::new(), suf: String::new(), blk: "closed".into(), color: None, txsty: String::new() }

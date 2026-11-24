@@ -1,6 +1,6 @@
 # CadForge command reference
 
-Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 360 commands. Type a command or alias at the command line, or use the ribbon.
+Generated from the command registry (`cargo run -q -p cadforge-engine --example commands_doc`): 371 commands. Type a command or alias at the command line, or use the ribbon.
 
 ## 3D
 
@@ -49,6 +49,8 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `DIMJOGLINE` | `DJL` | Adds or removes a jog line in a linear or aligned dimension. |
+| `DIMOVERRIDE` | `DOV` | Overrides dimension variables for selected dimensions only, or clears their overrides. |
 | `MTEXTEDIT` |  | Edits multiline text in the in-place editor. |
 | `QTEXT` |  | Draws text as boxes (QTEXTMODE). |
 | `TABLEEXPORT` |  | Exports data from a table object in CSV file format. |
@@ -230,6 +232,12 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `STATUS` |  | Displays drawing statistics, modes, and extents. |
 | `TIME` |  | Displays the date and time statistics of a drawing. |
 
+## Insert
+
+| Command | Aliases | Description |
+|---|---|---|
+| `BLOCKREPLACE` |  | Replaces every reference of one block with another block, optionally purging the replaced one. |
+
 ## Layers
 
 | Command | Aliases | Description |
@@ -286,6 +294,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `BLEND` |  | Creates a spline in the gap between two selected lines or open curves (tangent or smooth continuity). |
 | `BREAK` | `BR` | Breaks the selected object between two points. |
 | `BREAKATPOINT` |  | Breaks the selected object at a single point. |
+| `BURST` |  | Explodes block references, turning their attributes into text that keeps the values shown. |
 | `CHAMFER` | `CHA` | Bevels the edges of objects. |
 | `CHANGE` |  | Changes the properties of existing objects: moves line ends, resizes circles, edits text and block insertions, or edits properties. |
 | `CHPROP` |  | Changes the properties of objects: color, layer, linetype, linetype scale, lineweight, thickness and transparency. |
@@ -298,6 +307,7 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `EXTEND` | `EX` | Extends objects to meet the edges of other objects. |
 | `FILLET` | `F` | Rounds and fillets the edges of objects. |
 | `FLATTEN` |  | Sets the Z coordinate of objects to zero. Drawing geometry is already 2D, so nothing changes. |
+| `HATCHTOBACK` |  | Sends every hatch and fill behind all other objects. |
 | `JOIN` | `J` | Joins the endpoints of linear and curved objects to create a single object. |
 | `JUSTIFYTEXT` |  | Changes the justification point of selected text objects without changing their locations. |
 | `LENGTHEN` | `LEN` | Changes the length of objects and the included angle of arcs. |
@@ -307,17 +317,20 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `MIRROR3D` | `3DMIRROR` | Creates a mirror image of objects about a plane. |
 | `MOVE` | `M` | Moves objects a specified distance in a specified direction. |
 | `MULTIPLE` |  | Repeats the next command until you cancel it. |
+| `NCOPY` |  | Copies objects nested in block references and external references into the drawing. |
 | `OFFSET` | `O` | Creates concentric circles, parallel lines, and parallel curves. |
 | `OOPS` |  | Restores objects deleted by the last ERASE command. |
 | `OVERKILL` |  | Deletes duplicate objects and combines overlapping or end-to-end collinear lines and arcs of the same circle. Polylines and circles are only checked for duplicates. |
 | `PASTECLIP` |  | Inserts data from the clipboard into the drawing. |
 | `PEDIT` | `PE` | Edits polylines and 3D polygon meshes. |
+| `REVERSE` |  | Reverses the direction of lines, polylines and splines. |
 | `ROTATE` | `RO` | Rotates objects around a base point. |
 | `ROTATE3D` |  | Moves objects about a 3D axis. |
 | `SCALE` | `SC` | Enlarges or reduces selected objects, keeping the proportions the same. |
 | `SCALETEXT` |  | Enlarges or reduces selected text objects without changing their locations. |
 | `SPLINEDIT` | `SPE` | Edits a spline: fit points (move, add, delete, close, open) or control vertices (move, weight), and its direction. |
 | `STRETCH` | `S` | Stretches objects crossed by a selection window or polygon. |
+| `TEXTTOFRONT` |  | Brings text, dimensions and leaders in front of all other objects. |
 | `TRIM` | `TR` | Trims objects to meet the edges of other objects. |
 
 ## Output
@@ -414,6 +427,9 @@ Generated from the command registry (`cargo run -q -p cadforge-engine --example 
 | `CHECKSTANDARDS` |  | Checks layers, linetypes and dimension, multileader and table styles against the standards files and fixes them. |
 | `COPYBASE` |  | Copies objects to the clipboard along with a specified base point. |
 | `COPYHIST` |  | Copies the text in the command line history to the clipboard. |
+| `COUNT` |  | Counts and selects the block references (or other identical objects) like the one picked; Enter lists every block. |
+| `COUNTLIST` |  | Lists the block references of the current space with how many there are of each. |
+| `COUNTTABLE` |  | Inserts a table of the blocks in the current space and their counts. |
 | `GRAPHSCR` |  | Switches from the text window to the drawing area. |
 | `HIDEPALETTES` |  | Hides all currently displayed palettes (including the command line). |
 | `LAYERCLOSE` |  | Closes the Layer Properties Manager. |
@@ -520,6 +536,7 @@ Type a variable name at the command line to view or change it.
 | `TOUCHMODE` | `1` |
 | `TRACEWID` | `0.05` |
 | `TRANSPARENCYDISPLAY` | `1` |
+| `TRIMEXTENDMODE` | `1` |
 | `UCSICON` | `1` |
 | `UCSORG` | `0` |
 | `VPCONTROL` | `1` |

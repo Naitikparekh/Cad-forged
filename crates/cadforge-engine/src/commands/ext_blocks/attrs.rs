@@ -82,7 +82,7 @@ fn sync_attribs(ins: &mut InsertData, base: Pt, defs: &[TextData], mode: AttDisp
 }
 
 /// Bring every reference of block `name` (in all spaces and blocks) in line with its definitions.
-fn sync_block(d: &mut Drawing, name: &str) -> usize {
+pub(crate) fn sync_block(d: &mut Drawing, name: &str) -> usize {
     let Some(b) = d.blocks.get(name) else { return 0 };
     let (base, defs, mode) = (b.base, attdefs(b), d.settings.attdisp);
     d.change(|d| {

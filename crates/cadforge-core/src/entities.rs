@@ -1534,6 +1534,8 @@ pub fn grips_of(e: &Entity, doc: &Drawing) -> Vec<Grip> {
                     add("p1", d.p1);
                     add("p2", d.p2);
                     add("dp", geo.dim_line.as_ref().map(|l| mid(l.a, l.b)).or(d.dp));
+                    let jog = geo.dim_line.as_ref().zip(d.jl).and_then(|(l, j)| crate::dim::jog_points(l.a, l.b, j, geo.text.h * 1.5));
+                    add("jl", jog.map(|z| mid(z[0], z[3])));
                 }
                 DimType::Ang => {
                     add("p1", d.p1);

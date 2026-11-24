@@ -63,6 +63,12 @@ pub struct DimData {
     /// Links of the defining points to the geometry they measure (an associative dimension follows it).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assoc: Vec<DimRef>,
+    /// A jog in the dimension line (DIMJOGLINE), at this point's projection onto it (linear and aligned dimensions).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jl: Option<Pt>,
+    /// Dimension variables overridden for this dimension only (DIMOVERRIDE): `(name, value)` such as `("DIMTXT", "5")`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ovr: Vec<(String, String)>,
 }
 
 /// One defining point of an associative dimension, tied to a point of another object (see `dim_assoc.rs`).
@@ -104,7 +110,7 @@ pub enum InspShape {
 
 impl DimData {
     pub fn new(kind: DimType) -> DimData {
-        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None, sc: None, assoc: vec![] }
+        DimData { kind, p1: None, p2: None, dp: None, c: None, pt: None, tp: None, ang: None, txt: None, ds: None, xd: false, tr: None, obl: None, brk: vec![], insp: None, sc: None, assoc: vec![], jl: None, ovr: vec![] }
     }
     /// Names of the defining-point fields of this dimension.
     pub fn point_mut(&mut self, key: &str) -> Option<&mut Option<Pt>> {
@@ -115,6 +121,7 @@ impl DimData {
             "c" => &mut self.c,
             "pt" => &mut self.pt,
             "tp" => &mut self.tp,
+            "jl" => &mut self.jl,
             _ => return None,
         })
     }
@@ -131,7 +138,7 @@ impl DimData {
     }
 }
 
-pub const DIM_POINT_KEYS: [&str; 6] = ["p1", "p2", "dp", "c", "pt", "tp"];
+pub const DIM_POINT_KEYS: [&str; 7] = ["p1", "p2", "dp", "c", "pt", "tp", "jl"];
 
 #[derive(Clone, Debug)]
 pub struct Arrow {
@@ -210,9 +217,32 @@ fn label_for(e: &DimData, st: &DimStyle, measured: f64, kind: DimType) -> String
     }
 }
 
+/// The four corners of the jog symbol DIMJOGLINE puts in the dimension line from `a` to `b`, centred on the projection
+/// of `at` onto it and `size` high (1.5 times the text height, as DIMJOGLINE draws it); `None` when the line is too short
+/// for it.
+pub fn jog_points(a: Pt, b: Pt, at: Pt, size: f64) -> Option<[Pt; 4]> {
+    let l = dist(a, b);
+    if l < 1e-9 || size <= 0.0 {
+        return None;
+    }
+    let d = unit(b - a);
+    let n = perp(d);
+    let half = size / 2.0;
+    if l < size * 1.2 {
+        return None;
+    }
+    // the jog stays clear of the ends of the line
+    let t = dot(at - a, d).clamp(half, l - half);
+    let s = a + d * t;
+    Some([s - d * half, s - d * (size / 6.0) + n * half, s + d * (size / 6.0) - n * half, s + d * half])
+}
+
 /// Derive drawable geometry from a dimension entity.
 pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
-    let st = dim_style_of(e, settings).clone();
+    let mut st = dim_style_of(e, settings).clone();
+    for (name, value) in &e.ovr {
+        let _ = st.set_var(name, value);
+    }
     let k = st.scale * e.sc.filter(|v| *v > 0.0 && v.is_finite()).unwrap_or(1.0);
     let (asz, exo, exe, gap, h) = (st.asz * k, st.exo * k, st.exe * k, st.gap * k, st.txt * k);
     let mut segs: Vec<Seg> = vec![];
@@ -278,7 +308,16 @@ pub fn dim_geometry(e: &DimData, settings: &Settings) -> DimGeo {
             if arrows_fit {
                 arrow!(a, line_dir);
                 arrow!(b, line_dir * -1.0);
-                line!(a, b);
+                match e.jl.and_then(|j| jog_points(a, b, j, h * 1.5)) {
+                    Some(z) => {
+                        line!(a, z[0]);
+                        for w in z.windows(2) {
+                            line!(w[0], w[1]);
+                        }
+                        line!(z[3], b);
+                    }
+                    None => line!(a, b),
+                }
             } else {
                 arrow!(a, line_dir * -1.0);
                 arrow!(b, line_dir);

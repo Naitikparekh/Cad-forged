@@ -10,7 +10,7 @@ use crate::runtime::*;
 use cadforge_core::entities::*;
 use std::collections::HashSet;
 
-mod attrs;
+pub(crate) mod attrs;
 mod bedit;
 mod refedit;
 mod xclip;
